@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate glium;
 
+use std::fs;
+
 use glium::glutin;
 use glium::Surface;
 
@@ -11,20 +13,22 @@ struct Shader {
 
 impl Shader {
 	fn new() -> Self {
-		let vertex_shader_src = r#"
-		#version 140
+		// let vertex_shader_src = r#"
+		// #version 140
 
-		in vec2 position;
-		in vec3 color;
+		// in vec2 position;
+		// in vec3 color;
 
-		out vec3 u_Color;
+		// out vec3 u_Color;
 
-		void main() {
-			u_Color = color;
+		// void main() {
+		// 	u_Color = color;
 
-			gl_Position = vec4(position, 0.0, 1.0);
-		}
-		"#;
+		// 	gl_Position = vec4(position, 0.0, 1.0);
+		// }
+		// "#;
+		let vertex_shader_src = fs::read_to_string("src/vertex_shader.glsl").expect("Can't read file vertex_shader.glsl");
+
 		let fragment_shader_src = r#"
 			#version 140
 
@@ -57,9 +61,8 @@ fn main() {
 	let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
 	let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
-	let mut shaders = Shader::new();
-
-	let program = glium::Program::from_source(&display, shaders.vertex_src.as_mut_str(), shaders.fragment_src.as_mut_str(), None).unwrap();
+	let shaders = Shader::new();
+	let program = glium::Program::from_source(&display, shaders.vertex_src.as_str(), shaders.fragment_src.as_str(), None).unwrap();
 
 	event_loop.run(move |ev, _, control_flow| {
 		let mut target = display.draw();
