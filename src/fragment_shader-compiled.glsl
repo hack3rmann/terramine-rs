@@ -1,4 +1,5 @@
 #version 140
+#define GLSLIFY 1
 
 in vec3 u_Color;
 out vec4 color;
