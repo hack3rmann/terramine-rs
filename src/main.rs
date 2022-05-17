@@ -4,6 +4,43 @@ extern crate glium;
 use glium::glutin;
 use glium::Surface;
 
+struct Shader {
+	vertex_src: String,
+	fragment_src: String
+}
+
+impl Shader {
+	fn new() -> Self {
+		let vertex_shader_src = r#"
+		#version 140
+
+		in vec2 position;
+		in vec3 color;
+
+		out vec3 u_Color;
+
+		void main() {
+			u_Color = color;
+
+			gl_Position = vec4(position, 0.0, 1.0);
+		}
+		"#;
+		let fragment_shader_src = r#"
+			#version 140
+
+			in vec3 u_Color;
+			out vec4 color;
+
+			void main() {
+				color = vec4(u_Color, 1.0);
+			}
+		"#;
+		let shader = Shader { vertex_src: String::from(vertex_shader_src), fragment_src: String::from(fragment_shader_src) };
+
+		return shader;
+	}
+}
+
 fn main() {
 	let event_loop = glutin::event_loop::EventLoop::new();
 	let wb = glutin::window::WindowBuilder::new()
@@ -20,32 +57,9 @@ fn main() {
 	let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
 	let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
-	let vertex_shader_src = r#"
-		#version 140
+	let mut shaders = Shader::new();
 
-		in vec2 position;
-		in vec3 color;
-
-		out vec3 u_Color;
-
-		void main() {
-			u_Color = color;
-
-			gl_Position = vec4(position, 0.0, 1.0);
-		}
-	"#;
-	let fragment_shader_src = r#"
-		#version 140
-
-		in vec3 u_Color;
-		out vec4 color;
-
-		void main() {
-			color = vec4(u_Color, 1.0);
-		}
-	"#;
-
-	let program = glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
+	let program = glium::Program::from_source(&display, shaders.vertex_src.as_mut_str(), shaders.fragment_src.as_mut_str(), None).unwrap();
 
 	event_loop.run(move |ev, _, control_flow| {
 		let mut target = display.draw();
