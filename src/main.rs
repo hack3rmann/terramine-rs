@@ -36,7 +36,6 @@ fn main() {
 	/* Time stuff */
 	let mut time: f32 = 0.0;
 	let mut last_time = std::time::Instant::now();
-	let mut dt = std::time::Instant::now() - last_time;
 
 	/* Event loop run */
 	event_loop.run(move |event, _, control_flow| {
@@ -63,8 +62,8 @@ fn main() {
         *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
 
 		/* Update time stuff */
-		dt = std::time::Instant::now() - last_time;
-		time += dt.as_secs_f32() * 5.0;
+		time += (std::time::Instant::now() - last_time)
+				.as_secs_f32() * 5.0;
 		last_time = std::time::Instant::now();
 
 		/* Uniforms set */
