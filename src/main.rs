@@ -7,17 +7,16 @@ use glium::Surface;
 
 /* Other files */
 mod shader;
+mod window;
 use shader::Shader;
+use window::Window;
 
 fn main() {
 	/* Graphics stuff */
 	let event_loop = glutin::event_loop::EventLoop::new();
-	let wb = glutin::window::WindowBuilder::new()
-		.with_decorations(true)
-		.with_title("Terramine")
-		.with_resizable(false);
+	let window = Window::from(640, 480, false);
 	let cb = glutin::ContextBuilder::new();
-	let display = glium::Display::new(wb, cb, &event_loop).unwrap();
+	let display = glium::Display::new(window.window_builder, cb, &event_loop).unwrap();
 
 	/* Define vertices and triangle */
 	let vertex1 = Vertex { position: [-0.5, -0.5], color: [1.0, 0.0, 0.0] };
@@ -40,26 +39,15 @@ fn main() {
 	/* Event loop run */
 	event_loop.run(move |event, _, control_flow| {
 		/* Event match */
-		match event {
-            glutin::event::Event::WindowEvent { event, .. } => match event {
-                glutin::event::WindowEvent::CloseRequested => {
-                    *control_flow = glutin::event_loop::ControlFlow::Exit;
-                    return;
-                },
-                _ => return,
-            },
-            glutin::event::Event::NewEvents(cause) => match cause {
-                glutin::event::StartCause::ResumeTimeReached { .. } => (),
-                glutin::event::StartCause::Init => (),
-                _ => return,
-            },
-            _ => return,
-        }
+		Window::process_events(&event, control_flow);
+		if *control_flow == glutin::event_loop::ControlFlow::Exit {
+			return;
+		}
 
 		/* Control flow */
 		/* FPS cutoff removed because it may lag */
 		let next_frame_time = std::time::Instant::now() + std::time::Duration::from_nanos(/*16_666_667*/0);
-        *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
+		*control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
 
 		/* Update time stuff */
 		time += (std::time::Instant::now() - last_time)
@@ -88,7 +76,7 @@ fn main() {
 /* Vertex help struct */
 #[derive(Copy, Clone)]
 struct Vertex {
-    position: [f32; 2],
+	position: [f32; 2],
 	color: [f32; 3]
 }
 
