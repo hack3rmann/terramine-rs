@@ -9,7 +9,7 @@ use shader::Shader;
 
 fn main() {
 	let event_loop = glutin::event_loop::EventLoop::new();
-	let wb = glutin::window::WindowBuilder::new()
+	let wb = glutin::window::WindowBuilder::new().with_decorations(true)
 		.with_title("Terramine")
 		.with_resizable(false);
 	let cb = glutin::ContextBuilder::new();
@@ -26,7 +26,9 @@ fn main() {
 	let shaders = Shader::new("src/vertex_shader.glsl", "src/fragment_shader.glsl");
 	let program = glium::Program::from_source(&display, shaders.vertex_src.as_str(), shaders.fragment_src.as_str(), None).unwrap();
 
-	let mut time:f32 = 0.0;
+	let mut time: f32 = 0.0;
+	let mut last_time = std::time::Instant::now();
+	let mut dt = std::time::Instant::now() - last_time;
 
 	event_loop.run(move |ev, _, control_flow| {
 		match ev {
@@ -43,7 +45,9 @@ fn main() {
 		let next_frame_time = std::time::Instant::now() + std::time::Duration::from_micros(16_666_667);
 		*control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
 
-		time += 0.01;
+		dt = std::time::Instant::now() - last_time;
+		time += dt.as_secs_f32() * 10.0;
+		last_time = std::time::Instant::now();
 
 		let mut target = display.draw();
 		target.clear_color(0.1, 0.1, 0.1, 1.0);
