@@ -26,17 +26,9 @@ fn main() {
 	let shaders = Shader::new("src/vertex_shader.glsl", "src/fragment_shader.glsl");
 	let program = glium::Program::from_source(&display, shaders.vertex_src.as_str(), shaders.fragment_src.as_str(), None).unwrap();
 
+	let mut time:f32 = 0.0;
+
 	event_loop.run(move |ev, _, control_flow| {
-		let mut target = display.draw();
-		target.clear_color(0.1, 0.1, 0.1, 1.0);
-
-		target.draw(&vertex_buffer, &indices, &program, &glium::uniforms::EmptyUniforms, &Default::default()).unwrap();
-
-		target.finish().unwrap();
-
-		let next_frame_time = std::time::Instant::now() + std::time::Duration::from_micros(16_666_667);
-		*control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
-
 		match ev {
 			glutin::event::Event::WindowEvent { event, .. } => match event {
 				glutin::event::WindowEvent::CloseRequested => {
@@ -47,6 +39,18 @@ fn main() {
 			}, 
 			_ => ()
 		}
+
+		let next_frame_time = std::time::Instant::now() + std::time::Duration::from_micros(16_666_667);
+		*control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
+
+		time += 0.01;
+
+		let mut target = display.draw();
+		target.clear_color(0.1, 0.1, 0.1, 1.0);
+
+		target.draw(&vertex_buffer, &indices, &program, &uniform! { time: time }, &Default::default()).unwrap();
+
+		target.finish().unwrap();
 	});
 }
 

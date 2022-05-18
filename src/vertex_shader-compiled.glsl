@@ -1,4 +1,5 @@
 #version 140
+#define GLSLIFY 1
 
 in vec2 position;
 in vec3 color;
