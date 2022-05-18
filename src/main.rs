@@ -58,7 +58,8 @@ fn main() {
         }
 
 		/* Control flow */
-		let next_frame_time = std::time::Instant::now() + std::time::Duration::from_nanos(16_666_667);
+		/* FPS cutoff removed because it may lag */
+		let next_frame_time = std::time::Instant::now() + std::time::Duration::from_nanos(/*16_666_667*/0);
         *control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
 
 		/* Update time stuff */
