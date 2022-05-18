@@ -12,7 +12,8 @@ use shader::Shader;
 fn main() {
 	/* Graphics stuff */
 	let event_loop = glutin::event_loop::EventLoop::new();
-	let wb = glutin::window::WindowBuilder::new().with_decorations(true)
+	let wb = glutin::window::WindowBuilder::new()
+		.with_decorations(true)
 		.with_title("Terramine")
 		.with_resizable(false);
 	let cb = glutin::ContextBuilder::new();
