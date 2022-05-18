@@ -63,13 +63,24 @@ fn main() {
 
 		/* Update time stuff */
 		dt = std::time::Instant::now() - last_time;
-		time += dt.as_secs_f32() * 10.0;
+		time += dt.as_secs_f32() * 5.0;
 		last_time = std::time::Instant::now();
+
+		/* Uniforms set */
+		let uniforms = uniform! {
+			transform: [
+				[ time.cos(), time.sin(), 0.0, 0.0],
+				[-time.sin(), time.cos(), 0.0, 0.0],
+				[ 0.0, 0.0, 1.0, 0.0],
+				[ 0.0, 0.0, 0.0, 1.0f32]
+			],
+			time: time
+		};
 
 		/* Drawing process */
 		let mut target = display.draw();
 		target.clear_color(0.1, 0.1, 0.1, 1.0); {
-			target.draw(&vertex_buffer, &indices, &program, &uniform! { time: time }, &Default::default()).unwrap();
+			target.draw(&vertex_buffer, &indices, &program, &uniforms, &Default::default()).unwrap();
 		} target.finish().unwrap();
 	});
 }

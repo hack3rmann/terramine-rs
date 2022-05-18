@@ -9,6 +9,7 @@ in vec3 color;
 out vec4 u_Color_Time;
 
 /* Time uniform */
+uniform mat4 transform;
 uniform float time;
 
 void main() {
@@ -16,5 +17,5 @@ void main() {
     u_Color_Time = vec4(color.rgb, time);
 
     /* Writing to gl_Position */
-    gl_Position = vec4(position, 0.0, 1.0);
+    gl_Position = transform * vec4(position, 0.0, 1.0);
 }
