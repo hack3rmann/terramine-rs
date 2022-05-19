@@ -2,33 +2,27 @@
 extern crate glium;
 extern crate image;
 
-/* STD stuff */
-use std::io::Cursor;
-
 /* Glium includes */
 use glium::glutin;
 use glium::Surface;
 
 /* Other files */
 mod shader;
+mod texture;
 mod window;
 use shader::Shader;
+use texture::Texture;
 use window::Window;
 
 fn main() {
-	/* Image loading */
-	let image = image::load(
-		Cursor::new(&include_bytes!("image/grass_side_norn.png")),
-		image::ImageFormat::Png
-	).unwrap().to_rgba8();
-	let image_size = image.dimensions();
-	let image = glium::texture::RawImage2d::from_raw_rgba_reversed(&image.into_raw(), image_size);
-
 	/* Graphics stuff */
 	let event_loop = glutin::event_loop::EventLoop::new();
 	let window = Window::from(false);
 	let cb = glutin::ContextBuilder::new();
 	let display = glium::Display::new(window.window_builder, cb, &event_loop).unwrap();
+
+	/* Texture loading */
+	let texture = Texture::from("src/image/grass_side_norn.png", &display);
 
 	/* Define vertices and triangle */
 	let shape = vec! [
@@ -47,9 +41,6 @@ fn main() {
 	/* Shader program */
 	let shaders = Shader::new("src/vertex_shader.glsl", "src/fragment_shader.glsl", &display);
 
-	/* OpenGL texture 2d */
-	let texture = glium::texture::SrgbTexture2d::new(&display, image).unwrap();
-
 	/* Event loop run */
 	event_loop.run(move |event, _, control_flow| {
 		/* Event match */
@@ -65,10 +56,8 @@ fn main() {
 
 		/* Uniforms set */
 		let uniforms = uniform! {
-			/* Texture uniform with nearest filtering */
-			tex: glium::uniforms::Sampler::new(&texture)
-					.magnify_filter(glium::uniforms::MagnifySamplerFilter::Nearest)
-					.minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapNearest)
+			/* Texture uniform with filtering */
+			tex: texture.with_mips()
 		};
 
 		/* Drawing process */
