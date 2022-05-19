@@ -2,7 +2,6 @@
 #define GLSLIFY 1
 
 /* Input compound */
-in float a_Time;
 in vec2 a_Tex_Coords;
 
 /* Output */

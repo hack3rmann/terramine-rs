@@ -7,20 +7,18 @@ use glium::glutin;
 
 /* Window struct */
 pub struct Window {
-	width: i32,
-	height: i32,
 	pub window_builder: glium::glutin::window::WindowBuilder
 }
 
 impl Window {
 	/* Constructs window */
-	pub fn from(width: i32, height: i32, resizable: bool) -> Self {
+	pub fn from(resizable: bool) -> Self {
 		let window_builder = glutin::window::WindowBuilder::new()
 			.with_decorations(true)
 			.with_title("Terramine")
 			.with_resizable(resizable);
 
-		let window = Window { width: width, height: height, window_builder: window_builder };
+		let window = Window { window_builder: window_builder };
 
 		return window;
 	}
