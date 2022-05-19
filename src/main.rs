@@ -68,6 +68,7 @@ fn main() {
 			/* Texture uniform with nearest filtering */
 			tex: glium::uniforms::Sampler::new(&texture)
 					.magnify_filter(glium::uniforms::MagnifySamplerFilter::Nearest)
+					.minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapNearest)
 		};
 
 		/* Drawing process */
