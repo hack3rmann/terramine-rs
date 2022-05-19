@@ -1,4 +1,4 @@
-#version 140
+#version 440
 
 /* Input compound */
 in vec2 a_Tex_Coords;

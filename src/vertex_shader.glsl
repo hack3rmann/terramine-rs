@@ -1,4 +1,4 @@
-#version 140
+#version 440
 
 /* Vertex buffer inputs */
 in vec2 position;

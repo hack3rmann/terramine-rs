@@ -1,4 +1,4 @@
-#version 140
+#version 440
 #define GLSLIFY 1
 
 /* Input compound */
