@@ -10,7 +10,6 @@ out float a_Time;
 out vec2 a_Tex_Coords;
 
 /* Time uniform */
-uniform mat4 transform;
 uniform float time;
 
 void main() {
@@ -19,5 +18,5 @@ void main() {
     a_Tex_Coords = tex_coords;
 
     /* Writing to gl_Position */
-    gl_Position = /* transform * */ vec4(position, 0.0, 1.0);
+    gl_Position = vec4(position, 0.0, 1.0);
 }

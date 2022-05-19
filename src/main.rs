@@ -16,6 +16,7 @@ use shader::Shader;
 use window::Window;
 
 fn main() {
+	/* Image loading */
 	let image = image::load(
 		Cursor::new(&include_bytes!("image/grass_side_norn.png")),
 		image::ImageFormat::Png
@@ -79,8 +80,9 @@ fn main() {
 				[ 0.0, 0.0, 0.0, 1.0f32]
 			],
 			time: time,
+			/* Texture uniform with nearest filtering */
 			tex: glium::uniforms::Sampler::new(&texture)
-			.magnify_filter(glium::uniforms::MagnifySamplerFilter::Nearest)
+					.magnify_filter(glium::uniforms::MagnifySamplerFilter::Nearest)
 		};
 
 		/* Drawing process */
