@@ -1,5 +1,9 @@
 #[macro_use]
 extern crate glium;
+extern crate image;
+
+/* STD stuff */
+use std::io::Cursor;
 
 /* Glium includes */
 use glium::glutin;
@@ -12,6 +16,13 @@ use shader::Shader;
 use window::Window;
 
 fn main() {
+	let image = image::load(
+		Cursor::new(&include_bytes!("image/grass_side_norn.png")),
+		image::ImageFormat::Png
+	).unwrap().to_rgba8();
+	let image_size = image.dimensions();
+	let image = glium::texture::RawImage2d::from_raw_rgba_reversed(&image.into_raw(), image_size);
+
 	/* Graphics stuff */
 	let event_loop = glutin::event_loop::EventLoop::new();
 	let window = Window::from(640, 480, false);
@@ -19,10 +30,13 @@ fn main() {
 	let display = glium::Display::new(window.window_builder, cb, &event_loop).unwrap();
 
 	/* Define vertices and triangle */
-	let vertex1 = Vertex { position: [-0.5, -0.5], color: [1.0, 0.0, 0.0] };
-	let vertex2 = Vertex { position: [ 0.0,  0.5], color: [0.0, 1.0, 0.0] };
-	let vertex3 = Vertex { position: [ 0.5, -0.25], color: [0.0, 0.0, 1.0] };
-	let shape = vec![vertex1, vertex2, vertex3];
+	let vertex1 = Vertex { position: [-0.5, -0.5], tex_coords: [0.0, 0.0 ] };
+	let vertex2 = Vertex { position: [-0.5,  0.5], tex_coords: [0.0, 1.0 ] };
+	let vertex3 = Vertex { position: [ 0.5,  0.5], tex_coords: [1.0, 1.0 ] };
+	let vertex4 = Vertex { position: [-0.5, -0.5], tex_coords: [0.0, 0.0 ] };
+	let vertex5 = Vertex { position: [ 0.5,  0.5], tex_coords: [1.0, 1.0 ] };
+	let vertex6 = Vertex { position: [ 0.5, -0.5], tex_coords: [1.0, 0.0 ] };
+	let shape = vec![vertex1, vertex2, vertex3, vertex4, vertex5, vertex6];
 
 	/* Define vertex buffer */
 	let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
@@ -31,6 +45,8 @@ fn main() {
 	/* Shader program */
 	let shaders = Shader::new("src/vertex_shader.glsl", "src/fragment_shader.glsl");
 	let program = glium::Program::from_source(&display, shaders.vertex_src.as_str(), shaders.fragment_src.as_str(), None).unwrap();
+
+	let texture = glium::texture::SrgbTexture2d::new(&display, image).unwrap();
 
 	/* Time stuff */
 	let mut time: f32 = 0.0;
@@ -62,7 +78,9 @@ fn main() {
 				[ 0.0, 0.0, 1.0, 0.0],
 				[ 0.0, 0.0, 0.0, 1.0f32]
 			],
-			time: time
+			time: time,
+			tex: glium::uniforms::Sampler::new(&texture)
+			.magnify_filter(glium::uniforms::MagnifySamplerFilter::Nearest)
 		};
 
 		/* Drawing process */
@@ -77,8 +95,8 @@ fn main() {
 #[derive(Copy, Clone)]
 struct Vertex {
 	position: [f32; 2],
-	color: [f32; 3]
+	tex_coords: [f32; 2]
 }
 
 /* Implement Vertex struct as main vertex struct in glium */
-implement_vertex!(Vertex, position, color);
+implement_vertex!(Vertex, position, tex_coords);

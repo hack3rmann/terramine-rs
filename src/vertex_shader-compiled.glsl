@@ -3,10 +3,11 @@
 
 /* Vertex buffer inputs */
 in vec2 position;
-in vec3 color;
+in vec2 tex_coords;
 
 /* Output compound */
-out vec4 u_Color_Time;
+out float a_Time;
+out vec2 a_Tex_Coords;
 
 /* Time uniform */
 uniform mat4 transform;
@@ -14,8 +15,9 @@ uniform float time;
 
 void main() {
     /* Assempling output compound */
-    u_Color_Time = vec4(color.rgb, time);
+    a_Time = time;
+    a_Tex_Coords = tex_coords;
 
     /* Writing to gl_Position */
-    gl_Position = transform * vec4(position, 0.0, 1.0);
+    gl_Position = /* transform * */ vec4(position, 0.0, 1.0);
 }
