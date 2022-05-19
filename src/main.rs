@@ -45,8 +45,7 @@ fn main() {
 	let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
 	/* Shader program */
-	let shaders = Shader::new("src/vertex_shader.glsl", "src/fragment_shader.glsl");
-	let program = glium::Program::from_source(&display, shaders.vertex_src.as_str(), shaders.fragment_src.as_str(), None).unwrap();
+	let shaders = Shader::new("src/vertex_shader.glsl", "src/fragment_shader.glsl", &display);
 
 	/* OpenGL texture 2d */
 	let texture = glium::texture::SrgbTexture2d::new(&display, image).unwrap();
@@ -74,7 +73,7 @@ fn main() {
 		/* Drawing process */
 		let mut target = display.draw();
 		target.clear_color(0.1, 0.1, 0.1, 1.0); {
-			target.draw(&vertex_buffer, &indices, &program, &uniforms, &Default::default()).unwrap();
+			target.draw(&vertex_buffer, &indices, &shaders.program, &uniforms, &Default::default()).unwrap();
 		} target.finish().unwrap();
 	});
 }
