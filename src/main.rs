@@ -1,15 +1,15 @@
 #[macro_use]
 extern crate glium;
 extern crate image;
+mod shader;
+mod texture;
+mod window;
 
 /* Glium includes */
 use glium::glutin;
 use glium::Surface;
 
 /* Other files */
-mod shader;
-mod texture;
-mod window;
 use shader::Shader;
 use texture::Texture;
 use window::Window;
