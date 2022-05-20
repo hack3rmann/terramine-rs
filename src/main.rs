@@ -22,16 +22,16 @@ fn main() {
 	let display = glium::Display::new(window.window_builder, cb, &event_loop).unwrap();
 
 	/* Texture loading */
-	let texture = Texture::from("src/image/grass_side_norn.png", &display);
+	let texture = Texture::from("src/image/testSprite.png", &display);
 
 	/* Define vertices and triangle */
 	let shape = vec! [
-		Vertex { position: [-0.5, -0.5 ], tex_coords: [ 0.0, 0.0 ] },
-		Vertex { position: [-0.5,  0.5 ], tex_coords: [ 0.0, 1.0 ] },
-		Vertex { position: [ 0.5,  0.5 ], tex_coords: [ 1.0, 1.0 ] },
-		Vertex { position: [-0.5, -0.5 ], tex_coords: [ 0.0, 0.0 ] },
-		Vertex { position: [ 0.5,  0.5 ], tex_coords: [ 1.0, 1.0 ] },
-		Vertex { position: [ 0.5, -0.5 ], tex_coords: [ 1.0, 0.0 ] }
+		Vertex { position: [-0.9, -0.15 ], tex_coords: [ 0.0, 0.0 ] },
+		Vertex { position: [-0.9,  0.15 ], tex_coords: [ 0.0, 1.0 ] },
+		Vertex { position: [ 0.9,  0.15 ], tex_coords: [ 1.0, 1.0 ] },
+		Vertex { position: [-0.9, -0.15 ], tex_coords: [ 0.0, 0.0 ] },
+		Vertex { position: [ 0.9,  0.15 ], tex_coords: [ 1.0, 1.0 ] },
+		Vertex { position: [ 0.9, -0.15 ], tex_coords: [ 1.0, 0.0 ] }
 	];
 
 	/* Define vertex buffer */
