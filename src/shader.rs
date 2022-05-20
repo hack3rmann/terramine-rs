@@ -19,12 +19,10 @@ impl Shader {
 		let fragment_shader_src = fs::read_to_string(fragment_shader_path).expect("Can't read fragment shader file!");
 
 		/* Construct the struct */
-		let shader = Shader {
+		Shader {
 			vertex_src: String::from(&vertex_shader_src),
 			fragment_src: String::from(&fragment_shader_src),
 			program: glium::Program::from_source(display, vertex_shader_src.as_str(), fragment_shader_src.as_str(), None).unwrap()
-		};
-
-		return shader;
+		}
 	}
 }

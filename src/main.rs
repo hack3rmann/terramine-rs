@@ -18,8 +18,10 @@ fn main() {
 	/* Graphics stuff */
 	let event_loop = glutin::event_loop::EventLoop::new();
 	let window = Window::from(false);
-	let cb = glutin::ContextBuilder::new();
-	let display = glium::Display::new(window.window_builder, cb, &event_loop).unwrap();
+	let display = {
+		let cb = glutin::ContextBuilder::new();
+		glium::Display::new(window.window_builder, cb, &event_loop).unwrap()
+	};
 
 	/* Texture loading */
 	let texture = Texture::from("src/image/testSprite.png", &display);
