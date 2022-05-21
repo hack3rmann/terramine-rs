@@ -7,7 +7,9 @@ use glium::glutin;
 
 /* Window struct */
 pub struct Window {
-	pub window_builder: glium::glutin::window::WindowBuilder
+	pub window_builder: glium::glutin::window::WindowBuilder,
+    pub width: i32,
+    pub height: i32
 }
 
 pub enum Exit {
@@ -17,15 +19,18 @@ pub enum Exit {
 
 impl Window {
 	/* Constructs window */
-	pub fn from(resizable: bool) -> Self {
+	pub fn from(width: i32, height: i32, resizable: bool) -> Self {
 		let window_builder = glutin::window::WindowBuilder::new()
 			.with_decorations(true)
 			.with_title("Terramine")
-			.with_resizable(resizable);
+			.with_resizable(resizable)
+            .with_inner_size(glutin::dpi::LogicalSize::new(width, height));
 
-		let window = Window { window_builder: window_builder };
-
-		return window;
+		Window {
+            window_builder: window_builder,
+            width: width,
+            height: height
+        }
 	}
 	/* Processing window messages */
 	pub fn process_events(event: &glium::glutin::event::Event<()>) -> Exit {

@@ -17,7 +17,7 @@ use window::Window;
 fn main() {
 	/* Graphics stuff */
 	let event_loop = glutin::event_loop::EventLoop::new();
-	let window = Window::from(false);
+	let window = Window::from(1024, 768, false);
 	let display = {
 		let cb = glutin::ContextBuilder::new();
 		glium::Display::new(window.window_builder, cb, &event_loop).unwrap()
