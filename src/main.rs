@@ -45,16 +45,11 @@ fn main() {
 
 	/* Event loop run */
 	event_loop.run(move |event, _, control_flow| {
-		/* Event match */
-		Window::process_events(&event, control_flow);
-		if *control_flow == glutin::event_loop::ControlFlow::Exit {
+		/* Exit if window have that message */
+		if let window::Exit::Exit = Window::process_events(&event) {
+			Window::exit(control_flow);
 			return;
 		}
-
-		/* Control flow */
-		/* FPS cutoff removed because it may lag */
-		let next_frame_time = std::time::Instant::now() + std::time::Duration::from_nanos(/*16_666_667*/0);
-		*control_flow = glutin::event_loop::ControlFlow::WaitUntil(next_frame_time);
 
 		/* Uniforms set */
 		let uniforms = uniform! {
