@@ -383,6 +383,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "directx_math"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b80b68043b3d122ce8a8fd6cba0803d6c92746a472f006e2278fc0d5262f2183"
+
+[[package]]
 name = "dispatch"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1199,6 +1205,7 @@ checksum = "36ae8932fcfea38b7d3883ae2ab357b0d57a02caaa18ebb4f5ece08beaec4aa0"
 name = "terramine"
 version = "0.1.0"
 dependencies = [
+ "directx_math",
  "glium",
  "image",
 ]
