@@ -23,6 +23,8 @@ fn main() {
 		glium::Display::new(window.window_builder, cb, &event_loop).unwrap()
 	};
 
+	/* Test new branch commentary */
+
 	/* Texture loading */
 	let texture = Texture::from("src/image/testSprite.png", &display);
 
