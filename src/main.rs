@@ -24,7 +24,7 @@ fn main() {
 	};
 
 	/* Texture loading */
-	let texture = Texture::from("src/image/testSprite.png", &display);
+	let texture = Texture::from("src/image/testSprite.png", &display).unwrap();
 
 	/* Define vertices and triangle */
 	let shape = vec! [

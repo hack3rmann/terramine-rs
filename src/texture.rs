@@ -12,8 +12,12 @@ pub struct Texture {
 
 impl Texture {
 	/// Loads texture from path.
-	pub fn from(path: &str, display: &glium::Display) -> Self {
-		let image_bytes = fs::read(path).unwrap();
+	pub fn from(path: &str, display: &glium::Display) -> Result<Self, std::io::Error> {
+		let image_bytes = fs::read(path);
+		let image_bytes = match image_bytes {
+			Ok(image_bytes) => image_bytes,
+			Err(msg) => return Err(msg)
+		};
 
 		let image = image::load(
 			Cursor::new(image_bytes),
@@ -24,12 +28,14 @@ impl Texture {
 		
 		let texture = glium::texture::SrgbTexture2d::new(display, image).unwrap();
 
-		Texture {
-			path: String::from(path),
-			opengl_texture: texture,
-			width: image_size.0,
-			heigth: image_size.1
-		}
+		Ok (
+			Texture {
+				path: String::from(path),
+				opengl_texture: texture,
+				width: image_size.0,
+				heigth: image_size.1
+			}
+		)
 	}
 	/// Adds mips to texture uniform.
 	pub fn with_mips(&self) -> glium::uniforms::Sampler<glium::texture::SrgbTexture2d> {
