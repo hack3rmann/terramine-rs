@@ -4,6 +4,7 @@ extern crate image;
 mod shader;
 mod texture;
 mod window;
+mod graphics;
 
 /* Glium includes */
 use glium::glutin;
@@ -13,18 +14,15 @@ use glium::Surface;
 use shader::Shader;
 use texture::Texture;
 use window::Window;
+use graphics::Graphics;
 
 fn main() {
 	/* Graphics stuff */
 	let event_loop = glutin::event_loop::EventLoop::new();
-	let window = Window::from(1024, 768, false);
-	let display = {
-		let cb = glutin::ContextBuilder::new();
-		glium::Display::new(window.window_builder, cb, &event_loop).unwrap()
-	};
+	let graphics = Graphics::initialize(&event_loop).unwrap();
 
 	/* Texture loading */
-	let texture = Texture::from("src/image/testSprite.png", &display).unwrap();
+	let texture = Texture::from("src/image/testSprite.png", &graphics.display).unwrap();
 
 	/* Define vertices and triangle */
 	let shape = vec! [
@@ -37,11 +35,11 @@ fn main() {
 	];
 
 	/* Define vertex buffer */
-	let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
+	let vertex_buffer = glium::VertexBuffer::new(&graphics.display, &shape).unwrap();
 	let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
 	/* Shader program */
-	let shaders = Shader::new("src/vertex_shader.glsl", "src/fragment_shader.glsl", &display);
+	let shaders = Shader::new("src/vertex_shader.glsl", "src/fragment_shader.glsl", &graphics.display);
 
 	/* Event loop run */
 	event_loop.run(move |event, _, control_flow| {
@@ -58,7 +56,7 @@ fn main() {
 		};
 
 		/* Drawing process */
-		let mut target = display.draw();
+		let mut target = graphics.display.draw();
 		target.clear_color(0.1, 0.1, 0.1, 1.0); {
 			target.draw(&vertex_buffer, &indices, &shaders.program, &uniforms, &Default::default()).unwrap();
 		} target.finish().unwrap();
