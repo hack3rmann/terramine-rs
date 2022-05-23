@@ -1,17 +1,17 @@
-use crate::window::{self, Window};
+use crate::window::Window;
 use crate::glium;
-use glium::Surface;
 
 static mut IS_GRAPHICS_INITIALIZED: bool = false;
 
 pub struct Graphics {
 	pub window: Window,
 	pub vertex_buffer: Option<glium::VertexBuffer<Vertex>>,
-	pub display: glium::Display
+	pub display: glium::Display,
+	pub event_loop: Option<glium::glutin::event_loop::EventLoop<()>>
 }
 
 impl Graphics {
-	pub fn initialize(event_loop: &glium::glutin::event_loop::EventLoop<()>) -> Result<Self, &'static str> {
+	pub fn initialize() -> Result<Self, &'static str> {
 		unsafe {
 			if IS_GRAPHICS_INITIALIZED {
 				return Err("Attempting to initialize graphics twice! Graphics is already initialized!");
@@ -21,6 +21,7 @@ impl Graphics {
 		}
 
 		let window = Window::from(1024, 768, false);
+		let event_loop = glium::glutin::event_loop::EventLoop::new();
 		let display = {
 			let context_builder = glium::glutin::ContextBuilder::new();
 			glium::Display::new(window.window_builder.clone(), context_builder, &event_loop).unwrap()
@@ -30,7 +31,8 @@ impl Graphics {
 			Graphics {
 				window: window,
 				vertex_buffer: None,
-				display: display
+				display: display,
+				event_loop: Some(event_loop)
 			}
 		)
 	}
@@ -39,7 +41,11 @@ impl Graphics {
 		self.vertex_buffer = Some(vertex_buffer);
 	}
 
-	
+	pub fn take_event_loop(&mut self) -> glium::glutin::event_loop::EventLoop<()> {
+		let mut event_loop = None;
+		std::mem::swap(&mut event_loop, &mut self.event_loop);
+		event_loop.unwrap()
+	}
 }
 
 /* Vertex help struct */

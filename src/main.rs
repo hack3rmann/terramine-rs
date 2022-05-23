@@ -18,8 +18,7 @@ use graphics::{Graphics, Vertex};
 
 fn main() {
 	/* Graphics stuff */
-	let event_loop = glutin::event_loop::EventLoop::new();
-	let graphics = Graphics::initialize(&event_loop).unwrap();
+	let mut graphics = Graphics::initialize().unwrap();
 
 	/* Texture loading */
 	let texture = Texture::from("src/image/testSprite.png", &graphics.display).unwrap();
@@ -42,7 +41,7 @@ fn main() {
 	let shaders = Shader::new("src/vertex_shader.glsl", "src/fragment_shader.glsl", &graphics.display);
 
 	/* Event loop run */
-	event_loop.run(move |event, _, control_flow| {
+	graphics.take_event_loop().run(move |event, _, control_flow| {
 		/* Exit if window have that message */
 		if let window::Exit::Exit = Window::process_events(&event) {
 			Window::exit(control_flow);
