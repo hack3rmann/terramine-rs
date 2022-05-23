@@ -5,6 +5,7 @@ use crate::glium;
 
 static mut IS_GRAPHICS_INITIALIZED: bool = false;
 
+/// Struct that handles graphics.
 pub struct Graphics {
 	pub window: Window,
 	pub vertex_buffer: Option<glium::VertexBuffer<Vertex>>,
@@ -15,7 +16,10 @@ pub struct Graphics {
 }
 
 impl Graphics {
+	/// Graphics initialize function. Can be called once.
+	/// If you call it again it will panic.
 	pub fn initialize() -> Result<Self, &'static str> {
+		/* Checks if struct is already initialized */
 		unsafe {
 			if IS_GRAPHICS_INITIALIZED {
 				return Err("Attempting to initialize graphics twice! Graphics is already initialized!");
@@ -24,6 +28,7 @@ impl Graphics {
 			}
 		}
 
+		/* Creates variables */
 		let window = Window::from(1024, 768, false);
 		let event_loop = glium::glutin::event_loop::EventLoop::new();
 		let display = {
@@ -43,16 +48,20 @@ impl Graphics {
 		)
 	}
 
+	/// Borrow vertex buffer into graphics pipeline.
 	pub fn upload_vertex_buffer(&mut self, vertex_buffer: VertexBuffer) {
 		self.vertex_buffer = Some(vertex_buffer.vertex_buffer);
 		self.primitive_type = Some(vertex_buffer.indices);
 	}
 
+	/// Borrow shader into graphics pipeline.
 	pub fn upload_shaders(&mut self, shaders: Shader) {
 		self.shaders = Some(shaders);
 	}
 
+	/// Gives event_loop and romoves it from graphics struct
 	pub fn take_event_loop(&mut self) -> glium::glutin::event_loop::EventLoop<()> {
+		/* Swaps struct variable with returned */
 		if let None = self.event_loop {
 			panic!("Graphics.event_loop haven't been initialized!")
 		} else {
@@ -62,7 +71,9 @@ impl Graphics {
 		}
 	}
 
+	/// Gives shaders and romoves it from graphics struct
 	pub fn take_shaders(&mut self) -> Shader {
+		/* Swaps struct variable with returned */
 		if let None = self.shaders {
 			panic!("Graphics.shaders haven't beed initialized!")
 		} else {
@@ -72,7 +83,9 @@ impl Graphics {
 		}
 	}
 
+	/// Gives vertex_buffer and romoves it from graphics struct
 	pub fn take_vertex_buffer(&mut self) -> glium::VertexBuffer<Vertex> {
+		/* Swaps struct variable with returned */
 		if let None = self.vertex_buffer {
 			panic!("Graphics.vertex_buffer haven't been initialized!")
 		} else {
@@ -82,7 +95,9 @@ impl Graphics {
 		}
 	}
 
+	/// Gives primitive_type and romoves it from graphics struct
 	pub fn take_privitive_type(&mut self) -> glium::index::NoIndices {
+		/* Swaps struct variable with returned */
 		if let None = self.primitive_type {
 			panic!("Graphics.primitive_type haven't been initialized!")
 		} else {
@@ -93,7 +108,7 @@ impl Graphics {
 	}
 }
 
-/* Vertex help struct */
+/// Vertex help struct to OpenGL
 #[derive(Copy, Clone)]
 pub struct Vertex {
 	pub position: [f32; 2],

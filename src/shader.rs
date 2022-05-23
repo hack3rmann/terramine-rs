@@ -4,7 +4,7 @@
 
 use std::fs;
 
-/* Shader struct is container for shader source code */
+/// Shader struct is container for shader source code
 pub struct Shader {
 	pub vertex_src: String,
 	pub fragment_src: String,
