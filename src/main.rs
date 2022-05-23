@@ -7,7 +7,6 @@ mod window;
 mod graphics;
 
 /* Glium includes */
-use glium::glutin;
 use glium::Surface;
 
 /* Other files */
@@ -36,11 +35,15 @@ fn main() {
 	/* Define vertex buffer */
 	let vertex_buffer = glium::VertexBuffer::new(&graphics.display, &shape).unwrap();
 	let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+	graphics.upload_vertex_buffer(vertex_buffer);
 
 	/* Shader program */
 	let shaders = Shader::new("src/vertex_shader.glsl", "src/fragment_shader.glsl", &graphics.display);
+	graphics.upload_shaders(shaders);
 
 	/* Event loop run */
+	let vertex_buffer = graphics.take_vertex_buffer();
+	let shaders = graphics.take_shaders();
 	graphics.take_event_loop().run(move |event, _, control_flow| {
 		/* Exit if window have that message */
 		if let window::Exit::Exit = Window::process_events(&event) {
@@ -54,10 +57,17 @@ fn main() {
 			tex: texture.with_mips()
 		};
 
+
 		/* Drawing process */
 		let mut target = graphics.display.draw();
 		target.clear_color(0.1, 0.1, 0.1, 1.0); {
-			target.draw(&vertex_buffer, &indices, &shaders.program, &uniforms, &Default::default()).unwrap();
+			target.draw(
+				&vertex_buffer,
+				&indices,
+				&shaders.program,
+				&uniforms,
+				&Default::default()
+			).unwrap();
 		} target.finish().unwrap();
 	});
 }

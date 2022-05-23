@@ -1,4 +1,5 @@
 use crate::window::Window;
+use crate::shader::Shader;
 use crate::glium;
 
 static mut IS_GRAPHICS_INITIALIZED: bool = false;
@@ -7,7 +8,8 @@ pub struct Graphics {
 	pub window: Window,
 	pub vertex_buffer: Option<glium::VertexBuffer<Vertex>>,
 	pub display: glium::Display,
-	pub event_loop: Option<glium::glutin::event_loop::EventLoop<()>>
+	pub event_loop: Option<glium::glutin::event_loop::EventLoop<()>>,
+	pub shaders: Option<Shader>
 }
 
 impl Graphics {
@@ -32,7 +34,8 @@ impl Graphics {
 				window: window,
 				vertex_buffer: None,
 				display: display,
-				event_loop: Some(event_loop)
+				event_loop: Some(event_loop),
+				shaders: None
 			}
 		)
 	}
@@ -41,10 +44,38 @@ impl Graphics {
 		self.vertex_buffer = Some(vertex_buffer);
 	}
 
+	pub fn upload_shaders(&mut self, shaders: Shader) {
+		self.shaders = Some(shaders);
+	}
+
 	pub fn take_event_loop(&mut self) -> glium::glutin::event_loop::EventLoop<()> {
-		let mut event_loop = None;
-		std::mem::swap(&mut event_loop, &mut self.event_loop);
-		event_loop.unwrap()
+		if let None = self.event_loop {
+			panic!("Graphics.event_loop haven't been initialized!")
+		} else {
+			let mut event_loop = None;
+			std::mem::swap(&mut event_loop, &mut self.event_loop);
+			event_loop.unwrap()
+		}
+	}
+
+	pub fn take_shaders(&mut self) -> Shader {
+		if let None = self.shaders {
+			panic!("Graphics.shaders haven't beed initialized!")
+		} else {
+			let mut shaders = None;
+			std::mem::swap(&mut shaders, &mut self.shaders);
+			shaders.unwrap()
+		}
+	}
+
+	pub fn take_vertex_buffer(&mut self) -> glium::VertexBuffer<Vertex> {
+		if let None = self.vertex_buffer {
+			panic!("Graphics.vertex_buffer haven't been initialized!")
+		} else {
+			let mut vertex_buffer = None;
+			std::mem::swap(&mut vertex_buffer, &mut self.vertex_buffer);
+			vertex_buffer.unwrap()
+		}
 	}
 }
 
