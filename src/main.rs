@@ -14,7 +14,7 @@ use glium::Surface;
 use shader::Shader;
 use texture::Texture;
 use window::Window;
-use graphics::{Graphics, Vertex};
+use graphics::Graphics;
 use vertex_buffer::VertexBuffer;
 
 fn main() {

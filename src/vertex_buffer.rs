@@ -10,8 +10,6 @@ pub struct VertexBuffer {
 }
 
 impl VertexBuffer {
-	pub fn new() -> Self { unimplemented!() }
-
 	pub fn bind(self, graphics: &mut Graphics) {
 		graphics.upload_vertex_buffer(self);
 	}
