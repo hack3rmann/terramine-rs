@@ -59,25 +59,30 @@ impl Window {
 	/// Processing window messages.
 	pub fn process_events(event: &glium::glutin::event::Event<()>) -> Exit {
 		match event {
+			/* Window events */
             glutin::event::Event::WindowEvent { event, .. } => match event {
-                glutin::event::WindowEvent::CloseRequested => {
-                    return Exit::Exit;
-                },
+				/* Close event */
+                glutin::event::WindowEvent::CloseRequested => Exit::Exit,
+				/* Keyboard input event */
 				glutin::event::WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
+					/* Key matching */
 					Some(key) => match key {
-						glutin::event::VirtualKeyCode::Escape => return Exit::Exit,
-						_ => return Exit::None
+						glutin::event::VirtualKeyCode::Escape => Exit::Exit,
+						_ => Exit::None
 					}
-					_ => return Exit::None
+					_ => Exit::None
 				},
-                _ => return Exit::None,
+                _ => Exit::None,
             },
+			/* Glium events */
             glutin::event::Event::NewEvents(cause) => match cause {
+				/* "Wait until" called event */
                 glutin::event::StartCause::ResumeTimeReached { .. } => Exit::None,
+				/* Window initialized event */
                 glutin::event::StartCause::Init => Exit::None,
-                _ => return Exit::None,
+                _ => Exit::None,
             },
-            _ => return Exit::None,
+            _ => Exit::None,
         }
 	}
 	/// Window close function.
