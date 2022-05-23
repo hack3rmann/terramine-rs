@@ -4,16 +4,19 @@
 
 use crate::graphics::{Graphics, Vertex};
 
+/// Vertex buffer help struct.
 pub struct VertexBuffer {
 	pub vertex_buffer: glium::VertexBuffer<Vertex>,
 	pub indices: glium::index::NoIndices
 }
 
 impl VertexBuffer {
+	/// Binds vertex buffer to pipeline.
 	pub fn bind(self, graphics: &mut Graphics) {
 		graphics.upload_vertex_buffer(self);
 	}
 
+	/// Test code. Default realisation.
 	pub fn default(graphics: &Graphics) -> Self {
 		/* Quad vertices */
 		let shape = vec! [
