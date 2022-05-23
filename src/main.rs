@@ -40,9 +40,12 @@ fn main() {
 	/* Event loop run */
 	graphics.take_event_loop().run(move |event, _, control_flow| {
 		/* Exit if window have that message */
-		if let window::Exit::Exit = Window::process_events(&event) {
-			Window::exit(control_flow);
-			return;
+		match Window::process_events(&event) {
+			window::Exit::Exit => {
+				Window::exit(control_flow);
+				return;
+			},
+			_ => ()
 		}
 
 		/* Uniforms set */

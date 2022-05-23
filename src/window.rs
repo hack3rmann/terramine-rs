@@ -18,7 +18,7 @@ pub enum Exit {
 }
 
 impl Window {
-	/* Constructs window */
+	/// Constructs window.
 	pub fn from(width: i32, height: i32, resizable: bool) -> Self {
 		let window_builder = glutin::window::WindowBuilder::new()
 			.with_decorations(true)
@@ -32,13 +32,20 @@ impl Window {
             height: height
         }
 	}
-	/* Processing window messages */
+	/// Processing window messages.
 	pub fn process_events(event: &glium::glutin::event::Event<()>) -> Exit {
 		match event {
             glutin::event::Event::WindowEvent { event, .. } => match event {
                 glutin::event::WindowEvent::CloseRequested => {
                     return Exit::Exit;
                 },
+				glutin::event::WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
+					Some(key) => match key {
+						glutin::event::VirtualKeyCode::Escape => return Exit::Exit,
+						_ => return Exit::None
+					}
+					_ => return Exit::None
+				},
                 _ => return Exit::None,
             },
             glutin::event::Event::NewEvents(cause) => match cause {
@@ -49,6 +56,7 @@ impl Window {
             _ => return Exit::None,
         }
 	}
+	/// Window close function.
     pub fn exit(control_flow: &mut glutin::event_loop::ControlFlow) {
         *control_flow = glutin::event_loop::ControlFlow::Exit;
     }
