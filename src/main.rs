@@ -14,7 +14,7 @@ use glium::Surface;
 use shader::Shader;
 use texture::Texture;
 use window::Window;
-use graphics::Graphics;
+use graphics::{Graphics, Vertex};
 
 fn main() {
 	/* Graphics stuff */
@@ -62,13 +62,3 @@ fn main() {
 		} target.finish().unwrap();
 	});
 }
-
-/* Vertex help struct */
-#[derive(Copy, Clone)]
-struct Vertex {
-	position: [f32; 2],
-	tex_coords: [f32; 2]
-}
-
-/* Implement Vertex struct as main vertex struct in glium */
-implement_vertex!(Vertex, position, tex_coords);
