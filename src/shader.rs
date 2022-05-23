@@ -12,7 +12,7 @@ pub struct Shader {
 }
 
 impl Shader {
-	/* Returns new Shader object that contains shader source code from their path */
+	/// Returns new Shader object that contains shader source code from their path
 	pub fn new(vertex_shader_path: &str, fragment_shader_path: &str, display: &glium::Display) -> Self {
 		/* File reading */
 		let vertex_shader_src = fs::read_to_string(vertex_shader_path).expect("Can't read vertex shader file!");
