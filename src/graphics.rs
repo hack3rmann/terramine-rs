@@ -1,5 +1,6 @@
 use crate::window::Window;
 use crate::shader::Shader;
+use crate::vertex_buffer::VertexBuffer;
 use crate::glium;
 
 static mut IS_GRAPHICS_INITIALIZED: bool = false;
@@ -7,6 +8,7 @@ static mut IS_GRAPHICS_INITIALIZED: bool = false;
 pub struct Graphics {
 	pub window: Window,
 	pub vertex_buffer: Option<glium::VertexBuffer<Vertex>>,
+	pub primitive_type: Option<glium::index::NoIndices>,
 	pub display: glium::Display,
 	pub event_loop: Option<glium::glutin::event_loop::EventLoop<()>>,
 	pub shaders: Option<Shader>
@@ -33,6 +35,7 @@ impl Graphics {
 			Graphics {
 				window: window,
 				vertex_buffer: None,
+				primitive_type: None,
 				display: display,
 				event_loop: Some(event_loop),
 				shaders: None
@@ -40,8 +43,9 @@ impl Graphics {
 		)
 	}
 
-	pub fn upload_vertex_buffer(&mut self, vertex_buffer: glium::VertexBuffer<Vertex>) {
-		self.vertex_buffer = Some(vertex_buffer);
+	pub fn upload_vertex_buffer(&mut self, vertex_buffer: VertexBuffer) {
+		self.vertex_buffer = Some(vertex_buffer.vertex_buffer);
+		self.primitive_type = Some(vertex_buffer.indices);
 	}
 
 	pub fn upload_shaders(&mut self, shaders: Shader) {
@@ -75,6 +79,16 @@ impl Graphics {
 			let mut vertex_buffer = None;
 			std::mem::swap(&mut vertex_buffer, &mut self.vertex_buffer);
 			vertex_buffer.unwrap()
+		}
+	}
+
+	pub fn take_privitive_type(&mut self) -> glium::index::NoIndices {
+		if let None = self.primitive_type {
+			panic!("Graphics.primitive_type haven't been initialized!")
+		} else {
+			let mut primitive_type = None;
+			std::mem::swap(&mut primitive_type, &mut self.primitive_type);
+			primitive_type.unwrap()
 		}
 	}
 }
