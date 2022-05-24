@@ -29,14 +29,14 @@ fn main() {
 	vertex_buffer.bind(&mut graphics);
 
 	/* Shader program */
-	let shaders = Shader::new("src/vertex_shader.glsl", "src/fragment_shader.glsl", &graphics.display);
+	let shaders = Shader::new("vertex_shader", "fragment_shader", &graphics.display);
 	graphics.upload_shaders(shaders);
 
 	/* Temporary moves */
 	let vertex_buffer = graphics.take_vertex_buffer();
 	let indices = graphics.take_privitive_type();
 	let shaders = graphics.take_shaders();
-	
+
 	/* Event loop run */
 	graphics.take_event_loop().run(move |event, _, control_flow| {
 		/* Exit if window have that message */

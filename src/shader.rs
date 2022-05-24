@@ -12,11 +12,17 @@ pub struct Shader {
 }
 
 impl Shader {
-	/// Returns new Shader object that contains shader source code from their path
-	pub fn new(vertex_shader_path: &str, fragment_shader_path: &str, display: &glium::Display) -> Self {
+	/// Returns new Shader object that contains shader source code from their path.
+	/// It adds "src/shaders/" before the name and ".glsl" after.
+	pub fn new(vertex_shader_name: &str, fragment_shader_name: &str, display: &glium::Display) -> Self {
 		/* File reading */
-		let vertex_shader_src = fs::read_to_string(vertex_shader_path).expect("Can't read vertex shader file!");
-		let fragment_shader_src = fs::read_to_string(fragment_shader_path).expect("Can't read fragment shader file!");
+		let vertex_shader_src = fs::read_to_string(
+			format!("src/shaders/{}.glsl", vertex_shader_name)
+		).expect("Can't read vertex shader file!");
+
+		let fragment_shader_src = fs::read_to_string(
+			format!("src/shaders/{}.glsl", fragment_shader_name)
+		).expect("Can't read fragment shader file!");
 
 		/* Construct the struct */
 		Shader {
