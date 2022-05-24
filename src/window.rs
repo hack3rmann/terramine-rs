@@ -23,8 +23,9 @@ impl Window {
 	pub fn from(width: i32, height: i32, resizable: bool) -> Self {
 		/* Loading icon from bitmap */
 		let icon = {
-			/* Bytes vector from file */
-			let raw_data = fs::read("src/image/TerramineIcon32p.bmp").unwrap();
+			/* Bytes vector from bmp file */
+			/* File formatted in BGRA */
+			let mut raw_data = fs::read("src/image/TerramineIcon32p.bmp").unwrap();
 
 			/* Bytemap pointer load from 4 bytes of file */
 			/* This pointer is 4 bytes large and can be found on 10th byte position from file begin */
@@ -34,7 +35,14 @@ impl Window {
 										(raw_data[10] as usize);
 
 			/* Trim useless information */
-			let raw_data = &raw_data[start_bytes..];
+			let raw_data = raw_data[start_bytes..].as_mut();
+
+			/* Converting BGRA into RGBA formats */
+			let mut current: usize = 0;
+			while current <= raw_data.len() - 3 {
+				raw_data.swap(current, current + 2);
+				current += 4;
+			}
 
 			/* Upload data */
 			let mut data = Vec::with_capacity(raw_data.len());
