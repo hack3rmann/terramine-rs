@@ -21,6 +21,7 @@ pub struct Camera {
 	pub rotation: XMMatrix,
 }
 
+#[allow(dead_code)]
 impl Camera {
 	/// Creates camera.
 	pub fn new() -> Self { Default::default() }
