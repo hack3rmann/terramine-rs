@@ -111,7 +111,7 @@ impl Graphics {
 /// Vertex help struct to OpenGL
 #[derive(Copy, Clone)]
 pub struct Vertex {
-	pub position: [f32; 2],
+	pub position: [f32; 3],
 	pub tex_coords: [f32; 2]
 }
 

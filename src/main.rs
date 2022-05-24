@@ -6,11 +6,13 @@ mod texture;
 mod window;
 mod graphics;
 mod vertex_buffer;
+mod camera;
 
 /* Glium includes */
 use glium::Surface;
 
 /* Other files */
+use camera::Camera;
 use shader::Shader;
 use texture::Texture;
 use window::Window;
@@ -20,6 +22,9 @@ use vertex_buffer::VertexBuffer;
 fn main() {
 	/* Graphics initialization */
 	let mut graphics = Graphics::initialize().unwrap();
+
+	/* Camera handle */
+	let mut camera = Camera::new();
 
 	/* Texture loading */
 	let texture = Texture::from("src/image/testSprite.png", &graphics.display).unwrap();
@@ -37,6 +42,10 @@ fn main() {
 	let indices = graphics.take_privitive_type();
 	let shaders = graphics.take_shaders();
 
+	/* Time stuff */
+	let time_start = std::time::Instant::now();
+	let mut _time = time_start.elapsed().as_secs_f32();
+
 	/* Event loop run */
 	graphics.take_event_loop().run(move |event, _, control_flow| {
 		/* Exit if window have that message */
@@ -48,10 +57,19 @@ fn main() {
 			_ => ()
 		}
 
+		/* Time refresh */
+		_time = time_start.elapsed().as_secs_f32();
+
+		/* Rotating camera */
+		camera.set_rotation(1.0, _time * 2.0, _time, 0.0);
+
 		/* Uniforms set */
 		let uniforms = uniform! {
 			/* Texture uniform with filtering */
-			tex: texture.with_mips()
+			tex: texture.with_mips(),
+			time: _time,
+			proj: camera.get_proj(),
+			view: camera.get_view()
 		};
 
 		/* Drawing process */
