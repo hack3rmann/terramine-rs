@@ -61,7 +61,8 @@ fn main() {
 		_time = time_start.elapsed().as_secs_f32();
 
 		/* Rotating camera */
-		camera.set_rotation(1.0, _time * 2.0, _time, 0.0);
+		camera.set_rotation((_time * 4.0).sin() / 3.0, 0.0, 0.0);
+		camera.set_position(0.0, 0.0, 2.0);
 
 		/* Uniforms set */
 		let uniforms = uniform! {

@@ -10,7 +10,6 @@ pub struct Camera {
 	pub pitch: f32,
 	pub yaw: f32,
 	pub fov: f32,
-	pub r: f32,
 
 	/* Terrible code hightliting. It's type, not an object, stupid! */
 	pub pos: XMVector,
@@ -32,21 +31,10 @@ impl Camera {
 		self.up.0    = XMVector4Transform(XMVectorSet(0.0, 1.0,  0.0, 1.0), self.rotation.0);
 		self.front.0 = XMVector4Transform(XMVectorSet(0.0, 0.0, -1.0, 1.0), self.rotation.0);
 		self.right.0 = XMVector4Transform(XMVectorSet(1.0, 0.0,  0.0, 1.0), self.rotation.0);
-
-		/* Translate camera relative to origin (0.0, 0.0, 0.0) */
-		self.pos.0   = XMVector4Transform(
-			XMVectorSet(0.0, 0.0, 0.0, 1.0),
-			XMMatrixTranslation(
-				self.r * XMVectorGetX(self.front.0),
-				self.r * XMVectorGetY(self.front.0),
-				self.r * XMVectorGetZ(self.front.0)
-			)
-		);
 	}
 
 	/// Stores rotation.
-	pub fn set_rotation(&mut self, r: f32, roll: f32, pitch: f32, yaw: f32) {
-		self.r = -r;
+	pub fn set_rotation(&mut self, roll: f32, pitch: f32, yaw: f32) {
 		self.roll = roll;
 		self.pitch = pitch;
 		self.yaw = yaw;
@@ -54,6 +42,11 @@ impl Camera {
 		self.rotation.0 = XMMatrixRotationRollPitchYaw(roll, pitch, yaw);
 
 		self.update_vectors();
+	}
+
+	/// Sets position.
+	pub fn set_position(&mut self, x: f32, y: f32, z: f32) {
+		self.pos.0 = XMVectorSet(x, y, z, 1.0);
 	}
 
 	/// Sets rotation to [0.0, 0.0, 0.0].
@@ -93,7 +86,6 @@ impl Default for Camera {
 			roll: 0.0,
 			pitch: 0.0,
 			yaw: 0.0,
-			r: -1.0,
 			fov: 60.0,
 			pos: XMVector(XMVectorSet(0.0, 0.0, -3.0, 1.0)),
 			up: XMVector(XMVectorSet(0.0, 1.0, 0.0, 1.0)),
