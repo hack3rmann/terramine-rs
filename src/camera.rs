@@ -51,7 +51,7 @@ impl Camera {
 
 	/// Sets rotation to [0.0, 0.0, 0.0].
 	pub fn reset_rotation(&mut self) {
-		self.rotation.0 = XMMatrixRotationRollPitchYaw(0.0, 0.0, 0.0);
+		self.set_rotation(0.0, 0.0, 0.0);
 	}
 
 	/// Moves camera towards its vectors.

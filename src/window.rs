@@ -5,7 +5,7 @@
 /* Glium stuff */
 use glium::glutin;
 use std::fs;
-use crate::user_io::Keyboard;
+use crate::user_io::{Keyboard, Mouse};
 
 /* Window struct */
 pub struct Window {
@@ -51,7 +51,6 @@ impl Window {
 			glutin::window::Icon::from_rgba(data, 32, 32).unwrap()
 		};
 
-		/* Build the window */
 		let window_builder = glutin::window::WindowBuilder::new()
 			.with_decorations(true)
 			.with_title("Terramine")
@@ -65,9 +64,9 @@ impl Window {
             height: height
         }
 	}
-	
+
 	/// Processing window messages.
-	pub fn process_events(event: &glium::glutin::event::Event<()>, keyboard: &mut Keyboard) -> Exit {
+	pub fn process_events(event: &glium::glutin::event::Event<()>, keyboard: &mut Keyboard, mouse: &mut Mouse) -> Exit {
 		match event {
 			/* Window events */
             glutin::event::Event::WindowEvent { event, .. } => match event {
@@ -93,6 +92,33 @@ impl Window {
 					}
 					_ => Exit::None
 				},
+				/* Mouse buttons match. */
+				glutin::event::WindowEvent::MouseInput { button, state, .. } => match state {
+					/* If button is pressed then press it on virtual mouse, if not then release it. */
+					glutin::event::ElementState::Pressed => {
+						mouse.press(*button);
+						Exit::None
+					},
+					glutin::event::ElementState::Released => {
+						mouse.release(*button);
+						Exit::None
+					}
+				},
+				/* Cursor entered the window event. */
+				glutin::event::WindowEvent::CursorEntered { .. } => {
+					mouse.on_window = true;
+					Exit::None
+				},
+				/* Cursor left the window. */
+				glutin::event::WindowEvent::CursorLeft { .. } => {
+					mouse.on_window = false;
+					Exit::None
+				},
+				/* Cursor moved to new position. */
+				glutin::event::WindowEvent::CursorMoved { position, .. } => {
+					mouse.move_cursor(position.x as f32, position.y as f32);
+					Exit::None
+				}
                 _ => Exit::None,
             },
 			/* Glium events */
