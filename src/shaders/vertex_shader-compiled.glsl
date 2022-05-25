@@ -17,5 +17,5 @@ void main() {
     a_Tex_Coords = tex_coords;
 
     /* Writing to gl_Position */
-    gl_Position = proj * view * vec4(position, 1.0);
+    gl_Position = proj * view * vec4(position * log(time), 1.0);
 }
