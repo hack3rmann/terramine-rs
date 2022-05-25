@@ -7,11 +7,13 @@ mod window;
 mod graphics;
 mod vertex_buffer;
 mod camera;
+mod user_io;
 
 /* Glium includes */
 use glium::Surface;
 
 /* Other files */
+use user_io::{Keyboard, KeyCode};
 use camera::Camera;
 use shader::Shader;
 use texture::Texture;
@@ -20,6 +22,9 @@ use graphics::Graphics;
 use vertex_buffer::VertexBuffer;
 
 fn main() {
+	/* Keyboard init */
+	let mut keyboard = Keyboard::new();
+
 	/* Graphics initialization */
 	let mut graphics = Graphics::initialize().unwrap();
 
@@ -45,11 +50,17 @@ fn main() {
 	/* Time stuff */
 	let time_start = std::time::Instant::now();
 	let mut _time = time_start.elapsed().as_secs_f32();
+	
+	/* Camera rotation */
+	let mut roll: f32 = Default::default();
+	let mut pitch: f32 = Default::default();
+
+	camera.set_position(0.0, 0.0, 2.0);
 
 	/* Event loop run */
 	graphics.take_event_loop().run(move |event, _, control_flow| {
 		/* Exit if window have that message */
-		match Window::process_events(&event) {
+		match Window::process_events(&event, &mut keyboard) {
 			window::Exit::Exit => {
 				Window::exit(control_flow);
 				return;
@@ -57,12 +68,28 @@ fn main() {
 			_ => ()
 		}
 
+		/* Close window is `escape` pressed */
+		if keyboard.just_pressed(KeyCode::Escape) {
+			Window::exit(control_flow);
+		}
+
+		/* Control camera by user input */
+		if keyboard.is_pressed(KeyCode::W)		{ camera.move_pos( 0.001,  0.0,    0.0); }
+		if keyboard.is_pressed(KeyCode::S)		{ camera.move_pos(-0.001,  0.0,    0.0); }
+		if keyboard.is_pressed(KeyCode::D)		{ camera.move_pos( 0.0,    0.0,   -0.001); }
+		if keyboard.is_pressed(KeyCode::A)		{ camera.move_pos( 0.0,    0.0,    0.001); }
+		if keyboard.is_pressed(KeyCode::LShift)	{ camera.move_pos( 0.0,   -0.001,  0.0); }
+		if keyboard.is_pressed(KeyCode::Space)	{ camera.move_pos( 0.0,    0.001,  0.0); }
+		if keyboard.is_pressed(KeyCode::Down)	{ roll -= 0.002; }
+		if keyboard.is_pressed(KeyCode::Up)		{ roll += 0.002; }
+		if keyboard.is_pressed(KeyCode::Left)	{ pitch -= 0.002; }
+		if keyboard.is_pressed(KeyCode::Right)	{ pitch += 0.002; }
+
 		/* Time refresh */
 		_time = time_start.elapsed().as_secs_f32();
 
 		/* Rotating camera */
-		camera.set_rotation((_time * 4.0).sin() / 3.0, 0.0, 0.0);
-		camera.set_position(0.0, 0.0, 2.0);
+		camera.set_rotation(roll, pitch, 0.0);
 
 		/* Uniforms set */
 		let uniforms = uniform! {

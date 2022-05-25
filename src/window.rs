@@ -5,6 +5,7 @@
 /* Glium stuff */
 use glium::glutin;
 use std::fs;
+use crate::user_io::Keyboard;
 
 /* Window struct */
 pub struct Window {
@@ -64,8 +65,9 @@ impl Window {
             height: height
         }
 	}
+	
 	/// Processing window messages.
-	pub fn process_events(event: &glium::glutin::event::Event<()>) -> Exit {
+	pub fn process_events(event: &glium::glutin::event::Event<()>, keyboard: &mut Keyboard) -> Exit {
 		match event {
 			/* Window events */
             glutin::event::Event::WindowEvent { event, .. } => match event {
@@ -75,8 +77,19 @@ impl Window {
 				glutin::event::WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
 					/* Key matching */
 					Some(key) => match key {
-						glutin::event::VirtualKeyCode::Escape => Exit::Exit,
-						_ => Exit::None
+						_ => {
+							/* If key is pressed then press it on virtual keyboard, if not then release it. */
+							match input.state {
+								glutin::event::ElementState::Pressed => {
+									keyboard.press(key);
+									Exit::None
+								},
+								glutin::event::ElementState::Released => {
+									keyboard.release(key);
+									Exit::None
+								}
+							}
+						}
 					}
 					_ => Exit::None
 				},
@@ -93,6 +106,7 @@ impl Window {
             _ => Exit::None,
         }
 	}
+
 	/// Window close function.
     pub fn exit(control_flow: &mut glutin::event_loop::ControlFlow) {
         *control_flow = glutin::event_loop::ControlFlow::Exit;

@@ -54,6 +54,13 @@ impl Camera {
 		self.rotation.0 = XMMatrixRotationRollPitchYaw(0.0, 0.0, 0.0);
 	}
 
+	/// Moves camera towards its vectors.
+	pub fn move_pos(&mut self, front: f32, up: f32, right: f32) {
+		self.pos += self.front * front;
+		self.pos += self.up * up;
+		self.pos += self.right * right;
+	}
+
 	/// Returns view matrix.
 	pub fn get_view(&self) -> [[f32; 4]; 4] {
 		XMMatrix(XMMatrixLookAtLH(self.pos.0, (self.pos + self.front).0, self.up.0)).into()
@@ -61,7 +68,7 @@ impl Camera {
 
 	/// Returns projection matrix.
 	pub fn get_proj(&self) -> [[f32; 4]; 4] {
-		XMMatrix(XMMatrixPerspectiveLH(1.0, 768.0 / 1024.0, 0.5, 1000.0)).into()
+		XMMatrix(XMMatrixPerspectiveLH(1.0, 768.0 / 1024.0, 0.5, 100.0)).into()
 	}
 
 	/// Returns X component of pos vector.
