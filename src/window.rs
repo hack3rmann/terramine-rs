@@ -22,41 +22,12 @@ pub enum Exit {
 impl Window {
 	/// Constructs window.
 	pub fn from(width: i32, height: i32, resizable: bool) -> Self {
-		/* Loading icon from bitmap */
-		let icon = {
-			/* Bytes vector from bmp file */
-			/* File formatted in BGRA */
-			let mut raw_data = fs::read("src/image/TerramineIcon32p.bmp").unwrap();
-
-			/* Bytemap pointer load from 4 bytes of file */
-			/* This pointer is 4 bytes large and can be found on 10th byte position from file begin */
-			let start_bytes: usize =	(raw_data[13] as usize) << 24 |
-										(raw_data[12] as usize) << 16 |
-										(raw_data[11] as usize) << 8  |
-										(raw_data[10] as usize);
-
-			/* Trim useless information */
-			let raw_data = raw_data[start_bytes..].as_mut();
-
-			/* Converting BGRA into RGBA formats */
-			let mut current: usize = 0;
-			while current <= raw_data.len() - 3 {
-				raw_data.swap(current, current + 2);
-				current += 4;
-			}
-
-			/* Upload data */
-			let mut data = Vec::with_capacity(raw_data.len());
-			data.extend_from_slice(raw_data);
-			glutin::window::Icon::from_rgba(data, 32, 32).unwrap()
-		};
-
 		let window_builder = glutin::window::WindowBuilder::new()
 			.with_decorations(true)
 			.with_title("Terramine")
 			.with_resizable(resizable)
             .with_inner_size(glutin::dpi::LogicalSize::new(width, height))
-			.with_window_icon(Some(icon));
+			.with_window_icon(Some(Self::load_icon("src/image/TerramineIcon32p.bmp")));
 
 		Window {
             window_builder: Some(window_builder),
@@ -131,6 +102,34 @@ impl Window {
             },
             _ => Exit::None,
         }
+	}
+
+	fn load_icon(path: &str) -> glium::glutin::window::Icon {
+		/* Bytes vector from bmp file */
+		/* File formatted in BGRA */
+		let mut raw_data = fs::read(path).unwrap();
+
+		/* Bytemap pointer load from 4 bytes of file */
+		/* This pointer is 4 bytes large and can be found on 10th byte position from file begin */
+		let start_bytes: usize =	(raw_data[13] as usize) << 24 |
+									(raw_data[12] as usize) << 16 |
+									(raw_data[11] as usize) << 8  |
+									(raw_data[10] as usize);
+
+		/* Trim useless information */
+		let raw_data = raw_data[start_bytes..].as_mut();
+
+		/* Converting BGRA into RGBA formats */
+		let mut current: usize = 0;
+		while current <= raw_data.len() - 3 {
+			raw_data.swap(current, current + 2);
+			current += 4;
+		}
+
+		/* Upload data */
+		let mut data = Vec::with_capacity(raw_data.len());
+		data.extend_from_slice(raw_data);
+		glutin::window::Icon::from_rgba(data, 32, 32).unwrap()
 	}
 
 	/// Window close function.
