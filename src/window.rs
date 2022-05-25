@@ -21,7 +21,7 @@ use glium::{
 };
 
 use std::fs;
-use crate::user_io::{Keyboard, Mouse};
+use crate::user_io::InputManager;
 
 /* Window struct */
 pub struct Window {
@@ -53,7 +53,7 @@ impl Window {
 	}
 
 	/// Processing window messages.
-	pub fn process_events(event: &Event<()>, keyboard: &mut Keyboard, mouse: &mut Mouse) -> Exit {
+	pub fn process_events(event: &Event<()>, input_manager: &mut InputManager) -> Exit {
 		match event {
 			/* Window events */
             Event::WindowEvent { event, .. } => match event {
@@ -67,11 +67,11 @@ impl Window {
 							/* If key is pressed then press it on virtual keyboard, if not then release it. */
 							match input.state {
 								ElementState::Pressed => {
-									keyboard.press(key);
+									input_manager.keyboard.press(key);
 									Exit::None
 								},
 								ElementState::Released => {
-									keyboard.release(key);
+									input_manager.keyboard.release(key);
 									Exit::None
 								}
 							}
@@ -83,27 +83,27 @@ impl Window {
 				WindowEvent::MouseInput { button, state, .. } => match state {
 					/* If button is pressed then press it on virtual mouse, if not then release it. */
 					ElementState::Pressed => {
-						mouse.press(*button);
+						input_manager.mouse.press(*button);
 						Exit::None
 					},
 					ElementState::Released => {
-						mouse.release(*button);
+						input_manager.mouse.release(*button);
 						Exit::None
 					}
 				},
 				/* Cursor entered the window event. */
 				WindowEvent::CursorEntered { .. } => {
-					mouse.on_window = true;
+					input_manager.mouse.on_window = true;
 					Exit::None
 				},
 				/* Cursor left the window. */
 				WindowEvent::CursorLeft { .. } => {
-					mouse.on_window = false;
+					input_manager.mouse.on_window = false;
 					Exit::None
 				},
 				/* Cursor moved to new position. */
 				WindowEvent::CursorMoved { position, .. } => {
-					mouse.move_cursor(position.x as f32, position.y as f32);
+					input_manager.mouse.move_cursor(position.x as f32, position.y as f32);
 					Exit::None
 				}
                 _ => Exit::None,

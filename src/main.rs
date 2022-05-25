@@ -13,7 +13,7 @@ mod user_io;
 use glium::Surface;
 
 /* Other files */
-use user_io::{Mouse, Keyboard, KeyCode};
+use user_io::{InputManager, KeyCode};
 use camera::Camera;
 use shader::Shader;
 use texture::Texture;
@@ -23,8 +23,7 @@ use vertex_buffer::VertexBuffer;
 
 fn main() {
 	/* Keyboard init */
-	let mut keyboard = Keyboard::new();
-	let mut mouse = Mouse::new();
+	let mut input = InputManager::new();
 
 	/* Graphics initialization */
 	let mut graphics = Graphics::initialize().unwrap();
@@ -61,7 +60,7 @@ fn main() {
 	/* Event loop run */
 	graphics.take_event_loop().run(move |event, _, control_flow| {
 		/* Exit if window have that message */
-		match Window::process_events(&event, &mut keyboard, &mut mouse) {
+		match Window::process_events(&event, &mut input) {
 			window::Exit::Exit => {
 				Window::exit(control_flow);
 				return;
@@ -70,33 +69,33 @@ fn main() {
 		}
 
 		/* Close window is `escape` pressed */
-		if keyboard.just_pressed(KeyCode::Escape) {
+		if input.keyboard.just_pressed(KeyCode::Escape) {
 			Window::exit(control_flow);
 		}
 
 		/* Control camera by user input */
-		if keyboard.is_pressed(KeyCode::W)		{ camera.move_pos( 0.001,  0.0,    0.0); }
-		if keyboard.is_pressed(KeyCode::S)		{ camera.move_pos(-0.001,  0.0,    0.0); }
-		if keyboard.is_pressed(KeyCode::D)		{ camera.move_pos( 0.0,    0.0,   -0.001); }
-		if keyboard.is_pressed(KeyCode::A)		{ camera.move_pos( 0.0,    0.0,    0.001); }
-		if keyboard.is_pressed(KeyCode::LShift)	{ camera.move_pos( 0.0,   -0.001,  0.0); }
-		if keyboard.is_pressed(KeyCode::Space)	{ camera.move_pos( 0.0,    0.001,  0.0); }
-		if mouse.just_left_pressed() {
+		if input.keyboard.is_pressed(KeyCode::W)		{ camera.move_pos( 0.001,  0.0,    0.0); }
+		if input.keyboard.is_pressed(KeyCode::S)		{ camera.move_pos(-0.001,  0.0,    0.0); }
+		if input.keyboard.is_pressed(KeyCode::D)		{ camera.move_pos( 0.0,    0.0,   -0.001); }
+		if input.keyboard.is_pressed(KeyCode::A)		{ camera.move_pos( 0.0,    0.0,    0.001); }
+		if input.keyboard.is_pressed(KeyCode::LShift)	{ camera.move_pos( 0.0,   -0.001,  0.0); }
+		if input.keyboard.is_pressed(KeyCode::Space)	{ camera.move_pos( 0.0,    0.001,  0.0); }
+		if input.mouse.just_left_pressed() {
 			camera.set_position(0.0, 0.0, 2.0);
 			camera.reset_rotation();
 			roll = 0.0;
 			pitch = 0.0;
 		}
 
-		pitch += mouse.dx / 100.0;
-		roll -= mouse.dy / 100.0;
+		pitch += input.mouse.dx / 100.0;
+		roll -= input.mouse.dy / 100.0;
 
 		/* Time refresh */
 		_time = time_start.elapsed().as_secs_f32();
 
 		/* Rotating camera */
 		camera.set_rotation(roll, pitch, 0.0);
-		mouse.update();
+		input.mouse.update();
 
 		/* Uniforms set */
 		let uniforms = uniform! {

@@ -114,3 +114,15 @@ impl Mouse {
 		self.dy = 0.0;
 	}
 }
+
+/// Contains both input types: `keyboard` and `mouse`.
+#[derive(Default)]
+pub struct InputManager {
+	pub keyboard: Keyboard,
+	pub mouse: Mouse
+}
+
+impl InputManager {
+	/// Constructs manager with default values.
+	pub fn new() -> Self { Default::default() }
+}
