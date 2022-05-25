@@ -9,7 +9,7 @@ use crate::user_io::{Keyboard, Mouse};
 
 /* Window struct */
 pub struct Window {
-	pub window_builder: glium::glutin::window::WindowBuilder,
+	pub window_builder: Option<glium::glutin::window::WindowBuilder>,
     pub width: i32,
     pub height: i32
 }
@@ -59,7 +59,7 @@ impl Window {
 			.with_window_icon(Some(icon));
 
 		Window {
-            window_builder: window_builder,
+            window_builder: Some(window_builder),
             width: width,
             height: height
         }
@@ -137,4 +137,16 @@ impl Window {
     pub fn exit(control_flow: &mut glutin::event_loop::ControlFlow) {
         *control_flow = glutin::event_loop::ControlFlow::Exit;
     }
+
+	/// Gives window_builder and removes it from graphics struct
+	pub fn take_window_builder(&mut self) -> glium::glutin::window::WindowBuilder {
+		/* Swaps struct variable with returned */
+		if let None = self.window_builder {
+			panic!("Window.window_builder is None!")
+		} else {
+			let mut window_builder = None;
+			std::mem::swap(&mut window_builder, &mut self.window_builder);
+			window_builder.unwrap()
+		}
+	}
 }

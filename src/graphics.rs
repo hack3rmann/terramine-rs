@@ -29,11 +29,11 @@ impl Graphics {
 		}
 
 		/* Creates variables */
-		let window = Window::from(1024, 768, false);
+		let mut window = Window::from(1024, 768, false);
 		let event_loop = glium::glutin::event_loop::EventLoop::new();
 		let display = {
 			let context_builder = glium::glutin::ContextBuilder::new();
-			glium::Display::new(window.window_builder.clone(), context_builder, &event_loop).unwrap()
+			glium::Display::new(window.take_window_builder(), context_builder, &event_loop).unwrap()
 		};
 
 		Ok (
@@ -59,7 +59,7 @@ impl Graphics {
 		self.shaders = Some(shaders);
 	}
 
-	/// Gives event_loop and romoves it from graphics struct
+	/// Gives event_loop and removes it from graphics struct
 	pub fn take_event_loop(&mut self) -> glium::glutin::event_loop::EventLoop<()> {
 		/* Swaps struct variable with returned */
 		if let None = self.event_loop {
@@ -71,7 +71,7 @@ impl Graphics {
 		}
 	}
 
-	/// Gives shaders and romoves it from graphics struct
+	/// Gives shaders and removes it from graphics struct
 	pub fn take_shaders(&mut self) -> Shader {
 		/* Swaps struct variable with returned */
 		if let None = self.shaders {
@@ -83,7 +83,7 @@ impl Graphics {
 		}
 	}
 
-	/// Gives vertex_buffer and romoves it from graphics struct
+	/// Gives vertex_buffer and removes it from graphics struct
 	pub fn take_vertex_buffer(&mut self) -> glium::VertexBuffer<Vertex> {
 		/* Swaps struct variable with returned */
 		if let None = self.vertex_buffer {
@@ -95,7 +95,7 @@ impl Graphics {
 		}
 	}
 
-	/// Gives primitive_type and romoves it from graphics struct
+	/// Gives primitive_type and removes it from graphics struct
 	pub fn take_privitive_type(&mut self) -> glium::index::NoIndices {
 		/* Swaps struct variable with returned */
 		if let None = self.primitive_type {
