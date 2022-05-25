@@ -3,13 +3,29 @@
  */
 
 /* Glium stuff */
-use glium::glutin;
+use glium::{
+	glutin::{
+		event::{
+			Event,
+			WindowEvent,
+			ElementState,
+			StartCause,
+		},
+		event_loop::ControlFlow,
+		window::{
+			WindowBuilder,
+			Icon,
+		},
+		dpi::LogicalSize,
+	}
+};
+
 use std::fs;
 use crate::user_io::{Keyboard, Mouse};
 
 /* Window struct */
 pub struct Window {
-	pub window_builder: Option<glium::glutin::window::WindowBuilder>,
+	pub window_builder: Option<WindowBuilder>,
     pub width: i32,
     pub height: i32
 }
@@ -22,11 +38,11 @@ pub enum Exit {
 impl Window {
 	/// Constructs window.
 	pub fn from(width: i32, height: i32, resizable: bool) -> Self {
-		let window_builder = glutin::window::WindowBuilder::new()
+		let window_builder = WindowBuilder::new()
 			.with_decorations(true)
 			.with_title("Terramine")
 			.with_resizable(resizable)
-            .with_inner_size(glutin::dpi::LogicalSize::new(width, height))
+            .with_inner_size(LogicalSize::new(width, height))
 			.with_window_icon(Some(Self::load_icon("src/image/TerramineIcon32p.bmp")));
 
 		Window {
@@ -37,24 +53,24 @@ impl Window {
 	}
 
 	/// Processing window messages.
-	pub fn process_events(event: &glium::glutin::event::Event<()>, keyboard: &mut Keyboard, mouse: &mut Mouse) -> Exit {
+	pub fn process_events(event: &Event<()>, keyboard: &mut Keyboard, mouse: &mut Mouse) -> Exit {
 		match event {
 			/* Window events */
-            glutin::event::Event::WindowEvent { event, .. } => match event {
+            Event::WindowEvent { event, .. } => match event {
 				/* Close event */
-                glutin::event::WindowEvent::CloseRequested => Exit::Exit,
+                WindowEvent::CloseRequested => Exit::Exit,
 				/* Keyboard input event */
-				glutin::event::WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
+				WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
 					/* Key matching */
 					Some(key) => match key {
 						_ => {
 							/* If key is pressed then press it on virtual keyboard, if not then release it. */
 							match input.state {
-								glutin::event::ElementState::Pressed => {
+								ElementState::Pressed => {
 									keyboard.press(key);
 									Exit::None
 								},
-								glutin::event::ElementState::Released => {
+								ElementState::Released => {
 									keyboard.release(key);
 									Exit::None
 								}
@@ -64,47 +80,47 @@ impl Window {
 					_ => Exit::None
 				},
 				/* Mouse buttons match. */
-				glutin::event::WindowEvent::MouseInput { button, state, .. } => match state {
+				WindowEvent::MouseInput { button, state, .. } => match state {
 					/* If button is pressed then press it on virtual mouse, if not then release it. */
-					glutin::event::ElementState::Pressed => {
+					ElementState::Pressed => {
 						mouse.press(*button);
 						Exit::None
 					},
-					glutin::event::ElementState::Released => {
+					ElementState::Released => {
 						mouse.release(*button);
 						Exit::None
 					}
 				},
 				/* Cursor entered the window event. */
-				glutin::event::WindowEvent::CursorEntered { .. } => {
+				WindowEvent::CursorEntered { .. } => {
 					mouse.on_window = true;
 					Exit::None
 				},
 				/* Cursor left the window. */
-				glutin::event::WindowEvent::CursorLeft { .. } => {
+				WindowEvent::CursorLeft { .. } => {
 					mouse.on_window = false;
 					Exit::None
 				},
 				/* Cursor moved to new position. */
-				glutin::event::WindowEvent::CursorMoved { position, .. } => {
+				WindowEvent::CursorMoved { position, .. } => {
 					mouse.move_cursor(position.x as f32, position.y as f32);
 					Exit::None
 				}
                 _ => Exit::None,
             },
 			/* Glium events */
-            glutin::event::Event::NewEvents(cause) => match cause {
+            Event::NewEvents(cause) => match cause {
 				/* "Wait until" called event */
-                glutin::event::StartCause::ResumeTimeReached { .. } => Exit::None,
+                StartCause::ResumeTimeReached { .. } => Exit::None,
 				/* Window initialized event */
-                glutin::event::StartCause::Init => Exit::None,
+                StartCause::Init => Exit::None,
                 _ => Exit::None,
             },
             _ => Exit::None,
         }
 	}
 
-	fn load_icon(path: &str) -> glium::glutin::window::Icon {
+	fn load_icon(path: &str) -> Icon {
 		/* Bytes vector from bmp file */
 		/* File formatted in BGRA */
 		let mut raw_data = fs::read(path).unwrap();
@@ -129,16 +145,16 @@ impl Window {
 		/* Upload data */
 		let mut data = Vec::with_capacity(raw_data.len());
 		data.extend_from_slice(raw_data);
-		glutin::window::Icon::from_rgba(data, 32, 32).unwrap()
+		Icon::from_rgba(data, 32, 32).unwrap()
 	}
 
 	/// Window close function.
-    pub fn exit(control_flow: &mut glutin::event_loop::ControlFlow) {
-        *control_flow = glutin::event_loop::ControlFlow::Exit;
+    pub fn exit(control_flow: &mut ControlFlow) {
+        *control_flow = ControlFlow::Exit;
     }
 
 	/// Gives window_builder and removes it from graphics struct
-	pub fn take_window_builder(&mut self) -> glium::glutin::window::WindowBuilder {
+	pub fn take_window_builder(&mut self) -> WindowBuilder {
 		/* Swaps struct variable with returned */
 		if let None = self.window_builder {
 			panic!("Window.window_builder is None!")
