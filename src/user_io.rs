@@ -13,6 +13,7 @@ pub struct Keyboard {
 
 impl Keyboard {
 	/// Constructs keyboard with no keys are pressed.
+	#[allow(dead_code)]
 	pub fn new() -> Self { Default::default() }
 
 	/// Presses key on virtual keyboard.
