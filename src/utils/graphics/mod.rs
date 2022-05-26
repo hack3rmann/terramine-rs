@@ -6,7 +6,11 @@ pub mod camera;
 use crate::window::Window;
 use shader::Shader;
 use vertex_buffer::VertexBuffer;
-use crate::glium::{self, implement_vertex};
+use crate::glium::{
+	self,
+	implement_vertex,
+	backend::Facade,
+};
 
 static mut IS_GRAPHICS_INITIALIZED: bool = false;
 
@@ -110,6 +114,10 @@ impl Graphics {
 			std::mem::swap(&mut primitive_type, &mut self.primitive_type);
 			primitive_type.unwrap()
 		}
+	}
+
+	pub fn get_context(&self) -> &std::rc::Rc<glium::backend::Context> {
+		self.display.get_context()
 	}
 }
 
