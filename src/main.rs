@@ -2,12 +2,10 @@ mod utils;
 
 /* Glium includes */
 use glium::{
-	glutin::{
-		event::{
-			Event,
-			WindowEvent,
-			ElementState,
-		},
+	glutin::event::{
+		Event,
+		WindowEvent,
+		ElementState,
 	},
 	Surface,
 	uniform
