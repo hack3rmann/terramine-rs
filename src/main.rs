@@ -7,12 +7,14 @@ use glium::{Surface, uniform};
 use utils::{
 	*,
 	user_io::{InputManager, KeyCode},
-	camera::Camera,
-	shader::Shader,
-	texture::Texture,
 	window::Window,
-	graphics::Graphics,
-	vertex_buffer::VertexBuffer,
+	graphics::{
+		Graphics,
+		camera::Camera,
+		shader::Shader,
+		texture::Texture,
+		vertex_buffer::VertexBuffer,
+	},
 };
 
 fn main() {
@@ -81,6 +83,7 @@ fn main() {
 			pitch = 0.0;
 		}
 
+		/* Camera rotation */
 		pitch += input.mouse.dx / 100.0;
 		roll -= input.mouse.dy / 100.0;
 
