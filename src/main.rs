@@ -1,25 +1,19 @@
-#[macro_use]
-extern crate glium;
-extern crate image;
-mod shader;
-mod texture;
-mod window;
-mod graphics;
-mod vertex_buffer;
-mod camera;
-mod user_io;
+mod utils;
 
 /* Glium includes */
-use glium::Surface;
+use glium::{Surface, uniform};
 
 /* Other files */
-use user_io::{InputManager, KeyCode};
-use camera::Camera;
-use shader::Shader;
-use texture::Texture;
-use window::Window;
-use graphics::Graphics;
-use vertex_buffer::VertexBuffer;
+use utils::{
+	*,
+	user_io::{InputManager, KeyCode},
+	camera::Camera,
+	shader::Shader,
+	texture::Texture,
+	window::Window,
+	graphics::Graphics,
+	vertex_buffer::VertexBuffer,
+};
 
 fn main() {
 	/* Keyboard init */

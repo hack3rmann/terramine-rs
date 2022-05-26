@@ -1,7 +1,7 @@
 use crate::window::Window;
 use crate::shader::Shader;
 use crate::vertex_buffer::VertexBuffer;
-use crate::glium;
+use crate::glium::{self, implement_vertex};
 
 static mut IS_GRAPHICS_INITIALIZED: bool = false;
 
