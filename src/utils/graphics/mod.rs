@@ -116,6 +116,7 @@ impl Graphics {
 		}
 	}
 
+	#[allow(dead_code)]
 	pub fn get_context(&self) -> &std::rc::Rc<glium::backend::Context> {
 		self.display.get_context()
 	}
