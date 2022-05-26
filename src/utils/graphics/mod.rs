@@ -1,7 +1,12 @@
+pub mod shader;
+pub mod texture;
+pub mod vertex_buffer;
+pub mod camera;
+
 use crate::window::Window;
-use crate::shader::Shader;
-use crate::vertex_buffer::VertexBuffer;
-use crate::glium;
+use shader::Shader;
+use vertex_buffer::VertexBuffer;
+use crate::glium::{self, implement_vertex};
 
 static mut IS_GRAPHICS_INITIALIZED: bool = false;
 
