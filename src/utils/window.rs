@@ -39,7 +39,6 @@ impl Window {
 	/// Constructs window.
 	pub fn from(width: i32, height: i32, resizable: bool) -> Self {
 		let window_builder = WindowBuilder::new()
-			.with_decorations(true)
 			.with_title("Terramine")
 			.with_resizable(resizable)
             .with_inner_size(LogicalSize::new(width, height))
