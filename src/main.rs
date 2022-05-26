@@ -54,10 +54,7 @@ fn main() {
 	/* Time stuff */
 	let time_start = std::time::Instant::now();
 	let mut _time = time_start.elapsed().as_secs_f32();
-	
-	/* Camera rotation */
-	let mut roll: f32 = Default::default();
-	let mut pitch: f32 = Default::default();
+	let mut last = std::time::Instant::now();
 
 	camera.set_position(0.0, 0.0, 2.0);
 
@@ -124,29 +121,33 @@ fn main() {
 					Window::exit(control_flow);
 				}
 
+				/* Time difference */
+				let dt = (std::time::Instant::now() - last).as_secs_f32();
+
 				/* Control camera by user input */
-				if input_manager.keyboard.is_pressed(KeyCode::W)		{ camera.move_pos( 0.001,  0.0,    0.0); }
-				if input_manager.keyboard.is_pressed(KeyCode::S)		{ camera.move_pos(-0.001,  0.0,    0.0); }
-				if input_manager.keyboard.is_pressed(KeyCode::D)		{ camera.move_pos( 0.0,    0.0,   -0.001); }
-				if input_manager.keyboard.is_pressed(KeyCode::A)		{ camera.move_pos( 0.0,    0.0,    0.001); }
-				if input_manager.keyboard.is_pressed(KeyCode::LShift)	{ camera.move_pos( 0.0,   -0.001,  0.0); }
-				if input_manager.keyboard.is_pressed(KeyCode::Space)	{ camera.move_pos( 0.0,    0.001,  0.0); }
+				if input_manager.keyboard.is_pressed(KeyCode::W)		{ camera.move_pos( dt,  0.0,    0.0); }
+				if input_manager.keyboard.is_pressed(KeyCode::S)		{ camera.move_pos(-dt,  0.0,    0.0); }
+				if input_manager.keyboard.is_pressed(KeyCode::D)		{ camera.move_pos( 0.0,    0.0,   -dt); }
+				if input_manager.keyboard.is_pressed(KeyCode::A)		{ camera.move_pos( 0.0,    0.0,    dt); }
+				if input_manager.keyboard.is_pressed(KeyCode::LShift)	{ camera.move_pos( 0.0,   -dt,  0.0); }
+				if input_manager.keyboard.is_pressed(KeyCode::Space)	{ camera.move_pos( 0.0,    dt,  0.0); }
 				if input_manager.mouse.just_left_pressed() {
 					camera.set_position(0.0, 0.0, 2.0);
 					camera.reset_rotation();
-					roll = 0.0;
-					pitch = 0.0;
 				}
-
-				/* Camera rotation */
-				pitch += input_manager.mouse.dx / 100.0;
-				roll -= input_manager.mouse.dy / 100.0;
 
 				/* Time refresh */
 				_time = time_start.elapsed().as_secs_f32();
+				last = std::time::Instant::now();
 
 				/* Rotating camera */
-				camera.set_rotation(roll, pitch, 0.0);
+				camera.rotate(
+					-input_manager.mouse.dy * dt * 5.0,
+					 input_manager.mouse.dx * dt * 5.0,
+					 0.0
+				);
+				
+				/* Updating mouse */
 				input_manager.mouse.update();
 			},
 			_ => return,
