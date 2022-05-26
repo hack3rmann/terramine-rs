@@ -612,6 +612,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "imgui-glium-renderer"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5af2c601e2bda3bdc6fd291c81f08c51bd04741f5ef2801d7e77324496cf12ce"
+dependencies = [
+ "glium",
+ "imgui",
+]
+
+[[package]]
 name = "imgui-sys"
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -619,6 +629,16 @@ checksum = "286f5338bd8281e3203de29cc317d123b178f2e565eca5aee770a2048074fdf7"
 dependencies = [
  "cc",
  "chlorine",
+]
+
+[[package]]
+name = "imgui-winit-support"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30d8cb426a6ee9f1be8e379b18b9085585887056fcfbc2d66bddb2c355944624"
+dependencies = [
+ "imgui",
+ "winit",
 ]
 
 [[package]]
@@ -1236,6 +1256,8 @@ dependencies = [
  "glium",
  "image",
  "imgui",
+ "imgui-glium-renderer",
+ "imgui-winit-support",
 ]
 
 [[package]]
