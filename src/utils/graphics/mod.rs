@@ -13,8 +13,6 @@ use crate::glium::{
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 
-static IS_GRAPHICS_INITIALIZED: AtomicBool = AtomicBool::new(false);
-
 /// Struct that handles graphics.
 pub struct Graphics {
 	pub window: Window,
@@ -30,10 +28,11 @@ impl Graphics {
 	/// If you call it again it will panic.
 	pub fn initialize() -> Result<Self, &'static str> {
 		/* Checks if struct is already initialized */
-		if IS_GRAPHICS_INITIALIZED.load(Ordering::Acquire) {
+		static INITIALIZED: AtomicBool = AtomicBool::new(false);
+		if INITIALIZED.load(Ordering::Acquire) {
 			return Err("Attempting to initialize graphics twice! Graphics is already initialized!");
 		} else {
-			IS_GRAPHICS_INITIALIZED.store(true, Ordering::Release);
+			INITIALIZED.store(true, Ordering::Release);
 		}
 
 		/* Creates variables */
