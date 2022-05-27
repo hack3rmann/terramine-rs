@@ -14,8 +14,6 @@ use glium::{
 	}
 };
 
-use std::fs;
-
 /* Window struct */
 pub struct Window {
 	pub window_builder: Option<WindowBuilder>,
@@ -30,7 +28,7 @@ impl Window {
 			.with_title("Terramine")
 			.with_resizable(resizable)
             .with_inner_size(LogicalSize::new(width, height))
-			.with_window_icon(Some(Self::load_icon("src/image/TerramineIcon32p.bmp")));
+			.with_window_icon(Some(Self::load_icon()));
 
 		Window {
             window_builder: Some(window_builder),
@@ -39,10 +37,11 @@ impl Window {
         }
 	}
 
-	fn load_icon(path: &str) -> Icon {
+	fn load_icon() -> Icon {
 		/* Bytes vector from bmp file */
 		/* File formatted in BGRA */
-		let mut raw_data = fs::read(path).unwrap();
+		let raw_data = include_bytes!("../image/TerramineIcon32p.bmp");
+		let mut raw_data = *raw_data;
 
 		/* Bytemap pointer load from 4 bytes of file */
 		/* This pointer is 4 bytes large and can be found on 10th byte position from file begin */
