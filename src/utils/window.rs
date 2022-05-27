@@ -21,18 +21,12 @@ use glium::{
 };
 
 use std::fs;
-use crate::user_io::InputManager;
 
 /* Window struct */
 pub struct Window {
 	pub window_builder: Option<WindowBuilder>,
     pub width: i32,
     pub height: i32
-}
-
-pub enum Exit {
-    None,
-    Exit
 }
 
 impl Window {
@@ -48,74 +42,6 @@ impl Window {
             window_builder: Some(window_builder),
             width: width,
             height: height
-        }
-	}
-
-	/// Processing window messages.
-	pub fn process_events(event: &Event<()>, input_manager: &mut InputManager) -> Exit {
-		match event {
-			/* Window events */
-            Event::WindowEvent { event, .. } => match event {
-				/* Close event */
-                WindowEvent::CloseRequested => Exit::Exit,
-				/* Keyboard input event */
-				WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
-					/* Key matching */
-					Some(key) => match key {
-						_ => {
-							/* If key is pressed then press it on virtual keyboard, if not then release it. */
-							match input.state {
-								ElementState::Pressed => {
-									input_manager.keyboard.press(key);
-									Exit::None
-								},
-								ElementState::Released => {
-									input_manager.keyboard.release(key);
-									Exit::None
-								}
-							}
-						}
-					}
-					_ => Exit::None
-				},
-				/* Mouse buttons match. */
-				WindowEvent::MouseInput { button, state, .. } => match state {
-					/* If button is pressed then press it on virtual mouse, if not then release it. */
-					ElementState::Pressed => {
-						input_manager.mouse.press(*button);
-						Exit::None
-					},
-					ElementState::Released => {
-						input_manager.mouse.release(*button);
-						Exit::None
-					}
-				},
-				/* Cursor entered the window event. */
-				WindowEvent::CursorEntered { .. } => {
-					input_manager.mouse.on_window = true;
-					Exit::None
-				},
-				/* Cursor left the window. */
-				WindowEvent::CursorLeft { .. } => {
-					input_manager.mouse.on_window = false;
-					Exit::None
-				},
-				/* Cursor moved to new position. */
-				WindowEvent::CursorMoved { position, .. } => {
-					input_manager.mouse.move_cursor(position.x as f32, position.y as f32);
-					Exit::None
-				}
-                _ => Exit::None,
-            },
-			/* Glium events */
-            Event::NewEvents(cause) => match cause {
-				/* "Wait until" called event */
-                StartCause::ResumeTimeReached { .. } => Exit::None,
-				/* Window initialized event */
-                StartCause::Init => Exit::None,
-                _ => Exit::None,
-            },
-            _ => Exit::None,
         }
 	}
 
