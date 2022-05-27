@@ -42,5 +42,6 @@ impl Texture {
 		glium::uniforms::Sampler::new(&self.opengl_texture)
 			.magnify_filter(glium::uniforms::MagnifySamplerFilter::Nearest)
 			.minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapNearest)
+			.anisotropy(16)
 	}
 }
