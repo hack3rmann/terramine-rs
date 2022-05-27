@@ -5,12 +5,6 @@
 /* Glium stuff */
 use glium::{
 	glutin::{
-		event::{
-			Event,
-			WindowEvent,
-			ElementState,
-			StartCause,
-		},
 		event_loop::ControlFlow,
 		window::{
 			WindowBuilder,
