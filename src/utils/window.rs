@@ -5,35 +5,44 @@
 /* Glium stuff */
 use glium::{
 	glutin::{
-		event_loop::ControlFlow,
+		event_loop::{ControlFlow, EventLoop},
 		window::{
 			WindowBuilder,
 			Icon,
+			Window as GWindow
 		},
 		dpi::LogicalSize,
+		ContextWrapper,
+		PossiblyCurrent,
+		ContextBuilder,
+		GlRequest,
 	}
 };
 
 /* Window struct */
 pub struct Window {
-	pub window_builder: Option<WindowBuilder>,
-    pub width: i32,
-    pub height: i32
+	pub window: Option<ContextWrapper<PossiblyCurrent, GWindow>>,
 }
 
 impl Window {
 	/// Constructs window.
-	pub fn from(width: i32, height: i32, resizable: bool) -> Self {
-		let window_builder = WindowBuilder::new()
+	pub fn from(event_loop: &EventLoop<()>) -> Self {
+		let window = WindowBuilder::new()
 			.with_title("Terramine")
-			.with_resizable(resizable)
-            .with_inner_size(LogicalSize::new(width, height))
+			.with_resizable(true)
+            .with_inner_size(LogicalSize::new(1024, 768))
 			.with_window_icon(Some(Self::load_icon()));
+		let window = ContextBuilder::new()
+			.with_gl(GlRequest::Latest)
+			.with_vsync(true)
+			.build_windowed(window, event_loop)
+			.unwrap();
+		let window = unsafe {
+			window.make_current().unwrap()
+		};
 
 		Window {
-            window_builder: Some(window_builder),
-            width: width,
-            height: height
+            window: Some(window)
         }
 	}
 
@@ -71,15 +80,15 @@ impl Window {
         *control_flow = ControlFlow::Exit;
     }
 
-	/// Gives window_builder and removes it from graphics struct
-	pub fn take_window_builder(&mut self) -> WindowBuilder {
+	/// Gives window and removes it from graphics struct
+	pub fn take_window(&mut self) -> ContextWrapper<PossiblyCurrent, GWindow> {
 		/* Swaps struct variable with returned */
-		if let None = self.window_builder {
-			panic!("Window.window_builder is None!")
+		if let None = self.window {
+			panic!("Window.window is None!")
 		} else {
-			let mut window_builder = None;
-			std::mem::swap(&mut window_builder, &mut self.window_builder);
-			window_builder.unwrap()
+			let mut window = None;
+			std::mem::swap(&mut window, &mut self.window);
+			window.unwrap()
 		}
 	}
 }
