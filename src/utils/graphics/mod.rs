@@ -3,21 +3,29 @@ pub mod texture;
 pub mod vertex_buffer;
 pub mod camera;
 
-use crate::window::Window;
+//use crate::window::Window;
 use shader::Shader;
 use vertex_buffer::VertexBuffer;
-use crate::glium::{self, implement_vertex};
-
-static mut IS_GRAPHICS_INITIALIZED: bool = false;
+use super::window::Window;
+use crate::glium::{
+	self,
+	implement_vertex,
+	backend::Facade,
+	glutin::event_loop::EventLoop,
+};
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Struct that handles graphics.
 pub struct Graphics {
-	pub window: Window,
-	pub vertex_buffer: Option<glium::VertexBuffer<Vertex>>,
-	pub primitive_type: Option<glium::index::NoIndices>,
-	pub display: glium::Display,
-	pub event_loop: Option<glium::glutin::event_loop::EventLoop<()>>,
-	pub shaders: Option<Shader>
+	pub display:	glium::Display,
+	pub imguic:		imgui::Context,
+	pub imguiw:		imgui_winit_support::WinitPlatform,
+	pub imguir:		imgui_glium_renderer::Renderer,
+
+	pub event_loop:		Option<EventLoop<()>>,
+	pub shaders:		Option<Shader>,
+	pub vertex_buffer:	Option<glium::VertexBuffer<Vertex>>,
+	pub primitive_type:	Option<glium::index::NoIndices>,
 }
 
 impl Graphics {
@@ -25,30 +33,38 @@ impl Graphics {
 	/// If you call it again it will panic.
 	pub fn initialize() -> Result<Self, &'static str> {
 		/* Checks if struct is already initialized */
-		unsafe {
-			if IS_GRAPHICS_INITIALIZED {
-				return Err("Attempting to initialize graphics twice! Graphics is already initialized!");
-			} else {
-				IS_GRAPHICS_INITIALIZED = true;
-			}
+		#[allow(dead_code)]
+		static INITIALIZED: AtomicBool = AtomicBool::new(false);
+		if INITIALIZED.load(Ordering::Acquire) {
+			return Err("Attempting to initialize graphics twice! Graphics is already initialized!");
+		} else {
+			INITIALIZED.store(true, Ordering::Release);
 		}
 
-		/* Creates variables */
-		let mut window = Window::from(1024, 768, false);
-		let event_loop = glium::glutin::event_loop::EventLoop::new();
-		let display = {
-			let context_builder = glium::glutin::ContextBuilder::new();
-			glium::Display::new(window.take_window_builder(), context_builder, &event_loop).unwrap()
-		};
+		let event_loop = EventLoop::new();
+		let window = Window::from(&event_loop).take_window();
+
+		let mut imgui_context = imgui::Context::create();
+		imgui_context.set_ini_filename(None);
+		let mut winit_platform = imgui_winit_support::WinitPlatform::init(&mut imgui_context);
+		winit_platform.attach_window(imgui_context.io_mut(), window.window(), imgui_winit_support::HiDpiMode::Rounded);
+
+		imgui_context.fonts().add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
+		imgui_context.io_mut().font_global_scale = (1.0 / winit_platform.hidpi_factor()) as f32;
+
+		let display = glium::Display::from_gl_window(window).unwrap();
+		let imgui_renderer = imgui_glium_renderer::Renderer::init(&mut imgui_context, &display).unwrap();
 
 		Ok (
 			Graphics {
-				window: window,
-				vertex_buffer: None,
-				primitive_type: None,
 				display: display,
+				imguic: imgui_context,
+				imguir: imgui_renderer,
+				imguiw: winit_platform,
 				event_loop: Some(event_loop),
-				shaders: None
+				shaders: None,
+				vertex_buffer: None,
+				primitive_type: None
 			}
 		)
 	}
@@ -110,6 +126,11 @@ impl Graphics {
 			std::mem::swap(&mut primitive_type, &mut self.primitive_type);
 			primitive_type.unwrap()
 		}
+	}
+
+	#[allow(dead_code)]
+	pub fn get_context(&self) -> &std::rc::Rc<glium::backend::Context> {
+		self.display.get_context()
 	}
 }
 

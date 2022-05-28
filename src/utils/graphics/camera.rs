@@ -85,6 +85,13 @@ impl Camera {
 	pub fn get_z(&self) -> f32 {
 		XMVectorGetZ(self.pos.0)
 	}
+
+	pub fn rotate(&mut self, roll: f32, pitch: f32, yaw: f32) {
+		self.roll += roll;
+		self.pitch += pitch;
+		self.yaw += yaw;
+		self.set_rotation(self.roll, self.pitch, self.yaw);
+	}
 }
 
 impl Default for Camera {

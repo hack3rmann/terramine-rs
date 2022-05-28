@@ -5,125 +5,52 @@
 /* Glium stuff */
 use glium::{
 	glutin::{
-		event::{
-			Event,
-			WindowEvent,
-			ElementState,
-			StartCause,
-		},
-		event_loop::ControlFlow,
+		event_loop::{ControlFlow, EventLoop},
 		window::{
 			WindowBuilder,
 			Icon,
+			Window as GWindow
 		},
 		dpi::LogicalSize,
+		ContextWrapper,
+		PossiblyCurrent,
+		ContextBuilder,
+		GlRequest,
 	}
 };
 
-use std::fs;
-use crate::user_io::InputManager;
-
 /* Window struct */
 pub struct Window {
-	pub window_builder: Option<WindowBuilder>,
-    pub width: i32,
-    pub height: i32
-}
-
-pub enum Exit {
-    None,
-    Exit
+	pub window: Option<ContextWrapper<PossiblyCurrent, GWindow>>,
 }
 
 impl Window {
 	/// Constructs window.
-	pub fn from(width: i32, height: i32, resizable: bool) -> Self {
-		let window_builder = WindowBuilder::new()
-			.with_decorations(true)
+	pub fn from(event_loop: &EventLoop<()>) -> Self {
+		let window = WindowBuilder::new()
 			.with_title("Terramine")
-			.with_resizable(resizable)
-            .with_inner_size(LogicalSize::new(width, height))
-			.with_window_icon(Some(Self::load_icon("src/image/TerramineIcon32p.bmp")));
+			.with_resizable(true)
+            .with_inner_size(LogicalSize::new(1024, 768))
+			.with_window_icon(Some(Self::load_icon()));
+		let window = ContextBuilder::new()
+			.with_gl(GlRequest::Latest)
+			.with_vsync(true)
+			.build_windowed(window, event_loop)
+			.unwrap();
+		let window = unsafe {
+			window.make_current().unwrap()
+		};
 
 		Window {
-            window_builder: Some(window_builder),
-            width: width,
-            height: height
+            window: Some(window)
         }
 	}
 
-	/// Processing window messages.
-	pub fn process_events(event: &Event<()>, input_manager: &mut InputManager) -> Exit {
-		match event {
-			/* Window events */
-            Event::WindowEvent { event, .. } => match event {
-				/* Close event */
-                WindowEvent::CloseRequested => Exit::Exit,
-				/* Keyboard input event */
-				WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
-					/* Key matching */
-					Some(key) => match key {
-						_ => {
-							/* If key is pressed then press it on virtual keyboard, if not then release it. */
-							match input.state {
-								ElementState::Pressed => {
-									input_manager.keyboard.press(key);
-									Exit::None
-								},
-								ElementState::Released => {
-									input_manager.keyboard.release(key);
-									Exit::None
-								}
-							}
-						}
-					}
-					_ => Exit::None
-				},
-				/* Mouse buttons match. */
-				WindowEvent::MouseInput { button, state, .. } => match state {
-					/* If button is pressed then press it on virtual mouse, if not then release it. */
-					ElementState::Pressed => {
-						input_manager.mouse.press(*button);
-						Exit::None
-					},
-					ElementState::Released => {
-						input_manager.mouse.release(*button);
-						Exit::None
-					}
-				},
-				/* Cursor entered the window event. */
-				WindowEvent::CursorEntered { .. } => {
-					input_manager.mouse.on_window = true;
-					Exit::None
-				},
-				/* Cursor left the window. */
-				WindowEvent::CursorLeft { .. } => {
-					input_manager.mouse.on_window = false;
-					Exit::None
-				},
-				/* Cursor moved to new position. */
-				WindowEvent::CursorMoved { position, .. } => {
-					input_manager.mouse.move_cursor(position.x as f32, position.y as f32);
-					Exit::None
-				}
-                _ => Exit::None,
-            },
-			/* Glium events */
-            Event::NewEvents(cause) => match cause {
-				/* "Wait until" called event */
-                StartCause::ResumeTimeReached { .. } => Exit::None,
-				/* Window initialized event */
-                StartCause::Init => Exit::None,
-                _ => Exit::None,
-            },
-            _ => Exit::None,
-        }
-	}
-
-	fn load_icon(path: &str) -> Icon {
+	fn load_icon() -> Icon {
 		/* Bytes vector from bmp file */
 		/* File formatted in BGRA */
-		let mut raw_data = fs::read(path).unwrap();
+		let raw_data = include_bytes!("../image/TerramineIcon32p.bmp");
+		let mut raw_data = *raw_data;
 
 		/* Bytemap pointer load from 4 bytes of file */
 		/* This pointer is 4 bytes large and can be found on 10th byte position from file begin */
@@ -153,15 +80,15 @@ impl Window {
         *control_flow = ControlFlow::Exit;
     }
 
-	/// Gives window_builder and removes it from graphics struct
-	pub fn take_window_builder(&mut self) -> WindowBuilder {
+	/// Gives window and removes it from graphics struct
+	pub fn take_window(&mut self) -> ContextWrapper<PossiblyCurrent, GWindow> {
 		/* Swaps struct variable with returned */
-		if let None = self.window_builder {
-			panic!("Window.window_builder is None!")
+		if let None = self.window {
+			panic!("Window.window is None!")
 		} else {
-			let mut window_builder = None;
-			std::mem::swap(&mut window_builder, &mut self.window_builder);
-			window_builder.unwrap()
+			let mut window = None;
+			std::mem::swap(&mut window, &mut self.window);
+			window.unwrap()
 		}
 	}
 }
