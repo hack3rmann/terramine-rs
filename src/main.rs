@@ -114,7 +114,7 @@ fn main() {
 	 				return
 	 			}
 	             _ => return,
-	         },
+	        },
 	 		Event::MainEventsCleared => {
 	 			/* Close window is `escape` pressed */
 	 			if input_manager.keyboard.just_pressed(KeyCode::Escape) {
