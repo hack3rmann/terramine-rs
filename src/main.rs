@@ -144,19 +144,19 @@ fn main() {
 				time += dt;
 				
 				/* Rotating camera */
-				// camera.rotate(
-				// 	-input_manager.mouse.dy * dt * 0.2,
-				// 	 input_manager.mouse.dx * dt * 0.2,
-				// 	 0.0
-				// );
+				camera.rotate(
+					-input_manager.mouse.dy * dt * 0.2,
+					 input_manager.mouse.dx * dt * 0.2,
+					 0.0
+				);
 
 				input_manager.update();
 
-				camera.rotate(
-					-graphics.imguic.io().mouse_delta[1] as f64 * dt * 0.2,
-					 graphics.imguic.io().mouse_delta[0] as f64 * dt * 0.2,
-					 0.0
-				);
+				// camera.rotate(
+				// 	-graphics.imguic.io().mouse_delta[1] as f64 * dt * 0.2,
+				// 	 graphics.imguic.io().mouse_delta[0] as f64 * dt * 0.2,
+				// 	 0.0
+				// );
 
 				if is_cursor_grabbed {
 					graphics.display.gl_window().window().set_cursor_position(
