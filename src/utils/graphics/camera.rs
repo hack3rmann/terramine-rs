@@ -87,6 +87,7 @@ impl Camera {
 		XMVectorGetZ(self.pos.0)
 	}
 
+	/// Rotates camera.
 	pub fn rotate(&mut self, roll: f64, pitch: f64, yaw: f64) {
 		self.roll += roll;
 		self.pitch += pitch;
@@ -94,6 +95,7 @@ impl Camera {
 		self.set_rotation(self.roll, self.pitch, self.yaw);
 	}
 
+	/// Updates camera (key press checking, etc).
 	pub fn update(&mut self, input: &mut InputManager, dt: f64) {
 		if input.keyboard.is_pressed(KeyCode::W)		{ self.move_pos( dt,  0.0,    0.0); }
 		if input.keyboard.is_pressed(KeyCode::S)		{ self.move_pos(-dt,  0.0,    0.0); }
