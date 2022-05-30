@@ -10,6 +10,8 @@ use glium::{
 	uniform
 };
 
+use std::io::prelude::*;
+
 /* Other files */
 use utils::{
 	*,
@@ -72,7 +74,14 @@ fn main() {
 			/* Window events */
 	        Event::WindowEvent { event, .. } => match event {
 	 			/* Close event */
-	            WindowEvent::CloseRequested => *control_flow = glium::glutin::event_loop::ControlFlow::Exit,
+	            WindowEvent::CloseRequested => {
+					*control_flow = glium::glutin::event_loop::ControlFlow::Exit;
+					let mut buf: String = Default::default();
+					graphics.imguic.save_ini_settings(&mut buf);
+
+					let mut file = std::fs::File::create("src/imgui_settings.ini").unwrap();
+					file.write_all(buf.as_bytes()).unwrap();
+				},
 	             _ => (),
 	        },
 	 		Event::MainEventsCleared => {
@@ -103,8 +112,11 @@ fn main() {
 			glium::glutin::event::Event::RedrawRequested(_) => {
 				let draw_data = {
 					let ui = graphics.imguic.frame();
+					//ui.show_demo_window(&mut true);
 					imgui::Window::new("Delta")
 						.size([300.0, 150.0], imgui::Condition::FirstUseEver)
+						.resizable(false)
+						.movable(false)
 						.build(&ui, || {
 							ui.text("My delta:");
 							ui.text(format!("dx: {0}, dy: {1}", input_manager.mouse.dx, input_manager.mouse.dy));
@@ -125,6 +137,8 @@ fn main() {
 						});
 					imgui::Window::new("Position")
 						.size([300.0, 150.0], imgui::Condition::FirstUseEver)
+						.resizable(false)
+						.movable(false)
 						.build(&ui, || {
 							ui.text("My cursor position");
 							ui.text(format!("x: {0}, y: {1}", input_manager.mouse.x, input_manager.mouse.y));

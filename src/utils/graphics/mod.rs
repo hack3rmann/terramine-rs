@@ -14,6 +14,7 @@ use crate::glium::{
 	glutin::event_loop::EventLoop,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::io::prelude::*;
 
 /// Struct that handles graphics.
 pub struct Graphics {
@@ -51,6 +52,10 @@ impl Graphics {
 
 		imgui_context.fonts().add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
 		imgui_context.io_mut().font_global_scale = (1.0 / winit_platform.hidpi_factor()) as f32;
+		imgui_context.style_mut().window_rounding = 16.0;
+
+		let settings = std::fs::read_to_string("src/imgui_settings.ini").unwrap();
+		imgui_context.load_ini_settings(settings.as_str());
 
 		let display = glium::Display::from_gl_window(window).unwrap();
 		let imgui_renderer = imgui_glium_renderer::Renderer::init(&mut imgui_context, &display).unwrap();
