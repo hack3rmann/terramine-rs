@@ -53,8 +53,6 @@ fn main() {
 	/* Camera preposition */
 	camera.set_position(0.0, 0.0, 2.0);
 
-	let mut is_cursor_grabbed = false;
-
 	let mut time = 0.0;
 	let mut last_frame = std::time::Instant::now();
 	let mut _dt: f64 = 0.0;
@@ -92,21 +90,23 @@ fn main() {
 				window.window().request_redraw();
 	 		},
 			glium::glutin::event::Event::RedrawRequested(_) => {
-				let ui = graphics.imguic.frame();
-				imgui::Window::new("Delta")
-					.size([300.0, 100.0], imgui::Condition::FirstUseEver)
-					.build(&ui, || {
-						ui.text("My delta:");
-						ui.text(format!("dx: {0:.5}, dy: {1:.5}", input_manager.mouse.dx, input_manager.mouse.dy));
-
-						ui.separator();
-
-						ui.text("ImGUI delta");
-						ui.text(format!("dx: {0:.5}, dy: {1:.5}", ui.io().mouse_delta[0], ui.io().mouse_delta[1]))
-					});
-
-				graphics.imguiw.prepare_render(&ui, window.window());
-				let draw_data = ui.render();
+				let draw_data = {
+					let ui = graphics.imguic.frame();
+					imgui::Window::new("Delta")
+						.size([300.0, 100.0], imgui::Condition::FirstUseEver)
+						.build(&ui, || {
+							ui.text("My delta:");
+							ui.text(format!("dx: {0:.5}, dy: {1:.5}", input_manager.mouse.dx, input_manager.mouse.dy));
+	
+							ui.separator();
+	
+							ui.text("ImGUI delta");
+							ui.text(format!("dx: {0:.5}, dy: {1:.5}", ui.io().mouse_delta[0], ui.io().mouse_delta[1]))
+						});
+	
+					graphics.imguiw.prepare_render(&ui, graphics.display.gl_window().window());
+					ui.render()
+				};
 
 				/* Uniforms set */
 				let uniforms = uniform! {
