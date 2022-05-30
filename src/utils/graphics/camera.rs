@@ -103,7 +103,7 @@ impl Camera {
 		if input.keyboard.is_pressed(KeyCode::A)		{ self.move_pos( 0.0,    0.0,    dt); }
 		if input.keyboard.is_pressed(KeyCode::LShift)	{ self.move_pos( 0.0,   -dt,  0.0); }
 		if input.keyboard.is_pressed(KeyCode::Space)	{ self.move_pos( 0.0,    dt,  0.0); }
-		if input.mouse.just_left_pressed() {
+		if input.keyboard.just_pressed(KeyCode::P) {
 			self.set_position(0.0, 0.0, 2.0);
 			self.reset_rotation();
 		}
