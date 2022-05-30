@@ -42,7 +42,7 @@ impl Graphics {
 		}
 
 		let event_loop = EventLoop::new();
-		let window = Window::from(&event_loop).take_window();
+		let window = Window::from(&event_loop, 1024, 768).take_window();
 
 		let mut imgui_context = imgui::Context::create();
 		imgui_context.set_ini_filename(None);
