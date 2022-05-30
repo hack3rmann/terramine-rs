@@ -3,6 +3,7 @@
  */
 
 use directx_math::*;
+use crate::utils::user_io::{InputManager, KeyCode};
 
 /// Camera handler.
 pub struct Camera {
@@ -91,6 +92,24 @@ impl Camera {
 		self.pitch += pitch;
 		self.yaw += yaw;
 		self.set_rotation(self.roll, self.pitch, self.yaw);
+	}
+
+	pub fn update(&mut self, input: &mut InputManager, dt: f64) {
+		if input.keyboard.is_pressed(KeyCode::W)		{ self.move_pos( dt,  0.0,    0.0); }
+		if input.keyboard.is_pressed(KeyCode::S)		{ self.move_pos(-dt,  0.0,    0.0); }
+		if input.keyboard.is_pressed(KeyCode::D)		{ self.move_pos( 0.0,    0.0,   -dt); }
+		if input.keyboard.is_pressed(KeyCode::A)		{ self.move_pos( 0.0,    0.0,    dt); }
+		if input.keyboard.is_pressed(KeyCode::LShift)	{ self.move_pos( 0.0,   -dt,  0.0); }
+		if input.keyboard.is_pressed(KeyCode::Space)	{ self.move_pos( 0.0,    dt,  0.0); }
+		if input.mouse.just_left_pressed() {
+			self.set_position(0.0, 0.0, 2.0);
+			self.reset_rotation();
+		}
+		self.rotate(
+			-input.mouse.dy * dt * 0.2,
+			 input.mouse.dx * dt * 0.2,
+			 0.0
+		);
 	}
 }
 

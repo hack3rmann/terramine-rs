@@ -57,7 +57,7 @@ fn main() {
 
 	let mut time = 0.0;
 	let mut last_frame = std::time::Instant::now();
-	let mut dt: f64 = 0.0;
+	let mut _dt: f64 = 0.0;
 	graphics.take_event_loop().run(move |event, _, control_flow| {
 		/* Aliasing */
 		let window = graphics.display.gl_window();
@@ -82,16 +82,6 @@ fn main() {
 
 	 			/* Control camera by user input */
 				if input_manager.keyboard.just_pressed(KeyCode::Q) { is_cursor_grabbed = !is_cursor_grabbed; }
-	 			if input_manager.keyboard.is_pressed(KeyCode::W)		{ camera.move_pos( dt,  0.0,    0.0); }
-	 			if input_manager.keyboard.is_pressed(KeyCode::S)		{ camera.move_pos(-dt,  0.0,    0.0); }
-	 			if input_manager.keyboard.is_pressed(KeyCode::D)		{ camera.move_pos( 0.0,    0.0,   -dt); }
-	 			if input_manager.keyboard.is_pressed(KeyCode::A)		{ camera.move_pos( 0.0,    0.0,    dt); }
-	 			if input_manager.keyboard.is_pressed(KeyCode::LShift)	{ camera.move_pos( 0.0,   -dt,  0.0); }
-	 			if input_manager.keyboard.is_pressed(KeyCode::Space)	{ camera.move_pos( 0.0,    dt,  0.0); }
-	 			if input_manager.mouse.just_left_pressed() {
-	 				camera.set_position(0.0, 0.0, 2.0);
-	 				camera.reset_rotation();
-	 			}
 
 	 			/* Update ImGui stuff */
 				graphics.imguiw
@@ -141,16 +131,12 @@ fn main() {
 				graphics.imguic
 					.io_mut()
 					.update_delta_time(now.duration_since(last_frame));
-				dt = now.duration_since(last_frame).as_secs_f64();
+				_dt = now.duration_since(last_frame).as_secs_f64();
 				last_frame = now;
-				time += dt;
+				time += _dt;
 				
 				/* Rotating camera */
-				camera.rotate(
-					-input_manager.mouse.dy * dt * 0.2,
-					 input_manager.mouse.dx * dt * 0.2,
-					 0.0
-				);
+				camera.update(&mut input_manager, _dt);
 
 				input_manager.update();
 
@@ -159,6 +145,7 @@ fn main() {
 						glium::glutin::dpi::PhysicalPosition::new(1024 / 2, 768 / 2)
 					).unwrap();
 				}
+				graphics.display.gl_window().window().set_cursor_grab(is_cursor_grabbed).unwrap();
 			},
 			_ => ()
 		}
