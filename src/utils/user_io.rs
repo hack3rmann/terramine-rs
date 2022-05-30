@@ -10,7 +10,10 @@ pub use glium::glutin::event::{
 	WindowEvent
 };
 use std::collections::HashMap;
-use crate::utils::graphics::Graphics;
+use super::graphics::Graphics;
+use winapi::um::winuser::GetCursorPos;
+use winapi::shared::windef::LPPOINT;
+use winapi::shared::windef::POINT;
 
 /// Keyboard handler.
 #[derive(Default)]
@@ -75,10 +78,36 @@ impl Mouse {
 
 	/// Moves virtual cursor to new position.
 	pub fn move_cursor(&mut self, x: f64, y: f64) {
-		self.dx += x - self.x;
-		self.dy += y  - self.y;
-		self.x = x;
-		self.y = y;
+		// if self.is_grabbed {
+		// 	let cx: f64 = 1024.0 / 2.0;
+		// 	let cy: f64 = 768.0 / 2.0;
+		// 	if self.x >= cx && self.y >= cy {
+		// 		if x > self.x || y > self.y {
+		// 			self.dx = x - self.x;
+		// 			self.dy = y - self.y;
+		// 		}
+		// 	} else if self.x < cx && self.y >= cy {
+		// 		if x < self.x || y > self.y {
+		// 			self.dx = x - self.x;
+		// 			self.dy = y - self.y;
+		// 		}
+		// 	} else if self.x < cx && self.y < cy {
+		// 		if x < self.x || y < self.y {
+		// 			self.dx = x - self.x;
+		// 			self.dy = y - self.y;
+		// 		}
+		// 	} else if self.x >= cx && self.y < cy {
+		// 		if x > self.x || y < self.y {
+		// 			self.dx = x - self.x;
+		// 			self.dy = y - self.y;
+		// 		}
+		// 	}
+		// } else {
+		// 	self.dx += x - self.x;
+		// 	self.dy += y - self.y;
+		// }
+		// self.x = x;
+		// self.y = y;
 	}
 
 	/// Checks if left mouse button pressed.
@@ -119,13 +148,41 @@ impl Mouse {
 
 	/// Update delta.
 	pub fn update(&mut self, graphics: &Graphics) {
+		let (x, y) = Self::get_cursor_pos(graphics).unwrap();
+		self.dx = x - self.x;
+		self.dy = y - self.y;
+		self.x = x;
+		self.y = y;
+
+		let wsize = graphics.display.gl_window().window().inner_size();
+
 		if self.is_grabbed {
 			graphics.display.gl_window().window().set_cursor_position(
-				glium::glutin::dpi::PhysicalPosition::new(1024 / 2, 768 / 2)
+				glium::glutin::dpi::PhysicalPosition::new(wsize.width / 2, wsize.height / 2)
 			).unwrap();
+			self.x = (wsize.width / 2) as f64;
+			self.y = (wsize.height / 2) as f64;
 		}
-		self.dx = 0.0;
-		self.dy = 0.0;
+	}
+
+	/// Gives cursor position in screen cordinates.
+	pub fn get_cursor_screen_pos() -> Result<(f64, f64), &'static str> {
+		let pt: LPPOINT = &mut POINT { x: 0, y: 0 };
+		/* Safe because unwraping pointers after checking result */
+		if unsafe { GetCursorPos(pt) } != 0 {
+			let x = unsafe { (*pt).x as f64 };
+			let y = unsafe { (*pt).y as f64 };
+			Ok((x, y))
+		} else {
+			Err("Can't get cursor position!")
+		}
+	}
+
+	pub fn get_cursor_pos(graphics: &Graphics) -> Result<(f64, f64), &'static str> {
+		let (x, y) = Self::get_cursor_screen_pos()?;
+		let window_pos = graphics.display.gl_window().window().inner_position().unwrap();
+
+		Ok((x - window_pos.x as f64, y - window_pos.y as f64))
 	}
 
 	/// Grabs the cursor for camera control.
@@ -196,9 +253,9 @@ impl InputManager {
 	 			},
 	 			/* Cursor moved to new position. */
 	 			WindowEvent::CursorMoved { position, .. } => {
-					let position = position.to_logical(graphics.display.gl_window().window().scale_factor());
-					let position = graphics.imguiw.scale_pos_from_winit(graphics.display.gl_window().window(), position);
-	 				self.mouse.move_cursor(position.x, position.y);
+					// let position = position.to_logical(graphics.display.gl_window().window().scale_factor());
+					// let position = graphics.imguiw.scale_pos_from_winit(graphics.display.gl_window().window(), position);
+	 				// self.mouse.move_cursor(position.x, position.y);
 	 			}
 	            _ => (),
 	        },

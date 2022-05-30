@@ -25,6 +25,8 @@ use utils::{
 };
 
 fn main() {
+	
+
 	/* Keyboard init */
 	let mut input_manager = InputManager::new();
 
@@ -93,15 +95,44 @@ fn main() {
 				let draw_data = {
 					let ui = graphics.imguic.frame();
 					imgui::Window::new("Delta")
-						.size([300.0, 100.0], imgui::Condition::FirstUseEver)
+						.size([300.0, 150.0], imgui::Condition::FirstUseEver)
 						.build(&ui, || {
 							ui.text("My delta:");
-							ui.text(format!("dx: {0:.5}, dy: {1:.5}", input_manager.mouse.dx, input_manager.mouse.dy));
+							ui.text(format!("dx: {0}, dy: {1}", input_manager.mouse.dx, input_manager.mouse.dy));
 	
 							ui.separator();
 	
 							ui.text("ImGUI delta");
-							ui.text(format!("dx: {0:.5}, dy: {1:.5}", ui.io().mouse_delta[0], ui.io().mouse_delta[1]))
+							ui.text(format!("dx: {0}, dy: {1}", ui.io().mouse_delta[0], ui.io().mouse_delta[1]));
+	
+							ui.separator();
+	
+							ui.text("Difference");
+							ui.text(format!(
+								"ddx: {0}, ddy: {1}",
+								ui.io().mouse_delta[0] - input_manager.mouse.dx as f32,
+								ui.io().mouse_delta[1] - input_manager.mouse.dy as f32
+							));
+						});
+					imgui::Window::new("Position")
+						.size([300.0, 150.0], imgui::Condition::FirstUseEver)
+						.build(&ui, || {
+							ui.text("My cursor position");
+							ui.text(format!("x: {0}, y: {1}", input_manager.mouse.x, input_manager.mouse.y));
+
+							ui.separator();
+
+							ui.text("ImGui cursor position");
+							ui.text(format!("x: {0}, y: {1}", ui.io().mouse_pos[0], ui.io().mouse_pos[1]));
+
+							ui.separator();
+
+							ui.text("Difference");
+							ui.text(format!(
+								"dx: {0}, dy: {1}",
+								ui.io().mouse_pos[0] - input_manager.mouse.x as f32,
+								ui.io().mouse_pos[1] - input_manager.mouse.y as f32,
+							));
 						});
 	
 					graphics.imguiw.prepare_render(&ui, graphics.display.gl_window().window());
