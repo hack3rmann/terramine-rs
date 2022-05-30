@@ -2,8 +2,15 @@
  * Keyboard IO handler
  */
 
-pub use glium::glutin::event::{ElementState, VirtualKeyCode as KeyCode, MouseButton};
+pub use glium::glutin::event::{
+	ElementState,
+	VirtualKeyCode as KeyCode,
+	MouseButton,
+	Event,
+	WindowEvent
+};
 use std::collections::HashMap;
+use crate::utils::graphics::Graphics;
 
 /// Keyboard handler.
 #[derive(Default)]
@@ -43,10 +50,10 @@ impl Keyboard {
 #[derive(Default)]
 pub struct Mouse {
 	pub inputs: HashMap<MouseButton, ElementState>,
-	pub dx: f32,
-	pub dy: f32,
-	pub x: f32,
-	pub y: f32,
+	pub dx: f64,
+	pub dy: f64,
+	pub x: f64,
+	pub y: f64,
 	pub on_window: bool
 }
 
@@ -66,9 +73,9 @@ impl Mouse {
 	}
 
 	/// Moves virtual cursor to new position.
-	pub fn move_cursor(&mut self, x: f32, y: f32) {
-		self.dx = x - self.x;
-		self.dy = y - self.y;
+	pub fn move_cursor(&mut self, x: f64, y: f64) {
+		self.dx += x - self.x;
+		self.dy += y  - self.y;
 		self.x = x;
 		self.y = y;
 	}
@@ -114,6 +121,8 @@ impl Mouse {
 		self.dx = 0.0;
 		self.dy = 0.0;
 	}
+
+	
 }
 
 /// Contains both input types: `keyboard` and `mouse`.
@@ -126,4 +135,60 @@ pub struct InputManager {
 impl InputManager {
 	/// Constructs manager with default values.
 	pub fn new() -> Self { Default::default() }
+
+	pub fn handle_event(&mut self, event: &Event<()>, graphics: &Graphics) {
+		match event {
+			/* Window events */
+	        Event::WindowEvent { event, .. } => match event {
+	 			/* Close event */
+	            WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
+	 				/* Key matching */
+	 				Some(key) => match key {
+	 					_ => {
+	 						/* If key is pressed then press it on virtual keyboard, if not then release it. */
+	 						match input.state {
+	 							ElementState::Pressed => {
+	 								self.keyboard.press(key);
+	 							},
+	 							ElementState::Released => {
+	 								self.keyboard.release(key);
+	 							}
+	 						}
+	 					}
+	 				}
+	 				_ => ()
+	 			},
+	 			/* Mouse buttons match. */
+	 			WindowEvent::MouseInput { button, state, .. } => match state {
+	 				/* If button is pressed then press it on virtual mouse, if not then release it. */
+	 				ElementState::Pressed => {
+	 					self.mouse.press(*button);
+	 				},
+	 				ElementState::Released => {
+	 					self.mouse.release(*button);
+	 				}
+	 			},
+	 			/* Cursor entered the window event. */
+	 			WindowEvent::CursorEntered { .. } => {
+	 				self.mouse.on_window = true;
+	 			},
+	 			/* Cursor left the window. */
+	 			WindowEvent::CursorLeft { .. } => {
+	 				self.mouse.on_window = false;
+	 			},
+	 			/* Cursor moved to new position. */
+	 			WindowEvent::CursorMoved { position, .. } => {
+					let position = position.to_logical(graphics.display.gl_window().window().scale_factor());
+					let position = graphics.imguiw.scale_pos_from_winit(graphics.display.gl_window().window(), position);
+	 				self.mouse.move_cursor(position.x, position.y);
+	 			}
+	            _ => (),
+	        },
+			_ => ()
+		}
+	}
+
+	pub fn update(&mut self) {
+		self.mouse.update();
+	}
 }

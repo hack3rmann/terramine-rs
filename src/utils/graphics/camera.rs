@@ -6,9 +6,9 @@ use directx_math::*;
 
 /// Camera handler.
 pub struct Camera {
-	pub roll: f32,
-	pub pitch: f32,
-	pub yaw: f32,
+	pub roll: f64,
+	pub pitch: f64,
+	pub yaw: f64,
 	pub fov: f32,
 
 	/* Terrible code hightliting. It's type, not an object, stupid! */
@@ -34,19 +34,19 @@ impl Camera {
 	}
 
 	/// Stores rotation.
-	pub fn set_rotation(&mut self, roll: f32, pitch: f32, yaw: f32) {
+	pub fn set_rotation(&mut self, roll: f64, pitch: f64, yaw: f64) {
 		self.roll = roll;
 		self.pitch = pitch;
 		self.yaw = yaw;
 
-		self.rotation.0 = XMMatrixRotationRollPitchYaw(roll, pitch, yaw);
+		self.rotation.0 = XMMatrixRotationRollPitchYaw(roll as f32, pitch as f32, yaw as f32);
 
 		self.update_vectors();
 	}
 
 	/// Sets position.
-	pub fn set_position(&mut self, x: f32, y: f32, z: f32) {
-		self.pos.0 = XMVectorSet(x, y, z, 1.0);
+	pub fn set_position(&mut self, x: f64, y: f64, z: f64) {
+		self.pos.0 = XMVectorSet(x as f32, y as f32, z as f32, 1.0);
 	}
 
 	/// Sets rotation to [0.0, 0.0, 0.0].
@@ -55,10 +55,10 @@ impl Camera {
 	}
 
 	/// Moves camera towards its vectors.
-	pub fn move_pos(&mut self, front: f32, up: f32, right: f32) {
-		self.pos += self.front * front;
-		self.pos += self.up * up;
-		self.pos += self.right * right;
+	pub fn move_pos(&mut self, front: f64, up: f64, right: f64) {
+		self.pos += self.front * front as f32;
+		self.pos += self.up * up as f32;
+		self.pos += self.right * right as f32;
 	}
 
 	/// Returns view matrix.
@@ -86,7 +86,7 @@ impl Camera {
 		XMVectorGetZ(self.pos.0)
 	}
 
-	pub fn rotate(&mut self, roll: f32, pitch: f32, yaw: f32) {
+	pub fn rotate(&mut self, roll: f64, pitch: f64, yaw: f64) {
 		self.roll += roll;
 		self.pitch += pitch;
 		self.yaw += yaw;
