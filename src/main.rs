@@ -5,8 +5,6 @@ use glium::{
 	glutin::event::{
 		Event,
 		WindowEvent,
-		ElementState,
-		DeviceEvent
 	},
 	Surface,
 	uniform
@@ -61,10 +59,14 @@ fn main() {
 	let mut last_frame = std::time::Instant::now();
 	let mut dt: f64 = 0.0;
 	graphics.take_event_loop().run(move |event, _, control_flow| {
+		/* Aliasing */
 		let window = graphics.display.gl_window();
+
+		/* Event handlers */
 		graphics.imguiw.handle_event(graphics.imguic.io_mut(), window.window(), &event);
 		input_manager.handle_event(&event, &graphics);
 
+		/* This event handler */
 		match event {
 			/* Window events */
 	        Event::WindowEvent { event, .. } => match event {
