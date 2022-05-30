@@ -11,8 +11,8 @@ pub struct Camera {
 	pub pitch: f64,
 	pub yaw: f64,
 	pub fov: f32,
+	pub grabbes_cursor: bool,
 
-	/* Terrible code hightliting. It's type, not an object, stupid! */
 	pub pos: XMVector,
 	pub up: XMVector,
 	pub front: XMVector,
@@ -107,11 +107,13 @@ impl Camera {
 			self.set_position(0.0, 0.0, 2.0);
 			self.reset_rotation();
 		}
-		self.rotate(
-			-input.mouse.dy * dt * 0.2,
-			 input.mouse.dx * dt * 0.2,
-			 0.0
-		);
+		if self.grabbes_cursor {
+			self.rotate(
+				-input.mouse.dy * dt * 0.2,
+				input.mouse.dx * dt * 0.2,
+				0.0
+			);
+		}
 	}
 }
 
@@ -122,6 +124,7 @@ impl Default for Camera {
 			pitch: 0.0,
 			yaw: 0.0,
 			fov: 60.0,
+			grabbes_cursor: false,
 			pos: XMVector(XMVectorSet(0.0, 0.0, -3.0, 1.0)),
 			up: XMVector(XMVectorSet(0.0, 1.0, 0.0, 1.0)),
 			front: XMVector(XMVectorSet(0.0, 0.0, -1.0, 1.0)),

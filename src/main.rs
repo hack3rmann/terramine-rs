@@ -82,8 +82,15 @@ fn main() {
 	 			}
 
 	 			/* Control camera by user input */
-				if input_manager.keyboard.just_pressed(KeyCode::Q) { input_manager.mouse.grab_cursor(&graphics); }
-				if input_manager.keyboard.just_pressed(KeyCode::E) { input_manager.mouse.release_cursor(&graphics); }
+				if input_manager.keyboard.just_pressed(KeyCode::T) {
+					if camera.grabbes_cursor {
+						camera.grabbes_cursor = false;
+						input_manager.mouse.release_cursor(&graphics);
+					} else {
+						camera.grabbes_cursor = true;
+						input_manager.mouse.grab_cursor(&graphics);
+					}
+				}
 
 	 			/* Update ImGui stuff */
 				graphics.imguiw
