@@ -3,15 +3,16 @@
  */
 
 use directx_math::*;
+use crate::utils::user_io::{InputManager, KeyCode};
 
 /// Camera handler.
 pub struct Camera {
-	pub roll: f32,
-	pub pitch: f32,
-	pub yaw: f32,
+	pub roll: f64,
+	pub pitch: f64,
+	pub yaw: f64,
 	pub fov: f32,
+	pub grabbes_cursor: bool,
 
-	/* Terrible code hightliting. It's type, not an object, stupid! */
 	pub pos: XMVector,
 	pub up: XMVector,
 	pub front: XMVector,
@@ -34,19 +35,19 @@ impl Camera {
 	}
 
 	/// Stores rotation.
-	pub fn set_rotation(&mut self, roll: f32, pitch: f32, yaw: f32) {
+	pub fn set_rotation(&mut self, roll: f64, pitch: f64, yaw: f64) {
 		self.roll = roll;
 		self.pitch = pitch;
 		self.yaw = yaw;
 
-		self.rotation.0 = XMMatrixRotationRollPitchYaw(roll, pitch, yaw);
+		self.rotation.0 = XMMatrixRotationRollPitchYaw(roll as f32, pitch as f32, yaw as f32);
 
 		self.update_vectors();
 	}
 
 	/// Sets position.
-	pub fn set_position(&mut self, x: f32, y: f32, z: f32) {
-		self.pos.0 = XMVectorSet(x, y, z, 1.0);
+	pub fn set_position(&mut self, x: f64, y: f64, z: f64) {
+		self.pos.0 = XMVectorSet(x as f32, y as f32, z as f32, 1.0);
 	}
 
 	/// Sets rotation to [0.0, 0.0, 0.0].
@@ -55,10 +56,10 @@ impl Camera {
 	}
 
 	/// Moves camera towards its vectors.
-	pub fn move_pos(&mut self, front: f32, up: f32, right: f32) {
-		self.pos += self.front * front;
-		self.pos += self.up * up;
-		self.pos += self.right * right;
+	pub fn move_pos(&mut self, front: f64, up: f64, right: f64) {
+		self.pos += self.front * front as f32;
+		self.pos += self.up * up as f32;
+		self.pos += self.right * right as f32;
 	}
 
 	/// Returns view matrix.
@@ -86,11 +87,33 @@ impl Camera {
 		XMVectorGetZ(self.pos.0)
 	}
 
-	pub fn rotate(&mut self, roll: f32, pitch: f32, yaw: f32) {
+	/// Rotates camera.
+	pub fn rotate(&mut self, roll: f64, pitch: f64, yaw: f64) {
 		self.roll += roll;
 		self.pitch += pitch;
 		self.yaw += yaw;
 		self.set_rotation(self.roll, self.pitch, self.yaw);
+	}
+
+	/// Updates camera (key press checking, etc).
+	pub fn update(&mut self, input: &mut InputManager, dt: f64) {
+		if input.keyboard.is_pressed(KeyCode::W)		{ self.move_pos( dt,  0.0,    0.0); }
+		if input.keyboard.is_pressed(KeyCode::S)		{ self.move_pos(-dt,  0.0,    0.0); }
+		if input.keyboard.is_pressed(KeyCode::D)		{ self.move_pos( 0.0,    0.0,   -dt); }
+		if input.keyboard.is_pressed(KeyCode::A)		{ self.move_pos( 0.0,    0.0,    dt); }
+		if input.keyboard.is_pressed(KeyCode::LShift)	{ self.move_pos( 0.0,   -dt,  0.0); }
+		if input.keyboard.is_pressed(KeyCode::Space)	{ self.move_pos( 0.0,    dt,  0.0); }
+		if input.mouse.just_left_pressed() {
+			self.set_position(0.0, 0.0, 2.0);
+			self.reset_rotation();
+		}
+		if self.grabbes_cursor {
+			self.rotate(
+				-input.mouse.dy * dt * 0.2,
+				input.mouse.dx * dt * 0.2,
+				0.0
+			);
+		}
 	}
 }
 
@@ -101,6 +124,7 @@ impl Default for Camera {
 			pitch: 0.0,
 			yaw: 0.0,
 			fov: 60.0,
+			grabbes_cursor: false,
 			pos: XMVector(XMVectorSet(0.0, 0.0, -3.0, 1.0)),
 			up: XMVector(XMVectorSet(0.0, 1.0, 0.0, 1.0)),
 			front: XMVector(XMVectorSet(0.0, 0.0, -1.0, 1.0)),

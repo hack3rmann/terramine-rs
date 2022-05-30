@@ -5,7 +5,6 @@ use glium::{
 	glutin::event::{
 		Event,
 		WindowEvent,
-		ElementState,
 	},
 	Surface,
 	uniform
@@ -54,66 +53,27 @@ fn main() {
 	/* Camera preposition */
 	camera.set_position(0.0, 0.0, 2.0);
 
+	/* Time stuff */
 	let mut time = 0.0;
 	let mut last_frame = std::time::Instant::now();
-	let mut dt = 0.0;
-	graphics.take_event_loop().run(move |event, _, control_flow| {
-		let window = graphics.display.gl_window();
-		graphics.imguiw.handle_event(graphics.imguic.io_mut(), window.window(), &event);
+	let mut _dt: f64 = 0.0;
 
+	/* Event/game loop */
+	graphics.take_event_loop().run(move |event, _, control_flow| {
+		/* Aliasing */
+		let window = graphics.display.gl_window();
+
+		/* Event handlers */
+		graphics.imguiw.handle_event(graphics.imguic.io_mut(), window.window(), &event);
+		input_manager.handle_event(&event);
+
+		/* This event handler */
 		match event {
 			/* Window events */
 	        Event::WindowEvent { event, .. } => match event {
 	 			/* Close event */
 	            WindowEvent::CloseRequested => *control_flow = glium::glutin::event_loop::ControlFlow::Exit,
-	 			/* Keyboard input event */
-	 			WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
-	 				/* Key matching */
-	 				Some(key) => match key {
-	 					_ => {
-	 						/* If key is pressed then press it on virtual keyboard, if not then release it. */
-	 						match input.state {
-	 							ElementState::Pressed => {
-	 								input_manager.keyboard.press(key);
-	 								return
-	 							},
-	 							ElementState::Released => {
-	 								input_manager.keyboard.release(key);
-	 								return
-	 							}
-	 						}
-	 					}
-	 				}
-	 				_ => return
-	 			},
-	 			/* Mouse buttons match. */
-	 			WindowEvent::MouseInput { button, state, .. } => match state {
-	 				/* If button is pressed then press it on virtual mouse, if not then release it. */
-	 				ElementState::Pressed => {
-	 					input_manager.mouse.press(button);
-	 					return
-	 				},
-	 				ElementState::Released => {
-	 					input_manager.mouse.release(button);
-	 					return
-	 				}
-	 			},
-	 			/* Cursor entered the window event. */
-	 			WindowEvent::CursorEntered { .. } => {
-	 				input_manager.mouse.on_window = true;
-	 				return
-	 			},
-	 			/* Cursor left the window. */
-	 			WindowEvent::CursorLeft { .. } => {
-	 				input_manager.mouse.on_window = false;
-	 				return
-	 			},
-	 			/* Cursor moved to new position. */
-	 			WindowEvent::CursorMoved { position, .. } => {
-	 				input_manager.mouse.move_cursor(position.x as f32, position.y as f32);
-	 				return
-	 			}
-	             _ => return,
+	             _ => (),
 	        },
 	 		Event::MainEventsCleared => {
 	 			/* Close window is `escape` pressed */
@@ -122,30 +82,71 @@ fn main() {
 	 			}
 
 	 			/* Control camera by user input */
-	 			if input_manager.keyboard.is_pressed(KeyCode::W)		{ camera.move_pos( dt,  0.0,    0.0); }
-	 			if input_manager.keyboard.is_pressed(KeyCode::S)		{ camera.move_pos(-dt,  0.0,    0.0); }
-	 			if input_manager.keyboard.is_pressed(KeyCode::D)		{ camera.move_pos( 0.0,    0.0,   -dt); }
-	 			if input_manager.keyboard.is_pressed(KeyCode::A)		{ camera.move_pos( 0.0,    0.0,    dt); }
-	 			if input_manager.keyboard.is_pressed(KeyCode::LShift)	{ camera.move_pos( 0.0,   -dt,  0.0); }
-	 			if input_manager.keyboard.is_pressed(KeyCode::Space)	{ camera.move_pos( 0.0,    dt,  0.0); }
-	 			if input_manager.mouse.just_left_pressed() {
-	 				camera.set_position(0.0, 0.0, 2.0);
-	 				camera.reset_rotation();
-	 			}
+				if input_manager.keyboard.just_pressed(KeyCode::T) {
+					if camera.grabbes_cursor {
+						camera.grabbes_cursor = false;
+						input_manager.mouse.release_cursor(&graphics);
+					} else {
+						camera.grabbes_cursor = true;
+						input_manager.mouse.grab_cursor(&graphics);
+					}
+				}
 
 	 			/* Update ImGui stuff */
 				graphics.imguiw
 					.prepare_frame(graphics.imguic.io_mut(), window.window())
 					.unwrap();
  
+				/* Moves to `RedrawRequested` stage */
 				window.window().request_redraw();
 	 		},
 			glium::glutin::event::Event::RedrawRequested(_) => {
-				let ui = graphics.imguic.frame();
-				//ui.show_demo_window(&mut true);
+				let draw_data = {
+					let ui = graphics.imguic.frame();
+					imgui::Window::new("Delta")
+						.size([300.0, 150.0], imgui::Condition::FirstUseEver)
+						.build(&ui, || {
+							ui.text("My delta:");
+							ui.text(format!("dx: {0}, dy: {1}", input_manager.mouse.dx, input_manager.mouse.dy));
+	
+							ui.separator();
+	
+							ui.text("ImGUI delta");
+							ui.text(format!("dx: {0}, dy: {1}", ui.io().mouse_delta[0], ui.io().mouse_delta[1]));
+	
+							ui.separator();
+	
+							ui.text("Difference");
+							ui.text(format!(
+								"ddx: {0}, ddy: {1}",
+								ui.io().mouse_delta[0] - input_manager.mouse.dx as f32,
+								ui.io().mouse_delta[1] - input_manager.mouse.dy as f32
+							));
+						});
+					imgui::Window::new("Position")
+						.size([300.0, 150.0], imgui::Condition::FirstUseEver)
+						.build(&ui, || {
+							ui.text("My cursor position");
+							ui.text(format!("x: {0}, y: {1}", input_manager.mouse.x, input_manager.mouse.y));
 
-				graphics.imguiw.prepare_render(&ui, window.window());
-				let draw_data = ui.render();
+							ui.separator();
+
+							ui.text("ImGui cursor position");
+							ui.text(format!("x: {0}, y: {1}", ui.io().mouse_pos[0], ui.io().mouse_pos[1]));
+
+							ui.separator();
+
+							ui.text("Difference");
+							ui.text(format!(
+								"dx: {0}, dy: {1}",
+								ui.io().mouse_pos[0] - input_manager.mouse.x as f32,
+								ui.io().mouse_pos[1] - input_manager.mouse.y as f32,
+							));
+						});
+	
+					graphics.imguiw.prepare_render(&ui, graphics.display.gl_window().window());
+					ui.render()
+				};
 
 				/* Uniforms set */
 				let uniforms = uniform! {
@@ -156,6 +157,7 @@ fn main() {
 					view: camera.get_view()
 				};
 
+				/* Actual drawing */
 				let mut target = graphics.display.draw(); 
 				target.clear_color(0.01, 0.01, 0.01, 1.0); {
 					target.draw(&vertex_buffer, &indices, &shaders.program, &uniforms, &Default::default()).unwrap();
@@ -167,25 +169,22 @@ fn main() {
 				} target.finish().unwrap();
 			},
 			glium::glutin::event::Event::NewEvents(_) => {
+				/* Update time */
 				let now = std::time::Instant::now();
 				graphics.imguic
 					.io_mut()
 					.update_delta_time(now.duration_since(last_frame));
-				dt = now.duration_since(last_frame).as_secs_f32();
+				_dt = now.duration_since(last_frame).as_secs_f64();
 				last_frame = now;
-				time += dt;
+				time += _dt;
 				
 				/* Rotating camera */
-				camera.rotate(
-					-input_manager.mouse.dy * dt / 2.0,
-					 input_manager.mouse.dx * dt / 2.0,
-					 0.0
-				);
-		   
-				/* Updating mouse */
-				input_manager.mouse.update();
+				camera.update(&mut input_manager, _dt);
+
+				/* Input update */
+				input_manager.update(&graphics);				
 			},
-			_ => return
+			_ => ()
 		}
 	});
 }
