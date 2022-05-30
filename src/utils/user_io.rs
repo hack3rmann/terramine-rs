@@ -76,40 +76,6 @@ impl Mouse {
 		self.inputs.remove(&button);
 	}
 
-	/// Moves virtual cursor to new position.
-	pub fn move_cursor(&mut self, x: f64, y: f64) {
-		// if self.is_grabbed {
-		// 	let cx: f64 = 1024.0 / 2.0;
-		// 	let cy: f64 = 768.0 / 2.0;
-		// 	if self.x >= cx && self.y >= cy {
-		// 		if x > self.x || y > self.y {
-		// 			self.dx = x - self.x;
-		// 			self.dy = y - self.y;
-		// 		}
-		// 	} else if self.x < cx && self.y >= cy {
-		// 		if x < self.x || y > self.y {
-		// 			self.dx = x - self.x;
-		// 			self.dy = y - self.y;
-		// 		}
-		// 	} else if self.x < cx && self.y < cy {
-		// 		if x < self.x || y < self.y {
-		// 			self.dx = x - self.x;
-		// 			self.dy = y - self.y;
-		// 		}
-		// 	} else if self.x >= cx && self.y < cy {
-		// 		if x > self.x || y < self.y {
-		// 			self.dx = x - self.x;
-		// 			self.dy = y - self.y;
-		// 		}
-		// 	}
-		// } else {
-		// 	self.dx += x - self.x;
-		// 	self.dy += y - self.y;
-		// }
-		// self.x = x;
-		// self.y = y;
-	}
-
 	/// Checks if left mouse button pressed.
 	pub fn is_left_pressed(&self) -> bool {
 		self.inputs.contains_key(&MouseButton::Left)
@@ -146,38 +112,48 @@ impl Mouse {
 		return pressed;
 	}
 
-	/// Update delta.
+	/// Update mouse delta.
 	pub fn update(&mut self, graphics: &Graphics) {
+		/* Get cursor position from WinAPI */
 		let (x, y) = Self::get_cursor_pos(graphics).unwrap();
+
+		/* Update struct */
 		self.dx = x - self.x;
 		self.dy = y - self.y;
 		self.x = x;
 		self.y = y;
 
+		/* Get window size */
 		let wsize = graphics.display.gl_window().window().inner_size();
 
+		/* If cursor grabbed then not change mouse position and put cursor on center */
 		if self.is_grabbed {
 			graphics.display.gl_window().window().set_cursor_position(
 				glium::glutin::dpi::PhysicalPosition::new(wsize.width / 2, wsize.height / 2)
 			).unwrap();
-			self.x = (wsize.width / 2) as f64;
+			self.x = (wsize.width  / 2) as f64;
 			self.y = (wsize.height / 2) as f64;
 		}
 	}
 
 	/// Gives cursor position in screen cordinates.
 	pub fn get_cursor_screen_pos() -> Result<(f64, f64), &'static str> {
+		/* Point cordinates struct */
 		let pt: LPPOINT = &mut POINT { x: 0, y: 0 };
-		/* Safe because unwraping pointers after checking result */
+		
+		/* Checks if WinAPI `GetCursorPos()` success then return cursor position else error */
 		if unsafe { GetCursorPos(pt) } != 0 {
+			/* Safe because unwraping pointers after checking result */
 			let x = unsafe { (*pt).x as f64 };
 			let y = unsafe { (*pt).y as f64 };
 			Ok((x, y))
 		} else {
+			/* `GetCursorPos()` returned `false` for some reason */
 			Err("Can't get cursor position!")
 		}
 	}
 
+	/// Gives cursor position in window cordinates.
 	pub fn get_cursor_pos(graphics: &Graphics) -> Result<(f64, f64), &'static str> {
 		let (x, y) = Self::get_cursor_screen_pos()?;
 		let window_pos = graphics.display.gl_window().window().inner_position().unwrap();
@@ -211,7 +187,7 @@ impl InputManager {
 	/// Constructs manager with default values.
 	pub fn new() -> Self { Default::default() }
 
-	pub fn handle_event(&mut self, event: &Event<()>, graphics: &Graphics) {
+	pub fn handle_event(&mut self, event: &Event<()>) {
 		match event {
 			/* Window events */
 	        Event::WindowEvent { event, .. } => match event {
@@ -251,12 +227,6 @@ impl InputManager {
 	 			WindowEvent::CursorLeft { .. } => {
 	 				self.mouse.on_window = false;
 	 			},
-	 			/* Cursor moved to new position. */
-	 			WindowEvent::CursorMoved { position, .. } => {
-					// let position = position.to_logical(graphics.display.gl_window().window().scale_factor());
-					// let position = graphics.imguiw.scale_pos_from_winit(graphics.display.gl_window().window(), position);
-	 				// self.mouse.move_cursor(position.x, position.y);
-	 			}
 	            _ => (),
 	        },
 			_ => ()

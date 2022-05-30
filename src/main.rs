@@ -25,8 +25,6 @@ use utils::{
 };
 
 fn main() {
-	
-
 	/* Keyboard init */
 	let mut input_manager = InputManager::new();
 
@@ -55,16 +53,19 @@ fn main() {
 	/* Camera preposition */
 	camera.set_position(0.0, 0.0, 2.0);
 
+	/* Time stuff */
 	let mut time = 0.0;
 	let mut last_frame = std::time::Instant::now();
 	let mut _dt: f64 = 0.0;
+
+	/* Event/game loop */
 	graphics.take_event_loop().run(move |event, _, control_flow| {
 		/* Aliasing */
 		let window = graphics.display.gl_window();
 
 		/* Event handlers */
 		graphics.imguiw.handle_event(graphics.imguic.io_mut(), window.window(), &event);
-		input_manager.handle_event(&event, &graphics);
+		input_manager.handle_event(&event);
 
 		/* This event handler */
 		match event {
@@ -89,6 +90,7 @@ fn main() {
 					.prepare_frame(graphics.imguic.io_mut(), window.window())
 					.unwrap();
  
+				/* Moves to `RedrawRequested` stage */
 				window.window().request_redraw();
 	 		},
 			glium::glutin::event::Event::RedrawRequested(_) => {
@@ -148,6 +150,7 @@ fn main() {
 					view: camera.get_view()
 				};
 
+				/* Actual drawing */
 				let mut target = graphics.display.draw(); 
 				target.clear_color(0.01, 0.01, 0.01, 1.0); {
 					target.draw(&vertex_buffer, &indices, &shaders.program, &uniforms, &Default::default()).unwrap();
@@ -159,6 +162,7 @@ fn main() {
 				} target.finish().unwrap();
 			},
 			glium::glutin::event::Event::NewEvents(_) => {
+				/* Update time */
 				let now = std::time::Instant::now();
 				graphics.imguic
 					.io_mut()
@@ -170,6 +174,7 @@ fn main() {
 				/* Rotating camera */
 				camera.update(&mut input_manager, _dt);
 
+				/* Input update */
 				input_manager.update(&graphics);				
 			},
 			_ => ()
