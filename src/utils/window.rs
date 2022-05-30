@@ -11,7 +11,7 @@ use glium::{
 			Icon,
 			Window as GWindow
 		},
-		dpi::LogicalSize,
+		dpi::PhysicalSize,
 		ContextWrapper,
 		PossiblyCurrent,
 		ContextBuilder,
@@ -30,7 +30,7 @@ impl Window {
 		let window = WindowBuilder::new()
 			.with_title("Terramine")
 			.with_resizable(true)
-            .with_inner_size(LogicalSize::new(1024, 768))
+            .with_inner_size(PhysicalSize::new(1024, 768))
 			.with_window_icon(Some(Self::load_icon()));
 		let window = ContextBuilder::new()
 			.with_gl(GlRequest::Latest)
