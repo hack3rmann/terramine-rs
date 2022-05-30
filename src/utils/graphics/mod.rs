@@ -14,7 +14,6 @@ use crate::glium::{
 	glutin::event_loop::EventLoop,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::io::prelude::*;
 
 /// Struct that handles graphics.
 pub struct Graphics {
