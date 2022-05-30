@@ -54,7 +54,8 @@ pub struct Mouse {
 	pub dy: f64,
 	pub x: f64,
 	pub y: f64,
-	pub on_window: bool
+	pub on_window: bool,
+	pub is_grabbed: bool,
 }
 
 #[allow(dead_code)]
@@ -116,13 +117,30 @@ impl Mouse {
 		return pressed;
 	}
 
-	/// Update d/
-	pub fn update(&mut self) {
+	/// Update delta.
+	pub fn update(&mut self, graphics: &Graphics) {
+		if self.is_grabbed {
+			graphics.display.gl_window().window().set_cursor_position(
+				glium::glutin::dpi::PhysicalPosition::new(1024 / 2, 768 / 2)
+			).unwrap();
+		}
 		self.dx = 0.0;
 		self.dy = 0.0;
 	}
 
-	
+	/// Grabs the cursor for camera control.
+	pub fn grab_cursor(&mut self, graphics: &Graphics) {
+		graphics.display.gl_window().window().set_cursor_grab(true).unwrap();
+		graphics.display.gl_window().window().set_cursor_visible(false);
+		self.is_grabbed = true;
+	}
+
+	/// Releases cursor for standart input.
+	pub fn release_cursor(&mut self, graphics: &Graphics) {
+		graphics.display.gl_window().window().set_cursor_grab(false).unwrap();
+		graphics.display.gl_window().window().set_cursor_visible(true);
+		self.is_grabbed = false;
+	}
 }
 
 /// Contains both input types: `keyboard` and `mouse`.
@@ -188,7 +206,7 @@ impl InputManager {
 		}
 	}
 
-	pub fn update(&mut self) {
-		self.mouse.update();
+	pub fn update(&mut self, graphics: &Graphics) {
+		self.mouse.update(graphics);
 	}
 }

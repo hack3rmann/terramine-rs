@@ -81,7 +81,8 @@ fn main() {
 	 			}
 
 	 			/* Control camera by user input */
-				if input_manager.keyboard.just_pressed(KeyCode::Q) { is_cursor_grabbed = !is_cursor_grabbed; }
+				if input_manager.keyboard.just_pressed(KeyCode::Q) { input_manager.mouse.grab_cursor(&graphics); }
+				if input_manager.keyboard.just_pressed(KeyCode::E) { input_manager.mouse.release_cursor(&graphics); }
 
 	 			/* Update ImGui stuff */
 				graphics.imguiw
@@ -138,14 +139,7 @@ fn main() {
 				/* Rotating camera */
 				camera.update(&mut input_manager, _dt);
 
-				input_manager.update();
-
-				if is_cursor_grabbed {
-					graphics.display.gl_window().window().set_cursor_position(
-						glium::glutin::dpi::PhysicalPosition::new(1024 / 2, 768 / 2)
-					).unwrap();
-				}
-				graphics.display.gl_window().window().set_cursor_grab(is_cursor_grabbed).unwrap();
+				input_manager.update(&graphics);				
 			},
 			_ => ()
 		}
