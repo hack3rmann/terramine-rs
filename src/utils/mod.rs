@@ -6,3 +6,4 @@ pub extern crate winapi;
 pub mod window;
 pub mod graphics;
 pub mod user_io;
+pub mod math;
