@@ -1,4 +1,4 @@
-mod utils;
+mod app;
 
 /* Glium includes */
 use glium::{
@@ -13,7 +13,7 @@ use glium::{
 use std::io::prelude::*;
 
 /* Other files */
-use utils::{
+use app::utils::{
 	*,
 	user_io::{InputManager, KeyCode},
 	graphics::{

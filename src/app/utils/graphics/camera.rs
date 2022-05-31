@@ -2,8 +2,8 @@
  * Camera handler.
  */
 
-use crate::utils::user_io::{InputManager, KeyCode};
-use crate::utils::math::{
+use crate::app::utils::user_io::{InputManager, KeyCode};
+use crate::app::utils::math::{
 	matrix::Matrix4,
 	vector::{
 		Float4,
