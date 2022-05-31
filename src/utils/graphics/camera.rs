@@ -4,6 +4,7 @@
 
 use directx_math::*;
 use crate::utils::user_io::{InputManager, KeyCode};
+use crate::utils::math::*;
 
 /// Camera handler.
 pub struct Camera {
