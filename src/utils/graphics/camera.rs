@@ -13,6 +13,7 @@ pub struct Camera {
 	pub fov: f32,
 	pub speed: f64,
 	pub grabbes_cursor: bool,
+	pub aspect_ratio: f32,
 
 	pub pos: XMVector,
 	pub up: XMVector,
@@ -82,9 +83,9 @@ impl Camera {
 		XMMatrix(XMMatrixLookAtLH(self.pos.0, (self.pos + self.front).0, self.up.0)).into()
 	}
 
-	/// Returns projection matrix.
+	/// Returns projection matrix with `aspect_ratio = height / width`
 	pub fn get_proj(&self) -> [[f32; 4]; 4] {
-		XMMatrix(XMMatrixPerspectiveLH(1.0, 768.0 / 1024.0, 0.5, 100.0)).into()
+		XMMatrix(XMMatrixPerspectiveLH(1.0, self.aspect_ratio, 0.5, 100.0)).into()
 	}
 
 	/// Returns X component of pos vector.
@@ -148,7 +149,8 @@ impl Default for Camera {
 			yaw: 0.0,
 			fov: 60.0,
 			grabbes_cursor: false,
-			speed: 4.0,
+			speed: 10.0,
+			aspect_ratio: 768.0 / 1024.0,
 			pos: XMVector(XMVectorSet(0.0, 0.0, -3.0, 1.0)),
 			up: XMVector(XMVectorSet(0.0, 1.0, 0.0, 1.0)),
 			front: XMVector(XMVectorSet(0.0, 0.0, -1.0, 1.0)),

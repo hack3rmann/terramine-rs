@@ -81,7 +81,10 @@ fn main() {
 					let mut file = std::fs::File::create("src/imgui_settings.ini").unwrap();
 					file.write_all(buf.as_bytes()).unwrap();
 				},
-	             _ => (),
+				WindowEvent::Resized(new_size) => {
+					camera.aspect_ratio = new_size.height as f32 / new_size.width as f32;
+				},
+	            _ => (),
 	        },
 	 		Event::MainEventsCleared => {
 	 			/* Close window is `escape` pressed */
@@ -116,7 +119,6 @@ fn main() {
 			glium::glutin::event::Event::RedrawRequested(_) => {
 				let draw_data = {
 					let ui = graphics.imguic.frame();
-					//ui.show_demo_window(&mut true);
 					imgui::Window::new("Camera")
 						.resizable(false)
 						.movable(false)
@@ -126,7 +128,7 @@ fn main() {
 							ui.text(format!("x: {0:.3}, y: {1:.3}, z: {2:.3}", camera.get_x(), camera.get_y(), camera.get_z()));
 							ui.separator();
 							ui.text("Speed factor");
-							imgui::Slider::new("Camera speed", 0.0, 10.0)
+							imgui::Slider::new("Camera speed", 5.0, 50.0)
 								.display_format("%.1f")
 								.build(&ui, &mut camera.speed);
 						});
