@@ -7,7 +7,7 @@ pub mod camera;
 use shader::Shader;
 use vertex_buffer::VertexBuffer;
 use super::window::Window;
-use crate::glium::{
+use crate::app::glium::{
 	self,
 	implement_vertex,
 	backend::Facade,

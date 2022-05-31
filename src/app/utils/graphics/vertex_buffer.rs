@@ -2,7 +2,7 @@
  * Vertex buffer wrapper
  */
 
-use crate::graphics::{Graphics, Vertex};
+use crate::app::graphics::{Graphics, Vertex};
 
 /// Vertex buffer help struct.
 pub struct VertexBuffer {
