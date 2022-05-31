@@ -9,7 +9,7 @@ use swizzle::{
 
 /// Represents 4D 32-bit float vector.
 #[derive(Clone, Copy)]
-struct Float4 {
+pub struct Float4 {
 	pub i_vec: XMVECTOR
 }
 
