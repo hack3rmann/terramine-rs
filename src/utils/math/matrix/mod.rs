@@ -92,14 +92,14 @@ impl Matrix4x4 {
 	}
 
 	/// Gives view matrix for left-handed coordinate system
-	pub fn look_at_lh(eye_pos: &Float4, focus_pos: &Float4, up_dir: &Float4) -> Self {
+	pub fn look_at_lh(eye_pos: Float4, focus_pos: Float4, up_dir: Float4) -> Self {
 		Matrix4x4 {
 			mat: XMMatrixLookAtLH(eye_pos.i_vec, focus_pos.i_vec, up_dir.i_vec)
 		}
 	}
 
 	/// Gives view matrix for right-handed coordinate system
-	pub fn look_at_rh(eye_pos: &Float4, focus_pos: &Float4, up_dir: &Float4) -> Self {
+	pub fn look_at_rh(eye_pos: Float4, focus_pos: Float4, up_dir: Float4) -> Self {
 		Matrix4x4 {
 			mat: XMMatrixLookAtRH(eye_pos.i_vec, focus_pos.i_vec, up_dir.i_vec)
 		}

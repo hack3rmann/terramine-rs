@@ -1,11 +1,6 @@
-mod swizzle;
+pub mod swizzle;
 use directx_math::*;
-use swizzle::{
-	Swizzele4DCordsShuffle,
-	Swizzle4Dto1,
-	Set4Dto1,
-	NewVec4,
-};
+pub use swizzle::*;
 
 /// Represents 4D 32-bit float vector.
 #[derive(Clone, Copy)]
@@ -33,6 +28,13 @@ impl Float4 {
 	/// Constructs vector from 3 floats and make W to be 0.0
 	pub fn xyz0(x: f32, y: f32, z: f32) -> Self {
 		Self::new(x, y, z, 0.0)
+	}
+	
+	/// Normalyzes the vector.
+	pub fn normalyze(self) -> Self {
+		Float4 {
+			i_vec: XMVector3Normalize(self.i_vec)
+		}
 	}
 }
 

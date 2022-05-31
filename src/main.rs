@@ -131,6 +131,9 @@ fn main() {
 							imgui::Slider::new("Camera speed", 5.0, 50.0)
 								.display_format("%.1f")
 								.build(&ui, &mut camera.speed);
+							imgui::Slider::new("Camera fov", 0.0, std::f32::consts::PI * 4.0)
+								.display_format("%.2f")
+								.build(&ui, &mut camera.fov);
 						});
 	
 					graphics.imguiw.prepare_render(&ui, graphics.display.gl_window().window());

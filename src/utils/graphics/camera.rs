@@ -2,9 +2,14 @@
  * Camera handler.
  */
 
-use directx_math::*;
 use crate::utils::user_io::{InputManager, KeyCode};
-use crate::utils::math::*;
+use crate::utils::math::{
+	matrix::Matrix4,
+	vector::{
+		Float4,
+		swizzle::*
+	}
+};
 
 /// Camera handler.
 pub struct Camera {
@@ -16,12 +21,12 @@ pub struct Camera {
 	pub grabbes_cursor: bool,
 	pub aspect_ratio: f32,
 
-	pub pos: XMVector,
-	pub up: XMVector,
-	pub front: XMVector,
-	pub right: XMVector,
+	pub pos: Float4,
+	pub up: Float4,
+	pub front: Float4,
+	pub right: Float4,
 
-	pub rotation: XMMatrix,
+	pub rotation: Matrix4,
 }
 
 #[allow(dead_code)]
@@ -32,9 +37,9 @@ impl Camera {
 	/// This function updates camera vectors from rotatiion matrix.
 	pub fn update_vectors(&mut self) {
 		/* Transform basic vectors with rotation matrix */
-		self.up.0    = XMVector4Transform(XMVectorSet(0.0, 1.0,  0.0, 1.0), self.rotation.0);
-		self.front.0 = XMVector4Transform(XMVectorSet(0.0, 0.0, -1.0, 1.0), self.rotation.0);
-		self.right.0 = XMVector4Transform(XMVectorSet(1.0, 0.0,  0.0, 1.0), self.rotation.0);
+		self.up =    self.rotation.clone() * Float4::xyz1(0.0,  1.0,  0.0);
+		self.front = self.rotation.clone() * Float4::xyz1(0.0,  0.0, -1.0);
+		self.right = self.rotation.clone() * Float4::xyz1(1.0,  0.0,  0.0);
 	}
 
 	/// Stores rotation.
@@ -43,14 +48,14 @@ impl Camera {
 		self.pitch = pitch;
 		self.yaw = yaw;
 
-		self.rotation.0 = XMMatrixRotationRollPitchYaw(roll as f32, pitch as f32, yaw as f32);
+		self.rotation = Matrix4::rotation_rpy(roll as f32, pitch as f32, yaw as f32);
 
 		self.update_vectors();
 	}
 
 	/// Sets position.
 	pub fn set_position(&mut self, x: f64, y: f64, z: f64) {
-		self.pos.0 = XMVectorSet(x as f32, y as f32, z as f32, 1.0);
+		self.pos = Float4::xyz1(x as f32, y as f32, z as f32);
 	}
 
 	/// Sets rotation to [0.0, 0.0, 0.0].
@@ -61,19 +66,10 @@ impl Camera {
 	/// Moves camera towards its vectors.
 	pub fn move_pos(&mut self, front: f64, up: f64, right: f64) {
 		/* Front */
-		self.pos += XMVector(
-			XMVector3Normalize(
-				XMVectorSet(
-					XMVectorGetX(self.front.0),
-					0.0,
-					XMVectorGetZ(self.front.0),
-					1.0
-				)
-			)
-		) * front as f32;
+		self.pos += Float4::xyz1(self.front.x(), 0.0, self.front.z()).normalyze() * front as f32;
 
 		/* Up */
-		self.pos += XMVector(XMVectorSet(0.0, up as f32, 0.0, 1.0));
+		self.pos += Float4::xyz1(0.0, up as f32, 0.0);
 
 		/* Right */
 		self.pos += self.right * right as f32;
@@ -81,27 +77,27 @@ impl Camera {
 
 	/// Returns view matrix.
 	pub fn get_view(&self) -> [[f32; 4]; 4] {
-		XMMatrix(XMMatrixLookAtLH(self.pos.0, (self.pos + self.front).0, self.up.0)).into()
+		Matrix4::look_at_lh(self.pos, self.pos + self.front, self.up).as_2d_array()
 	}
 
 	/// Returns projection matrix with `aspect_ratio = height / width`
 	pub fn get_proj(&self) -> [[f32; 4]; 4] {
-		XMMatrix(XMMatrixPerspectiveLH(1.0, self.aspect_ratio, 0.5, 1000.0)).into()
+		Matrix4::perspective_fov_lh(self.fov, self.aspect_ratio * self.fov, 0.5, 1000.0).as_2d_array()
 	}
 
 	/// Returns X component of pos vector.
 	pub fn get_x(&self) -> f32 {
-		XMVectorGetX(self.pos.0)
+		self.pos.x()
 	}
 
 	/// Returns Y component of pos vector.
 	pub fn get_y(&self) -> f32 {
-		XMVectorGetY(self.pos.0)
+		self.pos.y()
 	}
 
 	/// Returns Z component of pos vector.
 	pub fn get_z(&self) -> f32 {
-		XMVectorGetZ(self.pos.0)
+		self.pos.z()
 	}
 
 	/// Rotates camera.
@@ -134,9 +130,9 @@ impl Camera {
 		}
 		if self.grabbes_cursor {
 			self.rotate(
+				 0.0,
 				-input.mouse.dy * dt * 0.2,
-				input.mouse.dx * dt * 0.2,
-				0.0
+				 input.mouse.dx * dt * 0.2,
 			);
 		}
 	}
@@ -148,15 +144,15 @@ impl Default for Camera {
 			roll: 0.0,
 			pitch: 0.0,
 			yaw: 0.0,
-			fov: 60.0,
+			fov: std::f32::consts::FRAC_PI_2,
 			grabbes_cursor: false,
 			speed: 10.0,
 			aspect_ratio: 768.0 / 1024.0,
-			pos: XMVector(XMVectorSet(0.0, 0.0, -3.0, 1.0)),
-			up: XMVector(XMVectorSet(0.0, 1.0, 0.0, 1.0)),
-			front: XMVector(XMVectorSet(0.0, 0.0, -1.0, 1.0)),
-			right: XMVector(XMVectorSet(1.0, 0.0, 0.0, 1.0)),
-			rotation: XMMatrix(XMMatrixRotationRollPitchYaw(0.0, 0.0, 0.0)),
+			pos: Float4::xyz1(0.0, 0.0, -3.0),
+			up: Float4::xyz1(0.0, 1.0, 0.0),
+			front: Float4::xyz1(0.0, 0.0, -1.0),
+			right: Float4::xyz1(1.0, 0.0, 0.0),
+			rotation: Default::default(),
 		};
 		cam.update_vectors();
 
