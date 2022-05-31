@@ -85,7 +85,7 @@ impl Camera {
 
 	/// Returns projection matrix with `aspect_ratio = height / width`
 	pub fn get_proj(&self) -> [[f32; 4]; 4] {
-		XMMatrix(XMMatrixPerspectiveLH(1.0, self.aspect_ratio, 0.5, 100.0)).into()
+		XMMatrix(XMMatrixPerspectiveLH(1.0, self.aspect_ratio, 0.5, 1000.0)).into()
 	}
 
 	/// Returns X component of pos vector.
