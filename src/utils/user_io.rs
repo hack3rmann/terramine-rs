@@ -187,7 +187,9 @@ impl InputManager {
 	/// Constructs manager with default values.
 	pub fn new() -> Self { Default::default() }
 
-	pub fn handle_event(&mut self, event: &Event<()>) {
+	pub fn handle_event(&mut self, event: &Event<()>, graphics: &Graphics) {
+		static mut CURSOR_REGRABBED: bool = false;
+		
 		match event {
 			/* Window events */
 	        Event::WindowEvent { event, .. } => match event {
@@ -227,6 +229,22 @@ impl InputManager {
 	 			WindowEvent::CursorLeft { .. } => {
 	 				self.mouse.on_window = false;
 	 			},
+				WindowEvent::Focused(focused) => {
+					/* If window has unfocused then release cursor. */
+					if *focused {
+						if unsafe { CURSOR_REGRABBED } {
+							if !self.mouse.is_grabbed {
+								self.mouse.grab_cursor(graphics);
+								unsafe { CURSOR_REGRABBED = false };
+							}
+						}
+					} else {
+						if self.mouse.is_grabbed {
+							self.mouse.release_cursor(graphics);
+							unsafe { CURSOR_REGRABBED = true };
+						}
+					}
+				}
 	            _ => (),
 	        },
 			_ => ()

@@ -66,7 +66,7 @@ fn main() {
 
 		/* Event handlers */
 		graphics.imguiw.handle_event(graphics.imguic.io_mut(), window.window(), &event);
-		input_manager.handle_event(&event);
+		input_manager.handle_event(&event, &graphics);
 
 		/* This event handler */
 		match event {
