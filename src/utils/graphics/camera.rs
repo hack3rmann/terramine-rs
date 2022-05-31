@@ -11,6 +11,7 @@ pub struct Camera {
 	pub pitch: f64,
 	pub yaw: f64,
 	pub fov: f32,
+	pub speed: f64,
 	pub grabbes_cursor: bool,
 
 	pub pos: XMVector,
@@ -119,12 +120,12 @@ impl Camera {
 
 	/// Updates camera (key press checking, etc).
 	pub fn update(&mut self, input: &mut InputManager, dt: f64) {
-		if input.keyboard.is_pressed(KeyCode::W)		{ self.move_pos( dt,  0.0,    0.0); }
-		if input.keyboard.is_pressed(KeyCode::S)		{ self.move_pos(-dt,  0.0,    0.0); }
-		if input.keyboard.is_pressed(KeyCode::D)		{ self.move_pos( 0.0,    0.0,   -dt); }
-		if input.keyboard.is_pressed(KeyCode::A)		{ self.move_pos( 0.0,    0.0,    dt); }
-		if input.keyboard.is_pressed(KeyCode::LShift)	{ self.move_pos( 0.0,   -dt,  0.0); }
-		if input.keyboard.is_pressed(KeyCode::Space)	{ self.move_pos( 0.0,    dt,  0.0); }
+		if input.keyboard.is_pressed(KeyCode::W)		{ self.move_pos( dt * self.speed,  0.0,    0.0); }
+		if input.keyboard.is_pressed(KeyCode::S)		{ self.move_pos(-dt * self.speed,  0.0,    0.0); }
+		if input.keyboard.is_pressed(KeyCode::D)		{ self.move_pos( 0.0,    0.0,   -dt * self.speed); }
+		if input.keyboard.is_pressed(KeyCode::A)		{ self.move_pos( 0.0,    0.0,    dt * self.speed); }
+		if input.keyboard.is_pressed(KeyCode::LShift)	{ self.move_pos( 0.0,   -dt * self.speed,  0.0); }
+		if input.keyboard.is_pressed(KeyCode::Space)	{ self.move_pos( 0.0,    dt * self.speed,  0.0); }
 		if input.keyboard.just_pressed(KeyCode::P) {
 			self.set_position(0.0, 0.0, 2.0);
 			self.reset_rotation();
@@ -147,6 +148,7 @@ impl Default for Camera {
 			yaw: 0.0,
 			fov: 60.0,
 			grabbes_cursor: false,
+			speed: 4.0,
 			pos: XMVector(XMVectorSet(0.0, 0.0, -3.0, 1.0)),
 			up: XMVector(XMVectorSet(0.0, 1.0, 0.0, 1.0)),
 			front: XMVector(XMVectorSet(0.0, 0.0, -1.0, 1.0)),

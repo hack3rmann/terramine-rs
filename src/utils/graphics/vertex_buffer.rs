@@ -20,12 +20,48 @@ impl VertexBuffer {
 	pub fn default(graphics: &Graphics) -> Self {
 		/* Quad vertices */
 		let shape = vec! [
-			Vertex { position: [-0.9, -0.15, 0.0 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [-0.9,  0.15, 0.0 ], tex_coords: [ 0.0, 1.0 ] },
-			Vertex { position: [ 0.9,  0.15, 0.0 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [-0.9, -0.15, 0.0 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [ 0.9,  0.15, 0.0 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [ 0.9, -0.15, 0.0 ], tex_coords: [ 1.0, 0.0 ] }
+			/* Front */
+			Vertex { position: [-1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
+			Vertex { position: [-1.0, -1.0,  1.0 ], tex_coords: [ 0.0, 1.0 ] },
+			Vertex { position: [-1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
+			Vertex { position: [-1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
+			Vertex { position: [-1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
+			Vertex { position: [-1.0,  1.0, -1.0 ], tex_coords: [ 1.0, 0.0 ] },
+			/* Back */
+			Vertex { position: [ 1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
+			Vertex { position: [ 1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
+			Vertex { position: [ 1.0, -1.0,  1.0 ], tex_coords: [ 0.0, 1.0 ] },
+			Vertex { position: [ 1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
+			Vertex { position: [ 1.0,  1.0, -1.0 ], tex_coords: [ 1.0, 0.0 ] },
+			Vertex { position: [ 1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
+			/* Left */
+			Vertex { position: [ 1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
+			Vertex { position: [-1.0,  1.0, -1.0 ], tex_coords: [ 1.0, 1.0 ] },
+			Vertex { position: [ 1.0,  1.0, -1.0 ], tex_coords: [ 0.0, 1.0 ] },
+			Vertex { position: [ 1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
+			Vertex { position: [-1.0, -1.0, -1.0 ], tex_coords: [ 1.0, 0.0 ] },
+			Vertex { position: [-1.0,  1.0, -1.0 ], tex_coords: [ 1.0, 1.0 ] },
+			/* Right */
+			Vertex { position: [ 1.0, -1.0,  1.0 ], tex_coords: [ 0.0, 0.0 ] },
+			Vertex { position: [ 1.0,  1.0,  1.0 ], tex_coords: [ 0.0, 1.0 ] },
+			Vertex { position: [-1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
+			Vertex { position: [ 1.0, -1.0,  1.0 ], tex_coords: [ 0.0, 0.0 ] },
+			Vertex { position: [-1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
+			Vertex { position: [-1.0, -1.0,  1.0 ], tex_coords: [ 1.0, 0.0 ] },
+			/* Up */
+			Vertex { position: [ 1.0,  1.0, -1.0 ], tex_coords: [ 0.0, 1.0 ] },
+			Vertex { position: [-1.0,  1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
+			Vertex { position: [ 1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
+			Vertex { position: [-1.0,  1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
+			Vertex { position: [-1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 0.0 ] },
+			Vertex { position: [ 1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
+			/* Up */
+			Vertex { position: [-1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
+			Vertex { position: [ 1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 1.0 ] },
+			Vertex { position: [ 1.0, -1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
+			Vertex { position: [-1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
+			Vertex { position: [ 1.0, -1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
+			Vertex { position: [-1.0, -1.0,  1.0 ], tex_coords: [ 1.0, 0.0 ] },
 		];
 
 		/* Define vertex buffer */

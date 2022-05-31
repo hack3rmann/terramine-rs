@@ -5,7 +5,7 @@
 /* Glium stuff */
 use glium::{
 	glutin::{
-		event_loop::{ControlFlow, EventLoop},
+		event_loop::{EventLoop},
 		window::{
 			WindowBuilder,
 			Icon,
@@ -34,6 +34,7 @@ impl Window {
 			.with_window_icon(Some(Self::load_icon()));
 		let window = ContextBuilder::new()
 			.with_gl(GlRequest::Latest)
+			.with_depth_buffer(32)
 			.with_vsync(true)
 			.build_windowed(window, event_loop)
 			.unwrap();
@@ -74,11 +75,6 @@ impl Window {
 		data.extend_from_slice(raw_data);
 		Icon::from_rgba(data, 32, 32).unwrap()
 	}
-
-	/// Window close function.
-    pub fn exit(control_flow: &mut ControlFlow) {
-        *control_flow = ControlFlow::Exit;
-    }
 
 	/// Gives window and removes it from graphics struct
 	pub fn take_window(&mut self) -> ContextWrapper<PossiblyCurrent, GWindow> {

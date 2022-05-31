@@ -16,7 +16,6 @@ use std::io::prelude::*;
 use utils::{
 	*,
 	user_io::{InputManager, KeyCode},
-	window::Window,
 	graphics::{
 		Graphics,
 		camera::Camera,
@@ -37,7 +36,7 @@ fn main() {
 	let mut camera = Camera::new();
 
 	/* Texture loading */
-	let texture = Texture::from("src/image/testSprite.png", &graphics.display).unwrap();
+	let texture = Texture::from("src/image/grass_top_separ.png", &graphics.display).unwrap();
 
 	/* Vertex buffer loading */
 	let vertex_buffer = VertexBuffer::default(&graphics);
@@ -87,7 +86,12 @@ fn main() {
 	 		Event::MainEventsCleared => {
 	 			/* Close window is `escape` pressed */
 	 			if input_manager.keyboard.just_pressed(KeyCode::Escape) {
-	 				Window::exit(control_flow);
+					*control_flow = glium::glutin::event_loop::ControlFlow::Exit;
+					let mut buf: String = Default::default();
+					graphics.imguic.save_ini_settings(&mut buf);
+
+					let mut file = std::fs::File::create("src/imgui_settings.ini").unwrap();
+					file.write_all(buf.as_bytes()).unwrap();
 	 			}
 
 	 			/* Control camera by user input */
@@ -113,49 +117,18 @@ fn main() {
 				let draw_data = {
 					let ui = graphics.imguic.frame();
 					//ui.show_demo_window(&mut true);
-					imgui::Window::new("Delta")
-						.size([300.0, 150.0], imgui::Condition::FirstUseEver)
+					imgui::Window::new("Camera")
 						.resizable(false)
 						.movable(false)
+						.collapsible(false)
 						.build(&ui, || {
-							ui.text("My delta:");
-							ui.text(format!("dx: {0}, dy: {1}", input_manager.mouse.dx, input_manager.mouse.dy));
-	
+							ui.text("Position");
+							ui.text(format!("x: {0:.3}, y: {1:.3}, z: {2:.3}", camera.get_x(), camera.get_y(), camera.get_z()));
 							ui.separator();
-	
-							ui.text("ImGUI delta");
-							ui.text(format!("dx: {0}, dy: {1}", ui.io().mouse_delta[0], ui.io().mouse_delta[1]));
-	
-							ui.separator();
-	
-							ui.text("Difference");
-							ui.text(format!(
-								"ddx: {0}, ddy: {1}",
-								ui.io().mouse_delta[0] - input_manager.mouse.dx as f32,
-								ui.io().mouse_delta[1] - input_manager.mouse.dy as f32
-							));
-						});
-					imgui::Window::new("Position")
-						.size([300.0, 150.0], imgui::Condition::FirstUseEver)
-						.resizable(false)
-						.movable(false)
-						.build(&ui, || {
-							ui.text("My cursor position");
-							ui.text(format!("x: {0}, y: {1}", input_manager.mouse.x, input_manager.mouse.y));
-
-							ui.separator();
-
-							ui.text("ImGui cursor position");
-							ui.text(format!("x: {0}, y: {1}", ui.io().mouse_pos[0], ui.io().mouse_pos[1]));
-
-							ui.separator();
-
-							ui.text("Difference");
-							ui.text(format!(
-								"dx: {0}, dy: {1}",
-								ui.io().mouse_pos[0] - input_manager.mouse.x as f32,
-								ui.io().mouse_pos[1] - input_manager.mouse.y as f32,
-							));
+							ui.text("Speed factor");
+							imgui::Slider::new("Camera speed", 0.0, 10.0)
+								.display_format("%.1f")
+								.build(&ui, &mut camera.speed);
 						});
 	
 					graphics.imguiw.prepare_render(&ui, graphics.display.gl_window().window());
@@ -171,10 +144,21 @@ fn main() {
 					view: camera.get_view()
 				};
 
+				let params = glium::DrawParameters {
+					depth: glium::Depth {
+						test: glium::DepthTest::Overwrite,
+						write: true,
+						.. Default::default()
+					},
+					backface_culling: glium::BackfaceCullingMode::CullCounterClockwise,
+					.. Default::default()
+				};
+
 				/* Actual drawing */
 				let mut target = graphics.display.draw(); 
-				target.clear_color(0.01, 0.01, 0.01, 1.0); {
-					target.draw(&vertex_buffer, &indices, &shaders.program, &uniforms, &Default::default()).unwrap();
+				target.clear_color(0.01, 0.01, 0.01, 1.0);
+				target.clear_depth(0.0); {
+					target.draw(&vertex_buffer, &indices, &shaders.program, &uniforms, &params).unwrap();
 
 					graphics.imguir
 						.render(&mut target, draw_data)
