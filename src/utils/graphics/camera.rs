@@ -57,8 +57,22 @@ impl Camera {
 
 	/// Moves camera towards its vectors.
 	pub fn move_pos(&mut self, front: f64, up: f64, right: f64) {
-		self.pos += self.front * front as f32;
-		self.pos += self.up * up as f32;
+		/* Front */
+		self.pos += XMVector(
+			XMVector3Normalize(
+				XMVectorSet(
+					XMVectorGetX(self.front.0),
+					0.0,
+					XMVectorGetZ(self.front.0),
+					1.0
+				)
+			)
+		) * front as f32;
+
+		/* Up */
+		self.pos += XMVector(XMVectorSet(0.0, up as f32, 0.0, 1.0));
+
+		/* Right */
 		self.pos += self.right * right as f32;
 	}
 
@@ -92,6 +106,14 @@ impl Camera {
 		self.roll += roll;
 		self.pitch += pitch;
 		self.yaw += yaw;
+
+		let eps = 0.001;
+		if self.roll > std::f64::consts::FRAC_PI_2 {
+			self.roll = std::f64::consts::FRAC_PI_2 - eps;
+		} else if self.roll < -std::f64::consts::FRAC_PI_2 {
+			self.roll = -std::f64::consts::FRAC_PI_2 + eps;
+		}
+
 		self.set_rotation(self.roll, self.pitch, self.yaw);
 	}
 
