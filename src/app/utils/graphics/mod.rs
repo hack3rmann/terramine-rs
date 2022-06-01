@@ -12,8 +12,19 @@ use crate::app::glium::{
 	implement_vertex,
 	backend::Facade,
 	glutin::event_loop::EventLoop,
+	glutin::event::{
+		self,
+		Event,
+		WindowEvent,
+	},
+	glutin::dpi,
 };
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::{
+	sync::atomic::{
+		AtomicBool, Ordering
+	},
+	path::PathBuf,
+};
 
 /// Struct that handles graphics.
 pub struct Graphics {
@@ -41,22 +52,36 @@ impl Graphics {
 			INITIALIZED.store(true, Ordering::Release);
 		}
 
+		/* Glutin event loop */
 		let event_loop = EventLoop::new();
+
+		/* Window creation */
 		let window = Window::from(&event_loop, 1024, 768).take_window();
 
+		/* Create ImGui context ant set settings file name. */
 		let mut imgui_context = imgui::Context::create();
-		imgui_context.set_ini_filename(None);
+		imgui_context.set_ini_filename(Some(PathBuf::from(r"src/imgui_settings.ini")));
+
+		/* Bound ImGui to winit. */
 		let mut winit_platform = imgui_winit_support::WinitPlatform::init(&mut imgui_context);
 		winit_platform.attach_window(imgui_context.io_mut(), window.window(), imgui_winit_support::HiDpiMode::Rounded);
 
+		/* Bad start size fix */
+		let dummy_event: Event<()> = Event::WindowEvent {
+			window_id: window.window().id(),
+			event: WindowEvent::Resized(dpi::PhysicalSize::new(1024, 768))
+		};
+		winit_platform.handle_event(imgui_context.io_mut(), window.window(), &dummy_event);
+
+		/* Style configuration. */
 		imgui_context.fonts().add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
 		imgui_context.io_mut().font_global_scale = (1.0 / winit_platform.hidpi_factor()) as f32;
 		imgui_context.style_mut().window_rounding = 16.0;
 
-		let settings = std::fs::read_to_string("src/imgui_settings.ini").unwrap();
-		imgui_context.load_ini_settings(settings.as_str());
-
+		/* Glium setup. */
 		let display = glium::Display::from_gl_window(window).unwrap();
+
+		/* ImGui glium renderer setup. */
 		let imgui_renderer = imgui_glium_renderer::Renderer::init(&mut imgui_context, &display).unwrap();
 
 		Ok (

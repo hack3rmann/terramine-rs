@@ -104,11 +104,6 @@ impl App {
 					/* Close event */
 					WindowEvent::CloseRequested => {
 						*control_flow = glium::glutin::event_loop::ControlFlow::Exit;
-						let mut buf: String = Default::default();
-						self.graphics.imguic.save_ini_settings(&mut buf);
-
-						let mut file = std::fs::File::create("src/imgui_settings.ini").unwrap();
-						file.write_all(buf.as_bytes()).unwrap();
 					},
 					WindowEvent::Resized(new_size) => {
 						self.camera.aspect_ratio = new_size.height as f32 / new_size.width as f32;
@@ -163,14 +158,27 @@ impl App {
 
 	/// Prepares the frame.
 	fn redraw_requested(&mut self) {
+		/* InGui draw data */
 		let draw_data = {
+			/* Aliasing */
 			let camera = &mut self.camera;
 
+			/* Get UI frame renderer */
 			let ui = self.graphics.imguic.frame();
-			imgui::Window::new("Camera")
-				.resizable(false)
-				.movable(false)
-				.collapsible(false)
+
+			/* Camera control window */
+			let mut camera_window = imgui::Window::new("Camera");
+
+			/* Move and resize if pressed I key */
+			if !self.input_manager.keyboard.is_pressed(KeyCode::I) {
+				camera_window = camera_window
+					.resizable(false)
+					.movable(false)
+					.collapsible(false)
+			}
+
+			/* UI building */
+			camera_window
 				.build(&ui, || {
 					ui.text("Position");
 					ui.text(format!("x: {0:.3}, y: {1:.3}, z: {2:.3}", camera.get_x(), camera.get_y(), camera.get_z()));
@@ -184,6 +192,7 @@ impl App {
 						.build(&ui, &mut camera.fov);
 				});
 
+			/* Render UI */
 			self.graphics.imguiw.prepare_render(&ui, self.graphics.display.gl_window().window());
 			ui.render()
 		};
@@ -197,6 +206,7 @@ impl App {
 			view: self.camera.get_view()
 		};
 
+		/* Draw parameters */
 		let params = glium::DrawParameters {
 			depth: glium::Depth {
 				test: glium::DepthTest::Overwrite,
