@@ -178,19 +178,18 @@ impl App {
 			}
 
 			/* UI building */
-			camera_window
-				.build(&ui, || {
-					ui.text("Position");
-					ui.text(format!("x: {0:.3}, y: {1:.3}, z: {2:.3}", camera.get_x(), camera.get_y(), camera.get_z()));
-					ui.separator();
-					ui.text("Speed factor");
-					imgui::Slider::new("Camera speed", 5.0, 50.0)
-						.display_format("%.1f")
-						.build(&ui, &mut camera.speed);
-					imgui::Slider::new("Camera fov", 0.0, std::f32::consts::PI * 4.0)
-						.display_format("%.2f")
-						.build(&ui, &mut camera.fov);
-				});
+			camera_window.build(&ui, || {
+				ui.text("Position");
+				ui.text(format!("x: {0:.3}, y: {1:.3}, z: {2:.3}", camera.get_x(), camera.get_y(), camera.get_z()));
+				ui.separator();
+				ui.text("Speed factor");
+				imgui::Slider::new("Camera speed", 5.0, 50.0)
+					.display_format("%.1f")
+					.build(&ui, &mut camera.speed);
+				imgui::Slider::new("Camera fov", 0.0, std::f32::consts::PI * 4.0)
+					.display_format("%.2f")
+					.build(&ui, &mut camera.fov);
+			});
 
 			/* Render UI */
 			self.graphics.imguiw.prepare_render(&ui, self.graphics.display.gl_window().window());
