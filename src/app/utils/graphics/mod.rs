@@ -13,7 +13,6 @@ use crate::app::glium::{
 	backend::Facade,
 	glutin::event_loop::EventLoop,
 	glutin::event::{
-		self,
 		Event,
 		WindowEvent,
 	},
@@ -28,15 +27,19 @@ use std::{
 
 /// Struct that handles graphics.
 pub struct Graphics {
+	/* Gluim main struct */
 	pub display:	glium::Display,
-	pub imguic:		imgui::Context,
-	pub imguiw:		imgui_winit_support::WinitPlatform,
-	pub imguir:		imgui_glium_renderer::Renderer,
 
+	/* OpenGL pipeline stuff */
 	pub event_loop:		Option<EventLoop<()>>,
 	pub shaders:		Option<Shader>,
 	pub vertex_buffer:	Option<glium::VertexBuffer<Vertex>>,
 	pub primitive_type:	Option<glium::index::NoIndices>,
+
+	/* ImGui stuff */
+	pub imguic:		imgui::Context,
+	pub imguiw:		imgui_winit_support::WinitPlatform,
+	pub imguir:		imgui_glium_renderer::Renderer,
 }
 
 impl Graphics {
