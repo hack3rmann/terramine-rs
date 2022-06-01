@@ -39,11 +39,6 @@ pub struct App {
 	last_frame: std::time::Instant,
 	dt: f64,
 
-	/* First layer temporary stuff */
-	vertex_buffer: glium::VertexBuffer<graphics::Vertex>,
-	indices: glium::index::NoIndices,
-	shaders: Shader,
-
 	/* Temp voxel */
 	voxel: Voxel<'static>,
 
@@ -77,11 +72,6 @@ impl App {
 		/* Fist voxel */
 		let voxel = Voxel::default(&graphics);
 
-		/* Destruct: */
-		let vertex_buffer = graphics.take_vertex_buffer();
-		let indices = graphics.take_privitive_type();
-		let shaders = graphics.take_shaders();
-
 		App {
 			voxel: voxel,
 			input_manager: InputManager::new(),
@@ -90,9 +80,6 @@ impl App {
 			time: 0.0,
 			last_frame: std::time::Instant::now(),
 			dt: 0.0,
-			vertex_buffer: vertex_buffer,
-			indices: indices,
-			shaders: shaders,
 			texture: texture
 		}
 	}
@@ -213,27 +200,17 @@ impl App {
 			view: self.camera.get_view()
 		};
 
-		/* Draw parameters */
-		let params = glium::DrawParameters {
-			depth: glium::Depth {
-				test: glium::DepthTest::Overwrite,
-				write: true,
-				.. Default::default()
-			},
-			backface_culling: glium::BackfaceCullingMode::CullCounterClockwise,
-			.. Default::default()
-		};
-
 		/* Actual drawing */
 		let mut target = self.graphics.display.draw(); 
 		target.clear_color(0.01, 0.01, 0.01, 1.0);
 		target.clear_depth(0.0); {
-			//target.draw(&self.vertex_buffer, &self.indices, &self.shaders.program, &uniforms, &params).unwrap();
-			self.voxel.mesh.render(&mut target, &uniforms).unwrap();
+			self.voxel.mesh
+				.render(&mut target, &uniforms)
+				.expect("Error rendering voxel");
 
 			self.graphics.imguir
 				.render(&mut target, draw_data)
-				.expect("error rendering imgui");
+				.expect("Error rendering imgui");
 
 		} target.finish().unwrap();
 	}
