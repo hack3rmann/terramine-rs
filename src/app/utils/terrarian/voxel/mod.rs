@@ -17,7 +17,7 @@ impl Default for Voxel {
 	fn default() -> Self {
 		Voxel {
 			data: &FIRST_VOXEL_DATA,
-			.. Default::default()
+			position: Default::default(),
 		}
 	}
 }
