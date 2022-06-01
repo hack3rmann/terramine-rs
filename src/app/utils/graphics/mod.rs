@@ -46,14 +46,8 @@ impl Graphics {
 	/// Graphics initialize function. Can be called once.
 	/// If you call it again it will panic.
 	pub fn initialize() -> Result<Self, &'static str> {
-		/* Checks if struct is already initialized */
-		#[allow(dead_code)]
-		static INITIALIZED: AtomicBool = AtomicBool::new(false);
-		if INITIALIZED.load(Ordering::Acquire) {
-			return Err("Attempting to initialize graphics twice! Graphics is already initialized!");
-		} else {
-			INITIALIZED.store(true, Ordering::Release);
-		}
+		/* Validating initialization */
+		Self::validate()?;
 
 		/* Glutin event loop */
 		let event_loop = EventLoop::new();
@@ -99,6 +93,18 @@ impl Graphics {
 				primitive_type: None
 			}
 		)
+	}
+
+	/// Validates initialization.
+	fn validate() -> Result<(), &'static str> {
+		/* Checks if struct is already initialized */
+		#[allow(dead_code)]
+		static INITIALIZED: AtomicBool = AtomicBool::new(false);
+		if INITIALIZED.load(Ordering::Acquire) {
+			return Err("Attempting to initialize graphics twice! Graphics is already initialized!");
+		} else {
+			Ok(INITIALIZED.store(true, Ordering::Release))
+		}
 	}
 
 	/// Borrow vertex buffer into graphics pipeline.
