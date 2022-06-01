@@ -24,6 +24,7 @@ use utils::{
 		texture::Texture,
 		vertex_buffer::VertexBuffer,
 	},
+	terrarian::voxel::Voxel
 };
 
 /// Struct that handles everything.
@@ -42,6 +43,9 @@ pub struct App {
 	vertex_buffer: glium::VertexBuffer<graphics::Vertex>,
 	indices: glium::index::NoIndices,
 	shaders: Shader,
+
+	/* Temp voxel */
+	voxel: Voxel<'static>,
 
 	/* Second layer temporary stuff */
 	texture: Texture
@@ -70,12 +74,16 @@ impl App {
 		/* Camera preposition */
 		camera.set_position(0.0, 0.0, 2.0);
 
+		/* Fist voxel */
+		let voxel = Voxel::default(&graphics);
+
 		/* Destruct: */
 		let vertex_buffer = graphics.take_vertex_buffer();
 		let indices = graphics.take_privitive_type();
 		let shaders = graphics.take_shaders();
 
 		App {
+			voxel: voxel,
 			input_manager: InputManager::new(),
 			graphics: graphics,
 			camera: camera,
@@ -220,7 +228,8 @@ impl App {
 		let mut target = self.graphics.display.draw(); 
 		target.clear_color(0.01, 0.01, 0.01, 1.0);
 		target.clear_depth(0.0); {
-			target.draw(&self.vertex_buffer, &self.indices, &self.shaders.program, &uniforms, &params).unwrap();
+			//target.draw(&self.vertex_buffer, &self.indices, &self.shaders.program, &uniforms, &params).unwrap();
+			self.voxel.mesh.render(&mut target, &uniforms).unwrap();
 
 			self.graphics.imguir
 				.render(&mut target, draw_data)

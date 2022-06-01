@@ -2,6 +2,7 @@ pub mod shader;
 pub mod texture;
 pub mod vertex_buffer;
 pub mod camera;
+pub mod mesh;
 
 //use crate::window::Window;
 use shader::Shader;

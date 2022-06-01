@@ -1,4 +1,3 @@
-
 #[allow(dead_code)]
 pub struct VoxelData {
 	name: &'static str,
