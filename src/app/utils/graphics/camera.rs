@@ -107,10 +107,10 @@ impl Camera {
 		self.yaw += yaw;
 
 		let eps = 0.001;
-		if self.roll > std::f64::consts::FRAC_PI_2 {
-			self.roll = std::f64::consts::FRAC_PI_2 - eps;
-		} else if self.roll < -std::f64::consts::FRAC_PI_2 {
-			self.roll = -std::f64::consts::FRAC_PI_2 + eps;
+		if self.pitch > std::f64::consts::FRAC_PI_2 {
+			self.pitch = std::f64::consts::FRAC_PI_2 - eps;
+		} else if self.pitch < -std::f64::consts::FRAC_PI_2 {
+			self.pitch = -std::f64::consts::FRAC_PI_2 + eps;
 		}
 
 		self.set_rotation(self.roll, self.pitch, self.yaw);
