@@ -6,6 +6,10 @@ pub trait NewVec4<T> {
 	fn new(x: T, y: T, z: T, w: T) -> Self;
 }
 
+pub trait NewVec3<T> {
+	fn new(x: T, y: T, z: T) -> Self;
+}
+
 pub trait Swizzle4Dto1<T>: Copy {
 	fn x(self) -> T;
 	fn y(self) -> T;
@@ -13,11 +17,23 @@ pub trait Swizzle4Dto1<T>: Copy {
 	fn w(self) -> T;
 }
 
+pub trait Swizzle3Dto1<T>: Copy {
+	fn x(self) -> T;
+	fn y(self) -> T;
+	fn z(self) -> T;
+}
+
 pub trait Set4Dto1<T> {
 	fn set_x(&mut self, other: T);
 	fn set_y(&mut self, other: T);
 	fn set_z(&mut self, other: T);
 	fn set_w(&mut self, other: T);
+}
+
+pub trait Set3Dto1<T> {
+	fn set_x(&mut self, other: T);
+	fn set_y(&mut self, other: T);
+	fn set_z(&mut self, other: T);
 }
 
 pub trait Swizzele4DCordsShuffle<T>: Copy + NewVec4<T> + Swizzle4Dto1<T> {
@@ -48,4 +64,13 @@ pub trait Swizzele4DCordsShuffle<T>: Copy + NewVec4<T> + Swizzle4Dto1<T> {
 	fn wyzx(self) -> Self { Self::new(self.w(), self.y(), self.z(), self.x()) }
 	fn wzxy(self) -> Self { Self::new(self.w(), self.z(), self.x(), self.y()) }
 	fn wzyx(self) -> Self { Self::new(self.w(), self.z(), self.y(), self.x()) }
+}
+
+pub trait Swizzle3DCoordsShuffle<T>: Copy + NewVec3<T> + Swizzle3Dto1<T> {
+	fn xyz(self) -> Self { Self::new(self.x(), self.y(), self.z()) }
+	fn xzy(self) -> Self { Self::new(self.x(), self.z(), self.y()) }
+	fn yxz(self) -> Self { Self::new(self.y(), self.x(), self.z()) }
+	fn yzx(self) -> Self { Self::new(self.y(), self.z(), self.x()) }
+	fn zxy(self) -> Self { Self::new(self.z(), self.x(), self.y()) }
+	fn zyx(self) -> Self { Self::new(self.z(), self.y(), self.x()) }
 }
