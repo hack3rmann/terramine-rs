@@ -34,7 +34,8 @@ impl Window {
 			.with_window_icon(Some(Self::load_icon()));
 		let window = ContextBuilder::new()
 			.with_gl(GlRequest::Latest)
-//			.with_depth_buffer(32) // <-- bad thing
+			.with_depth_buffer(24)
+			.with_stencil_buffer(8)
 			.with_vsync(true)
 			.build_windowed(window, event_loop)
 			.unwrap();

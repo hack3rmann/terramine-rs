@@ -14,7 +14,7 @@ use crate::app::utils::{
 #[allow(dead_code)]
 pub struct Voxel<'v> {
 	pub data: &'static VoxelData,
-	pub position: Float4,
+	pub position: Int3,
 
 	/* TEMPORARY */
 	pub mesh: Mesh<'v>
@@ -25,11 +25,11 @@ impl<'v> Voxel<'v> {
 		let mesh = {
 			let draw_params = glium::DrawParameters {
 				depth: glium::Depth {
-					test: glium::DepthTest::Overwrite,
+					test: glium::DepthTest::IfLess,
 					write: true,
 					.. Default::default()
 				},
-				backface_culling: glium::BackfaceCullingMode::CullCounterClockwise,
+				backface_culling: glium::BackfaceCullingMode::CullClockwise,
 				.. Default::default()
 			};
 			let shader = Shader::new("vertex_shader", "fragment_shader", &graphics.display);
@@ -43,4 +43,7 @@ impl<'v> Voxel<'v> {
 		}
 	}
 	
+	pub fn new(position: Int3, data: &'static VoxelData) -> Self {
+		
+	}
 }

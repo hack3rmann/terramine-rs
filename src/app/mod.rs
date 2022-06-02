@@ -193,8 +193,7 @@ impl App {
 
 		/* Actual drawing */
 		let mut target = self.graphics.display.draw(); 
-		target.clear_color(0.01, 0.01, 0.01, 1.0);
-		target.clear_depth(0.0); {
+		target.clear_all((0.01, 0.01, 0.01, 1.0), 1.0, 0); {
 			self.voxel.mesh
 				.render(&mut target, &uniforms)
 				.expect("Error rendering voxel");
