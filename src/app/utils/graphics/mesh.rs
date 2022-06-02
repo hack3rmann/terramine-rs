@@ -7,27 +7,9 @@ use glium::{
 	DrawParameters,
 	Frame,
 	Surface,
-	DrawError
+	DrawError,
+	uniforms::Uniforms
 };
-
-#[allow(dead_code)]
-type UniformTemp<'l> = glium::uniforms::UniformsStorage<
-	'l,
-	[[f32; 4]; 4],
-	glium::uniforms::UniformsStorage<
-		'l,
-		[[f32; 4]; 4],
-		glium::uniforms::UniformsStorage<
-			'l,
-			f64,
-			glium::uniforms::UniformsStorage<
-				'l,
-				glium::uniforms::Sampler<'l, glium::texture::SrgbTexture2d>,
-				glium::uniforms::EmptyUniforms
-			>
-		>
-	>
->;
 
 /// Handles vertex_buffer and shader.
 pub struct Mesh<'dp> {
@@ -47,7 +29,7 @@ impl<'dp> Mesh<'dp> {
 	}
 
 	/// Renders mesh.
-	pub fn render(&self, target: &mut Frame, uniforms: &UniformTemp) -> Result<(), DrawError> {
+	pub fn render<U: Uniforms>(&self, target: &mut Frame, uniforms: &U) -> Result<(), DrawError> {
 		target.draw(&self.vertex_buffer.vertex_buffer, &self.vertex_buffer.indices, &self.shader.program, uniforms, &self.draw_params)
 	}
 }
