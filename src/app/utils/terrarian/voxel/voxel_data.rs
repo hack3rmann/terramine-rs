@@ -4,4 +4,4 @@ pub struct VoxelData {
 	id: u32,
 }
 
-pub(super) static FIRST_VOXEL_DATA: VoxelData = VoxelData { name: "First ever!", id: 0 };
+pub static FIRST_VOXEL_DATA: VoxelData = VoxelData { name: "First ever!", id: 0 };

@@ -22,7 +22,11 @@ use utils::{
 		camera::Camera,
 		texture::Texture,
 	},
-	terrarian::voxel::Voxel
+	terrarian::voxel::{
+		Voxel,
+		voxel_data::FIRST_VOXEL_DATA
+	},
+	math::vector::*,
 };
 
 /// Struct that handles everything.
@@ -38,7 +42,7 @@ pub struct App {
 	dt: f64,
 
 	/* Temp voxel */
-	voxel: Voxel<'static>,
+	voxels: [Voxel<'static>; 9],
 
 	/* Second layer temporary stuff */
 	texture: Texture
@@ -59,11 +63,21 @@ impl App {
 		/* Camera preposition */
 		camera.set_position(0.0, 0.0, 2.0);
 
-		/* Fist voxel */
-		let voxel = Voxel::default(&graphics);
+		/* Voxels */
+		let voxels = [
+			Voxel::new(&graphics, Int3::new( 0,  0,  0), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new(-1, -2, -1), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 0, -1, -1), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 1,  0, -1), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 1,  1,  0), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 1,  2,  1), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 0,  1,  1), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new(-1,  0,  1), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new(-1, -1,  0), &FIRST_VOXEL_DATA),
+		];
 
 		App {
-			voxel: voxel,
+			voxels: voxels,
 			input_manager: InputManager::new(),
 			graphics: graphics,
 			camera: camera,
@@ -194,9 +208,9 @@ impl App {
 		/* Actual drawing */
 		let mut target = self.graphics.display.draw(); 
 		target.clear_all((0.01, 0.01, 0.01, 1.0), 1.0, 0); {
-			self.voxel.mesh
-				.render(&mut target, &uniforms)
-				.expect("Error rendering voxel");
+			for voxel in self.voxels.iter() {
+				voxel.mesh.render(&mut target, &uniforms).unwrap();
+			}
 
 			self.graphics.imguir
 				.render(&mut target, draw_data)
