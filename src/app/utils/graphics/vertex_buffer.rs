@@ -11,11 +11,6 @@ pub struct VertexBuffer {
 }
 
 impl VertexBuffer {
-	/// Binds vertex buffer to pipeline.
-	pub fn bind(self, graphics: &mut Graphics) {
-		graphics.upload_vertex_buffer(self);
-	}
-
 	/// Test code. Default realisation.
 	pub fn default(graphics: &Graphics) -> Self {
 		/* Quad vertices */

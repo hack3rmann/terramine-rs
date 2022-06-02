@@ -33,9 +33,6 @@ pub struct Graphics {
 
 	/* OpenGL pipeline stuff */
 	pub event_loop:		Option<EventLoop<()>>,
-	pub shaders:		Option<Shader>,
-	pub vertex_buffer:	Option<glium::VertexBuffer<Vertex>>,
-	pub primitive_type:	Option<glium::index::NoIndices>,
 
 	/* ImGui stuff */
 	pub imguic:		imgui::Context,
@@ -89,9 +86,6 @@ impl Graphics {
 				imguir: imgui_renderer,
 				imguiw: winit_platform,
 				event_loop: Some(event_loop),
-				shaders: None,
-				vertex_buffer: None,
-				primitive_type: None
 			}
 		)
 	}
@@ -108,17 +102,6 @@ impl Graphics {
 		}
 	}
 
-	/// Borrow vertex buffer into graphics pipeline.
-	pub fn upload_vertex_buffer(&mut self, vertex_buffer: VertexBuffer) {
-		self.vertex_buffer = Some(vertex_buffer.vertex_buffer);
-		self.primitive_type = Some(vertex_buffer.indices);
-	}
-
-	/// Borrow shader into graphics pipeline.
-	pub fn upload_shaders(&mut self, shaders: Shader) {
-		self.shaders = Some(shaders);
-	}
-
 	/// Gives event_loop and removes it from graphics struct
 	pub fn take_event_loop(&mut self) -> glium::glutin::event_loop::EventLoop<()> {
 		/* Swaps struct variable with returned */
@@ -128,42 +111,6 @@ impl Graphics {
 			let mut event_loop = None;
 			std::mem::swap(&mut event_loop, &mut self.event_loop);
 			event_loop.unwrap()
-		}
-	}
-
-	/// Gives shaders and removes it from graphics struct
-	pub fn take_shaders(&mut self) -> Shader {
-		/* Swaps struct variable with returned */
-		if let None = self.shaders {
-			panic!("Graphics.shaders haven't beed initialized!")
-		} else {
-			let mut shaders = None;
-			std::mem::swap(&mut shaders, &mut self.shaders);
-			shaders.unwrap()
-		}
-	}
-
-	/// Gives vertex_buffer and removes it from graphics struct
-	pub fn take_vertex_buffer(&mut self) -> glium::VertexBuffer<Vertex> {
-		/* Swaps struct variable with returned */
-		if let None = self.vertex_buffer {
-			panic!("Graphics.vertex_buffer haven't been initialized!")
-		} else {
-			let mut vertex_buffer = None;
-			std::mem::swap(&mut vertex_buffer, &mut self.vertex_buffer);
-			vertex_buffer.unwrap()
-		}
-	}
-
-	/// Gives primitive_type and removes it from graphics struct
-	pub fn take_privitive_type(&mut self) -> glium::index::NoIndices {
-		/* Swaps struct variable with returned */
-		if let None = self.primitive_type {
-			panic!("Graphics.primitive_type haven't been initialized!")
-		} else {
-			let mut primitive_type = None;
-			std::mem::swap(&mut primitive_type, &mut self.primitive_type);
-			primitive_type.unwrap()
 		}
 	}
 

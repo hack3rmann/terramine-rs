@@ -20,9 +20,7 @@ use utils::{
 	graphics::{
 		Graphics,
 		camera::Camera,
-		shader::Shader,
 		texture::Texture,
-		vertex_buffer::VertexBuffer,
 	},
 	terrarian::voxel::Voxel
 };
@@ -50,21 +48,13 @@ impl App {
 	/// Constructs app struct.
 	pub fn new() -> Self {
 		/* Graphics initialization */
-		let mut graphics = Graphics::initialize().unwrap();
+		let graphics = Graphics::initialize().unwrap();
 	
 		/* Camera handle */
 		let mut camera = Camera::new();
 	
 		/* Texture loading */
 		let texture = Texture::from("src/image/grass_top_separ.png", &graphics.display).unwrap();
-	
-		/* Vertex buffer loading */
-		let vertex_buffer = VertexBuffer::default(&graphics);
-		vertex_buffer.bind(&mut graphics);
-	
-		/* Shader program */
-		let shaders = Shader::new("vertex_shader", "fragment_shader", &graphics.display);
-		graphics.upload_shaders(shaders);
 	
 		/* Camera preposition */
 		camera.set_position(0.0, 0.0, 2.0);
