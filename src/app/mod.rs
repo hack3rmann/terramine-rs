@@ -171,9 +171,10 @@ impl App {
 				imgui::Slider::new("Camera speed", 5.0, 50.0)
 					.display_format("%.1f")
 					.build(&ui, &mut camera.speed);
-				imgui::Slider::new("Camera fov", 0.1, std::f32::consts::PI * 4.0)
+				imgui::Slider::new("Camera fov", 1.0, 180.0)
 					.display_format("%.1f")
-					.build(&ui, &mut camera.fov);
+					.build(&ui, &mut camera.fov.get_degrees_mut());
+				camera.fov.update_from_degrees();
 			});
 
 			/* Render UI */
