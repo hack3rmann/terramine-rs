@@ -20,10 +20,13 @@ use utils::{
 	graphics::{
 		Graphics,
 		camera::Camera,
-		shader::Shader,
 		texture::Texture,
-		vertex_buffer::VertexBuffer,
 	},
+	terrarian::voxel::{
+		Voxel,
+		voxel_data::FIRST_VOXEL_DATA
+	},
+	math::vector::*,
 };
 
 /// Struct that handles everything.
@@ -38,10 +41,8 @@ pub struct App {
 	last_frame: std::time::Instant,
 	dt: f64,
 
-	/* First layer temporary stuff */
-	vertex_buffer: glium::VertexBuffer<graphics::Vertex>,
-	indices: glium::index::NoIndices,
-	shaders: Shader,
+	/* Temp voxel */
+	voxels: [Voxel<'static>; 9],
 
 	/* Second layer temporary stuff */
 	texture: Texture
@@ -51,7 +52,7 @@ impl App {
 	/// Constructs app struct.
 	pub fn new() -> Self {
 		/* Graphics initialization */
-		let mut graphics = Graphics::initialize().unwrap();
+		let graphics = Graphics::initialize().unwrap();
 	
 		/* Camera handle */
 		let mut camera = Camera::new();
@@ -59,32 +60,30 @@ impl App {
 		/* Texture loading */
 		let texture = Texture::from("src/image/grass_top_separ.png", &graphics.display).unwrap();
 	
-		/* Vertex buffer loading */
-		let vertex_buffer = VertexBuffer::default(&graphics);
-		vertex_buffer.bind(&mut graphics);
-	
-		/* Shader program */
-		let shaders = Shader::new("vertex_shader", "fragment_shader", &graphics.display);
-		graphics.upload_shaders(shaders);
-	
 		/* Camera preposition */
 		camera.set_position(0.0, 0.0, 2.0);
 
-		/* Destruct: */
-		let vertex_buffer = graphics.take_vertex_buffer();
-		let indices = graphics.take_privitive_type();
-		let shaders = graphics.take_shaders();
+		/* Voxels */
+		let voxels = [
+			Voxel::new(&graphics, Int3::new( 0,  0,  0), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new(-1, -2, -1), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 0, -1, -1), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 1,  0, -1), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 1,  1,  0), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 1,  2,  1), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 0,  1,  1), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new(-1,  0,  1), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new(-1, -1,  0), &FIRST_VOXEL_DATA),
+		];
 
 		App {
+			voxels: voxels,
 			input_manager: InputManager::new(),
 			graphics: graphics,
 			camera: camera,
 			time: 0.0,
 			last_frame: std::time::Instant::now(),
 			dt: 0.0,
-			vertex_buffer: vertex_buffer,
-			indices: indices,
-			shaders: shaders,
 			texture: texture
 		}
 	}
@@ -186,9 +185,10 @@ impl App {
 				imgui::Slider::new("Camera speed", 5.0, 50.0)
 					.display_format("%.1f")
 					.build(&ui, &mut camera.speed);
-				imgui::Slider::new("Camera fov", 0.0, std::f32::consts::PI * 4.0)
-					.display_format("%.2f")
-					.build(&ui, &mut camera.fov);
+				imgui::Slider::new("Camera fov", 1.0, 180.0)
+					.display_format("%.1f")
+					.build(&ui, &mut camera.fov.get_degrees_mut());
+				camera.fov.update_from_degrees();
 			});
 
 			/* Render UI */
@@ -205,26 +205,16 @@ impl App {
 			view: self.camera.get_view()
 		};
 
-		/* Draw parameters */
-		let params = glium::DrawParameters {
-			depth: glium::Depth {
-				test: glium::DepthTest::Overwrite,
-				write: true,
-				.. Default::default()
-			},
-			backface_culling: glium::BackfaceCullingMode::CullCounterClockwise,
-			.. Default::default()
-		};
-
 		/* Actual drawing */
 		let mut target = self.graphics.display.draw(); 
-		target.clear_color(0.01, 0.01, 0.01, 1.0);
-		target.clear_depth(0.0); {
-			target.draw(&self.vertex_buffer, &self.indices, &self.shaders.program, &uniforms, &params).unwrap();
+		target.clear_all((0.01, 0.01, 0.01, 1.0), 1.0, 0); {
+			for voxel in self.voxels.iter() {
+				voxel.mesh.render(&mut target, &uniforms).unwrap();
+			}
 
 			self.graphics.imguir
 				.render(&mut target, draw_data)
-				.expect("error rendering imgui");
+				.expect("Error rendering imgui");
 
 		} target.finish().unwrap();
 	}

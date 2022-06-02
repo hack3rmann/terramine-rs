@@ -8,7 +8,8 @@ use crate::app::utils::math::{
 	vector::{
 		Float4,
 		swizzle::*
-	}
+	},
+	angle::Angle
 };
 
 /// Camera handler.
@@ -16,7 +17,7 @@ pub struct Camera {
 	pub roll: f64,
 	pub pitch: f64,
 	pub yaw: f64,
-	pub fov: f32,
+	pub fov: Angle,
 	pub speed: f64,
 	pub grabbes_cursor: bool,
 	pub aspect_ratio: f32,
@@ -82,7 +83,7 @@ impl Camera {
 
 	/// Returns projection matrix with `aspect_ratio = height / width`
 	pub fn get_proj(&self) -> [[f32; 4]; 4] {
-		Matrix4::perspective_fov_lh(self.fov, self.aspect_ratio * self.fov, 0.5, 1000.0).as_2d_array()
+		Matrix4::perspective_fov_lh(self.fov.get_radians(), self.aspect_ratio * self.fov.get_radians(), 0.5, 1000.0).as_2d_array()
 	}
 
 	/// Returns X component of pos vector.
@@ -144,7 +145,7 @@ impl Default for Camera {
 			roll: 0.0,
 			pitch: 0.0,
 			yaw: 0.0,
-			fov: std::f32::consts::FRAC_PI_2,
+			fov: Angle::from_degrees(60.0),
 			grabbes_cursor: false,
 			speed: 10.0,
 			aspect_ratio: 768.0 / 1024.0,

@@ -11,61 +11,10 @@ pub struct VertexBuffer {
 }
 
 impl VertexBuffer {
-	/// Binds vertex buffer to pipeline.
-	pub fn bind(self, graphics: &mut Graphics) {
-		graphics.upload_vertex_buffer(self);
-	}
-
-	/// Test code. Default realisation.
-	pub fn default(graphics: &Graphics) -> Self {
-		/* Quad vertices */
-		let shape = vec! [
-			/* Front */
-			Vertex { position: [-1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [-1.0, -1.0,  1.0 ], tex_coords: [ 0.0, 1.0 ] },
-			Vertex { position: [-1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [-1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [-1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [-1.0,  1.0, -1.0 ], tex_coords: [ 1.0, 0.0 ] },
-			/* Back */
-			Vertex { position: [ 1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [ 1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [ 1.0, -1.0,  1.0 ], tex_coords: [ 0.0, 1.0 ] },
-			Vertex { position: [ 1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [ 1.0,  1.0, -1.0 ], tex_coords: [ 1.0, 0.0 ] },
-			Vertex { position: [ 1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
-			/* Left */
-			Vertex { position: [ 1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [-1.0,  1.0, -1.0 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [ 1.0,  1.0, -1.0 ], tex_coords: [ 0.0, 1.0 ] },
-			Vertex { position: [ 1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [-1.0, -1.0, -1.0 ], tex_coords: [ 1.0, 0.0 ] },
-			Vertex { position: [-1.0,  1.0, -1.0 ], tex_coords: [ 1.0, 1.0 ] },
-			/* Right */
-			Vertex { position: [ 1.0, -1.0,  1.0 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [ 1.0,  1.0,  1.0 ], tex_coords: [ 0.0, 1.0 ] },
-			Vertex { position: [-1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [ 1.0, -1.0,  1.0 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [-1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [-1.0, -1.0,  1.0 ], tex_coords: [ 1.0, 0.0 ] },
-			/* Up */
-			Vertex { position: [ 1.0,  1.0, -1.0 ], tex_coords: [ 0.0, 1.0 ] },
-			Vertex { position: [-1.0,  1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [ 1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [-1.0,  1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [-1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 0.0 ] },
-			Vertex { position: [ 1.0,  1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
-			/* Up */
-			Vertex { position: [-1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [ 1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 1.0 ] },
-			Vertex { position: [ 1.0, -1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [-1.0, -1.0, -1.0 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [ 1.0, -1.0,  1.0 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [-1.0, -1.0,  1.0 ], tex_coords: [ 1.0, 0.0 ] },
-		];
-
+	/// Constructs vertex buffer from vertices vector.
+	pub fn from_vertices(graphics: &Graphics, vertices: Vec<Vertex>) -> Self {
 		/* Define vertex buffer */
-		let vertex_buffer = glium::VertexBuffer::new(&graphics.display, &shape).unwrap();
+		let vertex_buffer = glium::VertexBuffer::new(&graphics.display, &vertices).unwrap();
 		let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
 		VertexBuffer {
