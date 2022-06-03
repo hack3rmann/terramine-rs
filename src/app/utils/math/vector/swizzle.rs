@@ -534,44 +534,44 @@ pub trait Vec3Swizzles2<T>: NewVec3<T> + Swizzle3Dto1<T> + Copy {
 }
 
 pub trait Vec2Swizzles4<T>: Swizzle2Dto1<T> + NewVec2<T> + Copy {
-    type Vec4;
+    type Vec4: NewVec4<T>;
 
-    fn xxxx(self) -> Self::Vec4;
-    fn xxxy(self) -> Self::Vec4;
-    fn xxyx(self) -> Self::Vec4;
-    fn xxyy(self) -> Self::Vec4;
-    fn xyxx(self) -> Self::Vec4;
-    fn xyxy(self) -> Self::Vec4;
-    fn xyyx(self) -> Self::Vec4;
-    fn xyyy(self) -> Self::Vec4;
-    fn yxxx(self) -> Self::Vec4;
-    fn yxxy(self) -> Self::Vec4;
-    fn yxyx(self) -> Self::Vec4;
-    fn yxyy(self) -> Self::Vec4;
-    fn yyxx(self) -> Self::Vec4;
-    fn yyxy(self) -> Self::Vec4;
-    fn yyyx(self) -> Self::Vec4;
-    fn yyyy(self) -> Self::Vec4;
+    fn xxxx(self) -> Self::Vec4 { Self::Vec4::new(self.x(), self.x(), self.x(), self.x()) }
+    fn xxxy(self) -> Self::Vec4 { Self::Vec4::new(self.x(), self.x(), self.x(), self.y()) }
+    fn xxyx(self) -> Self::Vec4 { Self::Vec4::new(self.x(), self.x(), self.y(), self.x()) }
+    fn xxyy(self) -> Self::Vec4 { Self::Vec4::new(self.x(), self.x(), self.y(), self.y()) }
+    fn xyxx(self) -> Self::Vec4 { Self::Vec4::new(self.x(), self.y(), self.x(), self.x()) }
+    fn xyxy(self) -> Self::Vec4 { Self::Vec4::new(self.x(), self.y(), self.x(), self.y()) }
+    fn xyyx(self) -> Self::Vec4 { Self::Vec4::new(self.x(), self.y(), self.y(), self.x()) }
+    fn xyyy(self) -> Self::Vec4 { Self::Vec4::new(self.x(), self.y(), self.y(), self.y()) }
+    fn yxxx(self) -> Self::Vec4 { Self::Vec4::new(self.y(), self.x(), self.x(), self.x()) }
+    fn yxxy(self) -> Self::Vec4 { Self::Vec4::new(self.y(), self.x(), self.x(), self.y()) }
+    fn yxyx(self) -> Self::Vec4 { Self::Vec4::new(self.y(), self.x(), self.y(), self.x()) }
+    fn yxyy(self) -> Self::Vec4 { Self::Vec4::new(self.y(), self.x(), self.y(), self.y()) }
+    fn yyxx(self) -> Self::Vec4 { Self::Vec4::new(self.y(), self.y(), self.x(), self.x()) }
+    fn yyxy(self) -> Self::Vec4 { Self::Vec4::new(self.y(), self.y(), self.x(), self.y()) }
+    fn yyyx(self) -> Self::Vec4 { Self::Vec4::new(self.y(), self.y(), self.y(), self.x()) }
+    fn yyyy(self) -> Self::Vec4 { Self::Vec4::new(self.y(), self.y(), self.y(), self.y()) }
 }
 
 pub trait Vec2Swizzles3<T>: Swizzle2Dto1<T> + NewVec2<T> + Copy {
 	type Vec3: NewVec3<T>;
     
-    fn xxx(self) -> Self::Vec3;
-    fn xxy(self) -> Self::Vec3;
-    fn xyx(self) -> Self::Vec3;
-    fn xyy(self) -> Self::Vec3;
-    fn yxx(self) -> Self::Vec3;
-    fn yxy(self) -> Self::Vec3;
-    fn yyx(self) -> Self::Vec3;
-    fn yyy(self) -> Self::Vec3;
+    fn xxx(self) -> Self::Vec3 { Self::Vec3::new(self.x(), self.x(), self.x()) }
+    fn xxy(self) -> Self::Vec3 { Self::Vec3::new(self.x(), self.x(), self.y()) }
+    fn xyx(self) -> Self::Vec3 { Self::Vec3::new(self.x(), self.y(), self.x()) }
+    fn xyy(self) -> Self::Vec3 { Self::Vec3::new(self.x(), self.y(), self.y()) }
+    fn yxx(self) -> Self::Vec3 { Self::Vec3::new(self.y(), self.x(), self.x()) }
+    fn yxy(self) -> Self::Vec3 { Self::Vec3::new(self.y(), self.x(), self.y()) }
+    fn yyx(self) -> Self::Vec3 { Self::Vec3::new(self.y(), self.y(), self.x()) }
+    fn yyy(self) -> Self::Vec3 { Self::Vec3::new(self.y(), self.y(), self.y()) }
 }
 
 pub trait Vec2Swizzles2<T>: Swizzle2Dto1<T> + NewVec2<T> + Copy {
     #[inline]
     fn xy(self) -> Self { self }
 
-    fn xx(self) -> Self;
-    fn yx(self) -> Self;
-    fn yy(self) -> Self;
+    fn xx(self) -> Self { Self::new(self.x(), self.x()) }
+    fn yx(self) -> Self { Self::new(self.y(), self.x()) }
+    fn yy(self) -> Self { Self::new(self.y(), self.y()) }
 }
