@@ -24,7 +24,7 @@ impl Float4 {
 	}
 
 	/// Constructs unit vector.
-	pub fn unit() -> Self {
+	pub fn one() -> Self {
 		Self::all(1.0)
 	}
 
@@ -77,7 +77,7 @@ impl NewVec3<i32> for Int3 {
 
 impl Default for Float4 {
 	fn default() -> Self {
-		Self::new(0.0, 0.0, 0.0, 0.0)
+		Self::all(0.0)
 	}
 }
 
@@ -278,5 +278,5 @@ impl Set3Dto1<i32> for Int3 {
 	fn set_z(&mut self, other: i32) { self.z = other; }
 }
 
-impl Swizzele4DCordsShuffle<f32> for Float4 { }
-impl Swizzle3DCoordsShuffle<i32> for Int3 { }
+impl Vec4Swizzles4<f32> for Float4 { }
+impl Vec3Swizzles3<i32> for Int3 { }
