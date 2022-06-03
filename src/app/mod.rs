@@ -200,7 +200,7 @@ impl App {
 		let uniforms = uniform! {
 			/* Texture uniform with filtering */
 			tex: self.texture.with_mips(),
-			time: self.time,
+			time: self.time as f32,
 			proj: self.camera.get_proj(),
 			view: self.camera.get_view()
 		};
