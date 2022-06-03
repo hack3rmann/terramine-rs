@@ -24,7 +24,7 @@ use utils::{
 	},
 	terrarian::voxel::{
 		Voxel,
-		voxel_data::FIRST_VOXEL_DATA
+		voxel_data::GRASS_VOXEL_DATA
 	},
 	math::vector::*,
 };
@@ -65,15 +65,15 @@ impl App {
 
 		/* Voxels */
 		let voxels = [
-			Voxel::new(&graphics, Int3::new( 0,  0,  0), &FIRST_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new(-1, -2, -1), &FIRST_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new( 0, -1, -1), &FIRST_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new( 1,  0, -1), &FIRST_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new( 1,  1,  0), &FIRST_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new( 1,  2,  1), &FIRST_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new( 0,  1,  1), &FIRST_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new(-1,  0,  1), &FIRST_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new(-1, -1,  0), &FIRST_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 0,  0,  0), &GRASS_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new(-1, -2, -1), &GRASS_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 0, -1, -1), &GRASS_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 1,  0, -1), &GRASS_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 1,  1,  0), &GRASS_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 1,  2,  1), &GRASS_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new( 0,  1,  1), &GRASS_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new(-1,  0,  1), &GRASS_VOXEL_DATA),
+			Voxel::new(&graphics, Int3::new(-1, -1,  0), &GRASS_VOXEL_DATA),
 		];
 
 		App {
