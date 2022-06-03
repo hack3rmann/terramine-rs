@@ -7,7 +7,8 @@ const CHUNK_SIZE:	usize = 16;
 const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 struct Chunk {
-	voxels: Box<[[[Voxel<'static>; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>
+	voxels: Box<[[[Voxel<'static>; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
+	pos: Int3
 }
 
 impl Chunk {
@@ -18,4 +19,8 @@ impl Chunk {
 
 pub fn world_coords_to_chunk(pos: Int3) -> Int3 {
 	pos / CHUNK_SIZE as i32
+}
+
+pub fn chunk_cords_to_min_world(pos: Int3) -> Int3 {
+	unimplemented!();
 }
