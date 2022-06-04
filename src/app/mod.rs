@@ -26,6 +26,7 @@ use utils::{
 		Voxel,
 		voxel_data::GRASS_VOXEL_DATA
 	},
+	terrarian::chunk::Chunk,
 	math::vector::*,
 };
 
@@ -42,7 +43,7 @@ pub struct App {
 	dt: f64,
 
 	/* Temp voxel */
-	voxels: [Voxel<'static>; 9],
+	chunk: Chunk,
 
 	/* Second layer temporary stuff */
 	texture: Texture
@@ -63,28 +64,18 @@ impl App {
 		/* Camera preposition */
 		camera.set_position(0.0, 0.0, 2.0);
 
-		/* Voxels */
-		let voxels = [
-			Voxel::new(&graphics, Int3::new( 0,  0,  0), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new(-1, -2, -1), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new( 0, -1, -1), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new( 1,  0, -1), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new( 1,  1,  0), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new( 1,  2,  1), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new( 0,  1,  1), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new(-1,  0,  1), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new(-1, -1,  0), &GRASS_VOXEL_DATA),
-		];
+		/* Chunk */
+		let chunk = Chunk::new(&graphics, Int3::all(0));
 
 		App {
-			voxels: voxels,
-			input_manager: InputManager::new(),
-			graphics: graphics,
-			camera: camera,
+			chunk,
+			graphics,
+			camera,
+			texture,
 			time: 0.0,
-			last_frame: std::time::Instant::now(),
 			dt: 0.0,
-			texture: texture
+			last_frame: std::time::Instant::now(),
+			input_manager: InputManager::new(),
 		}
 	}
 
@@ -208,9 +199,7 @@ impl App {
 		/* Actual drawing */
 		let mut target = self.graphics.display.draw(); 
 		target.clear_all((0.01, 0.01, 0.01, 1.0), 1.0, 0); {
-			for voxel in self.voxels.iter() {
-				voxel.mesh.render(&mut target, &uniforms).unwrap();
-			}
+			self.chunk.render(&mut target, &uniforms).unwrap();
 
 			self.graphics.imguir
 				.render(&mut target, draw_data)
