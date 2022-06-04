@@ -33,8 +33,6 @@ pub struct App {
 	input_manager: InputManager,
 	graphics: Graphics,
 	camera: Camera,
-
-	/* Important but TODO stuff */
 	timer: Timer,
 
 	/* Temp voxel */
