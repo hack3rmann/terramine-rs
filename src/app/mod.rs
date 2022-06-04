@@ -22,10 +22,7 @@ use utils::{
 		camera::Camera,
 		texture::Texture,
 	},
-	terrarian::voxel::{
-		Voxel,
-		voxel_data::GRASS_VOXEL_DATA
-	},
+	terrarian::chunk::Chunk,
 	math::vector::*,
 };
 
@@ -42,7 +39,7 @@ pub struct App {
 	dt: f64,
 
 	/* Temp voxel */
-	voxels: [Voxel<'static>; 9],
+	chunks: Vec<Chunk<'static>>,
 
 	/* Second layer temporary stuff */
 	texture: Texture
@@ -58,33 +55,28 @@ impl App {
 		let mut camera = Camera::new();
 	
 		/* Texture loading */
-		let texture = Texture::from("src/image/grass_top_separ.png", &graphics.display).unwrap();
+		let texture = Texture::from("src/image/log_bottom.png", &graphics.display).unwrap();
 	
 		/* Camera preposition */
 		camera.set_position(0.0, 0.0, 2.0);
 
-		/* Voxels */
-		let voxels = [
-			Voxel::new(&graphics, Int3::new( 0,  0,  0), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new(-1, -2, -1), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new( 0, -1, -1), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new( 1,  0, -1), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new( 1,  1,  0), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new( 1,  2,  1), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new( 0,  1,  1), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new(-1,  0,  1), &GRASS_VOXEL_DATA),
-			Voxel::new(&graphics, Int3::new(-1, -1,  0), &GRASS_VOXEL_DATA),
-		];
+		/* Chunk */
+		let mut chunks = Vec::<Chunk>::with_capacity(27);
+		for x in -1..=1 {
+		for y in -1..=1 {
+		for z in -1..=1 {
+			chunks.push(Chunk::new(&graphics, Int3::new(x, y, z)));
+		}}}
 
 		App {
-			voxels: voxels,
-			input_manager: InputManager::new(),
-			graphics: graphics,
-			camera: camera,
+			chunks,
+			graphics,
+			camera,
+			texture,
 			time: 0.0,
-			last_frame: std::time::Instant::now(),
 			dt: 0.0,
-			texture: texture
+			last_frame: std::time::Instant::now(),
+			input_manager: InputManager::new(),
 		}
 	}
 
@@ -208,8 +200,8 @@ impl App {
 		/* Actual drawing */
 		let mut target = self.graphics.display.draw(); 
 		target.clear_all((0.01, 0.01, 0.01, 1.0), 1.0, 0); {
-			for voxel in self.voxels.iter() {
-				voxel.mesh.render(&mut target, &uniforms).unwrap();
+			for chunk in self.chunks.iter_mut() {
+				chunk.render(&mut target, &uniforms).unwrap();
 			}
 
 			self.graphics.imguir
