@@ -56,7 +56,10 @@ impl<'dp> Chunk<'dp> {
 			}
 		}}}
 		
+		/* Create chunk */
 		let mut chunk = Chunk { voxels, pos, mesh: None };
+
+		/* Create mesh for chunk */
 		chunk.update_mesh(graphics);
 
 		return chunk;
@@ -75,22 +78,32 @@ impl<'dp> Chunk<'dp> {
 			let mut vertices = Vec::<Vertex>::new();
 			for voxel in self.voxels.iter() {
 				if let Some(voxel) = voxel {
-					//vertices.append(&mut shape::cube(voxel.position));
+					/* Top face check */
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z())) {
 						vertices.append(&mut shape::cube_top(voxel.position));
 					}
+
+					/* Bottom face check */
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z())) {
 						vertices.append(&mut shape::cube_bottom(voxel.position));
 					}
+					
+					/* Back face check */
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z())) {
 						vertices.append(&mut shape::cube_back(voxel.position));
 					}
+					
+					/* Front face check */
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z())) {
 						vertices.append(&mut shape::cube_front(voxel.position));
 					}
+					
+					/* Right face check */
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1)) {
 						vertices.append(&mut shape::cube_right(voxel.position));
 					}
+					
+					/* Left face check */
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1)) {
 						vertices.append(&mut shape::cube_left(voxel.position));
 					}
@@ -104,7 +117,7 @@ impl<'dp> Chunk<'dp> {
 					write: true,
 					.. Default::default()
 				},
-				backface_culling: glium::BackfaceCullingMode::CullClockwise,
+				backface_culling: glium::BackfaceCullingMode::CullingDisabled,
 				.. Default::default()
 			};
 			
@@ -126,6 +139,7 @@ impl<'dp> Chunk<'dp> {
 		/* Sorts: [X -> Y -> Z] */
 		let index = (pos.x() * CHUNK_SIZE as i32 + pos.y()) * CHUNK_SIZE as i32 + pos.z();
 
+		/* If in vector bounds then return voxel */
 		if index >= 0 && index < CHUNK_VOLUME as i32 {
 			(&self.voxels[index as usize]).as_ref()
 		} else {
@@ -141,6 +155,7 @@ impl<'dp> Chunk<'dp> {
 		/* Sorts: [X -> Y -> Z] */
 		let index = (pos.x() * CHUNK_SIZE as i32 + pos.y()) * CHUNK_SIZE as i32 + pos.z();
 
+		/* If in vector bounds then return voxel */
 		if index >= 0 && index < CHUNK_VOLUME as i32 {
 			(&mut self.voxels[index as usize]).as_mut()
 		} else {
@@ -166,9 +181,12 @@ pub fn pos_in_chunk_to_world(in_chunk: Int3, chunk: Int3) -> Int3 {
 
 /// Transforms world coordinates to chunk 
 pub fn world_coords_to_in_chunk(pos: Int3) -> Int3 {
+	/* Take voxel coordinates to near-zero */
 	let x = pos.x() % CHUNK_SIZE as i32;
 	let y = pos.y() % CHUNK_SIZE as i32;
 	let z = pos.z() % CHUNK_SIZE as i32;
+
+	/* If negative then convert to positive */
 
 	let x = if x < 0 {
 		x + CHUNK_SIZE as i32

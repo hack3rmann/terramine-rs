@@ -8,6 +8,7 @@ use crate::app::utils::{
 	},
 };
 
+/// Represents voxel.
 #[allow(dead_code)]
 pub struct Voxel {
 	pub data: &'static VoxelData,
@@ -24,54 +25,7 @@ impl Voxel {
 pub mod shape {
 	use super::*;
 
-	/// Gives vertex vector from position.
-	pub fn cube(position: Int3) -> Vec<Vertex> {
-		vec! [
-			/* Front */
-			Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 0.0, 1.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 1.0, 0.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 1.0, 1.0 ] },
-			/* Back */
-			Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 0.0, 1.0 ] },
-			Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 1.0, 0.0 ] },
-			/* Left */
-			Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 1.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 1.0, 0.0 ] },
-			/* Right */
-			Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 0.0, 1.0 ] },
-			Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 1.0, 0.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 1.0, 1.0 ] },
-			/* Top */
-			Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 1.0 ] },
-			Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 1.0, 0.0 ] },
-			/* Bottom */
-			Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 1.0, 1.0 ] },
-			Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 1.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
-			Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 1.0, 0.0 ] },
-			Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 1.0, 1.0 ] },
-		]
-	}
-
+	/// Cube front face vertex array
 	pub fn cube_front(position: Int3) -> Vec<Vertex> {
 		vec! [
 			Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
@@ -83,6 +37,7 @@ pub mod shape {
 		]
 	}
 
+	/// Cube back face vertex array
 	pub fn cube_back(position: Int3) -> Vec<Vertex> {
 		vec! [
 			Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
@@ -94,6 +49,7 @@ pub mod shape {
 		]
 	}
 
+	/// Cube top face vertex array
 	pub fn cube_top(position: Int3) -> Vec<Vertex> {
 		vec! [
 			Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 1.0 ] },
@@ -105,6 +61,7 @@ pub mod shape {
 		]
 	}
 
+	/// Cube bottom face vertex array
 	pub fn cube_bottom(position: Int3) -> Vec<Vertex> {
 		vec! [
 			Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
@@ -116,6 +73,7 @@ pub mod shape {
 		]
 	}
 
+	/// Cube left face vertex array
 	pub fn cube_left(position: Int3) -> Vec<Vertex> {
 		vec! [
 			Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
@@ -127,6 +85,7 @@ pub mod shape {
 		]
 	}
 
+	/// Cube right face vertex array
 	pub fn cube_right(position: Int3) -> Vec<Vertex> {
 		vec! [
 			Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ 0.0, 0.0 ] },
