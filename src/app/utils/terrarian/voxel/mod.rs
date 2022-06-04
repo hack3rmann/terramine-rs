@@ -39,11 +39,7 @@ impl<'v> Voxel<'v> {
 			Mesh::new(vertex_buffer, shader, draw_params)
 		};
 
-		Voxel {
-			data: data,
-			position: position,
-			mesh: mesh
-		}
+		Voxel { data, position, mesh }
 	}
 
 	/// Gives vertex vector from position.

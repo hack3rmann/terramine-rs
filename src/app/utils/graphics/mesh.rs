@@ -21,11 +21,7 @@ pub struct Mesh<'dp> {
 impl<'dp> Mesh<'dp> {
 	/// Constructs new mesh.
 	pub fn new(vertex_buffer: VertexBuffer, shader: Shader, draw_params: DrawParameters<'dp>) -> Self {
-		Mesh {
-			vertex_buffer: vertex_buffer,
-			shader: shader,
-			draw_params: draw_params
-		}
+		Mesh { vertex_buffer, shader, draw_params }
 	}
 
 	/// Renders mesh.

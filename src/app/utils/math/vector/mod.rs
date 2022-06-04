@@ -71,7 +71,7 @@ impl NewVec4<f32> for Float4 {
 impl NewVec3<i32> for Int3 {
 	/// Constructs vector from 3 integers
 	fn new(x: i32, y: i32, z: i32) -> Self {
-		Int3 { x: x, y: y, z: z }
+		Int3 { x, y, z }
 	}
 }
 

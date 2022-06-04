@@ -21,14 +21,7 @@ pub struct TextureSides {
 impl TextureSides {
 	/// Constructs new voxel sides data
 	pub const fn new(front: u16, back: u16, left: u16, right: u16, up: u16, bottom: u16) -> Self {
-		TextureSides {
-			front: front,
-			back: back,
-			left: left,
-			right: right,
-			up: up,
-			bottom: bottom
-		}
+		TextureSides { front, back, left, right, up, bottom }
 	}
 
 	/// Makes all sides to given id

@@ -43,9 +43,7 @@ impl Window {
 			window.make_current().unwrap()
 		};
 
-		Window {
-            window: Some(window)
-        }
+		Window { window: Some(window) }
 	}
 
 	fn load_icon() -> Icon {

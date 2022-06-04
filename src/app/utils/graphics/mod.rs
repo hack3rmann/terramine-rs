@@ -81,7 +81,7 @@ impl Graphics {
 
 		Ok (
 			Graphics {
-				display: display,
+				display,
 				imguic: imgui_context,
 				imguir: imgui_renderer,
 				imguiw: winit_platform,

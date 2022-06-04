@@ -17,9 +17,6 @@ impl VertexBuffer {
 		let vertex_buffer = glium::VertexBuffer::new(&graphics.display, &vertices).unwrap();
 		let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
-		VertexBuffer {
-			vertex_buffer: vertex_buffer,
-			indices: indices
-		}
+		VertexBuffer { vertex_buffer, indices }
 	}
 }
