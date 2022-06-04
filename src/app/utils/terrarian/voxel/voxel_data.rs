@@ -30,11 +30,13 @@ impl TextureSides {
 	}
 
 	/// Sides and up/bottom
+	#[allow(dead_code)]
 	pub const fn vertical(sides: u16, up_bottom: u16) -> Self {
 		Self::new(sides, sides, sides, sides, up_bottom, up_bottom)
 	}
 
 	/// Front, up/bottom and other sides
+	#[allow(dead_code)]
 	pub const fn vertical_one_side(front: u16, up_bottom: u16, other_sides: u16) -> Self {
 		Self::new(front, other_sides, other_sides, other_sides, up_bottom, up_bottom)
 	}
