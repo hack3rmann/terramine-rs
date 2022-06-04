@@ -8,3 +8,4 @@ pub mod graphics;
 pub mod user_io;
 pub mod math;
 pub mod terrarian;
+pub mod time;
