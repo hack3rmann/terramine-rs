@@ -135,6 +135,8 @@ impl App {
 			}
 		}
 
+		self.graphics.display.gl_window().window().set_title(format!("Terramine: {0:.0} FPS", self.timer.fps()).as_str());
+
 		/* Update ImGui stuff */
 		self.graphics.imguiw
 			.prepare_frame(self.graphics.imguic.io_mut(), self.graphics.display.gl_window().window())
