@@ -39,7 +39,7 @@ pub struct App {
 	dt: f64,
 
 	/* Temp voxel */
-	chunks: [Chunk<'static>; 4],
+	chunks: Vec<Chunk<'static>>,
 
 	/* Second layer temporary stuff */
 	texture: Texture
@@ -55,18 +55,18 @@ impl App {
 		let mut camera = Camera::new();
 	
 		/* Texture loading */
-		let texture = Texture::from("src/image/grass_top_separ.png", &graphics.display).unwrap();
+		let texture = Texture::from("src/image/log_bottom.png", &graphics.display).unwrap();
 	
 		/* Camera preposition */
 		camera.set_position(0.0, 0.0, 2.0);
 
 		/* Chunk */
-		let chunks = [
-			Chunk::new(&graphics, Int3::new( 0,  0,  0)),
-			Chunk::new(&graphics, Int3::new(-1,  0,  0)),
-			Chunk::new(&graphics, Int3::new(-1,  0, -1)),
-			Chunk::new(&graphics, Int3::new( 0,  0, -1)),
-		];
+		let mut chunks = Vec::<Chunk>::with_capacity(27);
+		for x in -1..2 {
+		for y in -1..2 {
+		for z in -1..2 {
+			chunks.push(Chunk::new(&graphics, Int3::new(x, y, z)));
+		}}}
 
 		App {
 			chunks,

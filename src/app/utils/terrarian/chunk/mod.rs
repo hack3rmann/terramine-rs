@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 
-use super::voxel::Voxel;
+use super::voxel::{
+	Voxel,
+	shape
+};
 use super::voxel::voxel_data::GRASS_VOXEL_DATA;
 use crate::app::utils::{
 	math::vector::{
@@ -22,11 +25,11 @@ use glium::{
 };
 
 /// Predefined chunk values.
-const CHUNK_SIZE:	usize = 8;
+const CHUNK_SIZE:	usize = 64;
 const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 /// Type of voxel array. May be something different during progress.
-type VoxelArray = Vec<Voxel>;
+type VoxelArray = Vec<Option<Voxel>>;
 
 /// Chunk struct.
 pub struct Chunk<'dp> {
@@ -42,10 +45,15 @@ impl<'dp> Chunk<'dp> {
 		let mut voxels = VoxelArray::with_capacity(CHUNK_VOLUME);
 
 		/* Iterating in the chunk */
-		for x in 0..=CHUNK_SIZE {
-		for y in 0..=CHUNK_SIZE {
-		for z in 0..=CHUNK_SIZE {
-			voxels.push(Voxel::new(pos_in_chunk_to_world(Int3::new(x as i32, y as i32, z as i32), pos), &GRASS_VOXEL_DATA));
+		for x in 0..CHUNK_SIZE {
+		for y in 0..CHUNK_SIZE {
+		for z in 0..CHUNK_SIZE {
+			let global_pos = pos_in_chunk_to_world(Int3::new(x as i32, y as i32, z as i32), pos);
+			if global_pos.y() < ((global_pos.x() as f32).sin() * 3.0 + (global_pos.z() as f32).sin() * 3.0 + (global_pos.x() as f32 / 15000.0).sin() * 3000.0 + (global_pos.z() as f32 / 15000.0).sin() * 3000.0 + 8.0) as i32 {
+				voxels.push(Some(Voxel::new(global_pos, &GRASS_VOXEL_DATA)));
+			} else {
+			 	voxels.push(None)
+			}
 		}}}
 		
 		let mut chunk = Chunk { voxels, pos, mesh: None };
@@ -66,7 +74,27 @@ impl<'dp> Chunk<'dp> {
 			/* Construct vertex array */
 			let mut vertices = Vec::<Vertex>::new();
 			for voxel in self.voxels.iter() {
-				vertices.append(&mut Voxel::cube_shape(voxel.position));
+				if let Some(voxel) = voxel {
+					//vertices.append(&mut shape::cube(voxel.position));
+					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z())) {
+						vertices.append(&mut shape::cube_top(voxel.position));
+					}
+					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z())) {
+						vertices.append(&mut shape::cube_bottom(voxel.position));
+					}
+					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z())) {
+						vertices.append(&mut shape::cube_back(voxel.position));
+					}
+					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z())) {
+						vertices.append(&mut shape::cube_front(voxel.position));
+					}
+					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1)) {
+						vertices.append(&mut shape::cube_right(voxel.position));
+					}
+					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1)) {
+						vertices.append(&mut shape::cube_left(voxel.position));
+					}
+				}
 			}
 
 			/* Chunk draw parameters */
@@ -89,6 +117,36 @@ impl<'dp> Chunk<'dp> {
 			Some(Mesh::new(vertex_buffer, shader, draw_params))
 		};
 	}
+
+	/// Gives voxel by inner coordinate
+	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<&Voxel> {
+		/* Transform to local */
+		let pos = world_coords_to_in_chunk(pos);
+
+		/* Sorts: [X -> Y -> Z] */
+		let index = (pos.x() * CHUNK_SIZE as i32 + pos.y()) * CHUNK_SIZE as i32 + pos.z();
+
+		if index >= 0 && index < CHUNK_VOLUME as i32 {
+			(&self.voxels[index as usize]).as_ref()
+		} else {
+			None
+		}
+	}
+
+	/// Gives mutable reference to voxel by inner coordinate
+	pub fn get_voxel_mut_or_none(&mut self, pos: Int3) -> Option<&mut Voxel> {
+		/* Transform to local */
+		let pos = world_coords_to_in_chunk(pos);
+
+		/* Sorts: [X -> Y -> Z] */
+		let index = (pos.x() * CHUNK_SIZE as i32 + pos.y()) * CHUNK_SIZE as i32 + pos.z();
+
+		if index >= 0 && index < CHUNK_VOLUME as i32 {
+			(&mut self.voxels[index as usize]).as_mut()
+		} else {
+			None
+		}
+	}
 }
 
 /// Transforms world coordinates to chunk 
@@ -104,4 +162,25 @@ pub fn chunk_cords_to_min_world(pos: Int3) -> Int3 {
 /// Transforms in-chunk coords to world
 pub fn pos_in_chunk_to_world(in_chunk: Int3, chunk: Int3) -> Int3 {
 	chunk_cords_to_min_world(chunk) + in_chunk
+}
+
+/// Transforms world coordinates to chunk 
+pub fn world_coords_to_in_chunk(pos: Int3) -> Int3 {
+	let x = pos.x() % CHUNK_SIZE as i32;
+	let y = pos.y() % CHUNK_SIZE as i32;
+	let z = pos.z() % CHUNK_SIZE as i32;
+
+	let x = if x < 0 {
+		x + CHUNK_SIZE as i32
+	} else { x };
+
+	let y = if y < 0 {
+		y + CHUNK_SIZE as i32
+	} else { y };
+
+	let z = if z < 0 {
+		z + CHUNK_SIZE as i32
+	} else { z };
+
+	Int3::new(x, y, z)
 }
