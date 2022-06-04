@@ -22,10 +22,6 @@ use utils::{
 		camera::Camera,
 		texture::Texture,
 	},
-	terrarian::voxel::{
-		Voxel,
-		voxel_data::GRASS_VOXEL_DATA
-	},
 	terrarian::chunk::Chunk,
 	math::vector::*,
 };
@@ -43,7 +39,7 @@ pub struct App {
 	dt: f64,
 
 	/* Temp voxel */
-	chunk: Chunk,
+	chunks: [Chunk<'static>; 4],
 
 	/* Second layer temporary stuff */
 	texture: Texture
@@ -65,10 +61,15 @@ impl App {
 		camera.set_position(0.0, 0.0, 2.0);
 
 		/* Chunk */
-		let chunk = Chunk::new(&graphics, Int3::all(0));
+		let chunks = [
+			Chunk::new(&graphics, Int3::new( 0,  0,  0)),
+			Chunk::new(&graphics, Int3::new(-1,  0,  0)),
+			Chunk::new(&graphics, Int3::new(-1,  0, -1)),
+			Chunk::new(&graphics, Int3::new( 0,  0, -1)),
+		];
 
 		App {
-			chunk,
+			chunks,
 			graphics,
 			camera,
 			texture,
@@ -199,7 +200,9 @@ impl App {
 		/* Actual drawing */
 		let mut target = self.graphics.display.draw(); 
 		target.clear_all((0.01, 0.01, 0.01, 1.0), 1.0, 0); {
-			self.chunk.render(&mut target, &uniforms).unwrap();
+			for chunk in self.chunks.iter_mut() {
+				chunk.render(&mut target, &uniforms).unwrap();
+			}
 
 			self.graphics.imguir
 				.render(&mut target, draw_data)

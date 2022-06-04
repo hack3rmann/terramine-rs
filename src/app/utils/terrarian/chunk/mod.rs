@@ -7,7 +7,13 @@ use crate::app::utils::{
 		Int3,
 		swizzle::*,
 	},
-	graphics::Graphics
+	graphics::{
+		Graphics,
+		mesh::Mesh,
+		Vertex,
+		shader::Shader,
+		vertex_buffer::VertexBuffer
+	}
 };
 use glium::{
 	DrawError,
@@ -20,15 +26,16 @@ const CHUNK_SIZE:	usize = 8;
 const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 /// Type of voxel array. May be something different during progress.
-type VoxelArray = Vec<Voxel<'static>>;
+type VoxelArray = Vec<Voxel>;
 
 /// Chunk struct.
-pub struct Chunk {
+pub struct Chunk<'dp> {
 	voxels: VoxelArray,
-	pos: Int3
+	pos: Int3,
+	mesh: Option<Mesh<'dp>>
 }
 
-impl Chunk {
+impl<'dp> Chunk<'dp> {
 	/// Constructs new chunk in given position 
 	pub fn new(graphics: &Graphics, pos: Int3) -> Self {
 		/* Voxel array initialization */
@@ -38,20 +45,49 @@ impl Chunk {
 		for x in 0..=CHUNK_SIZE {
 		for y in 0..=CHUNK_SIZE {
 		for z in 0..=CHUNK_SIZE {
-			voxels.push(Voxel::new(graphics, pos_in_chunk_to_world(Int3::new(x as i32, y as i32, z as i32), pos), &GRASS_VOXEL_DATA));
+			voxels.push(Voxel::new(pos_in_chunk_to_world(Int3::new(x as i32, y as i32, z as i32), pos), &GRASS_VOXEL_DATA));
 		}}}
 		
-		Chunk { voxels, pos }
+		let mut chunk = Chunk { voxels, pos, mesh: None };
+		chunk.update_mesh(graphics);
+
+		return chunk;
 	}
 
 	/// Renders chunk.
 	pub fn render<U: Uniforms>(&mut self, target: &mut Frame, uniforms: &U) -> Result<(), DrawError> {
 		/* Iterating through array */
-		for voxel in self.voxels.iter() {
-			voxel.mesh.render(target, uniforms)?
-		}
+		self.mesh.as_ref().unwrap().render(target, uniforms)
+	}
 
-		Ok(( ))
+	/// Updates mesh
+	pub fn update_mesh(&mut self, graphics: &Graphics) {
+		self.mesh = {
+			/* Construct vertex array */
+			let mut vertices = Vec::<Vertex>::new();
+			for voxel in self.voxels.iter() {
+				vertices.append(&mut Voxel::cube_shape(voxel.position));
+			}
+
+			/* Chunk draw parameters */
+			let draw_params = glium::DrawParameters {
+				depth: glium::Depth {
+					test: glium::DepthTest::IfLess,
+					write: true,
+					.. Default::default()
+				},
+				backface_culling: glium::BackfaceCullingMode::CullClockwise,
+				.. Default::default()
+			};
+			
+			/* Shader for chunks */
+			let shader = Shader::new("vertex_shader", "fragment_shader", &graphics.display);
+			
+			/* Vertex buffer for chunks */
+			let vertex_buffer = VertexBuffer::from_vertices(graphics, vertices);
+	
+			Some(Mesh::new(vertex_buffer, shader, draw_params))
+		};
 	}
 }
 
