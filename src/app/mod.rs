@@ -24,6 +24,7 @@ use utils::{
 	},
 	terrarian::chunk::Chunk,
 	math::vector::*,
+	time::timer::Timer,
 };
 
 /// Struct that handles everything.
@@ -34,9 +35,7 @@ pub struct App {
 	camera: Camera,
 
 	/* Important but TODO stuff */
-	time: f64,
-	last_frame: std::time::Instant,
-	dt: f64,
+	timer: Timer,
 
 	/* Temp voxel */
 	chunks: Vec<Chunk<'static>>,
@@ -73,9 +72,7 @@ impl App {
 			graphics,
 			camera,
 			texture,
-			time: 0.0,
-			dt: 0.0,
-			last_frame: std::time::Instant::now(),
+			timer: Timer::new(),
 			input_manager: InputManager::new(),
 		}
 	}
@@ -192,7 +189,7 @@ impl App {
 		let uniforms = uniform! {
 			/* Texture uniform with filtering */
 			tex: self.texture.with_mips(),
-			time: self.time as f32,
+			time: self.timer.time(),
 			proj: self.camera.get_proj(),
 			view: self.camera.get_view()
 		};
@@ -214,16 +211,13 @@ impl App {
 	/// Updates things.
 	fn new_events(&mut self) {
 		/* Update time */
-		let now = std::time::Instant::now();
+		self.timer.update();
 		self.graphics.imguic
 			.io_mut()
-			.update_delta_time(now.duration_since(self.last_frame));
-		self.dt = now.duration_since(self.last_frame).as_secs_f64();
-		self.last_frame = now;
-		self.time += self.dt;
+			.update_delta_time(self.timer.duration());
 		
 		/* Rotating camera */
-		self.camera.update(&mut self.input_manager, self.dt);
+		self.camera.update(&mut self.input_manager, self.timer.dt_as_f64());
 
 		/* Input update */
 		self.input_manager.update(&self.graphics);		
