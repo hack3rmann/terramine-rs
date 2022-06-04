@@ -117,7 +117,7 @@ impl<'dp> Chunk<'dp> {
 					write: true,
 					.. Default::default()
 				},
-				backface_culling: glium::BackfaceCullingMode::CullingDisabled,
+				backface_culling: glium::BackfaceCullingMode::CullClockwise,
 				.. Default::default()
 			};
 			
