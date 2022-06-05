@@ -59,7 +59,11 @@ impl App {
 
 		/* Chunk */
 		let mut chunks = Vec::<Chunk>::with_capacity(1);
-		chunks.push(Chunk::new(&graphics, Int3::all(0)));
+		for x in -1..=1 {
+		for y in -1..=1 {
+		for z in -1..=1 {
+			chunks.push(Chunk::new(&graphics, Int3::new(x, y, z)));
+		}}}
 
 		App {
 			chunks,

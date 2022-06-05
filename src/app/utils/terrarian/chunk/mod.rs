@@ -25,7 +25,7 @@ use glium::{
 };
 
 /// Predefined chunk values.
-const CHUNK_SIZE:	usize = 128;
+const CHUNK_SIZE:	usize = 16;
 const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 /// Type of voxel array. May be something different during progress.
@@ -49,7 +49,7 @@ impl<'dp> Chunk<'dp> {
 		for y in 0..CHUNK_SIZE {
 		for z in 0..CHUNK_SIZE {
 			let global_pos = pos_in_chunk_to_world(Int3::new(x as i32, y as i32, z as i32), pos);
-			if global_pos.y() < ((global_pos.x() as f32).sin() * 3.0 + (global_pos.z() as f32).sin() * 3.0 + (global_pos.x() as f32 / 15000.0).sin() * 3000.0 + (global_pos.z() as f32 / 15000.0).sin() * 3000.0 + 8.0) as i32 {
+			if global_pos.y() < ((global_pos.x() as f32).sin() * 3.0 + (global_pos.z() as f32).sin() * 3.0 + (global_pos.x() as f32 / 6000.0).sin() * 3000.0 + (global_pos.z() as f32 / 6000.0).sin() * 3000.0 + 8.0) as i32 {
 				voxels.push(Some(Voxel::new(global_pos, &GRASS_VOXEL_DATA)));
 			} else {
 			 	voxels.push(None)
@@ -134,32 +134,14 @@ impl<'dp> Chunk<'dp> {
 	/// Gives voxel by world coordinate
 	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<&Voxel> {
 		/* Transform to local */
-		let pos = world_coords_to_in_chunk(pos);
-
-		/* Sorts: [X -> Y -> Z] */
-		let index = (pos.x() * CHUNK_SIZE as i32 + pos.y()) * CHUNK_SIZE as i32 + pos.z();
-
-		/* If in vector bounds then return voxel */
-		if index >= 0 && index < CHUNK_VOLUME as i32 {
+		let pos = world_coords_to_in_some_chunk(pos, self.pos);
+		
+		if pos.x() < 0 || pos.x() >= CHUNK_SIZE as i32 || pos.y() < 0 || pos.y() >= CHUNK_SIZE as i32 || pos.z() < 0 || pos.z() >= CHUNK_SIZE as i32 {
+			None
+		} else {
+			/* Sorts: [X -> Y -> Z] */
+			let index = (pos.x() * CHUNK_SIZE as i32 + pos.y()) * CHUNK_SIZE as i32 + pos.z();
 			(&self.voxels[index as usize]).as_ref()
-		} else {
-			None
-		}
-	}
-
-	/// Gives mutable reference to voxel by world coordinate
-	pub fn get_voxel_mut_or_none(&mut self, pos: Int3) -> Option<&mut Voxel> {
-		/* Transform to local */
-		let pos = world_coords_to_in_chunk(pos);
-
-		/* Sorts: [X -> Y -> Z] */
-		let index = (pos.x() * CHUNK_SIZE as i32 + pos.y()) * CHUNK_SIZE as i32 + pos.z();
-
-		/* If in vector bounds then return voxel */
-		if index >= 0 && index < CHUNK_VOLUME as i32 {
-			(&mut self.voxels[index as usize]).as_mut()
-		} else {
-			None
 		}
 	}
 }
@@ -201,4 +183,9 @@ pub fn world_coords_to_in_chunk(pos: Int3) -> Int3 {
 	} else { z };
 
 	Int3::new(x, y, z)
+}
+
+/// Transforms world coordinates to chunk 
+pub fn world_coords_to_in_some_chunk(pos: Int3, chunk: Int3) -> Int3 {
+	pos - chunk_cords_to_min_world(chunk)
 }
