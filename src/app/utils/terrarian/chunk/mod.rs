@@ -25,7 +25,7 @@ use glium::{
 };
 
 /// Predefined chunk values.
-const CHUNK_SIZE:	usize = 64;
+const CHUNK_SIZE:	usize = 128;
 const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 /// Type of voxel array. May be something different during progress.
@@ -131,7 +131,7 @@ impl<'dp> Chunk<'dp> {
 		};
 	}
 
-	/// Gives voxel by inner coordinate
+	/// Gives voxel by world coordinate
 	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<&Voxel> {
 		/* Transform to local */
 		let pos = world_coords_to_in_chunk(pos);
@@ -147,7 +147,7 @@ impl<'dp> Chunk<'dp> {
 		}
 	}
 
-	/// Gives mutable reference to voxel by inner coordinate
+	/// Gives mutable reference to voxel by world coordinate
 	pub fn get_voxel_mut_or_none(&mut self, pos: Int3) -> Option<&mut Voxel> {
 		/* Transform to local */
 		let pos = world_coords_to_in_chunk(pos);
