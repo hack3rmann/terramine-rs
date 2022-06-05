@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use super::voxel::{
 	Voxel,
 	shape
@@ -147,6 +145,7 @@ impl<'dp> Chunk<'dp> {
 }
 
 /// Transforms world coordinates to chunk 
+#[allow(dead_code)]
 pub fn world_coords_to_chunk(pos: Int3) -> Int3 {
 	pos / CHUNK_SIZE as i32
 }
@@ -161,7 +160,8 @@ pub fn pos_in_chunk_to_world(in_chunk: Int3, chunk: Int3) -> Int3 {
 	chunk_cords_to_min_world(chunk) + in_chunk
 }
 
-/// Transforms world coordinates to chunk 
+/// Transforms world coordinates to chunk
+#[allow(dead_code)]
 pub fn world_coords_to_in_chunk(pos: Int3) -> Int3 {
 	/* Take voxel coordinates to near-zero */
 	let x = pos.x() % CHUNK_SIZE as i32;
