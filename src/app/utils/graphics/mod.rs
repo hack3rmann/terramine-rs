@@ -124,8 +124,9 @@ impl Graphics {
 #[derive(Copy, Clone)]
 pub struct Vertex {
 	pub position: [f32; 3],
-	pub tex_coords: [f32; 2]
+	pub tex_coords: [f32; 2],
+	pub light: f32
 }
 
 /* Implement Vertex struct as main vertex struct in glium */
-implement_vertex!(Vertex, position, tex_coords);
+implement_vertex!(Vertex, position, tex_coords, light);
