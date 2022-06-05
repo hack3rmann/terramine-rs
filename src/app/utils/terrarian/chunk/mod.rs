@@ -49,6 +49,7 @@ pub struct ChunkEnvironment<'e, 'c> {
 
 impl<'e, 'c> ChunkEnvironment<'e, 'c> {
 	/// Creates new description
+	#[allow(dead_code)]
     pub fn new(
 		top: Option<&'e Chunk<'c>>,
 		bottom: Option<&'e Chunk<'c>>,
