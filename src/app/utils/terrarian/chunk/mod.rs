@@ -38,25 +38,25 @@ pub struct Chunk<'dp> {
 
 /// Describes blocked chunks by environent or not. 
 #[derive(Clone, Copy, Default)]
-pub struct ChunkEnvironment<'e, 'c> {
-	pub top:	Option<&'e Chunk<'c>>,
-	pub bottom:	Option<&'e Chunk<'c>>,
-	pub front:	Option<&'e Chunk<'c>>,
-	pub back:	Option<&'e Chunk<'c>>,
-	pub left:	Option<&'e Chunk<'c>>,
-	pub right:	Option<&'e Chunk<'c>>,
+pub struct ChunkEnvironment<'c> {
+	pub top:	Option<&'c Chunk<'c>>,
+	pub bottom:	Option<&'c Chunk<'c>>,
+	pub front:	Option<&'c Chunk<'c>>,
+	pub back:	Option<&'c Chunk<'c>>,
+	pub left:	Option<&'c Chunk<'c>>,
+	pub right:	Option<&'c Chunk<'c>>,
 }
 
-impl<'e, 'c> ChunkEnvironment<'e, 'c> {
+impl<'c> ChunkEnvironment<'c> {
 	/// Creates new description
 	#[allow(dead_code)]
     pub fn new(
-		top: Option<&'e Chunk<'c>>,
-		bottom: Option<&'e Chunk<'c>>,
-		front: Option<&'e Chunk<'c>>,
-		back: Option<&'e Chunk<'c>>,
-		left: Option<&'e Chunk<'c>>,
-		right: Option<&'e Chunk<'c>>
+		top: Option<&'c Chunk<'c>>,
+		bottom: Option<&'c Chunk<'c>>,
+		front: Option<&'c Chunk<'c>>,
+		back: Option<&'c Chunk<'c>>,
+		left: Option<&'c Chunk<'c>>,
+		right: Option<&'c Chunk<'c>>
 	) -> Self { ChunkEnvironment { top, bottom, front, back, left, right } }
 
 	/// Empty description.
