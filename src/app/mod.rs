@@ -22,7 +22,7 @@ use utils::{
 		camera::Camera,
 		texture::Texture,
 	},
-	terrarian::chunk::Chunk,
+	terrarian::chunk::{Chunk, ChunkEnvironment as ChunkEnv},
 	math::vector::*,
 	time::timer::Timer,
 };
@@ -57,13 +57,39 @@ impl App {
 		/* Camera preposition */
 		camera.set_position(0.0, 0.0, 2.0);
 
+		let mut chunk1 = Chunk::new(&graphics, Int3::new(-1,  0, -1), false);
+		let mut chunk2 = Chunk::new(&graphics, Int3::new( 0,  0, -1), false);
+		let mut chunk3 = Chunk::new(&graphics, Int3::new( 1,  0, -1), false);
+		let mut chunk4 = Chunk::new(&graphics, Int3::new(-1,  0,  0), false);
+		let mut chunk5 = Chunk::new(&graphics, Int3::new( 0,  0,  0), false);
+		let mut chunk6 = Chunk::new(&graphics, Int3::new( 1,  0,  0), false);
+		let mut chunk7 = Chunk::new(&graphics, Int3::new(-1,  0,  1), false);
+		let mut chunk8 = Chunk::new(&graphics, Int3::new( 0,  0,  1), false);
+		let mut chunk9 = Chunk::new(&graphics, Int3::new( 1,  0,  1), false);
+
+		chunk1.update_mesh(&graphics, ChunkEnv { right: Some(&chunk4), back: Some(&chunk2), .. Default::default() });
+		chunk2.update_mesh(&graphics, ChunkEnv { front: Some(&chunk1), right: Some(&chunk5), back: Some(&chunk3), .. Default::default() });
+		chunk3.update_mesh(&graphics, ChunkEnv { front: Some(&chunk2), right: Some(&chunk6), .. Default::default() });
+		chunk4.update_mesh(&graphics, ChunkEnv { right: Some(&chunk7), back: Some(&chunk5), left: Some(&chunk1), .. Default::default() });
+		chunk5.update_mesh(&graphics, ChunkEnv { front: Some(&chunk4), right: Some(&chunk8), back: Some(&chunk6), left: Some(&chunk2), .. Default::default() });
+		chunk6.update_mesh(&graphics, ChunkEnv { front: Some(&chunk5), right: Some(&chunk9), left: Some(&chunk3), .. Default::default() });
+		chunk7.update_mesh(&graphics, ChunkEnv { left: Some(&chunk4), back: Some(&chunk8), .. Default::default() });
+		chunk8.update_mesh(&graphics, ChunkEnv { front: Some(&chunk7), back: Some(&chunk9), left: Some(&chunk5), .. Default::default() });
+		chunk9.update_mesh(&graphics, ChunkEnv { front: Some(&chunk8), left: Some(&chunk6), .. Default::default() });
+
 		/* Chunk */
-		let mut chunks = Vec::<Chunk>::with_capacity(3_usize.pow(3));
-		for x in -1..=1 {
-		for y in -1..=1 {
-		for z in -1..=1 {
-			chunks.push(Chunk::new(&graphics, Int3::new(x, y, z)));
-		}}}
+		const _ROW_COUNT: usize = 3;
+		let mut chunks = Vec::<Chunk>::with_capacity(2); {
+			chunks.push(chunk1);
+			chunks.push(chunk2);
+			chunks.push(chunk3);
+			chunks.push(chunk4);
+			chunks.push(chunk5);
+			chunks.push(chunk6);
+			chunks.push(chunk7);
+			chunks.push(chunk8);
+			chunks.push(chunk9);
+		}
 
 		App {
 			chunks,

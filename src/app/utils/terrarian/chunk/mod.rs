@@ -36,9 +36,37 @@ pub struct Chunk<'dp> {
 	mesh: Option<Mesh<'dp>>
 }
 
+/// Describes blocked chunks by environent or not. 
+#[derive(Clone, Copy, Default)]
+pub struct ChunkEnvironment<'e, 'c> {
+	pub top:	Option<&'e Chunk<'c>>,
+	pub bottom:	Option<&'e Chunk<'c>>,
+	pub front:	Option<&'e Chunk<'c>>,
+	pub back:	Option<&'e Chunk<'c>>,
+	pub left:	Option<&'e Chunk<'c>>,
+	pub right:	Option<&'e Chunk<'c>>,
+}
+
+impl<'e, 'c> ChunkEnvironment<'e, 'c> {
+	/// Creates new description
+    pub fn new(
+		top: Option<&'e Chunk<'c>>,
+		bottom: Option<&'e Chunk<'c>>,
+		front: Option<&'e Chunk<'c>>,
+		back: Option<&'e Chunk<'c>>,
+		left: Option<&'e Chunk<'c>>,
+		right: Option<&'e Chunk<'c>>
+	) -> Self { ChunkEnvironment { top, bottom, front, back, left, right } }
+
+	/// Empty description.
+	pub fn none() -> Self {
+		ChunkEnvironment { top: None, bottom: None, front: None, back: None, left: None, right: None }
+	}
+}
+
 impl<'dp> Chunk<'dp> {
 	/// Constructs new chunk in given position 
-	pub fn new(graphics: &Graphics, pos: Int3) -> Self {
+	pub fn new(graphics: &Graphics, pos: Int3, generate_mesh: bool) -> Self {
 		/* Voxel array initialization */
 		let mut voxels = VoxelArray::with_capacity(CHUNK_VOLUME);
 
@@ -58,7 +86,9 @@ impl<'dp> Chunk<'dp> {
 		let mut chunk = Chunk { voxels, pos, mesh: None };
 
 		/* Create mesh for chunk */
-		chunk.update_mesh(graphics);
+		if generate_mesh {
+			chunk.update_mesh(graphics, ChunkEnvironment::none());
+		}
 
 		return chunk;
 	}
@@ -70,7 +100,7 @@ impl<'dp> Chunk<'dp> {
 	}
 
 	/// Updates mesh
-	pub fn update_mesh(&mut self, graphics: &Graphics) {
+	pub fn update_mesh(&mut self, graphics: &Graphics, env: ChunkEnvironment) {
 		self.mesh = {
 			/* Construct vertex array */
 			let mut vertices = Vec::<Vertex>::new();
@@ -78,32 +108,74 @@ impl<'dp> Chunk<'dp> {
 				if let Some(voxel) = voxel {
 					/* Top face check */
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z())) {
-						vertices.append(&mut shape::cube_top(voxel.position));
+						match env.top {
+							Some(chunk) => {
+								if let None = chunk.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z())) {
+									vertices.append(&mut shape::cube_top(voxel.position))
+								}
+							},
+							None => vertices.append(&mut shape::cube_top(voxel.position))
+						}
 					}
 
 					/* Bottom face check */
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z())) {
-						vertices.append(&mut shape::cube_bottom(voxel.position));
+						match env.bottom {
+							Some(chunk) => {
+								if let None = chunk.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z())) {
+									vertices.append(&mut shape::cube_bottom(voxel.position))
+								}
+							},
+							None => vertices.append(&mut shape::cube_bottom(voxel.position))
+						}
 					}
 					
 					/* Back face check */
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z())) {
-						vertices.append(&mut shape::cube_back(voxel.position));
+						match env.back {
+							Some(chunk) => {
+								if let None = chunk.get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z())) {
+									vertices.append(&mut shape::cube_back(voxel.position))
+								}
+							},
+							None => vertices.append(&mut shape::cube_back(voxel.position))
+						}
 					}
 					
 					/* Front face check */
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z())) {
-						vertices.append(&mut shape::cube_front(voxel.position));
+						match env.front {
+							Some(chunk) => {
+								if let None = chunk.get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z())) {
+									vertices.append(&mut shape::cube_front(voxel.position))
+								}
+							},
+							None => vertices.append(&mut shape::cube_front(voxel.position))
+						}
 					}
 					
 					/* Right face check */
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1)) {
-						vertices.append(&mut shape::cube_right(voxel.position));
+						match env.right {
+							Some(chunk) => {
+								if let None = chunk.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1)) {
+									vertices.append(&mut shape::cube_right(voxel.position))
+								}
+							},
+							None => vertices.append(&mut shape::cube_right(voxel.position))
+						}
 					}
 					
 					/* Left face check */
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1)) {
-						vertices.append(&mut shape::cube_left(voxel.position));
+						match env.left {
+							Some(chunk) => {
+								if let None = chunk.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1)) {
+									vertices.append(&mut shape::cube_left(voxel.position))
+								}
+							},
+							None => vertices.append(&mut shape::cube_left(voxel.position))
+						}
 					}
 				}
 			}
