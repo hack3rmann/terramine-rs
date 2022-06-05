@@ -58,7 +58,7 @@ impl App {
 		camera.set_position(0.0, 0.0, 2.0);
 
 		/* Chunk */
-		let mut chunks = Vec::<Chunk>::with_capacity(1);
+		let mut chunks = Vec::<Chunk>::with_capacity(3_usize.pow(3));
 		for x in -1..=1 {
 		for y in -1..=1 {
 		for z in -1..=1 {

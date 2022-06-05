@@ -25,7 +25,7 @@ use glium::{
 };
 
 /// Predefined chunk values.
-const CHUNK_SIZE:	usize = 16;
+const CHUNK_SIZE:	usize = 64;
 const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 /// Type of voxel array. May be something different during progress.
@@ -49,7 +49,7 @@ impl<'dp> Chunk<'dp> {
 		for y in 0..CHUNK_SIZE {
 		for z in 0..CHUNK_SIZE {
 			let global_pos = pos_in_chunk_to_world(Int3::new(x as i32, y as i32, z as i32), pos);
-			if global_pos.y() < ((global_pos.x() as f32).sin() * 3.0 + (global_pos.z() as f32).sin() * 3.0 + (global_pos.x() as f32 / 6000.0).sin() * 3000.0 + (global_pos.z() as f32 / 6000.0).sin() * 3000.0 + 8.0) as i32 {
+			if global_pos.y() < ((global_pos.x() as f32).sin() * 3.0 + (global_pos.z() as f32).sin() * 3.0 + (global_pos.x() as f32 / 80.0).sin() * 30.0 + (global_pos.z() as f32 / 80.0).sin() * 30.0 + 8.0) as i32 {
 				voxels.push(Some(Voxel::new(global_pos, &GRASS_VOXEL_DATA)));
 			} else {
 			 	voxels.push(None)
