@@ -48,13 +48,10 @@ impl App {
 		let graphics = Graphics::initialize().unwrap();
 	
 		/* Camera handle */
-		let mut camera = Camera::new();
+		let camera = Camera::new().with_position(0.0, 0.0, 2.0);
 	
 		/* Texture loading */
 		let texture = Texture::from("src/image/log_bottom.png", &graphics.display).unwrap();
-	
-		/* Camera preposition */
-		camera.set_position(0.0, 0.0, 2.0);
 
 		/* Chunk */
 		let chunk_arr = ChunkArray::new(&graphics, 3, 1, 3);
