@@ -160,7 +160,7 @@ impl App {
 			/* UI building */
 			camera_window.build(&ui, || {
 				ui.text("Position");
-				ui.text(format!("x: {0:.3}, y: {1:.3}, z: {2:.3}", camera.get_x(), camera.get_y(), camera.get_z()));
+				ui.text(format!("x: {x:.3}, y: {y:.3}, z: {z:.3}", x = camera.get_x(), y = camera.get_y(), z = camera.get_z()));
 				ui.separator();
 				ui.text("Speed factor");
 				imgui::Slider::new("Camera speed", 5.0, 50.0)
