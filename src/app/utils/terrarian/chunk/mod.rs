@@ -1,3 +1,5 @@
+pub mod chunk_array;
+
 use super::voxel::{
 	Voxel,
 	shape
@@ -33,11 +35,11 @@ type VoxelArray = Vec<Option<Voxel>>;
 pub struct Chunk<'dp> {
 	voxels: VoxelArray,
 	pos: Int3,
-	mesh: Option<Mesh<'dp>>
+	mesh:Option<Mesh<'dp>>
 }
 
 /// Describes blocked chunks by environent or not. 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 pub struct ChunkEnvironment<'c> {
 	pub top:	Option<&'c Chunk<'c>>,
 	pub bottom:	Option<&'c Chunk<'c>>,
@@ -95,7 +97,8 @@ impl<'dp> Chunk<'dp> {
 	}
 
 	/// Renders chunk.
-	pub fn render<U: Uniforms>(&mut self, target: &mut Frame, uniforms: &U) -> Result<(), DrawError> {
+	/// * Mesh should be constructed before this function call.
+	pub fn render<U: Uniforms>(&self, target: &mut Frame, uniforms: &U) -> Result<(), DrawError> {
 		/* Iterating through array */
 		self.mesh.as_ref().unwrap().render(target, uniforms)
 	}
