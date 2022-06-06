@@ -168,7 +168,7 @@ impl App {
 					.build(&ui, &mut camera.speed);
 				imgui::Slider::new("Camera fov", 1.0, 180.0)
 					.display_format("%.0f")
-					.build(&ui, &mut camera.fov.get_degrees_mut());
+					.build(&ui, camera.fov.get_degrees_mut());
 				camera.fov.update_from_degrees();
 			});
 
