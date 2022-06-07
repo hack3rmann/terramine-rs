@@ -131,6 +131,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "chlorine"
+version = "1.0.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75476fe966a8af7c0ceae2a3e514afa87d4451741fcdfab8bfaa07ad301842ec"
+
+[[package]]
 name = "cocoa"
 version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -592,6 +598,47 @@ dependencies = [
  "png",
  "scoped_threadpool",
  "tiff",
+]
+
+[[package]]
+name = "imgui"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6a33933d4645d6db1bfa55ff75e13ef301644d4c001cfaec6fe3afcfb05b82c"
+dependencies = [
+ "bitflags",
+ "imgui-sys",
+ "parking_lot",
+]
+
+[[package]]
+name = "imgui-glium-renderer"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5af2c601e2bda3bdc6fd291c81f08c51bd04741f5ef2801d7e77324496cf12ce"
+dependencies = [
+ "glium",
+ "imgui",
+]
+
+[[package]]
+name = "imgui-sys"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "286f5338bd8281e3203de29cc317d123b178f2e565eca5aee770a2048074fdf7"
+dependencies = [
+ "cc",
+ "chlorine",
+]
+
+[[package]]
+name = "imgui-winit-support"
+version = "0.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30d8cb426a6ee9f1be8e379b18b9085585887056fcfbc2d66bddb2c355944624"
+dependencies = [
+ "imgui",
+ "winit",
 ]
 
 [[package]]
@@ -1203,11 +1250,15 @@ checksum = "36ae8932fcfea38b7d3883ae2ab357b0d57a02caaa18ebb4f5ece08beaec4aa0"
 
 [[package]]
 name = "terramine"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "directx_math",
  "glium",
  "image",
+ "imgui",
+ "imgui-glium-renderer",
+ "imgui-winit-support",
+ "winapi",
 ]
 
 [[package]]
