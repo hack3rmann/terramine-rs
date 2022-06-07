@@ -23,6 +23,7 @@ use glium::{
 	uniforms::Uniforms,
 	Frame
 };
+use std::cell::RefCell;
 
 /// Predefined chunk values.
 const CHUNK_SIZE:	usize = 64;
@@ -35,30 +36,30 @@ type VoxelArray = Vec<Option<Voxel>>;
 pub struct Chunk<'dp> {
 	voxels: VoxelArray,
 	pos: Int3,
-	mesh:Option<Mesh<'dp>>
+	mesh: RefCell<Option<Mesh<'dp>>>
 }
 
 /// Describes blocked chunks by environent or not. 
 #[derive(Clone, Default)]
 pub struct ChunkEnvironment<'c> {
-	pub top:	Option<&'c Chunk<'c>>,
-	pub bottom:	Option<&'c Chunk<'c>>,
-	pub front:	Option<&'c Chunk<'c>>,
-	pub back:	Option<&'c Chunk<'c>>,
-	pub left:	Option<&'c Chunk<'c>>,
-	pub right:	Option<&'c Chunk<'c>>,
+	pub top:	Option<*const Chunk<'c>>,
+	pub bottom:	Option<*const Chunk<'c>>,
+	pub front:	Option<*const Chunk<'c>>,
+	pub back:	Option<*const Chunk<'c>>,
+	pub left:	Option<*const Chunk<'c>>,
+	pub right:	Option<*const Chunk<'c>>,
 }
 
 impl<'c> ChunkEnvironment<'c> {
 	/// Creates new description
 	#[allow(dead_code)]
     pub fn new(
-		top: Option<&'c Chunk<'c>>,
-		bottom: Option<&'c Chunk<'c>>,
-		front: Option<&'c Chunk<'c>>,
-		back: Option<&'c Chunk<'c>>,
-		left: Option<&'c Chunk<'c>>,
-		right: Option<&'c Chunk<'c>>
+		top:	Option<*const Chunk<'c>>,
+		bottom:	Option<*const Chunk<'c>>,
+		front:	Option<*const Chunk<'c>>,
+		back:	Option<*const Chunk<'c>>,
+		left:	Option<*const Chunk<'c>>,
+		right:	Option<*const Chunk<'c>>
 	) -> Self { ChunkEnvironment { top, bottom, front, back, left, right } }
 
 	/// Empty description.
@@ -86,11 +87,11 @@ impl<'dp> Chunk<'dp> {
 		}}}
 		
 		/* Create chunk */
-		let mut chunk = Chunk { voxels, pos, mesh: None };
+		let chunk = Chunk { voxels, pos, mesh: RefCell::new(None) };
 
 		/* Create mesh for chunk */
 		if generate_mesh {
-			chunk.update_mesh(graphics, ChunkEnvironment::none());
+			chunk.update_mesh(graphics, &ChunkEnvironment::none());
 		}
 
 		return chunk;
@@ -100,12 +101,12 @@ impl<'dp> Chunk<'dp> {
 	/// * Mesh should be constructed before this function call.
 	pub fn render<U: Uniforms>(&self, target: &mut Frame, uniforms: &U) -> Result<(), DrawError> {
 		/* Iterating through array */
-		self.mesh.as_ref().unwrap().render(target, uniforms)
+		self.mesh.borrow().as_ref().unwrap().render(target, uniforms)
 	}
 
 	/// Updates mesh
-	pub fn update_mesh(&mut self, graphics: &Graphics, env: ChunkEnvironment) {
-		self.mesh = {
+	pub fn update_mesh(&self, graphics: &Graphics, env: &ChunkEnvironment) {
+		self.mesh.replace({
 			/* Construct vertex array */
 			let mut vertices = Vec::<Vertex>::new();
 			for voxel in self.voxels.iter() {
@@ -114,7 +115,7 @@ impl<'dp> Chunk<'dp> {
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z())) {
 						match env.top {
 							Some(chunk) => {
-								if let None = chunk.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z())) {
+								if let None = unsafe { (*chunk).get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z())) } {
 									vertices.append(&mut shape::cube_top(voxel.position))
 								}
 							},
@@ -126,7 +127,7 @@ impl<'dp> Chunk<'dp> {
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z())) {
 						match env.bottom {
 							Some(chunk) => {
-								if let None = chunk.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z())) {
+								if let None = unsafe { (*chunk).get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z())) } {
 									vertices.append(&mut shape::cube_bottom(voxel.position))
 								}
 							},
@@ -138,7 +139,7 @@ impl<'dp> Chunk<'dp> {
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z())) {
 						match env.back {
 							Some(chunk) => {
-								if let None = chunk.get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z())) {
+								if let None = unsafe { (*chunk).get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z())) } {
 									vertices.append(&mut shape::cube_back(voxel.position))
 								}
 							},
@@ -150,7 +151,7 @@ impl<'dp> Chunk<'dp> {
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z())) {
 						match env.front {
 							Some(chunk) => {
-								if let None = chunk.get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z())) {
+								if let None = unsafe { (*chunk).get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z())) } {
 									vertices.append(&mut shape::cube_front(voxel.position))
 								}
 							},
@@ -162,7 +163,7 @@ impl<'dp> Chunk<'dp> {
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1)) {
 						match env.right {
 							Some(chunk) => {
-								if let None = chunk.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1)) {
+								if let None = unsafe { (*chunk).get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1)) } {
 									vertices.append(&mut shape::cube_right(voxel.position))
 								}
 							},
@@ -174,7 +175,7 @@ impl<'dp> Chunk<'dp> {
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1)) {
 						match env.left {
 							Some(chunk) => {
-								if let None = chunk.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1)) {
+								if let None = unsafe { (*chunk).get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1)) } {
 									vertices.append(&mut shape::cube_left(voxel.position))
 								}
 							},
@@ -202,7 +203,7 @@ impl<'dp> Chunk<'dp> {
 			let vertex_buffer = VertexBuffer::from_vertices(graphics, vertices);
 	
 			Some(Mesh::new(vertex_buffer, shader, draw_params))
-		};
+		});
 	}
 
 	/// Gives voxel by world coordinate
