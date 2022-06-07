@@ -52,43 +52,48 @@ impl<'a> ChunkArray<'a> {
 		for x in 0..width {
 		for y in 0..height {
 		for z in 0..depth {
+			/* Local index function */
+			let index = |x: usize, y: usize, z: usize| -> usize {
+				(x * height + y) * depth + z
+			};
+
 			/* Reference to current environment variable */
-			let env = &mut env[(z * depth + y) * height + x];
+			let env = &mut env[index(x, y, z)];
 
 			/* For `front` side */
 			if x as i32 - 1 >= 0 {
-				let index = (z * depth + y) * height + (x - 1);
-				env.left = Some(&chunks[index]);
+				let index = index(x - 1, y, z);
+				env.front = Some(&chunks[index]);
 			}
 
 			/* For `back` side */
 			if x + 1 < width {
-				let index = (z * depth + y) * height + (x + 1);
-				env.right = Some(&chunks[index]);
+				let index = index(x + 1, y, z);
+				env.back = Some(&chunks[index]);
 			}
 
 			/* For `bottom` side */
 			if y as i32 - 1 >= 0 {
-				let index = (z * depth + (y - 1)) * height + x;
+				let index = index(x, y - 1, z);
 				env.bottom = Some(&chunks[index]);
 			}
 		
 			/* For `top` side */
 			if y + 1 < height {
-				let index = (z * depth + (y + 1)) * height + x;
+				let index = index(x, y + 1, z);
 				env.top = Some(&chunks[index]);
 			}
 
 			/* For `left` side */
 			if z as i32 - 1 >= 0 {
-				let index = ((z - 1) * depth + y) * height + x;
-				env.front = Some(&chunks[index]);
+				let index = index(x, y, z - 1);
+				env.left = Some(&chunks[index]);
 			}
 
 			/* For `right` side */
 			if z + 1 < depth {
-				let index = ((z + 1) * depth + y) * height + x;
-				env.back = Some(&chunks[index]);
+				let index = index(x, y, z + 1);
+				env.right = Some(&chunks[index]);
 			}
 		}}}
 
