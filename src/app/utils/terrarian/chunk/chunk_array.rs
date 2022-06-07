@@ -29,6 +29,10 @@ impl<'a> ChunkArray<'a> {
 		/* Amount of voxels in chunks */
 		let volume = width * height * depth;
 
+		/* Initialize vector */
+		let mut chunks = Vec::<Chunk>::with_capacity(volume);
+		let mut env = vec![ChunkEnv::none(); volume];
+
 		/* Array borders */
 		let x_lo: i32 = -(width  as i32) / 2;
 		let y_lo: i32 = -(height as i32) / 2;
@@ -36,10 +40,6 @@ impl<'a> ChunkArray<'a> {
 		let x_hi: i32 = (width  / 2 + width  % 2) as i32;
 		let y_hi: i32 = (height / 2 + height % 2) as i32;
 		let z_hi: i32 = (depth  / 2 + depth  % 2) as i32;
-
-		/* Initialize vector */
-		let mut chunks = Vec::<Chunk>::with_capacity(volume);
-		let mut env = vec![ChunkEnv::none(); volume];
 
 		/* Fill vector with chunks with no mesh attached */
 		for x in x_lo..x_hi {
@@ -62,38 +62,32 @@ impl<'a> ChunkArray<'a> {
 
 			/* For `front` side */
 			if x as i32 - 1 >= 0 {
-				let index = index(x - 1, y, z);
-				env.front = Some(&chunks[index]);
+				env.front	= Some(&chunks[index(x - 1, y, z)]);
 			}
 
 			/* For `back` side */
 			if x + 1 < width {
-				let index = index(x + 1, y, z);
-				env.back = Some(&chunks[index]);
+				env.back	= Some(&chunks[index(x + 1, y, z)]);
 			}
 
 			/* For `bottom` side */
 			if y as i32 - 1 >= 0 {
-				let index = index(x, y - 1, z);
-				env.bottom = Some(&chunks[index]);
+				env.bottom	= Some(&chunks[index(x, y - 1, z)]);
 			}
 		
 			/* For `top` side */
 			if y + 1 < height {
-				let index = index(x, y + 1, z);
-				env.top = Some(&chunks[index]);
+				env.top		= Some(&chunks[index(x, y + 1, z)]);
 			}
 
 			/* For `left` side */
 			if z as i32 - 1 >= 0 {
-				let index = index(x, y, z - 1);
-				env.left = Some(&chunks[index]);
+				env.left	= Some(&chunks[index(x, y, z - 1)]);
 			}
 
 			/* For `right` side */
 			if z + 1 < depth {
-				let index = index(x, y, z + 1);
-				env.right = Some(&chunks[index]);
+				env.right	= Some(&chunks[index(x, y, z + 1)]);
 			}
 		}}}
 

@@ -111,6 +111,11 @@ impl<'dp> Chunk<'dp> {
 			let mut vertices = Vec::<Vertex>::new();
 			for voxel in self.voxels.iter() {
 				if let Some(voxel) = voxel {
+					/*
+					 * Safe because environment chunks lives as long as other chunks or that given chunk.
+					 * And it also needs only at chunk generation stage.
+					 */
+
 					/* Top face check */
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z())) {
 						match env.top {
