@@ -13,3 +13,6 @@ imgui = "*"
 imgui-glium-renderer = "*"
 imgui-winit-support = "*"
 winapi = "*"
+
+[features]
+release = []
