@@ -54,7 +54,7 @@ impl App {
 		let texture = Texture::from("src/image/log_bottom.png", &graphics.display).unwrap();
 
 		/* Chunk */
-		let chunk_arr = ChunkArray::new(&graphics, 3, 3, 3);
+		let chunk_arr = ChunkArray::new(&graphics, 7, 1, 7);
 
 		App {
 			chunk_arr,
