@@ -48,7 +48,7 @@ impl App {
 		let camera = Camera::new().with_position(0.0, 0.0, 2.0);
 	
 		/* Texture loading */
-		let texture = Texture::from("src/image/log_bottom.png", &graphics.display).unwrap();
+		let texture = Texture::from("src/image/texture_atlas.png", &graphics.display).unwrap();
 
 		/* Chunk */
 		let chunk_arr = ChunkArray::new(&graphics, 7, 1, 7);

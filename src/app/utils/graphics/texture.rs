@@ -1,5 +1,6 @@
 use std::io::Cursor;
 use std::fs;
+use glium::uniforms::SamplerWrapFunction;
 
 /// Texture struct.
 /// Contains texture stuff.
@@ -41,7 +42,8 @@ impl Texture {
 	pub fn with_mips(&self) -> glium::uniforms::Sampler<glium::texture::SrgbTexture2d> {
 		glium::uniforms::Sampler::new(&self.opengl_texture)
 			.magnify_filter(glium::uniforms::MagnifySamplerFilter::Nearest)
-			.minify_filter(glium::uniforms::MinifySamplerFilter::LinearMipmapNearest)
+			.minify_filter(glium::uniforms::MinifySamplerFilter::NearestMipmapLinear)
+			.wrap_function(SamplerWrapFunction::MirrorClamp)
 			.anisotropy(16)
 	}
 }
