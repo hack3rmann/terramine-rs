@@ -19,6 +19,7 @@ pub const ATLAS_PADDING_P: usize = 4;
 pub const ATLAS_PADDING_F: f32 = ATLAS_PADDING_P as f32 / ATLAS_ROW_SIZE_P as f32;
 
 /// Handles UV information
+#[derive(Clone, Copy)]
 pub struct UV {
 	pub x_lo: f32,
 	pub x_hi: f32,
@@ -49,7 +50,7 @@ impl UV {
 		y_lo += ATLAS_PADDING_F;
 		y_hi -= ATLAS_PADDING_F;
 
-		UV { x_lo, x_hi, y_lo, y_hi }
+		UV { x_lo, x_hi, y_lo, y_hi }.with_inversion()
 	}
 
 	/// Useful if texture is inverted

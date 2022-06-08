@@ -44,7 +44,7 @@ pub mod shape {
 
 		/// Cube front face vertex array
 		pub fn front(&self, position: Int3) -> Vec<Vertex> {
-			let uv = UV::new(self.data.textures.front).with_inversion();
+			let uv = UV::new(self.data.textures.front);
 
 			vec! [
 				Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: FRONT_LIGHT },
@@ -58,7 +58,7 @@ pub mod shape {
 
 		/// Cube back face vertex array
 		pub fn back(&self, position: Int3) -> Vec<Vertex> {
-			let uv = UV::new(self.data.textures.back).with_inversion();
+			let uv = UV::new(self.data.textures.back);
 
 			vec! [
 				Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: BACK_LIGHT },
@@ -72,7 +72,7 @@ pub mod shape {
 
 		/// Cube top face vertex array
 		pub fn top(&self, position: Int3) -> Vec<Vertex> {
-			let uv = UV::new(self.data.textures.top).with_inversion();
+			let uv = UV::new(self.data.textures.top);
 
 			vec! [
 				Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_hi ], light: TOP_LIGHT },
@@ -86,7 +86,7 @@ pub mod shape {
 
 		/// Cube bottom face vertex array
 		pub fn bottom(&self, position: Int3) -> Vec<Vertex> {
-			let uv = UV::new(self.data.textures.bottom).with_inversion();
+			let uv = UV::new(self.data.textures.bottom);
 
 			vec! [
 				Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: BOTTOM_LIGHT },
@@ -100,7 +100,7 @@ pub mod shape {
 
 		/// Cube left face vertex array
 		pub fn left(&self, position: Int3) -> Vec<Vertex> {
-			let uv = UV::new(self.data.textures.left).with_inversion();
+			let uv = UV::new(self.data.textures.left);
 
 			vec! [
 				Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: LEFT_LIGHT },
@@ -114,7 +114,7 @@ pub mod shape {
 
 		/// Cube right face vertex array
 		pub fn right(&self, position: Int3) -> Vec<Vertex> {
-			let uv = UV::new(self.data.textures.right).with_inversion();
+			let uv = UV::new(self.data.textures.right);
 
 			vec! [
 				Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: RIGHT_LIGHT },
