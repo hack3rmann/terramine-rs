@@ -28,4 +28,9 @@ impl<'dp> Mesh<'dp> {
 	pub fn render<U: Uniforms>(&self, target: &mut Frame, uniforms: &U) -> Result<(), DrawError> {
 		target.draw(&self.vertex_buffer.vertex_buffer, &self.vertex_buffer.indices, &self.shader.program, uniforms, &self.draw_params)
 	}
+
+	/// Checks if vertices vector is empty
+	pub fn is_empty(&self) -> bool {
+		self.vertex_buffer.vertex_buffer.len() == 0
+	}
 }

@@ -105,8 +105,16 @@ impl<'dp> Chunk<'dp> {
 	/// Renders chunk.
 	/// * Mesh should be constructed before this function call.
 	pub fn render<U: Uniforms>(&self, target: &mut Frame, uniforms: &U) -> Result<(), DrawError> {
-		/* Iterating through array */
-		self.mesh.borrow().as_ref().unwrap().render(target, uniforms)
+		let mesh = self.mesh.borrow();
+		let mesh = mesh.as_ref().unwrap();
+
+		/* Check if vertex array is empty */
+		if !mesh.is_empty() {
+			/* Iterating through array */
+			mesh.render(target, uniforms)
+		} else {
+			Ok(( ))
+		}
 	}
 
 	/// Updates mesh
