@@ -58,6 +58,11 @@ impl Float4 {
 			i_vec: XMVector3Cross(self.i_vec, other.i_vec)
 		}
 	}
+
+	/// Gives absolute value of vector
+	pub fn abs(self) -> f32 {
+		XMVectorGetX(XMVector3Length(self.i_vec))
+	}
 }
 
 #[allow(dead_code)]
