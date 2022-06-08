@@ -4,7 +4,7 @@ use super::voxel::{
 	Voxel,
 	shape::Cube
 };
-use super::voxel::voxel_data::LOG_VOXEL_DATA;
+use super::voxel::voxel_data::{LOG_VOXEL_DATA, STONE_VOXEL_DATA};
 use crate::app::utils::{
 	math::vector::{
 		Int3,
@@ -79,8 +79,13 @@ impl<'dp> Chunk<'dp> {
 		for y in 0..CHUNK_SIZE {
 		for z in 0..CHUNK_SIZE {
 			let global_pos = pos_in_chunk_to_world(Int3::new(x as i32, y as i32, z as i32), pos);
-			if global_pos.y() < ((global_pos.x() as f32).sin() * 3.0 + (global_pos.z() as f32).sin() * 3.0 + (global_pos.x() as f32 / 80.0).sin() * 30.0 + (global_pos.z() as f32 / 80.0).sin() * 30.0 + 8.0) as i32 {
+			if global_pos.y() < ((global_pos.x() as f32).sin() * 3.0 + (global_pos.z() as f32).sin() * 3.0 + (global_pos.x() as f32 / 80.0).sin() * 30.0 + (global_pos.z() as f32 / 80.0).sin() * 30.0 + 8.0) as i32 &&
+			   global_pos.y() >= ((global_pos.x() as f32 / 80.0).sin() * 30.0 + (global_pos.z() as f32 / 80.0).sin() * 30.0 + 8.0) as i32
+			{
 				voxels.push(Some(Voxel::new(global_pos, &LOG_VOXEL_DATA)));
+			}
+			else if global_pos.y() < ((global_pos.x() as f32 / 80.0).sin() * 30.0 + (global_pos.z() as f32 / 80.0).sin() * 30.0 + 8.0) as i32 {
+				voxels.push(Some(Voxel::new(global_pos, &STONE_VOXEL_DATA)))
 			} else {
 			 	voxels.push(None)
 			}
