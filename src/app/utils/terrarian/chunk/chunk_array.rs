@@ -1,7 +1,8 @@
 use super::{Chunk, ChunkEnvironment as ChunkEnv};
 use crate::app::utils::{
 	graphics::Graphics,
-	math::vector::{Int3, swizzle::*}
+	math::vector::{Int3, swizzle::*},
+	graphics::camera::Camera,
 };
 use glium::{
 	uniforms::Uniforms,
@@ -99,10 +100,10 @@ impl<'a> ChunkArray<'a> {
 	}
 
 	/// Renders chunks.
-	pub fn render<U: Uniforms>(&mut self, target: &mut Frame, uniforms: &U) -> Result<(), DrawError> {
+	pub fn render<U: Uniforms>(&mut self, target: &mut Frame, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
 		/* Iterating through array */
 		for chunk in self.chunks.iter_mut() {
-			chunk.render(target, uniforms)?
+			chunk.render(target, uniforms, camera)?
 		}
 		Ok(())
 	}

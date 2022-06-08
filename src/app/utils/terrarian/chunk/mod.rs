@@ -2,12 +2,13 @@ pub mod chunk_array;
 
 use super::voxel::{
 	Voxel,
-	shape::Cube
+	shape::Cube,
+	voxel_data::{LOG_VOXEL_DATA, STONE_VOXEL_DATA},
 };
-use super::voxel::voxel_data::{LOG_VOXEL_DATA, STONE_VOXEL_DATA};
 use crate::app::utils::{
 	math::vector::{
 		Int3,
+		Float4,
 		swizzle::*,
 	},
 	graphics::{
@@ -15,7 +16,8 @@ use crate::app::utils::{
 		mesh::Mesh,
 		Vertex,
 		shader::Shader,
-		vertex_buffer::VertexBuffer
+		vertex_buffer::VertexBuffer,
+		camera::Camera,
 	}
 };
 use glium::{
@@ -51,17 +53,6 @@ pub struct ChunkEnvironment<'c> {
 }
 
 impl<'c> ChunkEnvironment<'c> {
-	/// Creates new description
-	#[allow(dead_code)]
-    pub fn new(
-		top:	Option<*const Chunk<'c>>,
-		bottom:	Option<*const Chunk<'c>>,
-		front:	Option<*const Chunk<'c>>,
-		back:	Option<*const Chunk<'c>>,
-		left:	Option<*const Chunk<'c>>,
-		right:	Option<*const Chunk<'c>>
-	) -> Self { ChunkEnvironment { top, bottom, front, back, left, right } }
-
 	/// Empty description.
 	pub fn none() -> Self {
 		ChunkEnvironment { top: None, bottom: None, front: None, back: None, left: None, right: None }
@@ -104,12 +95,12 @@ impl<'dp> Chunk<'dp> {
 
 	/// Renders chunk.
 	/// * Mesh should be constructed before this function call.
-	pub fn render<U: Uniforms>(&self, target: &mut Frame, uniforms: &U) -> Result<(), DrawError> {
+	pub fn render<U: Uniforms>(&self, target: &mut Frame, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
 		let mesh = self.mesh.borrow();
 		let mesh = mesh.as_ref().unwrap();
 
 		/* Check if vertex array is empty */
-		if !mesh.is_empty() {
+		if !mesh.is_empty() && self.is_visible(camera) {
 			/* Iterating through array */
 			mesh.render(target, uniforms)
 		} else {
@@ -239,6 +230,35 @@ impl<'dp> Chunk<'dp> {
 			let index = (pos.x() * CHUNK_SIZE as i32 + pos.y()) * CHUNK_SIZE as i32 + pos.z();
 			(&self.voxels[index as usize]).as_ref()
 		}
+	}
+
+	/// Checks if chunk is in camera view
+	pub fn is_visible(&self, camera: &Camera) -> bool {
+		let x_lo = chunk_cords_to_min_world(self.pos).x();
+		let y_lo = chunk_cords_to_min_world(self.pos).y();
+		let z_lo = chunk_cords_to_min_world(self.pos).z();
+
+		let x_hi = x_lo + CHUNK_SIZE as i32;
+		let y_hi = y_lo + CHUNK_SIZE as i32;
+		let z_hi = z_lo + CHUNK_SIZE as i32;
+
+		let vertices = [
+			Float4::xyz1(x_lo as f32, y_lo as f32, z_lo as f32),
+			Float4::xyz1(x_lo as f32, y_lo as f32, z_hi as f32),
+			Float4::xyz1(x_lo as f32, y_hi as f32, z_lo as f32),
+			Float4::xyz1(x_lo as f32, y_hi as f32, z_hi as f32),
+			Float4::xyz1(x_hi as f32, y_lo as f32, z_lo as f32),
+			Float4::xyz1(x_hi as f32, y_lo as f32, z_hi as f32),
+			Float4::xyz1(x_hi as f32, y_hi as f32, z_lo as f32),
+			Float4::xyz1(x_hi as f32, y_hi as f32, z_hi as f32),
+		];
+		
+		let mut result = false;
+		for vertex in vertices {
+			result = result || camera.is_in_view(vertex);
+		}
+
+		result
 	}
 }
 
