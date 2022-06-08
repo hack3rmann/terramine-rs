@@ -10,9 +10,6 @@ use glium::{
 	uniform
 };
 
-/* File stream use */
-use std::io::prelude::*;
-
 /* Other files */
 use utils::{
 	*,
