@@ -44,6 +44,20 @@ impl Float4 {
 			i_vec: XMVector3Normalize(self.i_vec)
 		}
 	}
+
+	/// Gives dot product of two vectors
+	pub fn dot(self, other: Float4) -> Self {
+		Float4 {
+			i_vec: XMVector3Dot(self.i_vec, other.i_vec)
+		}
+	}
+
+	/// Gives cross product of two vectors
+	pub fn cross(self, other: Float4) -> Self {
+		Float4 {
+			i_vec: XMVector3Cross(self.i_vec, other.i_vec)
+		}
+	}
 }
 
 #[allow(dead_code)]
