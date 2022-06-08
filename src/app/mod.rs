@@ -106,11 +106,6 @@ impl App {
 		/* Close window is `escape` pressed */
 		if self.input_manager.keyboard.just_pressed(KeyCode::Escape) {
 			*control_flow = glium::glutin::event_loop::ControlFlow::Exit;
-			let mut buf: String = Default::default();
-			self.graphics.imguic.save_ini_settings(&mut buf);
-
-			let mut file = std::fs::File::create("src/imgui_settings.ini").unwrap();
-			file.write_all(buf.as_bytes()).unwrap();
 		}
 
 		/* Control camera by user input */
