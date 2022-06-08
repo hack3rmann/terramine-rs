@@ -1,9 +1,22 @@
+/*
+ * Control section 
+ */
 
 /// The size of one texture in pixels
 pub const TEXTURE_SIZE_P: usize = 8;
 
+/// Padding to not hit neighbor textures
+pub const ATLAS_PADDING_P: usize = 4;
+
 /// The size of texture atlas row in textures
 pub const ATLAS_ROW_SIZE_T: usize = 32;
+
+/// Bias to not hit neighbor textures
+pub const ATLAS_BIAS: f32 = 0.0;
+
+/*
+ * Auto constants section
+ */
 
 /// The size of texture atlas row in pixels
 pub const ATLAS_ROW_SIZE_P: usize = (TEXTURE_SIZE_P + 2 * ATLAS_PADDING_P) * ATLAS_ROW_SIZE_T;
@@ -11,11 +24,7 @@ pub const ATLAS_ROW_SIZE_P: usize = (TEXTURE_SIZE_P + 2 * ATLAS_PADDING_P) * ATL
 /// The size of texture in unit fraction
 pub const TEXTURE_SIZE_F: f32 = 1.0 / ATLAS_ROW_SIZE_T as f32;
 
-/// Bias to not hit neighbor textures
-pub const ATLAS_BIAS: f32 = 0.0;
-
 /// Padding to not hit neighbor textures
-pub const ATLAS_PADDING_P: usize = 4;
 pub const ATLAS_PADDING_F: f32 = ATLAS_PADDING_P as f32 / ATLAS_ROW_SIZE_P as f32;
 
 /// Handles UV information
