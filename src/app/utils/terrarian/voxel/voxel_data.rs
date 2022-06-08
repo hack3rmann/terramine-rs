@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 /// Represents shared data for group of voxels
 #[allow(dead_code)]
 pub struct VoxelData {
@@ -42,4 +44,5 @@ impl TextureSides {
 	}
 }
 
-pub static GRASS_VOXEL_DATA: VoxelData = VoxelData { name: "Grass block", id: 1, textures: TextureSides::all(0) };
+pub static EMPTY_VOXEL_DATA:	VoxelData = VoxelData { name: "Default nothing-block",	id: 0, textures: TextureSides::all(0) };
+pub static LOG_VOXEL_DATA:		VoxelData = VoxelData { name: "Log block",				id: 1, textures: TextureSides::all(1) };
