@@ -34,18 +34,18 @@ impl<'a> ChunkArray<'a> {
 		let mut env = vec![ChunkEnv::none(); volume];
 
 		/* Array borders */
-		let x_lo: i32 = -(width  as i32) / 2;
-		let y_lo: i32 = -(height as i32) / 2;
-		let z_lo: i32 = -(depth  as i32) / 2;
-		let x_hi: i32 = (width  / 2 + width  % 2) as i32;
-		let y_hi: i32 = (height / 2 + height % 2) as i32;
-		let z_hi: i32 = (depth  / 2 + depth  % 2) as i32;
+		let x_lo: isize = -(width  as isize) / 2;
+		let y_lo: isize = -(height as isize) / 2;
+		let z_lo: isize = -(depth  as isize) / 2;
+		let x_hi: isize = (width  / 2 + width  % 2) as isize;
+		let y_hi: isize = (height / 2 + height % 2) as isize;
+		let z_hi: isize = (depth  / 2 + depth  % 2) as isize;
 
 		/* Fill vector with chunks with no mesh attached */
 		for x in x_lo..x_hi {
 		for y in y_lo..y_hi {
 		for z in z_lo..z_hi {
-			chunks.push(Chunk::new(&graphics, Int3::new(x, y, z), false));
+			chunks.push(Chunk::new(&graphics, Int3::new(x as i32, y as i32, z as i32), false));
 		}}}
 
 		/* Fill environments with references to chunk array */
@@ -61,7 +61,7 @@ impl<'a> ChunkArray<'a> {
 			let env = &mut env[index(x, y, z)];
 
 			/* For `front` side */
-			if x as i32 - 1 >= 0 {
+			if x as isize - 1 >= 0 {
 				env.front	= Some(&chunks[index(x - 1, y, z)]);
 			}
 
@@ -71,7 +71,7 @@ impl<'a> ChunkArray<'a> {
 			}
 
 			/* For `bottom` side */
-			if y as i32 - 1 >= 0 {
+			if y as isize - 1 >= 0 {
 				env.bottom	= Some(&chunks[index(x, y - 1, z)]);
 			}
 		
@@ -81,7 +81,7 @@ impl<'a> ChunkArray<'a> {
 			}
 
 			/* For `left` side */
-			if z as i32 - 1 >= 0 {
+			if z as isize - 1 >= 0 {
 				env.left	= Some(&chunks[index(x, y, z - 1)]);
 			}
 
