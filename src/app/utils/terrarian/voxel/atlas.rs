@@ -40,9 +40,9 @@ impl UV {
 
 		/* Biasing */
 		x_lo += ATLAS_BIAS;
-		x_hi -= ATLAS_BIAS;
+		x_hi += ATLAS_BIAS;
 		y_lo += ATLAS_BIAS;
-		y_hi -= ATLAS_BIAS;
+		y_hi += ATLAS_BIAS;
 
 		/* Applying padding */
 		x_lo += ATLAS_PADDING_F;
