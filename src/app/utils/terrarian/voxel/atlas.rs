@@ -6,7 +6,7 @@
 pub const TEXTURE_SIZE_P: usize = 8;
 
 /// Padding to not hit neighbor textures
-pub const ATLAS_PADDING_P: usize = 4;
+pub const ATLAS_PADDING_P: usize = 8;
 
 /// The size of texture atlas row in textures
 pub const ATLAS_ROW_SIZE_T: usize = 32;
