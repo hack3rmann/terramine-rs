@@ -15,8 +15,8 @@ pub struct Frustum {
 impl Frustum {
 	/// Creates frustum struct from camera data
 	pub fn new(cam: &Camera) -> Frustum {
-		let half_horizontal_side = (cam.fov.get_radians() / 2.0).tan() * cam.far;
-		let half_vertical_side = half_horizontal_side * cam.aspect_ratio;
+		let half_vertical_side = (cam.fov.get_radians() / 2.0).tan() * cam.far;
+		let half_horizontal_side = half_vertical_side / cam.aspect_ratio;
 		
 		let front_far = cam.front * cam.far;
 
@@ -32,8 +32,8 @@ impl Frustum {
 
 	/// Checks if given vector is in frustum
 	pub fn is_in_frustum(&self, vec: Float4) -> bool {
-		self.near	.is_in_positive_side(vec) &&
-		self.far	.is_in_positive_side(vec) &&
+	//	self.near	.is_in_positive_side(vec) &&
+	//	self.far	.is_in_positive_side(vec) &&
 		self.left	.is_in_positive_side(vec) &&
 		self.right	.is_in_positive_side(vec) &&
 		self.top	.is_in_positive_side(vec) &&

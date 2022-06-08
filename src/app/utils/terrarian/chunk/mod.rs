@@ -253,12 +253,13 @@ impl<'dp> Chunk<'dp> {
 			Float4::xyz1(x_hi as f32, y_hi as f32, z_hi as f32),
 		];
 		
-		let mut result = false;
 		for vertex in vertices {
-			result = result || camera.is_in_view(vertex);
+			if camera.is_in_view(vertex) {
+				return true;
+			}
 		}
 
-		result
+		false
 	}
 }
 
