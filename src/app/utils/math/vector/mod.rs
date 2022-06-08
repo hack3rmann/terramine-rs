@@ -46,10 +46,8 @@ impl Float4 {
 	}
 
 	/// Gives dot product of two vectors
-	pub fn dot(self, other: Float4) -> Self {
-		Float4 {
-			i_vec: XMVector3Dot(self.i_vec, other.i_vec)
-		}
+	pub fn dot(self, other: Float4) -> f32 {
+		XMVectorGetX(XMVector3Dot(self.i_vec, other.i_vec))
 	}
 
 	/// Gives cross product of two vectors
