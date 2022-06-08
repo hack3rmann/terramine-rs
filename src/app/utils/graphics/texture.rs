@@ -14,11 +14,7 @@ pub struct Texture {
 impl Texture {
 	/// Loads texture from path.
 	pub fn from(path: &str, display: &glium::Display) -> Result<Self, std::io::Error> {
-		let image_bytes = fs::read(path);
-		let image_bytes = match image_bytes {
-			Ok(image_bytes) => image_bytes,
-			Err(msg) => return Err(msg)
-		};
+		let image_bytes = fs::read(path)?;
 
 		let image = image::load(
 			Cursor::new(image_bytes),
