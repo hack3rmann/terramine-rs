@@ -120,7 +120,7 @@ impl<'dp> Chunk<'dp> {
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z())) {
 						match env.top {
 							Some(chunk) => {
-								if let None = unsafe { (*chunk).get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z())) } {
+								if let None = unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z())) } {
 									vertices.append(&mut shape::cube_top(voxel.position))
 								}
 							},
@@ -132,7 +132,7 @@ impl<'dp> Chunk<'dp> {
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z())) {
 						match env.bottom {
 							Some(chunk) => {
-								if let None = unsafe { (*chunk).get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z())) } {
+								if let None = unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z())) } {
 									vertices.append(&mut shape::cube_bottom(voxel.position))
 								}
 							},
@@ -144,7 +144,7 @@ impl<'dp> Chunk<'dp> {
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z())) {
 						match env.back {
 							Some(chunk) => {
-								if let None = unsafe { (*chunk).get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z())) } {
+								if let None = unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z())) } {
 									vertices.append(&mut shape::cube_back(voxel.position))
 								}
 							},
@@ -156,7 +156,7 @@ impl<'dp> Chunk<'dp> {
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z())) {
 						match env.front {
 							Some(chunk) => {
-								if let None = unsafe { (*chunk).get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z())) } {
+								if let None = unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z())) } {
 									vertices.append(&mut shape::cube_front(voxel.position))
 								}
 							},
@@ -168,7 +168,7 @@ impl<'dp> Chunk<'dp> {
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1)) {
 						match env.right {
 							Some(chunk) => {
-								if let None = unsafe { (*chunk).get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1)) } {
+								if let None = unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1)) } {
 									vertices.append(&mut shape::cube_right(voxel.position))
 								}
 							},
@@ -180,7 +180,7 @@ impl<'dp> Chunk<'dp> {
 					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1)) {
 						match env.left {
 							Some(chunk) => {
-								if let None = unsafe { (*chunk).get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1)) } {
+								if let None = unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1)) } {
 									vertices.append(&mut shape::cube_left(voxel.position))
 								}
 							},
