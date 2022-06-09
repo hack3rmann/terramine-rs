@@ -14,6 +14,11 @@ impl Plane {
 
 	/// Checks if gitven vector is in positive side of plane
 	pub fn is_in_positive_side(&self, vec: Float4) -> bool {
-		vec.dot(self.normal) >= self.distance
+		self.signed_distance(vec) >= 0.0
+	}
+
+	/// Gives signed distance to this plane
+	pub fn signed_distance(&self, vec: Float4) -> f32 {
+		vec.dot(self.normal) - self.distance
 	}
 }

@@ -41,4 +41,17 @@ impl Frustum {
 		self.top	.is_in_positive_side(vec) &&
 		self.bottom	.is_in_positive_side(vec)
 	}
+
+	/// Gives signed distance sum
+	pub fn signed_distance_sum(&self, vec: Float4) -> f32 {
+		let mut sum = 0.0;
+		sum += self.near	.signed_distance(vec);
+		sum += self.far		.signed_distance(vec);
+		sum += self.left	.signed_distance(vec);
+		sum += self.right	.signed_distance(vec);
+		sum += self.top		.signed_distance(vec);
+		sum += self.bottom	.signed_distance(vec);
+
+		return sum;
+	}
 }
