@@ -43,6 +43,7 @@ impl Frustum {
 	}
 
 	/// Gives signed distance sum
+	#[allow(dead_code)]
 	pub fn signed_distance_sum(&self, vec: Float4) -> f32 {
 		let mut sum = 0.0;
 		sum += self.near	.signed_distance(vec);

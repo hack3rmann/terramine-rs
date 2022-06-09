@@ -12,6 +12,7 @@ pub struct AABB {
 
 impl AABB {
 	/// Constructs AABB from Float4 vectors
+	#[allow(dead_code)]
 	pub fn from_float4(lo: Float4, hi: Float4) -> Self { AABB { lo, hi } }
 
 	/// Constructs AABB from Int3 vectors
@@ -33,7 +34,7 @@ impl AABB {
 
 		/* Second pass
 		 * Checks every vertex of AABB is behind the frustum
-		 ? 8 times more expensive than first */
+		 ? 8 times more expensive than previous */
 
 		let vertex_set = self.as_vertex_set();
 
@@ -46,15 +47,21 @@ impl AABB {
 		}
 		if !result { return result }
 
-		/* Second pass
+		/* Third pass
 		 * Checks every vertex of AABB is in frustum
-		 ? 48 times more expensive than first */
+		 ? 6 times more expensive than previous */
 
 		for vertex in vertex_set {
 			if frustum.is_in_frustum(vertex) {
 				return true;
 			}
 		}
+
+		/* Fourth pass
+		 * Checks if someone of 4 frustum corner rays intersects AABB
+		 ! Very expensive! */
+		
+		
 
 		/* All passed */
 		return false;
