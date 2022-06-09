@@ -5,6 +5,6 @@ pub mod plane;
 pub mod bounding_volumes;
 
 pub mod prelude {
-	pub use super::vector::{swizzle::*, self};
+	pub use super::vector::{swizzle::*, *};
 	pub use super::matrix::*;
 }
