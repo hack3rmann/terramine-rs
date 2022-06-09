@@ -1,6 +1,5 @@
-use crate::app::utils::math::plane::Plane;
 use crate::app::utils::graphics::camera::Camera;
-use crate::app::utils::math::vector::Float4;
+use crate::app::utils::math::prelude::*;
 
 /// Represents the camera frustum
 pub struct Frustum {
@@ -10,6 +9,8 @@ pub struct Frustum {
 	pub right: Plane,
 	pub top: Plane,
 	pub bottom: Plane,
+
+	pub courner_rays: [Ray; 4]
 }
 
 impl Frustum {
@@ -29,7 +30,15 @@ impl Frustum {
 		let top		= Plane::from_origin_and_normal(cam.pos, cam.right.cross(front_far - cam.up * half_vertical_side));
 		let bottom	= Plane::from_origin_and_normal(cam.pos, (front_far + cam.up * half_vertical_side).cross(cam.right));
 
-		Frustum { near, far, left, right, top, bottom }
+		/* Rays */
+		let courner_rays = [
+			Ray::from_2_points(cam.pos, front_far + cam.right * half_horizontal_side),
+			Ray::from_2_points(cam.pos, front_far - cam.right * half_horizontal_side),
+			Ray::from_2_points(cam.pos, front_far + cam.up * half_vertical_side),
+			Ray::from_2_points(cam.pos, front_far - cam.up * half_vertical_side),
+		];
+
+		Frustum { near, far, left, right, top, bottom, courner_rays }
 	}
 
 	/// Checks if given vector is in frustum

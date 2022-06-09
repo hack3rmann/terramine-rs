@@ -3,6 +3,7 @@
 use super::prelude::*;
 
 /// Represents mathematical ray
+#[derive(Clone, Copy)]
 pub struct Ray {
 	pub origin: Float4,
 	pub direction: Float4,

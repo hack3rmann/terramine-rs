@@ -3,6 +3,7 @@ pub mod matrix;
 pub mod angle;
 pub mod plane;
 pub mod bounding_volumes;
+pub mod ray;
 
 pub mod prelude {
 	pub use super::{
@@ -13,5 +14,6 @@ pub mod prelude {
 		bounding_volumes::{
 			aabb::*,
 		},
+		ray::*,
 	};
 }
