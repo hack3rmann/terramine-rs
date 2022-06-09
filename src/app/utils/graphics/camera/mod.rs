@@ -152,8 +152,13 @@ impl Camera {
 	}
 
 	/// Checks if position is in camera frustum
-	pub fn is_in_view(&self, pos: Float4) -> bool {
+	pub fn is_pos_in_view(&self, pos: Float4) -> bool {
 		self.get_frustum().is_in_frustum(pos)
+	}
+
+	/// Checks if AABB is in camera frustum
+	pub fn is_aabb_in_view(&self, min: Float4, max: Float4) -> bool {
+		todo!()
 	}
 
 	/// Gives frustum from camera

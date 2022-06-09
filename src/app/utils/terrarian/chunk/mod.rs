@@ -234,32 +234,15 @@ impl<'dp> Chunk<'dp> {
 
 	/// Checks if chunk is in camera view
 	pub fn is_visible(&self, camera: &Camera) -> bool {
-		let x_lo = chunk_cords_to_min_world(self.pos).x();
-		let y_lo = chunk_cords_to_min_world(self.pos).y();
-		let z_lo = chunk_cords_to_min_world(self.pos).z();
+		/* AABB init */
+		let lo = chunk_cords_to_min_world(self.pos);
+		let hi = lo + Int3::all(CHUNK_SIZE as i32);
 
-		let x_hi = x_lo + CHUNK_SIZE as i32;
-		let y_hi = y_lo + CHUNK_SIZE as i32;
-		let z_hi = z_lo + CHUNK_SIZE as i32;
-
-		let vertices = [
-			Float4::xyz1(x_lo as f32, y_lo as f32, z_lo as f32),
-			Float4::xyz1(x_lo as f32, y_lo as f32, z_hi as f32),
-			Float4::xyz1(x_lo as f32, y_hi as f32, z_lo as f32),
-			Float4::xyz1(x_lo as f32, y_hi as f32, z_hi as f32),
-			Float4::xyz1(x_hi as f32, y_lo as f32, z_lo as f32),
-			Float4::xyz1(x_hi as f32, y_lo as f32, z_hi as f32),
-			Float4::xyz1(x_hi as f32, y_hi as f32, z_lo as f32),
-			Float4::xyz1(x_hi as f32, y_hi as f32, z_hi as f32),
-		];
-		
-		for vertex in vertices {
-			if camera.is_in_view(vertex) {
-				return true;
-			}
-		}
-
-		false
+		/* Frustum check */
+		camera.is_aabb_in_view(
+			Float4::xyz1(lo.x() as f32, lo.y() as f32, lo.z() as f32),
+			Float4::xyz1(hi.x() as f32, hi.y() as f32, hi.z() as f32),
+		)
 	}
 }
 
