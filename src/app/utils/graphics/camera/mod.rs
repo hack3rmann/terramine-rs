@@ -5,14 +5,7 @@
 pub mod frustum;
 
 use crate::app::utils::user_io::{InputManager, KeyCode};
-use crate::app::utils::math::{
-	matrix::Matrix4,
-	vector::{
-		Float4,
-		swizzle::*
-	},
-	angle::Angle,
-};
+use crate::app::utils::math::prelude::*;
 use frustum::Frustum;
 
 /// Camera handler.
@@ -157,8 +150,8 @@ impl Camera {
 	}
 
 	/// Checks if AABB is in camera frustum
-	pub fn is_aabb_in_view(&self, min: Float4, max: Float4) -> bool {
-		todo!()
+	pub fn is_aabb_in_view(&self, aabb: AABB) -> bool {
+		aabb.is_in_frustum(&self.get_frustum())
 	}
 
 	/// Gives frustum from camera

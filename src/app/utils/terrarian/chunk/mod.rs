@@ -6,11 +6,7 @@ use super::voxel::{
 	voxel_data::{LOG_VOXEL_DATA, STONE_VOXEL_DATA},
 };
 use crate::app::utils::{
-	math::vector::{
-		Int3,
-		Float4,
-		swizzle::*,
-	},
+	math::prelude::*,
 	graphics::{
 		Graphics,
 		mesh::Mesh,
@@ -239,10 +235,7 @@ impl<'dp> Chunk<'dp> {
 		let hi = lo + Int3::all(CHUNK_SIZE as i32);
 
 		/* Frustum check */
-		camera.is_aabb_in_view(
-			Float4::xyz1(lo.x() as f32, lo.y() as f32, lo.z() as f32),
-			Float4::xyz1(hi.x() as f32, hi.y() as f32, hi.z() as f32),
-		)
+		camera.is_aabb_in_view(AABB::from_int3(lo, hi))
 	}
 }
 
