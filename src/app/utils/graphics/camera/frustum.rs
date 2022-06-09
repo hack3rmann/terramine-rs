@@ -2,6 +2,7 @@ use crate::app::utils::graphics::camera::Camera;
 use crate::app::utils::math::prelude::*;
 
 /// Represents the camera frustum
+#[derive(Clone)]
 pub struct Frustum {
 	pub near: Plane,
 	pub far: Plane,

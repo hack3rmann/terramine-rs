@@ -31,6 +31,9 @@ pub struct Camera {
 	pub up:		Float4,
 	pub front:	Float4,
 	pub right:	Float4,
+
+	/* Frustum */
+	frustum: Option<Frustum>,
 }
 
 #[allow(dead_code)]
@@ -106,6 +109,9 @@ impl Camera {
 		self.up =    self.rotation.clone() * Float4::xyz1(0.0,  1.0,  0.0);
 		self.front = self.rotation.clone() * Float4::xyz1(0.0,  0.0, -1.0);
 		self.right = self.rotation.clone() * Float4::xyz1(1.0,  0.0,  0.0);
+
+		/* Frustum update */
+		self.frustum = Some(Frustum::new(self));
 	}
 
 	/// Updates camera (key press checking, etc).
@@ -156,7 +162,11 @@ impl Camera {
 
 	/// Gives frustum from camera
 	pub fn get_frustum(&self) -> Frustum {
-		Frustum::new(self)
+		if self.frustum.is_none() {
+			Frustum::new(self)
+		} else {
+			self.frustum.as_ref().unwrap().clone()
+		}
 	}
 
 	/// Returns X component of pos vector.
@@ -186,6 +196,7 @@ impl Default for Camera {
 			front: Float4::xyz1(0.0, 0.0, -1.0),
 			right: Float4::xyz1(1.0, 0.0, 0.0),
 			rotation: Default::default(),
+			frustum: None,
 		};
 		cam.update_vectors();
 

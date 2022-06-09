@@ -1,6 +1,7 @@
 use crate::app::utils::math::vector::Float4;
 
 /// Represents a plane
+#[derive(Clone, Copy)]
 pub struct Plane {
 	pub normal: Float4,
 	pub distance: f32,
