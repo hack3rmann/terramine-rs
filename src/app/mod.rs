@@ -155,7 +155,7 @@ impl App {
 				ui.text(format!("x: {x:.3}, y: {y:.3}, z: {z:.3}", x = camera.get_x(), y = camera.get_y(), z = camera.get_z()));
 				ui.separator();
 				ui.text("Speed factor");
-				imgui::Slider::new("Camera speed", 5.0, 50.0)
+				imgui::Slider::new("Camera speed", 5.0, 150.0)
 					.display_format("%.1f")
 					.build(&ui, &mut camera.speed);
 				imgui::Slider::new("Camera fov", 1.0, 180.0)
@@ -181,7 +181,7 @@ impl App {
 		/* Actual drawing */
 		let mut target = self.graphics.display.draw(); 
 		target.clear_all((0.01, 0.01, 0.01, 1.0), 1.0, 0); {
-			self.chunk_arr.render(&mut target, &uniforms).unwrap();
+			self.chunk_arr.render(&mut target, &uniforms, &self.camera).unwrap();
 
 			self.graphics.imguir
 				.render(&mut target, draw_data)

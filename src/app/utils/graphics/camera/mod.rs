@@ -2,21 +2,19 @@
  * Camera handler.
  */
 
+pub mod frustum;
+
 use crate::app::utils::user_io::{InputManager, KeyCode};
-use crate::app::utils::math::{
-	matrix::Matrix4,
-	vector::{
-		Float4,
-		swizzle::*
-	},
-	angle::Angle
-};
+use crate::app::utils::math::prelude::*;
+use frustum::Frustum;
 
 /// Camera handler.
 pub struct Camera {
 	/* Screen needs */
 	pub fov: Angle,
 	pub aspect_ratio: f32,
+	pub near: f32,
+	pub far: f32,
 
 	/* Additional control */
 	pub speed: f64,
@@ -143,7 +141,22 @@ impl Camera {
 
 	/// Returns projection matrix with `aspect_ratio = height / width`
 	pub fn get_proj(&self) -> [[f32; 4]; 4] {
-		Matrix4::perspective_fov_lh(self.fov.get_radians(), self.aspect_ratio * self.fov.get_radians(), 0.5, 1000.0).as_2d_array()
+		Matrix4::perspective_fov_lh(self.fov.get_radians(), self.aspect_ratio, self.near, self.far).as_2d_array()
+	}
+
+	/// Checks if position is in camera frustum
+	pub fn is_pos_in_view(&self, pos: Float4) -> bool {
+		self.get_frustum().is_in_frustum(pos)
+	}
+
+	/// Checks if AABB is in camera frustum
+	pub fn is_aabb_in_view(&self, aabb: AABB) -> bool {
+		aabb.is_in_frustum(&self.get_frustum())
+	}
+
+	/// Gives frustum from camera
+	pub fn get_frustum(&self) -> Frustum {
+		Frustum::new(self)
 	}
 
 	/// Returns X component of pos vector.
@@ -163,6 +176,8 @@ impl Default for Camera {
 			pitch: 0.0,
 			yaw: 0.0,
 			fov: Angle::from_degrees(60.0),
+			near: 0.5,
+			far: 1000.0,
 			grabbes_cursor: false,
 			speed: 10.0,
 			aspect_ratio: 768.0 / 1024.0,
