@@ -3,6 +3,8 @@ use crate::app::utils::{
 	graphics::camera::frustum::Frustum,
 };
 
+use crate::app::utils::profiler::{self, *};
+
 /// Represents axis aligned bounding box
 #[derive(Clone, Copy)]
 pub struct AABB {
@@ -16,6 +18,7 @@ impl AABB {
 	pub fn from_float4(lo: Float4, hi: Float4) -> Self { AABB { lo, hi } }
 
 	/// Constructs AABB from Int3 vectors
+	#[profiler_target]
 	pub fn from_int3(lo: Int3, hi: Int3) -> Self {
 		AABB {
 			lo: Float4::xyz1(lo.x() as f32, lo.y() as f32, lo.z() as f32),
@@ -24,6 +27,7 @@ impl AABB {
 	}
 
 	/// Frustum check
+	#[profiler_target]
 	pub fn is_in_frustum(self, frustum: &Frustum) -> bool {
 		/* Frirst pass
 		 * 1) Checks if camera position is in AABB

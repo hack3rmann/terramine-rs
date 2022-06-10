@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::time::Instant;
+pub extern crate profiler as profiler_target_macro;
+pub use profiler_target_macro::profiler_target;
 
 pub type ID = u64;
 
