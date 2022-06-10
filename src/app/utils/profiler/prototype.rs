@@ -6,16 +6,20 @@ pub fn some_funky_func(args: [i32; 12]) -> String {
 	todo!()
 }
 
-//! Truns to:
+//! Turns to:
 
 pub fn some_funky_func(args: [i32; 12]) -> String {
-	let __profiler = Profiler::start_capture("some_funky_func()");
+	static __id: ID = random!(); // Controlled by #[profiler_target] macro
+	let __measure = profiler::start_capture("some_funky_func()", __id);
 
 	/* Some funky code */
 
-	std::mem::drop(__profiler);
-
 	todo!()
+
+	// std::mem::drop(__measure);
+	//	Measure::drop() {
+	//		profiler::upload_measure(self)
+	//	}
 }
 
 //! RESULT:

@@ -5,5 +5,7 @@ mod app;
 use app::App;
 
 fn main() {
+	app::utils::profiler::initialyze();
+
 	App::new().run();
 }
