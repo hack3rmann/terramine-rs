@@ -7,8 +7,8 @@ pub type ID = u64;
 
 /// Represents profiler target
 pub struct Profile {
-	target_name: String,
-	measures: Vec<f64>,
+	pub target_name: String,
+	pub measures: Vec<f64>,
 }
 
 impl Profile {
@@ -94,4 +94,16 @@ pub fn start_capture(target_name: &str, id: ID) -> Measure {
 		}
 	};
 	Measure::new(id)
+}
+
+pub fn update_and_show_window(ui: &imgui::Ui) {
+	unsafe {
+		let profiler_result: Vec<_> = PROFILER.profiles.as_ref().unwrap()
+			.iter()
+			.map(|e| (
+				&e.1.target_name,
+				e.1.measures.iter().sum::<f64>()
+			))
+			.collect();
+	}
 }
