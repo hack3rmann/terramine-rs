@@ -1,5 +1,13 @@
-use std::collections::HashMap;
-use std::time::Instant;
+use std::{
+	collections::HashMap,
+	time::Instant
+};
+
+use crate::app::utils::{
+	time::timer::Timer,
+	user_io::InputManager,
+};
+
 pub extern crate profiler as profiler_target_macro;
 pub use profiler_target_macro::profiler_target;
 
@@ -96,14 +104,26 @@ pub fn start_capture(target_name: &str, id: ID) -> Measure {
 	Measure::new(id)
 }
 
-pub fn update_and_show_window(ui: &imgui::Ui) {
+/// Updates profiler and show its ImGui window.
+pub fn update_and_show_window(ui: &imgui::Ui, timer: &Timer, imput: &mut InputManager) {
+	let result = get_result(timer);
+}
+
+/// Outputs a result of function capturing:
+/// * FunctionName, NumOfCall, FramePercent, CallTime
+pub fn get_result<'t, 's>(timer: &'t Timer) -> Vec<(&'s String, usize, f64, f64)> {
 	unsafe {
-		let profiler_result: Vec<_> = PROFILER.profiles.as_ref().unwrap()
+		PROFILER.profiles.as_ref().unwrap()
 			.iter()
-			.map(|e| (
-				&e.1.target_name,
-				e.1.measures.iter().sum::<f64>()
-			))
-			.collect();
+			.map(|e| {
+				let time_summary = e.1.measures.iter().sum::<f64>();
+				(
+					&e.1.target_name,
+					e.1.measures.len(),
+					time_summary / timer.dt_as_f64(),
+					time_summary
+				)
+			})
+			.collect()
 	}
 }
