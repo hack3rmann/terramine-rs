@@ -14,7 +14,7 @@ use crate::app::utils::{
 		shader::Shader,
 		vertex_buffer::VertexBuffer,
 		camera::Camera,
-	}
+	},
 };
 use glium::{
 	DrawError,
