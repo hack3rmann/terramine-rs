@@ -116,13 +116,22 @@ impl Camera {
 
 	/// Updates camera (key press checking, etc).
 	pub fn update(&mut self, input: &mut InputManager, dt: f64) {
+		/* Camera move vector */
+		let mut move_vector = Float4::all(0.0);
+
 		/* Movement controls */
-		if input.keyboard.is_pressed(KeyCode::W)		{ self.move_pos( dt * self.speed,  0.0,    0.0); }
-		if input.keyboard.is_pressed(KeyCode::S)		{ self.move_pos(-dt * self.speed,  0.0,    0.0); }
-		if input.keyboard.is_pressed(KeyCode::D)		{ self.move_pos( 0.0,    0.0,   -dt * self.speed); }
-		if input.keyboard.is_pressed(KeyCode::A)		{ self.move_pos( 0.0,    0.0,    dt * self.speed); }
-		if input.keyboard.is_pressed(KeyCode::LShift)	{ self.move_pos( 0.0,   -dt * self.speed,  0.0); }
-		if input.keyboard.is_pressed(KeyCode::Space)	{ self.move_pos( 0.0,    dt * self.speed,  0.0); }
+		if input.keyboard.is_pressed(KeyCode::W)		{ move_vector += Float4::xyz1(1.0, 0.0, 0.0) }
+		if input.keyboard.is_pressed(KeyCode::S)		{ move_vector -= Float4::xyz1(1.0, 0.0, 0.0) }
+		if input.keyboard.is_pressed(KeyCode::A)		{ move_vector += Float4::xyz1(0.0, 0.0, 1.0) }
+		if input.keyboard.is_pressed(KeyCode::D)		{ move_vector -= Float4::xyz1(0.0, 0.0, 1.0) }
+		if input.keyboard.is_pressed(KeyCode::Space)	{ move_vector += Float4::xyz1(0.0, 1.0, 0.0) }
+		if input.keyboard.is_pressed(KeyCode::LShift)	{ move_vector -= Float4::xyz1(0.0, 1.0, 0.0) }
+
+		/* Normalyzing direction vector */
+		move_vector = move_vector.normalyze() * dt as f32 * self.speed as f32;
+
+		/* Move camera with move vector */
+		self.move_pos(move_vector.x() as f64, move_vector.y() as f64, move_vector.z() as f64);
 
 		/* Reset */
 		if input.keyboard.just_pressed(KeyCode::P) {
