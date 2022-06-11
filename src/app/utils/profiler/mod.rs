@@ -180,7 +180,7 @@ pub fn build_window(ui: &imgui::Ui, input: &InputManager, profiler_result: DataS
 				ui.text(format!("Time: {:.3}ms", result.3 * 1000.0));
 
 				/* Percent of frame time */
-				ui.text(format!("Frame time: {:.3}%", result.2));
+				ui.text(format!("Frame time: {:.3}%", result.2 * 100.0));
 
 				/* Separator to next result */
 				ui.separator();
