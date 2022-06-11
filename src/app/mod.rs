@@ -2,9 +2,12 @@ pub mod utils;
 
 /* Glium includes */
 use glium::{
-	glutin::event::{
-		Event,
-		WindowEvent,
+	glutin::{
+		event::{
+			Event,
+			WindowEvent,
+		},
+		event_loop::ControlFlow,
 	},
 	Surface,
 	uniform
@@ -21,7 +24,7 @@ use utils::{
 	},
 	terrarian::chunk::{chunk_array::ChunkArray},
 	time::timer::Timer,
-	profiler
+	profiler::prelude::*,
 };
 
 /// Struct that handles everything.
@@ -68,38 +71,45 @@ impl App {
 	pub fn run(mut self) {
 		/* Event/game loop */
 		self.graphics.take_event_loop().run(move |event, _, control_flow| {
-			/* Event handlers */
-			self.graphics.imguiw.handle_event(self.graphics.imguic.io_mut(), self.graphics.display.gl_window().window(), &event);
-			self.input_manager.handle_event(&event, &self.graphics);
-
-			/* This event handler */
-			match event {
-				/* Window events */
-				Event::WindowEvent { event, .. } => match event {
-					/* Close event */
-					WindowEvent::CloseRequested => {
-						*control_flow = glium::glutin::event_loop::ControlFlow::Exit;
-					},
-					WindowEvent::Resized(new_size) => {
-						self.camera.aspect_ratio = new_size.height as f32 / new_size.width as f32;
-					},
-					_ => (),
-				},
-				Event::MainEventsCleared => {
-					self.main_events_cleared(control_flow);
-				},
-				glium::glutin::event::Event::RedrawRequested(_) => {
-					self.redraw_requested();
-				},
-				glium::glutin::event::Event::NewEvents(_) => {
-					self.new_events();			
-				},
-				_ => ()
-			}
+			self.run_frame_loop(event, control_flow)
 		});
 	}
 
+	/// Event loop run function
+	#[profile]
+	pub fn run_frame_loop(&mut self, event: Event<()>, control_flow: &mut ControlFlow) {
+		/* Event handlers */
+		self.graphics.imguiw.handle_event(self.graphics.imguic.io_mut(), self.graphics.display.gl_window().window(), &event);
+		self.input_manager.handle_event(&event, &self.graphics);
+
+		/* This event handler */
+		match event {
+			/* Window events */
+			Event::WindowEvent { event, .. } => match event {
+				/* Close event */
+				WindowEvent::CloseRequested => {
+					*control_flow = glium::glutin::event_loop::ControlFlow::Exit;
+				},
+				WindowEvent::Resized(new_size) => {
+					self.camera.aspect_ratio = new_size.height as f32 / new_size.width as f32;
+				},
+				_ => (),
+			},
+			Event::MainEventsCleared => {
+				self.main_events_cleared(control_flow);
+			},
+			glium::glutin::event::Event::RedrawRequested(_) => {
+				self.redraw_requested();
+			},
+			glium::glutin::event::Event::NewEvents(_) => {
+				self.new_events();			
+			},
+			_ => ()
+		}
+	}
+
 	/// Main events cleared.
+	#[profile]
 	fn main_events_cleared(&mut self, control_flow: &mut glium::glutin::event_loop::ControlFlow) {
 		/* Close window is `escape` pressed */
 		if self.input_manager.keyboard.just_pressed(KeyCode::Escape) {
@@ -130,6 +140,7 @@ impl App {
 	}
 
 	/// Prepares the frame.
+	#[profile]
 	fn redraw_requested(&mut self) {
 		/* InGui draw data */
 		let draw_data = {
@@ -195,6 +206,7 @@ impl App {
 	}
 
 	/// Updates things.
+	#[profile]
 	fn new_events(&mut self) {
 		/* Update time */
 		self.timer.update();
