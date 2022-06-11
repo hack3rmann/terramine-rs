@@ -25,7 +25,7 @@ impl AABB {
 	}
 
 	/// Frustum check
-	#[profiler_target]
+	#[profile]
 	pub fn is_in_frustum(self, frustum: &Frustum) -> bool {
 		/* Frirst pass
 		 * 1) Checks if camera position is in AABB
@@ -94,7 +94,7 @@ impl AABB {
 
 	/// Tests ray intersection.
 	/// Source reference: https://tavianator.com/2011/ray_box.html
-	#[profiler_target]
+	#[profile]
 	pub fn is_intersected_by_ray(self, ray: Ray) -> bool {
 		let mut t_max = f32::INFINITY;
 		let mut t_min = f32::NEG_INFINITY;

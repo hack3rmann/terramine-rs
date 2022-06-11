@@ -10,7 +10,7 @@ use crate::app::utils::{
 
 pub mod prelude {
 	pub use super::{
-		profiler_target,
+		profiler_target as profile,
 		super::profiler,
 		ID,
 	};
