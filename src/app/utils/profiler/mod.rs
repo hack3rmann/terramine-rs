@@ -157,7 +157,7 @@ pub fn update() {
 pub fn build_window(ui: &imgui::Ui, input: &InputManager, profiler_result: DataSummary) {
 	if profiler_result.len() != 0 {
 		/* Create ImGui window */
-		let mut window = imgui::Window::new("Profiler");
+		let mut window = imgui::Window::new("Profiler").always_auto_resize(true);
 
 		/* Check if window can be moved or resized */
 		if !input.keyboard.is_pressed(KeyCode::I) {
@@ -169,7 +169,11 @@ pub fn build_window(ui: &imgui::Ui, input: &InputManager, profiler_result: DataS
 
 		/* Ui building */
 		window.build(ui, || {
-			for result in profiler_result.iter() {
+			/*
+			 * Build all elements. Speparate only existing lines
+			 */
+
+			for result in profiler_result[..profiler_result.len() - 1].iter() {
 				/* Target name */
 				ui.text(result.0);
 
@@ -185,6 +189,20 @@ pub fn build_window(ui: &imgui::Ui, input: &InputManager, profiler_result: DataS
 				/* Separator to next result */
 				ui.separator();
 			}
+
+			let ref last = profiler_result[profiler_result.len() - 1];
+
+			/* Target name */
+			ui.text(last.0);
+
+			/* Call count */
+			ui.text(format!("Call per frame: {}", last.1));
+
+			/* Time that function need */
+			ui.text(format!("Time: {:.3}ms", last.3 * 1000.0));
+
+			/* Percent of frame time */
+			ui.text(format!("Frame time: {:.3}%", last.2 * 100.0));
 		});
 	}
 }
