@@ -1,6 +1,7 @@
 use crate::app::utils::{
 	math::prelude::*,
 	graphics::camera::frustum::Frustum,
+	profiler::prelude::*,
 };
 
 /// Represents axis aligned bounding box
@@ -24,6 +25,7 @@ impl AABB {
 	}
 
 	/// Frustum check
+	#[profile]
 	pub fn is_in_frustum(self, frustum: &Frustum) -> bool {
 		/* Frirst pass
 		 * 1) Checks if camera position is in AABB
@@ -92,6 +94,7 @@ impl AABB {
 
 	/// Tests ray intersection.
 	/// Source reference: https://tavianator.com/2011/ray_box.html
+	#[profile]
 	pub fn is_intersected_by_ray(self, ray: Ray) -> bool {
 		let mut t_max = f32::INFINITY;
 		let mut t_min = f32::NEG_INFINITY;

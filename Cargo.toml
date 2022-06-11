@@ -13,6 +13,7 @@ imgui = "*"
 imgui-glium-renderer = "*"
 imgui-winit-support = "*"
 winapi = "*"
+profiler = { path = "../profiler" }
 
 [features]
 release = []
