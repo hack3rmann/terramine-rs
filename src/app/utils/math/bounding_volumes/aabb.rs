@@ -18,7 +18,6 @@ impl AABB {
 	pub fn from_float4(lo: Float4, hi: Float4) -> Self { AABB { lo, hi } }
 
 	/// Constructs AABB from Int3 vectors
-	#[profiler_target]
 	pub fn from_int3(lo: Int3, hi: Int3) -> Self {
 		AABB {
 			lo: Float4::xyz1(lo.x() as f32, lo.y() as f32, lo.z() as f32),
@@ -96,6 +95,7 @@ impl AABB {
 
 	/// Tests ray intersection.
 	/// Source reference: https://tavianator.com/2011/ray_box.html
+	#[profiler_target]
 	pub fn is_intersected_by_ray(self, ray: Ray) -> bool {
 		let mut t_max = f32::INFINITY;
 		let mut t_min = f32::NEG_INFINITY;

@@ -5,13 +5,14 @@ use std::{
 
 use crate::app::utils::{
 	time::timer::Timer,
-	user_io::InputManager,
+	user_io::{InputManager, KeyCode},
 };
 
 pub extern crate profiler as profiler_target_macro;
 pub use profiler_target_macro::profiler_target;
 
 pub type ID = u64;
+pub type DataSummary<'s> = Vec<(&'s String, usize, f64, f64)>;
 
 /// Represents profiler target
 pub struct Profile {
@@ -104,14 +105,18 @@ pub fn start_capture(target_name: &str, id: ID) -> Measure {
 	Measure::new(id)
 }
 
-/// Updates profiler and show its ImGui window.
-pub fn update_and_show_window(ui: &imgui::Ui, timer: &Timer, imput: &mut InputManager) {
-	let result = get_result(timer);
+/// Updates profiler and builds ImGui window.
+pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer, input: &InputManager) {
+	build_window(ui, input, get_result(timer));
+	update();
 }
 
-/// Outputs a result of function capturing:
-/// * FunctionName, NumOfCall, FramePercent, CallTime
-pub fn get_result<'t, 's>(timer: &'t Timer) -> Vec<(&'s String, usize, f64, f64)> {
+/// Outputs a vector of results of function capturing:
+/// * FunctionName
+/// * NumOfCall
+/// * FramePercent
+/// * CallTime
+pub fn get_result<'t, 's>(timer: &'t Timer) -> DataSummary<'s> {
 	unsafe {
 		PROFILER.profiles.as_ref().unwrap()
 			.iter()
@@ -126,4 +131,48 @@ pub fn get_result<'t, 's>(timer: &'t Timer) -> Vec<(&'s String, usize, f64, f64)
 			})
 			.collect()
 	}
+}
+
+/// Updates profiler:
+/// * Clears mesures
+pub fn update() {
+	unsafe {
+		for profile in PROFILER.profiles.as_mut().unwrap().iter_mut() {
+			profile.1.measures.clear()
+		}
+	}
+}
+
+/// Builds ImGui window of capturing results
+pub fn build_window(ui: &imgui::Ui, input: &InputManager, profiler_result: DataSummary) {
+	/* Create ImGui window */
+	let mut window = imgui::Window::new("Profiler");
+
+	/* Check if window can be moved or resized */
+	if !input.keyboard.is_pressed(KeyCode::I) {
+		window = window
+			.resizable(false)
+			.movable(false)
+			.collapsible(false)
+	}
+
+	/* Ui building */
+	window.build(ui, || {
+		for result in profiler_result.iter() {
+			/* Target name */
+			ui.text(result.0);
+
+			/* Call count */
+			ui.text(format!("Call per frame: {}", result.1));
+
+			/* Time that function need */
+			ui.text(format!("Time: {:.3}ms", result.3 * 1000.0));
+
+			/* Percent of frame time */
+			ui.text(format!("Frame time: {:.3}%", result.2));
+
+			/* Separator to next result */
+			ui.separator();
+		}
+	});
 }

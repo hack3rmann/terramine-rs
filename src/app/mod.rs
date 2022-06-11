@@ -21,6 +21,7 @@ use utils::{
 	},
 	terrarian::chunk::{chunk_array::ChunkArray},
 	time::timer::Timer,
+	profiler
 };
 
 /// Struct that handles everything.
@@ -163,6 +164,9 @@ impl App {
 					.build(&ui, camera.fov.get_degrees_mut());
 				camera.fov.update_from_degrees();
 			});
+
+			/* Profiler window */
+			profiler::update_and_build_window(&ui, &self.timer, &self.input_manager);
 
 			/* Render UI */
 			self.graphics.imguiw.prepare_render(&ui, self.graphics.display.gl_window().window());
