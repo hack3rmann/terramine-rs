@@ -1,9 +1,8 @@
 use crate::app::utils::{
 	math::prelude::*,
 	graphics::camera::frustum::Frustum,
+	profiler::prelude::*,
 };
-
-use crate::app::utils::profiler::{self, *};
 
 /// Represents axis aligned bounding box
 #[derive(Clone, Copy)]

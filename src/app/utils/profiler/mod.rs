@@ -8,6 +8,14 @@ use crate::app::utils::{
 	user_io::{InputManager, KeyCode},
 };
 
+pub mod prelude {
+	pub use super::{
+		profiler_target,
+		super::profiler,
+		ID,
+	};
+}
+
 pub extern crate profiler as profiler_target_macro;
 pub use profiler_target_macro::profiler_target;
 
