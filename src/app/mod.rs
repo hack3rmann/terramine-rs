@@ -22,7 +22,7 @@ use utils::{
 		camera::Camera,
 		texture::Texture,
 	},
-	terrarian::chunk::{chunk_array::ChunkArray},
+	terrain::chunk::{chunk_array::ChunkArray},
 	time::timer::Timer,
 	profiler,
 };

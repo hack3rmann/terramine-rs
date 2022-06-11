@@ -7,7 +7,7 @@ use crate::app::utils::{
 	graphics::{
 		Vertex,
 	},
-	terrarian::voxel::VoxelData,
+	terrain::voxel::VoxelData,
 };
 
 /// Represents voxel.
