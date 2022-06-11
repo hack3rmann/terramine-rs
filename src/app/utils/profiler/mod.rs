@@ -155,34 +155,36 @@ pub fn update() {
 
 /// Builds ImGui window of capturing results
 pub fn build_window(ui: &imgui::Ui, input: &InputManager, profiler_result: DataSummary) {
-	/* Create ImGui window */
-	let mut window = imgui::Window::new("Profiler");
+	if profiler_result.len() != 0 {
+		/* Create ImGui window */
+		let mut window = imgui::Window::new("Profiler");
 
-	/* Check if window can be moved or resized */
-	if !input.keyboard.is_pressed(KeyCode::I) {
-		window = window
-			.resizable(false)
-			.movable(false)
-			.collapsible(false)
-	}
-
-	/* Ui building */
-	window.build(ui, || {
-		for result in profiler_result.iter() {
-			/* Target name */
-			ui.text(result.0);
-
-			/* Call count */
-			ui.text(format!("Call per frame: {}", result.1));
-
-			/* Time that function need */
-			ui.text(format!("Time: {:.3}ms", result.3 * 1000.0));
-
-			/* Percent of frame time */
-			ui.text(format!("Frame time: {:.3}%", result.2));
-
-			/* Separator to next result */
-			ui.separator();
+		/* Check if window can be moved or resized */
+		if !input.keyboard.is_pressed(KeyCode::I) {
+			window = window
+				.resizable(false)
+				.movable(false)
+				.collapsible(false)
 		}
-	});
+
+		/* Ui building */
+		window.build(ui, || {
+			for result in profiler_result.iter() {
+				/* Target name */
+				ui.text(result.0);
+
+				/* Call count */
+				ui.text(format!("Call per frame: {}", result.1));
+
+				/* Time that function need */
+				ui.text(format!("Time: {:.3}ms", result.3 * 1000.0));
+
+				/* Percent of frame time */
+				ui.text(format!("Frame time: {:.3}%", result.2));
+
+				/* Separator to next result */
+				ui.separator();
+			}
+		});
+	}
 }
