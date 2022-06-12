@@ -246,13 +246,23 @@ unsafe impl<'c> Reinterpret for Chunk<'c> { }
 
 unsafe impl<'c> ReinterpretAsBytes for Chunk<'c> {
 	fn reinterpret_as_bytes(&self) -> Vec<u8> {
-		todo!()
+		let mut bytes = Vec::with_capacity(Self::static_size());
+
+		bytes.append(&mut self.voxels.reinterpret_as_bytes());
+		bytes.append(&mut self.pos.reinterpret_as_bytes());
+		bytes.push(self.mesh.borrow().as_ref().is_some() as u8);
+
+		return bytes;
 	}
 }
 
 unsafe impl<'c> ReinterpretFromBytes for Chunk<'c> {
 	fn reinterpret_from_bytes(source: &[u8]) -> Self {
-		todo!()
+		let voxels = VoxelArray::reinterpret_from_bytes(&source[.. CHUNK_VOLUME * Voxel::static_size()]);
+		let pos = Int3::reinterpret_from_bytes(&source[CHUNK_VOLUME * Voxel::static_size() .. Int3::static_size() + CHUNK_VOLUME * Voxel::static_size()]);
+		let mesh = RefCell::new(None);
+
+		Self { voxels, pos, mesh }
 	}
 }
 
@@ -262,7 +272,21 @@ unsafe impl<'c> ReinterpretSize for Chunk<'c> {
 
 unsafe impl<'c> StaticSize for Chunk<'c> {
 	fn static_size() -> usize {
-		CHUNK_VOLUME * Voxel::static_size() + Int3::static_size() + 1
+		CHUNK_VOLUME * Option::<Voxel>::static_size() + Int3::static_size() + 1
+	}
+}
+
+#[cfg(test)]
+mod reinterpret_test {
+	use super::*;
+
+	#[test]
+	fn reinterpret_chunk() {
+		let before = Chunk::new(None, Int3::new(12, 12, 11), false);
+		let after = Chunk::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+
+		assert_eq!(before.voxels, after.voxels);
+		assert_eq!(before.pos, after.pos);
 	}
 }
 
