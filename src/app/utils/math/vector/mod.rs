@@ -1,15 +1,18 @@
 pub mod swizzle;
+
 use directx_math::*;
 pub use swizzle::*;
 
+use crate::app::utils::reinterpreter::*;
+
 /// Represents 4D 32-bit float vector.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Float4 {
 	pub i_vec: XMVECTOR
 }
 
 /// Represents 3D 32-bit int vector.
-#[derive(Clone, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq, Debug)]
 pub struct Int3 {
 	x: i32,
 	y: i32,
@@ -297,3 +300,46 @@ impl Set3Dto1<i32> for Int3 {
 
 impl Vec4Swizzles4<f32> for Float4 { }
 impl Vec3Swizzles3<i32> for Int3 { }
+
+/**
+ * Reinterpretor section
+ */
+
+unsafe impl Reinterpret for Int3 { }
+
+unsafe impl ReinterpretAsBytes for Int3 {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		let mut out = Vec::with_capacity(12);
+
+		out.append(&mut self.x().reinterpret_as_bytes());
+		out.append(&mut self.y().reinterpret_as_bytes());
+		out.append(&mut self.z().reinterpret_as_bytes());
+
+		return out;
+	}
+}
+
+unsafe impl ReinterpretFromBytes for Int3 {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		let x = i32::reinterpret_from_bytes(&source[0..4]);
+		let y = i32::reinterpret_from_bytes(&source[4..8]);
+		let z = i32::reinterpret_from_bytes(&source[8..12]);
+
+		Self::new(x, y, z)
+	}
+}
+
+
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn reinterpret_int3() {
+		let before = Int3::new(23, 441, 52);
+		let after = Int3::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+
+		assert_eq!(before, after);
+	}
+}
