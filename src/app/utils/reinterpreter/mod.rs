@@ -470,7 +470,12 @@ unsafe impl<T: Reinterpret + StaticSize> Reinterpret for Option<T> { }
 unsafe impl<T: ReinterpretAsBytes + ReinterpretSize> ReinterpretAsBytes for Option<T> {
 	fn reinterpret_as_bytes(&self) -> Vec<u8> {
 		match self {
-			None => vec![false as u8],
+			None => {
+				let mut bytes = vec![false as u8];
+				bytes.append(&mut vec![0; self.reinterpret_size()]);
+				
+				return bytes;
+			},
 			Some(item) => {
 				let mut bytes = Vec::with_capacity(1 + item.reinterpret_size());
 				bytes.push(true as u8);
