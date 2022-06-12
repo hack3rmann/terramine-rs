@@ -331,6 +331,34 @@ unsafe impl ReinterpretFromBytes for Int3 {
 
 
 
+unsafe impl Reinterpret for Float4 { }
+
+unsafe impl ReinterpretAsBytes for Float4 {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		let mut out = Vec::with_capacity(16);
+
+		out.append(&mut self.x().reinterpret_as_bytes());
+		out.append(&mut self.y().reinterpret_as_bytes());
+		out.append(&mut self.z().reinterpret_as_bytes());
+		out.append(&mut self.w().reinterpret_as_bytes());
+
+		return out;
+	}
+}
+
+unsafe impl ReinterpretFromBytes for Float4 {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		let x = f32::reinterpret_from_bytes(&source[0..4]);
+		let y = f32::reinterpret_from_bytes(&source[4..8]);
+		let z = f32::reinterpret_from_bytes(&source[8..12]);
+		let w = f32::reinterpret_from_bytes(&source[12..16]);
+
+		Self::new(x, y, z, w)
+	}
+}
+
+
+
 #[cfg(test)]
 mod test {
 	use super::*;
@@ -339,6 +367,14 @@ mod test {
 	fn reinterpret_int3() {
 		let before = Int3::new(23, 441, 52);
 		let after = Int3::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+
+		assert_eq!(before, after);
+	}
+
+	#[test]
+	fn reinterpret_float4() {
+		let before = Float4::new(233.7, 123.5, 123123.5, 444.5);
+		let after = Float4::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
 		assert_eq!(before, after);
 	}
