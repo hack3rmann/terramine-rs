@@ -8,10 +8,11 @@ use crate::app::utils::{
 		Vertex,
 	},
 	terrain::voxel::VoxelData,
+	reinterpreter::*,
 };
 
 /// Represents voxel.
-#[allow(dead_code)]
+#[derive(Debug, PartialEq)]
 pub struct Voxel {
 	pub data: &'static VoxelData,
 	pub position: Int3,
@@ -21,6 +22,49 @@ impl Voxel {
 	/// Voxel constructor.
 	pub fn new(position: Int3, data: &'static VoxelData) -> Self {
 		Voxel { data, position }
+	}
+}
+
+unsafe impl Reinterpret for Voxel { }
+
+unsafe impl ReinterpretAsBytes for Voxel {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		let mut bytes = Vec::with_capacity(16);
+
+		bytes.append(&mut self.data.id.reinterpret_as_bytes());
+		bytes.append(&mut self.position.reinterpret_as_bytes());
+
+		return bytes;
+	}
+}
+
+unsafe impl ReinterpretFromBytes for Voxel {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		let id = u32::reinterpret_from_bytes(&source[0..4]);
+		let pos = Int3::reinterpret_from_bytes(&source[4..16]);
+
+		Self::new(pos, &VOXEL_DATA[id as usize])
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn reinterpret_voxel1() {
+		let before = Voxel::new(Int3::new(123, 4212, 11), STONE_VOXEL_DATA);
+		let after = Voxel::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+
+		assert_eq!(before, after);
+	}
+
+	#[test]
+	fn reinterpret_voxel2() {
+		let before = Voxel::new(Int3::new(-213, 4212, 11), LOG_VOXEL_DATA);
+		let after = Voxel::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+
+		assert_eq!(before, after);
 	}
 }
 

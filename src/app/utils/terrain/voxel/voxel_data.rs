@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 /// Represents shared data for group of voxels
-#[allow(dead_code)]
+#[derive(Debug, PartialEq)]
 pub struct VoxelData {
 	pub name: &'static str,
 	pub id: u32,
@@ -10,7 +10,7 @@ pub struct VoxelData {
 }
 
 /// Represents textured sides of the voxel.
-#[allow(dead_code)]
+#[derive(Debug, PartialEq)]
 pub struct TextureSides {
 	pub front:	u16,
 	pub back:	u16,
