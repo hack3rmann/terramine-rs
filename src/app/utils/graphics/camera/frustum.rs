@@ -33,10 +33,10 @@ impl Frustum {
 
 		/* Rays */
 		let courner_rays = [
-			Ray::from_2_points(cam.pos, front_far + cam.right * half_horizontal_side),
-			Ray::from_2_points(cam.pos, front_far - cam.right * half_horizontal_side),
-			Ray::from_2_points(cam.pos, front_far + cam.up * half_vertical_side),
-			Ray::from_2_points(cam.pos, front_far - cam.up * half_vertical_side),
+			Ray::from_2_points(cam.pos, cam.pos + (front_far + cam.right * half_horizontal_side + cam.up * half_vertical_side)),
+			Ray::from_2_points(cam.pos, cam.pos + (front_far - cam.right * half_horizontal_side + cam.up * half_vertical_side)),
+			Ray::from_2_points(cam.pos, cam.pos + (front_far + cam.right * half_horizontal_side - cam.up * half_vertical_side)),
+			Ray::from_2_points(cam.pos, cam.pos + (front_far - cam.right * half_horizontal_side - cam.up * half_vertical_side)),
 		];
 
 		Frustum { near, far, left, right, top, bottom, courner_rays }
