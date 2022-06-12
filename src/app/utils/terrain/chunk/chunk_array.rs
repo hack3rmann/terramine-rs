@@ -9,6 +9,7 @@ use glium::{
 	DrawError,
 	Frame
 };
+use std::fs::File;
 
 /// Represents self-controlling chunk array.
 /// * Width is bigger if you go to x+ direction
@@ -23,6 +24,9 @@ pub struct ChunkArray<'a> {
 
 	/* Chunk array itself */
 	chunks: Vec<Chunk<'a>>,
+
+	/* Dynamic world file */
+	file: File,
 }
 
 impl<'a> ChunkArray<'a> {
@@ -46,7 +50,8 @@ impl<'a> ChunkArray<'a> {
 		for x in x_lo..x_hi {
 		for y in y_lo..y_hi {
 		for z in z_lo..z_hi {
-			chunks.push(Chunk::new(&graphics, Int3::new(x as i32, y as i32, z as i32), false));
+			let chunk = Chunk::new(&graphics, Int3::new(x as i32, y as i32, z as i32), false);
+			chunks.push(chunk);
 		}}}
 
 		/* Fill environments with references to chunk array */
@@ -96,7 +101,7 @@ impl<'a> ChunkArray<'a> {
 		let mut env_iter = env.iter();
 		chunks.iter().for_each(|chunk| chunk.update_mesh(&graphics, env_iter.next().unwrap()));
 
-		ChunkArray { width, height, depth, chunks }
+		ChunkArray { width, height, depth, chunks, file: todo!() }
 	}
 
 	/// Renders chunks.
