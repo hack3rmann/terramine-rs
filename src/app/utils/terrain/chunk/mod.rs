@@ -258,8 +258,10 @@ unsafe impl<'c> ReinterpretAsBytes for Chunk<'c> {
 
 unsafe impl<'c> ReinterpretFromBytes for Chunk<'c> {
 	fn reinterpret_from_bytes(source: &[u8]) -> Self {
-		let voxels = VoxelArray::reinterpret_from_bytes(&source[.. CHUNK_VOLUME * Voxel::static_size()]);
-		let pos = Int3::reinterpret_from_bytes(&source[CHUNK_VOLUME * Voxel::static_size() .. Int3::static_size() + CHUNK_VOLUME * Voxel::static_size()]);
+		let voxel_array_size: usize = CHUNK_VOLUME * (Voxel::static_size() + 1);
+
+		let voxels = VoxelArray::reinterpret_from_bytes(&source[.. voxel_array_size]);
+		let pos = Int3::reinterpret_from_bytes(&source[voxel_array_size .. voxel_array_size + Int3::static_size()]);
 		let mesh = RefCell::new(None);
 
 		Self { voxels, pos, mesh }
