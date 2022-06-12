@@ -25,6 +25,8 @@ impl Voxel {
 	}
 }
 
+
+
 unsafe impl Reinterpret for Voxel { }
 
 unsafe impl ReinterpretAsBytes for Voxel {
@@ -67,6 +69,8 @@ mod tests {
 		assert_eq!(before, after);
 	}
 }
+
+
 
 pub mod shape {
 	use super::{*, atlas::UV};
