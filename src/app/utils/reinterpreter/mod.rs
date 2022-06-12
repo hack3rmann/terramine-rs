@@ -382,7 +382,12 @@ unsafe impl<T: ReinterpretFromBytes + StaticSize> ReinterpretFromBytes for Vec<T
 			return vec![];
 		} else {
 			/* Byte data should be aligned by destination byte size */
-			debug_assert_ne!(source.len() % T::static_size(), 0, "Attempting to reinterpret unaligned bytes as aligned by {} bytes", T::static_size());
+			debug_assert_eq!(
+				source.len() % T::static_size(), 0,
+				"Attempting to reinterpret unaligned bytes as aligned by {} bytes. Actual length is {}",
+				T::static_size(),
+				source.len()
+			);
 
 			/* Counter */
 			let mut current: usize = 0;
@@ -392,7 +397,7 @@ unsafe impl<T: ReinterpretFromBytes + StaticSize> ReinterpretFromBytes for Vec<T
 
 			/* Reintepret bytes until vector is full */
 			while current <= source.len() - T::static_size() {
-				result.append(&mut Self::reinterpret_from_bytes(&source[current .. current + T::static_size()]));
+				result.push(T::reinterpret_from_bytes(&source[current .. current + T::static_size()]));
 				current += T::static_size();
 			}
 
@@ -535,5 +540,14 @@ mod tests {
 		assert_eq!(before, after);
 		assert_eq!(before.reinterpret_size(), f64::static_size());
 		assert_eq!(f64::static_size(), 8);
+	}
+
+	#[test]
+	fn reinterpret_vec() {
+		let before: Vec<i32> = vec![1, 124, 11, 44, 111, 4523, 765];
+		let after = Vec::<i32>::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+
+		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), before.len() * i32::static_size());
 	}
 }
