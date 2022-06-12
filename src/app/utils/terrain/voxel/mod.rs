@@ -31,7 +31,7 @@ unsafe impl Reinterpret for Voxel { }
 
 unsafe impl ReinterpretAsBytes for Voxel {
 	fn reinterpret_as_bytes(&self) -> Vec<u8> {
-		let mut bytes = Vec::with_capacity(16);
+		let mut bytes = Vec::with_capacity(Self::static_size());
 
 		bytes.append(&mut self.data.id.reinterpret_as_bytes());
 		bytes.append(&mut self.position.reinterpret_as_bytes());
@@ -47,6 +47,14 @@ unsafe impl ReinterpretFromBytes for Voxel {
 
 		Self::new(pos, &VOXEL_DATA[id as usize])
 	}
+}
+
+unsafe impl ReinterpretSize for Voxel {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for Voxel {
+	fn static_size() -> usize { 16 }
 }
 
 #[cfg(test)]

@@ -15,6 +15,7 @@ use crate::app::utils::{
 		vertex_buffer::VertexBuffer,
 		camera::Camera,
 	},
+	reinterpreter::*,
 };
 use glium::{
 	DrawError,
@@ -57,7 +58,7 @@ impl<'c> ChunkEnvironment<'c> {
 
 impl<'dp> Chunk<'dp> {
 	/// Constructs new chunk in given position 
-	pub fn new(graphics: &Graphics, pos: Int3, generate_mesh: bool) -> Self {
+	pub fn new(graphics: Option<&Graphics>, pos: Int3, generate_mesh: bool) -> Self {
 		/* Voxel array initialization */
 		let mut voxels = VoxelArray::with_capacity(CHUNK_VOLUME);
 
@@ -83,7 +84,7 @@ impl<'dp> Chunk<'dp> {
 
 		/* Create mesh for chunk */
 		if generate_mesh {
-			chunk.update_mesh(graphics, &ChunkEnvironment::none());
+			chunk.update_mesh(graphics.unwrap(), &ChunkEnvironment::none());
 		}
 
 		return chunk;
@@ -238,6 +239,34 @@ impl<'dp> Chunk<'dp> {
 		camera.is_aabb_in_view(AABB::from_int3(lo, hi))
 	}
 }
+
+
+
+unsafe impl<'c> Reinterpret for Chunk<'c> { }
+
+unsafe impl<'c> ReinterpretAsBytes for Chunk<'c> {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		todo!()
+	}
+}
+
+unsafe impl<'c> ReinterpretFromBytes for Chunk<'c> {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		todo!()
+	}
+}
+
+unsafe impl<'c> ReinterpretSize for Chunk<'c> {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl<'c> StaticSize for Chunk<'c> {
+	fn static_size() -> usize {
+		CHUNK_VOLUME * Voxel::static_size() + Int3::static_size() + 1
+	}
+}
+
+
 
 /// Transforms world coordinates to chunk 
 #[allow(dead_code)]

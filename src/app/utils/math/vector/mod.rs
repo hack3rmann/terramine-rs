@@ -309,7 +309,7 @@ unsafe impl Reinterpret for Int3 { }
 
 unsafe impl ReinterpretAsBytes for Int3 {
 	fn reinterpret_as_bytes(&self) -> Vec<u8> {
-		let mut out = Vec::with_capacity(12);
+		let mut out = Vec::with_capacity(Self::static_size());
 
 		out.append(&mut self.x().reinterpret_as_bytes());
 		out.append(&mut self.y().reinterpret_as_bytes());
@@ -329,13 +329,21 @@ unsafe impl ReinterpretFromBytes for Int3 {
 	}
 }
 
+unsafe impl ReinterpretSize for Int3 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for Int3 {
+	fn static_size() -> usize { 12 }
+}
+
 
 
 unsafe impl Reinterpret for Float4 { }
 
 unsafe impl ReinterpretAsBytes for Float4 {
 	fn reinterpret_as_bytes(&self) -> Vec<u8> {
-		let mut out = Vec::with_capacity(16);
+		let mut out = Vec::with_capacity(Self::static_size());
 
 		out.append(&mut self.x().reinterpret_as_bytes());
 		out.append(&mut self.y().reinterpret_as_bytes());
@@ -355,6 +363,14 @@ unsafe impl ReinterpretFromBytes for Float4 {
 
 		Self::new(x, y, z, w)
 	}
+}
+
+unsafe impl ReinterpretSize for Float4 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for Float4 {
+	fn static_size() -> usize { 16 }
 }
 
 

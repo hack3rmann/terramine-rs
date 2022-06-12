@@ -1,6 +1,10 @@
+/**
+ * Provides some `type-byte` and `byte-type` reinterpretations to common types
+ */
+
 use std::mem::transmute;
 
-pub unsafe trait Reinterpret: ReinterpretAsBytes + ReinterpretFromBytes { }
+pub unsafe trait Reinterpret: ReinterpretAsBytes + ReinterpretFromBytes + ReinterpretSize { }
 
 pub unsafe trait ReinterpretAsBytes {
 	fn reinterpret_as_bytes(&self) -> Vec<u8>;
@@ -8,6 +12,14 @@ pub unsafe trait ReinterpretAsBytes {
 
 pub unsafe trait ReinterpretFromBytes {
 	fn reinterpret_from_bytes(source: &[u8]) -> Self;
+}
+
+pub unsafe trait ReinterpretSize {
+	fn reinterpret_size(&self) -> usize;
+}
+
+pub unsafe trait StaticSize {
+	fn static_size() -> usize;
 }
 
 
@@ -24,6 +36,14 @@ unsafe impl ReinterpretFromBytes for u8 {
 	}
 }
 
+unsafe impl ReinterpretSize for u8 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for u8 {
+	fn static_size() -> usize { 1 }
+}
+
 
 
 unsafe impl Reinterpret for i8 { }
@@ -36,6 +56,14 @@ unsafe impl ReinterpretFromBytes for i8 {
 	fn reinterpret_from_bytes(source: &[u8]) -> Self {
 		unsafe { transmute(source[0]) }
 	}
+}
+
+unsafe impl ReinterpretSize for i8 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for i8 {
+	fn static_size() -> usize { 1 }
 }
 
 
@@ -59,6 +87,14 @@ unsafe impl ReinterpretFromBytes for u16 {
 	}
 }
 
+unsafe impl ReinterpretSize for u16 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for u16 {
+	fn static_size() -> usize { 2 }
+}
+
 
 
 unsafe impl Reinterpret for i16 { }
@@ -78,6 +114,14 @@ unsafe impl ReinterpretFromBytes for i16 {
 			transmute([source[0], source[1]])
 		}
 	}
+}
+
+unsafe impl ReinterpretSize for i16 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for i16 {
+	fn static_size() -> usize { 2 }
 }
 
 
@@ -101,6 +145,14 @@ unsafe impl ReinterpretFromBytes for u32 {
 	}
 }
 
+unsafe impl ReinterpretSize for u32 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for u32 {
+	fn static_size() -> usize { 4 }
+}
+
 
 
 unsafe impl Reinterpret for i32 { }
@@ -120,6 +172,14 @@ unsafe impl ReinterpretFromBytes for i32 {
 			transmute([source[0], source[1], source[2], source[3]])
 		}
 	}
+}
+
+unsafe impl ReinterpretSize for i32 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for i32 {
+	fn static_size() -> usize { 4 }
 }
 
 
@@ -143,6 +203,14 @@ unsafe impl ReinterpretFromBytes for u64 {
 	}
 }
 
+unsafe impl ReinterpretSize for u64 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for u64 {
+	fn static_size() -> usize { 8 }
+}
+
 
 
 unsafe impl Reinterpret for i64 { }
@@ -162,6 +230,14 @@ unsafe impl ReinterpretFromBytes for i64 {
 			transmute([source[0], source[1], source[2], source[3], source[4], source[5], source[6], source[7]])
 		}
 	}
+}
+
+unsafe impl ReinterpretSize for i64 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for i64 {
+	fn static_size() -> usize { 8 }
 }
 
 
@@ -187,6 +263,14 @@ unsafe impl ReinterpretFromBytes for u128 {
 	}
 }
 
+unsafe impl ReinterpretSize for u128 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for u128 {
+	fn static_size() -> usize { 16 }
+}
+
 
 
 unsafe impl Reinterpret for i128 { }
@@ -210,6 +294,14 @@ unsafe impl ReinterpretFromBytes for i128 {
 	}
 }
 
+unsafe impl ReinterpretSize for i128 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for i128 {
+	fn static_size() -> usize { 16 }
+}
+
 
 
 unsafe impl Reinterpret for f32 { }
@@ -229,6 +321,14 @@ unsafe impl ReinterpretFromBytes for f32 {
 			transmute([source[0], source[1], source[2], source[3]])
 		}
 	}
+}
+
+unsafe impl ReinterpretSize for f32 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for f32 {
+	fn static_size() -> usize { 4 }
 }
 
 
@@ -252,6 +352,65 @@ unsafe impl ReinterpretFromBytes for f64 {
 	}
 }
 
+unsafe impl ReinterpretSize for f64 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for f64 {
+	fn static_size() -> usize { 8 }
+}
+
+
+
+unsafe impl<T: Reinterpret + StaticSize> Reinterpret for Vec<T> { }
+
+unsafe impl<T: ReinterpretAsBytes + ReinterpretSize> ReinterpretAsBytes for Vec<T> {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		let mut bytes = Vec::with_capacity(self.reinterpret_size());
+
+		for elem in self.iter() {
+			bytes.append(&mut elem.reinterpret_as_bytes());
+		}
+
+		return bytes;
+	}
+}
+
+unsafe impl<T: ReinterpretFromBytes + StaticSize> ReinterpretFromBytes for Vec<T> {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		if source.len() == 0 {
+			return vec![];
+		} else {
+			/* Byte data should be aligned by destination byte size */
+			debug_assert_ne!(source.len() % T::static_size(), 0, "Attempting to reinterpret unaligned bytes as aligned by {} bytes", T::static_size());
+
+			/* Counter */
+			let mut current: usize = 0;
+
+			/* Result */
+			let mut result = Vec::with_capacity(source.len() % T::static_size());
+
+			/* Reintepret bytes until vector is full */
+			while current <= source.len() - T::static_size() {
+				result.append(&mut Self::reinterpret_from_bytes(&source[current .. current + T::static_size()]));
+				current += T::static_size();
+			}
+
+			return result;
+		}
+	}
+}
+
+unsafe impl<T: ReinterpretSize> ReinterpretSize for Vec<T> {
+	fn reinterpret_size(&self) -> usize {
+		if self.len() == 0 {
+			0
+		} else {
+			self.len() * self[0].reinterpret_size()
+		}
+	}
+}
+
 
 
 #[cfg(test)]
@@ -264,6 +423,8 @@ mod tests {
 		let after = u8::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
 		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), u8::static_size());
+		assert_eq!(u8::static_size(), 1);
 	}
 
 	#[test]
@@ -272,6 +433,8 @@ mod tests {
 		let after = i8::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
 		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), i8::static_size());
+		assert_eq!(i8::static_size(), 1);
 	}
 
 	#[test]
@@ -280,6 +443,8 @@ mod tests {
 		let after = u16::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
 		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), u16::static_size());
+		assert_eq!(u16::static_size(), 2);
 	}
 
 	#[test]
@@ -288,6 +453,8 @@ mod tests {
 		let after = i16::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
 		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), i16::static_size());
+		assert_eq!(i16::static_size(), 2);
 	}
 
 	#[test]
@@ -296,6 +463,8 @@ mod tests {
 		let after = u32::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
 		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), u32::static_size());
+		assert_eq!(u32::static_size(), 4);
 	}
 
 	#[test]
@@ -304,6 +473,8 @@ mod tests {
 		let after = i32::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
 		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), i32::static_size());
+		assert_eq!(i32::static_size(), 4);
 	}
 
 	#[test]
@@ -312,6 +483,8 @@ mod tests {
 		let after = u64::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
 		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), u64::static_size());
+		assert_eq!(u64::static_size(), 8);
 	}
 
 	#[test]
@@ -320,6 +493,8 @@ mod tests {
 		let after = i64::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
 		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), i64::static_size());
+		assert_eq!(i64::static_size(), 8);
 	}
 
 	#[test]
@@ -328,6 +503,8 @@ mod tests {
 		let after = u128::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
 		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), u128::static_size());
+		assert_eq!(u128::static_size(), 16);
 	}
 
 	#[test]
@@ -336,6 +513,8 @@ mod tests {
 		let after = i128::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
 		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), i128::static_size());
+		assert_eq!(i128::static_size(), 16);
 	}
 
 	#[test]
@@ -344,6 +523,8 @@ mod tests {
 		let after = f32::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
 		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), f32::static_size());
+		assert_eq!(f32::static_size(), 4);
 	}
 
 	#[test]
@@ -352,5 +533,7 @@ mod tests {
 		let after = f64::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
 		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), f64::static_size());
+		assert_eq!(f64::static_size(), 8);
 	}
 }

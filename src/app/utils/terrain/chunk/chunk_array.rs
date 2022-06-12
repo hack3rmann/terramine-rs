@@ -50,7 +50,7 @@ impl<'a> ChunkArray<'a> {
 		for x in x_lo..x_hi {
 		for y in y_lo..y_hi {
 		for z in z_lo..z_hi {
-			let chunk = Chunk::new(&graphics, Int3::new(x as i32, y as i32, z as i32), false);
+			let chunk = Chunk::new(None, Int3::new(x as i32, y as i32, z as i32), false);
 			chunks.push(chunk);
 		}}}
 
