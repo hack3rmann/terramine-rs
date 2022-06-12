@@ -212,6 +212,48 @@ unsafe impl ReinterpretFromBytes for i128 {
 
 
 
+unsafe impl Reinterpret for f32 { }
+
+unsafe impl ReinterpretAsBytes for f32 {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		unsafe {
+			let bytes: [u8; 4] = transmute(*self);
+			vec![bytes[0], bytes[1], bytes[2], bytes[3]]
+		}
+	}
+}
+
+unsafe impl ReinterpretFromBytes for f32 {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		unsafe {
+			transmute([source[0], source[1], source[2], source[3]])
+		}
+	}
+}
+
+
+
+unsafe impl Reinterpret for f64 { }
+
+unsafe impl ReinterpretAsBytes for f64 {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		unsafe {
+			let bytes: [u8; 8] = transmute(*self);
+			vec![bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]]
+		}
+	}
+}
+
+unsafe impl ReinterpretFromBytes for f64 {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		unsafe {
+			transmute([source[0], source[1], source[2], source[3], source[4], source[5], source[6], source[7]])
+		}
+	}
+}
+
+
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -292,6 +334,22 @@ mod tests {
 	fn reinterpret_i128() {
 		let before: i128 = 243523452345;
 		let after = i128::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+
+		assert_eq!(before, after);
+	}
+
+	#[test]
+	fn reinterpret_f32() {
+		let before: f32 = 12.54;
+		let after = f32::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+
+		assert_eq!(before, after);
+	}
+
+	#[test]
+	fn reinterpret_f64() {
+		let before: f64 = 134442.4454;
+		let after = f64::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
 		assert_eq!(before, after);
 	}
