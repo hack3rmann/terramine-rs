@@ -418,6 +418,48 @@ unsafe impl<T: ReinterpretSize> ReinterpretSize for Vec<T> {
 
 
 
+unsafe impl<T: Reinterpret + StaticSize> Reinterpret for Option<T> { }
+
+unsafe impl<T: ReinterpretAsBytes + ReinterpretSize> ReinterpretAsBytes for Option<T> {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		match self {
+			None => vec![false as u8],
+			Some(item) => {
+				let mut bytes = Vec::with_capacity(1 + item.reinterpret_size());
+				bytes.push(true as u8);
+				bytes.append(&mut item.reinterpret_as_bytes());
+
+				return bytes;
+			}
+		}
+	}
+}
+
+unsafe impl<T: ReinterpretFromBytes + StaticSize> ReinterpretFromBytes for Option<T> {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		if source[0] == 0 {
+			None
+		} else {
+			Some(T::reinterpret_from_bytes(&source[1 .. T::static_size() + 1]))
+		}
+	}
+}
+
+unsafe impl<T: ReinterpretSize> ReinterpretSize for Option<T> {
+	fn reinterpret_size(&self) -> usize {
+		match self {
+			Some(item) => item.reinterpret_size() + 1,
+			None => 1
+		}
+	}
+}
+
+unsafe impl<T: StaticSize> StaticSize for Option<T> {
+	fn static_size() -> usize { 1 + T::static_size() }
+}
+
+
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -549,5 +591,25 @@ mod tests {
 
 		assert_eq!(before, after);
 		assert_eq!(before.reinterpret_size(), before.len() * i32::static_size());
+	}
+
+	#[test]
+	fn reinterpret_some() {
+		let before: Option<i32> = Some(213);
+		let after = Option::<i32>::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+
+		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), Option::<i32>::static_size());
+		assert_eq!(before.reinterpret_size(), i32::static_size() + 1);
+	}
+
+	#[test]
+	fn reinterpret_none() {
+		let before: Option<u128> = None;
+		let after = Option::<u128>::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+
+		assert_eq!(before, after);
+		assert_ne!(before.reinterpret_size(), Option::<u128>::static_size());
+		assert_eq!(before.reinterpret_size(), 1);
 	}
 }
