@@ -40,6 +40,6 @@ impl Texture {
 			.magnify_filter(glium::uniforms::MagnifySamplerFilter::Nearest)
 			.minify_filter(glium::uniforms::MinifySamplerFilter::NearestMipmapNearest)
 			.wrap_function(SamplerWrapFunction::Clamp)
-			.anisotropy(16)
+			.anisotropy(4)
 	}
 }
