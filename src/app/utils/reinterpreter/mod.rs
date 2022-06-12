@@ -2,7 +2,7 @@
  * Provides some `type-byte` and `byte-type` reinterpretations to common types
  */
 
-use std::mem::transmute;
+use std::{mem::transmute, iter::FromIterator};
 
 pub unsafe trait Reinterpret: ReinterpretAsBytes + ReinterpretFromBytes + ReinterpretSize { }
 
@@ -18,8 +18,13 @@ pub unsafe trait ReinterpretSize {
 	fn reinterpret_size(&self) -> usize;
 }
 
-pub unsafe trait StaticSize {
-	fn static_size() -> usize;
+pub unsafe trait StaticSize
+where
+	Self: Sized
+{
+	fn static_size() -> usize {
+		std::mem::size_of::<Self>()
+	}
 }
 
 
@@ -40,9 +45,7 @@ unsafe impl ReinterpretSize for u8 {
 	fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl StaticSize for u8 {
-	fn static_size() -> usize { 1 }
-}
+unsafe impl StaticSize for u8 { }
 
 
 
@@ -62,9 +65,7 @@ unsafe impl ReinterpretSize for i8 {
 	fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl StaticSize for i8 {
-	fn static_size() -> usize { 1 }
-}
+unsafe impl StaticSize for i8 { }
 
 
 
@@ -91,9 +92,7 @@ unsafe impl ReinterpretSize for u16 {
 	fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl StaticSize for u16 {
-	fn static_size() -> usize { 2 }
-}
+unsafe impl StaticSize for u16 { }
 
 
 
@@ -120,9 +119,7 @@ unsafe impl ReinterpretSize for i16 {
 	fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl StaticSize for i16 {
-	fn static_size() -> usize { 2 }
-}
+unsafe impl StaticSize for i16 { }
 
 
 
@@ -149,9 +146,7 @@ unsafe impl ReinterpretSize for u32 {
 	fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl StaticSize for u32 {
-	fn static_size() -> usize { 4 }
-}
+unsafe impl StaticSize for u32 { }
 
 
 
@@ -178,9 +173,7 @@ unsafe impl ReinterpretSize for i32 {
 	fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl StaticSize for i32 {
-	fn static_size() -> usize { 4 }
-}
+unsafe impl StaticSize for i32 { }
 
 
 
@@ -207,9 +200,7 @@ unsafe impl ReinterpretSize for u64 {
 	fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl StaticSize for u64 {
-	fn static_size() -> usize { 8 }
-}
+unsafe impl StaticSize for u64 { }
 
 
 
@@ -236,9 +227,7 @@ unsafe impl ReinterpretSize for i64 {
 	fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl StaticSize for i64 {
-	fn static_size() -> usize { 8 }
-}
+unsafe impl StaticSize for i64 { }
 
 
 
@@ -267,9 +256,7 @@ unsafe impl ReinterpretSize for u128 {
 	fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl StaticSize for u128 {
-	fn static_size() -> usize { 16 }
-}
+unsafe impl StaticSize for u128 { }
 
 
 
@@ -298,9 +285,7 @@ unsafe impl ReinterpretSize for i128 {
 	fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl StaticSize for i128 {
-	fn static_size() -> usize { 16 }
-}
+unsafe impl StaticSize for i128 { }
 
 
 
@@ -327,9 +312,7 @@ unsafe impl ReinterpretSize for f32 {
 	fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl StaticSize for f32 {
-	fn static_size() -> usize { 4 }
-}
+unsafe impl StaticSize for f32 { }
 
 
 
@@ -356,9 +339,73 @@ unsafe impl ReinterpretSize for f64 {
 	fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl StaticSize for f64 {
-	fn static_size() -> usize { 8 }
+unsafe impl StaticSize for f64 { }
+
+
+
+unsafe impl Reinterpret for usize { }
+
+unsafe impl ReinterpretAsBytes for usize {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		unsafe {
+			let bytes: [u8; std::mem::size_of::<Self>()] = transmute(*self);
+			Vec::from_iter(bytes.iter().map(|r| *r))
+		}
+	}
 }
+
+unsafe impl ReinterpretFromBytes for usize {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		debug_assert_eq!(source.len(), Self::static_size(), "Attempting to assign wrong sized usize!");
+
+		unsafe {
+			match Self::static_size() {
+				4 => transmute::<_, u32>([source[0], source[1], source[2], source[3]]) as usize,
+				8 => transmute::<_, u64>([source[0], source[1], source[2], source[3], source[4], source[5], source[6], source[7]]) as usize,
+				_ => unreachable!()
+			}
+		}
+	}
+}
+
+unsafe impl ReinterpretSize for usize {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for usize { }
+
+
+
+unsafe impl Reinterpret for isize { }
+
+unsafe impl ReinterpretAsBytes for isize {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		unsafe {
+			let bytes: [u8; std::mem::size_of::<Self>()] = transmute(*self);
+			Vec::from_iter(bytes.iter().map(|r| *r))
+		}
+	}
+}
+
+unsafe impl ReinterpretFromBytes for isize {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		debug_assert_eq!(source.len(), Self::static_size(), "Attempting to assign wrong sized isize!");
+
+		unsafe {
+			match Self::static_size() {
+				4 => transmute::<_, i32>([source[0], source[1], source[2], source[3]]) as isize,
+				8 => transmute::<_, i64>([source[0], source[1], source[2], source[3], source[4], source[5], source[6], source[7]]) as isize,
+				_ => unreachable!()
+			}
+		}
+	}
+}
+
+unsafe impl ReinterpretSize for isize {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for isize { }
 
 
 
@@ -611,5 +658,25 @@ mod tests {
 		assert_eq!(before, after);
 		assert_ne!(before.reinterpret_size(), Option::<u128>::static_size());
 		assert_eq!(before.reinterpret_size(), 1);
+	}
+
+	#[test]
+	fn reinterpret_usize() {
+		let before: usize = 14242;
+		let after = usize::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+
+		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), usize::static_size());
+		assert_eq!(before.reinterpret_size(), std::mem::size_of::<usize>());
+	}
+
+	#[test]
+	fn reinterpret_isize() {
+		let before: isize = 14242;
+		let after = isize::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+
+		assert_eq!(before, after);
+		assert_eq!(before.reinterpret_size(), isize::static_size());
+		assert_eq!(before.reinterpret_size(), std::mem::size_of::<isize>());
 	}
 }
