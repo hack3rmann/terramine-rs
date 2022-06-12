@@ -44,6 +44,12 @@ impl TextureSides {
 	}
 }
 
-pub static EMPTY_VOXEL_DATA:		VoxelData = VoxelData { name: "Default nothing-block",	id: 0, textures: TextureSides::all(0) };
-pub static LOG_VOXEL_DATA:			VoxelData = VoxelData { name: "Log block",				id: 1, textures: TextureSides::vertical(3, 1) };
-pub static STONE_VOXEL_DATA:		VoxelData = VoxelData { name: "Stone block",			id: 2, textures: TextureSides::all(2) };
+pub static EMPTY_VOXEL_DATA:		&VoxelData = &VOXEL_DATA[0];
+pub static LOG_VOXEL_DATA:			&VoxelData = &VOXEL_DATA[1];
+pub static STONE_VOXEL_DATA:		&VoxelData = &VOXEL_DATA[2];
+
+pub static VOXEL_DATA: [VoxelData; 3] = [
+	VoxelData { name: "Default nothing-block",	id: 0, textures: TextureSides::all(0) },
+	VoxelData { name: "Log block",				id: 1, textures: TextureSides::vertical(3, 1) },
+	VoxelData { name: "Stone block",			id: 2, textures: TextureSides::all(2) },
+];
