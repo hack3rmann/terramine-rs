@@ -2,14 +2,14 @@ use super::{Chunk, ChunkEnvironment as ChunkEnv};
 use crate::app::utils::{
 	graphics::Graphics,
 	math::vector::{Int3, swizzle::*},
-	graphics::camera::Camera,
+	graphics::camera::Camera, reinterpreter::{StaticSize, ReinterpretAsBytes},
 };
 use glium::{
 	uniforms::Uniforms,
 	DrawError,
 	Frame
 };
-use std::fs::File;
+use std::{fs::File, os::windows::prelude::FileExt};
 
 /// Represents self-controlling chunk array.
 /// * Width is bigger if you go to x+ direction
@@ -46,11 +46,32 @@ impl<'a> ChunkArray<'a> {
 		let y_hi: isize = (height / 2 + height % 2) as isize;
 		let z_hi: isize = (depth  / 2 + depth  % 2) as isize;
 
+		/* World file */
+		let file = File::create("src/world.chunks").expect("Failed to create/open file 'src/world.chunks' in write mode!");
+		file.set_len((Chunk::static_size() * volume) as u64).expect("Failed to set file size!");
+
 		/* Fill vector with chunks with no mesh attached */
 		for x in x_lo..x_hi {
 		for y in y_lo..y_hi {
 		for z in z_lo..z_hi {
+			/* Local index function */
+			let index = |mut x: isize, mut y: isize, mut z: isize| -> usize {
+				/* Conversion to [0; +inf) */
+				x -= x_lo;
+				y -= y_lo;
+				z -= z_lo;
+
+				/* Index */
+				((x * height as isize + y) * depth as isize + z) as usize
+			};
+
+			/* Generate chunk */
 			let chunk = Chunk::new(None, Int3::new(x as i32, y as i32, z as i32), false);
+
+			/* Write it to file */
+			file.seek_write(&chunk.reinterpret_as_bytes(), (index(x, y, z) * Chunk::static_size()) as u64).unwrap();
+
+			/* Push it to chunk array */
 			chunks.push(chunk);
 		}}}
 
@@ -101,7 +122,7 @@ impl<'a> ChunkArray<'a> {
 		let mut env_iter = env.iter();
 		chunks.iter().for_each(|chunk| chunk.update_mesh(&graphics, env_iter.next().unwrap()));
 
-		ChunkArray { width, height, depth, chunks, file: todo!() }
+		ChunkArray { width, height, depth, chunks, file }
 	}
 
 	/// Renders chunks.
