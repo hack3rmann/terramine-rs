@@ -2,7 +2,7 @@ use super::{Chunk, ChunkEnvironment as ChunkEnv};
 use crate::app::utils::{
 	graphics::Graphics,
 	math::vector::{Int3, swizzle::*},
-	graphics::camera::Camera, reinterpreter::{StaticSize, ReinterpretAsBytes},
+	graphics::camera::Camera, reinterpreter::{StaticSize, ReinterpretAsBytes, ReinterpretFromBytes},
 };
 use glium::{
 	uniforms::Uniforms,
@@ -46,34 +46,61 @@ impl<'a> ChunkArray<'a> {
 		let y_hi: isize = (height / 2 + height % 2) as isize;
 		let z_hi: isize = (depth  / 2 + depth  % 2) as isize;
 
-		/* World file */
-		let file = File::create("src/world.chunks").expect("Failed to create/open file 'src/world.chunks' in write mode!");
-		file.set_len((Chunk::static_size() * volume) as u64).expect("Failed to set file size!");
+		/* Name of world file */
+		let filename = "src/world.chunks";
 
-		/* Fill vector with chunks with no mesh attached */
-		for x in x_lo..x_hi {
-		for y in y_lo..y_hi {
-		for z in z_lo..z_hi {
-			/* Local index function */
-			let index = |mut x: isize, mut y: isize, mut z: isize| -> usize {
-				/* Conversion to [0; +inf) */
-				x -= x_lo;
-				y -= y_lo;
-				z -= z_lo;
+		let file = if std::path::Path::new(filename).exists() {
+			/* World file */
+			let file = File::open(filename).expect("Failed to open file 'src/world.chunks' in read-only mode!");
 
-				/* Index */
-				((x * height as isize + y) * depth as isize + z) as usize
-			};
+			/* Current byte pointer */
+			let mut current: usize = 0;
 
-			/* Generate chunk */
-			let chunk = Chunk::new(None, Int3::new(x as i32, y as i32, z as i32), false);
+			while current <= (volume - 1) * Chunk::static_size() {
+				/* Read exact bytes for one chunk */
+				let mut bytes = vec![0; Chunk::static_size()];
+				file.seek_read(&mut bytes, current as u64).unwrap();
 
-			/* Write it to file */
-			file.seek_write(&chunk.reinterpret_as_bytes(), (index(x, y, z) * Chunk::static_size()) as u64).unwrap();
+				/* Push chunk to array */
+				chunks.push(Chunk::reinterpret_from_bytes(&bytes));
 
-			/* Push it to chunk array */
-			chunks.push(chunk);
-		}}}
+				/* Increment current pointer */
+				current += Chunk::static_size();
+			}
+
+			file
+		} else {
+			/* World file */
+			let file = File::create(filename).expect("Failed to create file 'src/world.chunks' in write-only mode!");
+			file.set_len((Chunk::static_size() * volume) as u64).expect("Failed to set file size!");
+
+			/* Fill vector with chunks with no mesh attached */
+			for x in x_lo..x_hi {
+			for y in y_lo..y_hi {
+			for z in z_lo..z_hi {
+				/* Local index function */
+				let index = |mut x: isize, mut y: isize, mut z: isize| -> usize {
+					/* Conversion to [0; +inf) */
+					x -= x_lo;
+					y -= y_lo;
+					z -= z_lo;
+
+					/* Index */
+					((x * height as isize + y) * depth as isize + z) as usize
+				};
+
+				/* Generate chunk */
+				let chunk = Chunk::new(None, Int3::new(x as i32, y as i32, z as i32), false);
+
+				/* Write it to file */
+				file.seek_write(&chunk.reinterpret_as_bytes(), (index(x, y, z) * Chunk::static_size()) as u64).unwrap();
+
+				/* Push it to chunk array */
+				chunks.push(chunk);
+			}}}
+
+			file
+		};
 
 		/* Fill environments with references to chunk array */
 		for x in 0..width {
