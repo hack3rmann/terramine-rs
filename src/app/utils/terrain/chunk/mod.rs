@@ -31,6 +31,13 @@ const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 /// Type of voxel array. May be something different during progress.
 type VoxelArray = Vec<Voxel>;
 
+#[allow(dead_code)]
+pub enum FindOptions<'v> {
+	Border,
+	InChunkNothing,
+	InChunkSome(&'v Voxel)
+}
+
 /// Chunk struct.
 pub struct Chunk<'dp> {
 	voxels: VoxelArray,
@@ -124,7 +131,7 @@ impl<'dp> Chunk<'dp> {
 					let check = |input: Option<&Voxel>| -> bool {
 						match input {
 							None => true,
-							Some(voxel) => voxel.data == NOTHING_VOXEL_DATA
+							Some(voxel) => voxel.data == NOTHING_VOXEL_DATA,
 						}
 					};
 
@@ -224,16 +231,24 @@ impl<'dp> Chunk<'dp> {
 	}
 
 	/// Gives voxel by world coordinate
-	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<&Voxel> {
+	pub fn get_voxel_optional(&self, pos: Int3) -> FindOptions {
 		/* Transform to local */
 		let pos = world_coords_to_in_some_chunk(pos, self.pos);
 		
 		if pos.x() < 0 || pos.x() >= CHUNK_SIZE as i32 || pos.y() < 0 || pos.y() >= CHUNK_SIZE as i32 || pos.z() < 0 || pos.z() >= CHUNK_SIZE as i32 {
-			None
+			FindOptions::Border
 		} else {
 			/* Sorts: [X -> Y -> Z] */
 			let index = (pos.x() * CHUNK_SIZE as i32 + pos.y()) * CHUNK_SIZE as i32 + pos.z();
-			Some(&self.voxels[index as usize])
+			FindOptions::InChunkSome(&self.voxels[index as usize])
+		}
+	}
+
+	/// Gives voxel by world coordinate
+	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<&Voxel> {
+		match self.get_voxel_optional(pos) {
+			FindOptions::Border | FindOptions::InChunkNothing => None,
+			FindOptions::InChunkSome(chunk) => Some(chunk)
 		}
 	}
 
