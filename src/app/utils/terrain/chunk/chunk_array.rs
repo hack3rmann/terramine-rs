@@ -49,9 +49,31 @@ impl<'a> ChunkArray<'a> {
 		/* Name of world file */
 		let filename = "src/world.chunks";
 
+		/* Offset of world bytes */
+		let world_offset = usize::static_size() * 3;
+
 		let file = if std::path::Path::new(filename).exists() {
 			/* World file */
-			let file = File::open(filename).expect("Failed to open file 'src/world.chunks' in read-only mode!");
+			let file = File::open(filename).expect(format!("Failed to open file {filename} in read-only mode!").as_str());
+
+			/* Read dimensions of world */
+			let mut bytes = vec![0; usize::static_size()];
+
+			/* Width */
+			file.seek_read(&mut bytes, 0).unwrap();
+			let read_width = usize::reinterpret_from_bytes(&bytes);
+
+			/* Height */
+			file.seek_read(&mut bytes, (usize::static_size()) as u64).unwrap();
+			let read_height = usize::reinterpret_from_bytes(&bytes);
+
+			/* Depth */
+			file.seek_read(&mut bytes, (usize::static_size() * 2) as u64).unwrap();
+			let read_depth = usize::reinterpret_from_bytes(&bytes);
+
+			assert_eq!(read_width,  width,  "{filename} world size changed from last edit!");
+			assert_eq!(read_height, height, "{filename} world size changed from last edit!");
+			assert_eq!(read_depth,  depth,  "{filename} world size changed from last edit!");
 
 			/* Current byte pointer */
 			let mut current: usize = 0;
@@ -59,7 +81,7 @@ impl<'a> ChunkArray<'a> {
 			while current <= (volume - 1) * Chunk::static_size() {
 				/* Read exact bytes for one chunk */
 				let mut bytes = vec![0; Chunk::static_size()];
-				file.seek_read(&mut bytes, current as u64).unwrap();
+				file.seek_read(&mut bytes, (current + world_offset) as u64).unwrap();
 
 				/* Push chunk to array */
 				chunks.push(Chunk::reinterpret_from_bytes(&bytes));
@@ -71,8 +93,13 @@ impl<'a> ChunkArray<'a> {
 			file
 		} else {
 			/* World file */
-			let file = File::create(filename).expect("Failed to create file 'src/world.chunks' in write-only mode!");
-			file.set_len((Chunk::static_size() * volume) as u64).expect("Failed to set file size!");
+			let file = File::create(filename).expect(format!("Failed to create file {filename} in write-only mode!").as_str());
+			file.set_len((Chunk::static_size() * volume + world_offset) as u64).expect("Failed to set file size!");
+
+			/* Write width, height and depth to file */
+			file.seek_write(&width.reinterpret_as_bytes(), 0).unwrap();
+			file.seek_write(&height.reinterpret_as_bytes(), (usize::static_size()) as u64).unwrap();
+			file.seek_write(&depth.reinterpret_as_bytes(), (usize::static_size() * 2) as u64).unwrap();
 
 			/* Fill vector with chunks with no mesh attached */
 			for x in x_lo..x_hi {
@@ -93,7 +120,7 @@ impl<'a> ChunkArray<'a> {
 				let chunk = Chunk::new(None, Int3::new(x as i32, y as i32, z as i32), false);
 
 				/* Write it to file */
-				file.seek_write(&chunk.reinterpret_as_bytes(), (index(x, y, z) * Chunk::static_size()) as u64).unwrap();
+				file.seek_write(&chunk.reinterpret_as_bytes(), (index(x, y, z) * Chunk::static_size() + world_offset) as u64).unwrap();
 
 				/* Push it to chunk array */
 				chunks.push(chunk);
