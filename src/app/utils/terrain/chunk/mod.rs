@@ -3,7 +3,7 @@ pub mod chunk_array;
 use super::voxel::{
 	Voxel,
 	shape::Cube,
-	voxel_data::{LOG_VOXEL_DATA, STONE_VOXEL_DATA},
+	voxel_data::*,
 };
 use crate::app::utils::{
 	math::prelude::*,
@@ -29,7 +29,7 @@ const CHUNK_SIZE:	usize = 64;
 const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 /// Type of voxel array. May be something different during progress.
-type VoxelArray = Vec<Option<Voxel>>;
+type VoxelArray = Vec<Voxel>;
 
 /// Chunk struct.
 pub struct Chunk<'dp> {
@@ -70,12 +70,12 @@ impl<'dp> Chunk<'dp> {
 			if global_pos.y() < ((global_pos.x() as f32).sin() * 3.0 + (global_pos.z() as f32).sin() * 3.0 + (global_pos.x() as f32 / 80.0).sin() * 30.0 + (global_pos.z() as f32 / 80.0).sin() * 30.0 + 8.0) as i32 &&
 			   global_pos.y() >= ((global_pos.x() as f32 / 80.0).sin() * 30.0 + (global_pos.z() as f32 / 80.0).sin() * 30.0 + 8.0) as i32
 			{
-				voxels.push(Some(Voxel::new(global_pos, LOG_VOXEL_DATA)));
+				voxels.push(Voxel::new(global_pos, LOG_VOXEL_DATA));
 			}
 			else if global_pos.y() < ((global_pos.x() as f32 / 80.0).sin() * 30.0 + (global_pos.z() as f32 / 80.0).sin() * 30.0 + 8.0) as i32 {
-				voxels.push(Some(Voxel::new(global_pos, STONE_VOXEL_DATA)))
+				voxels.push(Voxel::new(global_pos, STONE_VOXEL_DATA));
 			} else {
-			 	voxels.push(None)
+			 	voxels.push(Voxel::new(global_pos, NOTHING_VOXEL_DATA))
 			}
 		}}}
 		
@@ -111,7 +111,7 @@ impl<'dp> Chunk<'dp> {
 			/* Construct vertex array */
 			let mut vertices = Vec::<Vertex>::new();
 			for voxel in self.voxels.iter() {
-				if let Some(voxel) = voxel {
+				if voxel.data != NOTHING_VOXEL_DATA {
 					/*
 					 * Safe because environment chunks lives as long as other chunks or that given chunk.
 					 * And it also needs only at chunk generation stage.
@@ -120,11 +120,19 @@ impl<'dp> Chunk<'dp> {
 					/* Cube vertices generator */
 					let cube = Cube::new(voxel.data);
 
+					/* Draw checker */
+					let check = |input: Option<&Voxel>| -> bool {
+						match input {
+							None => true,
+							Some(voxel) => voxel.data == NOTHING_VOXEL_DATA
+						}
+					};
+
 					/* Top face check */
-					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z())) {
+					if check(self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z()))) {
 						match env.top {
 							Some(chunk) => {
-								if let None = unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z())) } {
+								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z())) }) {
 									cube.top(voxel.position, &mut vertices)
 								}
 							},
@@ -133,10 +141,10 @@ impl<'dp> Chunk<'dp> {
 					}
 
 					/* Bottom face check */
-					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z())) {
+					if check(self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z()))) {
 						match env.bottom {
 							Some(chunk) => {
-								if let None = unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z())) } {
+								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z())) }) {
 									cube.bottom(voxel.position, &mut vertices)
 								}
 							},
@@ -145,10 +153,10 @@ impl<'dp> Chunk<'dp> {
 					}
 					
 					/* Back face check */
-					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z())) {
+					if check(self.get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z()))) {
 						match env.back {
 							Some(chunk) => {
-								if let None = unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z())) } {
+								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z())) }) {
 									cube.back(voxel.position, &mut vertices)
 								}
 							},
@@ -157,10 +165,10 @@ impl<'dp> Chunk<'dp> {
 					}
 					
 					/* Front face check */
-					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z())) {
+					if check(self.get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z()))) {
 						match env.front {
 							Some(chunk) => {
-								if let None = unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z())) } {
+								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z())) }) {
 									cube.front(voxel.position, &mut vertices)
 								}
 							},
@@ -169,10 +177,10 @@ impl<'dp> Chunk<'dp> {
 					}
 					
 					/* Right face check */
-					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1)) {
+					if check(self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1))) {
 						match env.right {
 							Some(chunk) => {
-								if let None = unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1)) } {
+								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1)) }) {
 									cube.right(voxel.position, &mut vertices)
 								}
 							},
@@ -181,10 +189,10 @@ impl<'dp> Chunk<'dp> {
 					}
 					
 					/* Left face check */
-					if let None = self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1)) {
+					if check(self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1))) {
 						match env.left {
 							Some(chunk) => {
-								if let None = unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1)) } {
+								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1)) }) {
 									cube.left(voxel.position, &mut vertices)
 								}
 							},
@@ -225,7 +233,7 @@ impl<'dp> Chunk<'dp> {
 		} else {
 			/* Sorts: [X -> Y -> Z] */
 			let index = (pos.x() * CHUNK_SIZE as i32 + pos.y()) * CHUNK_SIZE as i32 + pos.z();
-			(&self.voxels[index as usize]).as_ref()
+			Some(&self.voxels[index as usize])
 		}
 	}
 
@@ -258,7 +266,7 @@ unsafe impl<'c> ReinterpretAsBytes for Chunk<'c> {
 
 unsafe impl<'c> ReinterpretFromBytes for Chunk<'c> {
 	fn reinterpret_from_bytes(source: &[u8]) -> Self {
-		let voxel_array_size: usize = CHUNK_VOLUME * (Voxel::static_size() + 1);
+		let voxel_array_size: usize = CHUNK_VOLUME * Voxel::static_size();
 
 		let voxels = VoxelArray::reinterpret_from_bytes(&source[.. voxel_array_size]);
 		let pos = Int3::reinterpret_from_bytes(&source[voxel_array_size .. voxel_array_size + Int3::static_size()]);
@@ -274,7 +282,7 @@ unsafe impl<'c> ReinterpretSize for Chunk<'c> {
 
 unsafe impl<'c> StaticSize for Chunk<'c> {
 	fn static_size() -> usize {
-		CHUNK_VOLUME * Option::<Voxel>::static_size() + Int3::static_size() + 1
+		CHUNK_VOLUME * Voxel::static_size() + Int3::static_size() + 1
 	}
 }
 
