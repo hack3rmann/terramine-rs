@@ -173,7 +173,7 @@ pub fn build_window(ui: &imgui::Ui, input: &InputManager, profiler_result: DataS
 			 * Build all elements. Speparate only existing lines
 			 */
 
-			for result in profiler_result[..profiler_result.len() - 1].iter() {
+			for (i, result) in profiler_result.iter().enumerate() {
 				/* Target name */
 				ui.text(result.0);
 
@@ -187,22 +187,10 @@ pub fn build_window(ui: &imgui::Ui, input: &InputManager, profiler_result: DataS
 				ui.text(format!("Frame time: {:.3}%", result.2 * 100.0));
 
 				/* Separator to next result */
-				ui.separator();
+				if i != profiler_result.len() - 1 {
+					ui.separator();
+				}
 			}
-
-			let ref last = profiler_result[profiler_result.len() - 1];
-
-			/* Target name */
-			ui.text(last.0);
-
-			/* Call count */
-			ui.text(format!("Call per frame: {}", last.1));
-
-			/* Time that function need */
-			ui.text(format!("Time: {:.3}ms", last.3 * 1000.0));
-
-			/* Percent of frame time */
-			ui.text(format!("Frame time: {:.3}%", last.2 * 100.0));
 		});
 	}
 }
