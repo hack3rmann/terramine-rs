@@ -209,6 +209,9 @@ impl<'dp> Chunk<'dp> {
 				}
 			}
 
+			/* Shrink vector */
+			vertices.shrink_to_fit();
+
 			/* Chunk draw parameters */
 			let draw_params = glium::DrawParameters {
 				depth: glium::Depth {
