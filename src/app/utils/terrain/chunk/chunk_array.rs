@@ -49,46 +49,7 @@ impl<'a> ChunkArray<'a> {
 		/* Offset of world bytes */
 		let world_offset = usize::static_size() * 3;
 
-		if std::path::Path::new(filename).exists() {
-			/* World file */
-			let file = File::open(filename).expect(format!("Failed to open file {filename} in read-only mode!").as_str());
-
-			/* Read dimensions of world */
-			let mut bytes = vec![0; usize::static_size()];
-
-			/* Width */
-			file.seek_read(&mut bytes, 0).unwrap();
-			let read_width = usize::reinterpret_from_bytes(&bytes);
-
-			/* Height */
-			file.seek_read(&mut bytes, (usize::static_size()) as u64).unwrap();
-			let read_height = usize::reinterpret_from_bytes(&bytes);
-
-			/* Depth */
-			file.seek_read(&mut bytes, (usize::static_size() * 2) as u64).unwrap();
-			let read_depth = usize::reinterpret_from_bytes(&bytes);
-
-			assert_eq!(read_width,  width,  "{filename} world size changed from last edit!");
-			assert_eq!(read_height, height, "{filename} world size changed from last edit!");
-			assert_eq!(read_depth,  depth,  "{filename} world size changed from last edit!");
-
-			/* Current byte pointer */
-			let mut current: usize = 0;
-
-			/* Bytes buffer */
-			let mut buffer = vec![0; Chunk::static_size()];
-
-			while current <= (volume - 1) * Chunk::static_size() {
-				/* Read exact bytes for one chunk */
-				file.seek_read(&mut buffer, (current + world_offset) as u64).unwrap();
-
-				/* Push chunk to array */
-				chunks.push(Chunk::reinterpret_from_bytes(&buffer));
-
-				/* Increment current pointer */
-				current += Chunk::static_size();
-			}
-		} else {
+		let mut generate_file = || {
 			/* World file */
 			let file = File::create(filename).expect(format!("Failed to create file {filename} in write-only mode!").as_str());
 			file.set_len((Chunk::static_size() * volume + world_offset) as u64).expect("Failed to set file size!");
@@ -122,6 +83,49 @@ impl<'a> ChunkArray<'a> {
 				/* Push it to chunk array */
 				chunks.push(chunk);
 			}}}
+		};
+
+		if std::path::Path::new(filename).exists() {
+			/* World file */
+			let file = File::open(filename).expect(format!("Failed to open file {filename} in read-only mode!").as_str());
+
+			/* Read dimensions of world */
+			let mut bytes = vec![0; usize::static_size()];
+
+			/* Width */
+			file.seek_read(&mut bytes, 0).unwrap();
+			let read_width = usize::reinterpret_from_bytes(&bytes);
+
+			/* Height */
+			file.seek_read(&mut bytes, (usize::static_size()) as u64).unwrap();
+			let read_height = usize::reinterpret_from_bytes(&bytes);
+
+			/* Depth */
+			file.seek_read(&mut bytes, (usize::static_size() * 2) as u64).unwrap();
+			let read_depth = usize::reinterpret_from_bytes(&bytes);
+
+			if read_width == width && read_height == height && read_depth == depth {
+				/* Current byte pointer */
+				let mut current: usize = 0;
+	
+				/* Bytes buffer */
+				let mut buffer = vec![0; Chunk::static_size()];
+	
+				while current <= (volume - 1) * Chunk::static_size() {
+					/* Read exact bytes for one chunk */
+					file.seek_read(&mut buffer, (current + world_offset) as u64).unwrap();
+	
+					/* Push chunk to array */
+					chunks.push(Chunk::reinterpret_from_bytes(&buffer));
+	
+					/* Increment current pointer */
+					current += Chunk::static_size();
+				}
+			} else {
+				generate_file();
+			}
+		} else {
+			generate_file();
 		}
 
 		/* Fill environments with references to chunk array */
