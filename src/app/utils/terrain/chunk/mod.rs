@@ -3,7 +3,8 @@ pub mod chunk_array;
 use super::voxel::{
 	Voxel,
 	shape::Cube,
-	voxel_data::*, generator,
+	voxel_data::*,
+	generator,
 };
 use crate::app::utils::{
 	math::prelude::*,
@@ -24,18 +25,28 @@ use glium::{
 };
 use std::cell::RefCell;
 
+/**
+ * Index cheatsheet!
+ * 
+ * i = d(hx + y) + z
+ * 
+ * x = (i / d) / h
+ * y = (i / d) % h
+ * z = i % d
+ */
+
 /// Predefined chunk values.
 const CHUNK_SIZE:	usize = 64;
 const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 /// Type of voxel array. May be something different during progress.
-type VoxelArray = Vec<Voxel>;
+type VoxelArray = Vec<&'static VoxelData>;
 
 #[allow(dead_code)]
-pub enum FindOptions<'v> {
+pub enum FindOptions {
 	Border,
 	InChunkNothing,
-	InChunkSome(&'v Voxel)
+	InChunkSome(Voxel)
 }
 
 /// Chunk struct.
@@ -77,17 +88,17 @@ impl<'dp> Chunk<'dp> {
 
 			/* Kind of trees generation */
 			if generator::trees(global_pos) {
-				voxels.push(Voxel::new(global_pos, LOG_VOXEL_DATA));
+				voxels.push(LOG_VOXEL_DATA);
 			}
 			
 			/* Sine-like floor */
-			else if generator::sine(pos) {
-				voxels.push(Voxel::new(global_pos, STONE_VOXEL_DATA));
+			else if generator::sine(global_pos) {
+				voxels.push(STONE_VOXEL_DATA);
 			}
 			
 			/* Air */
 			else {
-			 	voxels.push(Voxel::new(global_pos, NOTHING_VOXEL_DATA))
+			 	voxels.push(NOTHING_VOXEL_DATA)
 			}
 		}}}
 		
@@ -122,18 +133,31 @@ impl<'dp> Chunk<'dp> {
 		self.mesh.replace({
 			/* Construct vertex array */
 			let mut vertices = Vec::<Vertex>::new();
-			for voxel in self.voxels.iter() {
-				if voxel.data != NOTHING_VOXEL_DATA {
+			for (i, &voxel) in self.voxels.iter().enumerate() {
+				if voxel != NOTHING_VOXEL_DATA {
 					/*
 					 * Safe because environment chunks lives as long as other chunks or that given chunk.
 					 * And it also needs only at chunk generation stage.
 					 */
 
 					/* Cube vertices generator */
-					let cube = Cube::new(voxel.data);
+					let cube = Cube::new(voxel);
+
+					/* Get position from index */
+					let position = {
+						/* Reference formula: `i = d(hx + y) + z` */
+						
+						let xy = i / CHUNK_SIZE;
+						let z  = i % CHUNK_SIZE;
+
+						let x = xy / CHUNK_SIZE;
+						let y = xy % CHUNK_SIZE;
+
+						pos_in_chunk_to_world(Int3::new(x as i32, y as i32, z as i32), self.pos)
+					};
 
 					/* Draw checker */
-					let check = |input: Option<&Voxel>| -> bool {
+					let check = |input: Option<Voxel>| -> bool {
 						match input {
 							None => true,
 							Some(voxel) => voxel.data == NOTHING_VOXEL_DATA,
@@ -141,74 +165,74 @@ impl<'dp> Chunk<'dp> {
 					};
 
 					/* Top face check */
-					if check(self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z()))) {
+					if check(self.get_voxel_or_none(Int3::new(position.x(), position.y() + 1, position.z()))) {
 						match env.top {
 							Some(chunk) => {
-								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() + 1, voxel.position.z())) }) {
-									cube.top(voxel.position, &mut vertices)
+								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y() + 1, position.z())) }) {
+									cube.top(position, &mut vertices)
 								}
 							},
-							None => cube.top(voxel.position, &mut vertices)
+							None => cube.top(position, &mut vertices)
 						}
 					}
 
 					/* Bottom face check */
-					if check(self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z()))) {
+					if check(self.get_voxel_or_none(Int3::new(position.x(), position.y() - 1, position.z()))) {
 						match env.bottom {
 							Some(chunk) => {
-								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y() - 1, voxel.position.z())) }) {
-									cube.bottom(voxel.position, &mut vertices)
+								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y() - 1, position.z())) }) {
+									cube.bottom(position, &mut vertices)
 								}
 							},
-							None => cube.bottom(voxel.position, &mut vertices)
+							None => cube.bottom(position, &mut vertices)
 						}
 					}
 					
 					/* Back face check */
-					if check(self.get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z()))) {
+					if check(self.get_voxel_or_none(Int3::new(position.x() + 1, position.y(), position.z()))) {
 						match env.back {
 							Some(chunk) => {
-								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x() + 1, voxel.position.y(), voxel.position.z())) }) {
-									cube.back(voxel.position, &mut vertices)
+								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x() + 1, position.y(), position.z())) }) {
+									cube.back(position, &mut vertices)
 								}
 							},
-							None => cube.back(voxel.position, &mut vertices)
+							None => cube.back(position, &mut vertices)
 						}
 					}
 					
 					/* Front face check */
-					if check(self.get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z()))) {
+					if check(self.get_voxel_or_none(Int3::new(position.x() - 1, position.y(), position.z()))) {
 						match env.front {
 							Some(chunk) => {
-								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x() - 1, voxel.position.y(), voxel.position.z())) }) {
-									cube.front(voxel.position, &mut vertices)
+								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x() - 1, position.y(), position.z())) }) {
+									cube.front(position, &mut vertices)
 								}
 							},
-							None => cube.front(voxel.position, &mut vertices)
+							None => cube.front(position, &mut vertices)
 						}
 					}
 					
 					/* Right face check */
-					if check(self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1))) {
+					if check(self.get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() + 1))) {
 						match env.right {
 							Some(chunk) => {
-								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() + 1)) }) {
-									cube.right(voxel.position, &mut vertices)
+								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() + 1)) }) {
+									cube.right(position, &mut vertices)
 								}
 							},
-							None => cube.right(voxel.position, &mut vertices)
+							None => cube.right(position, &mut vertices)
 						}
 					}
 					
 					/* Left face check */
-					if check(self.get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1))) {
+					if check(self.get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() - 1))) {
 						match env.left {
 							Some(chunk) => {
-								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(voxel.position.x(), voxel.position.y(), voxel.position.z() - 1)) }) {
-									cube.left(voxel.position, &mut vertices)
+								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() - 1)) }) {
+									cube.left(position, &mut vertices)
 								}
 							},
-							None => cube.left(voxel.position, &mut vertices)
+							None => cube.left(position, &mut vertices)
 						}
 					}
 				}
@@ -239,21 +263,21 @@ impl<'dp> Chunk<'dp> {
 	}
 
 	/// Gives voxel by world coordinate
-	pub fn get_voxel_optional(&self, pos: Int3) -> FindOptions {
+	pub fn get_voxel_optional(&self, global_pos: Int3) -> FindOptions {
 		/* Transform to local */
-		let pos = world_coords_to_in_some_chunk(pos, self.pos);
+		let pos = world_coords_to_in_some_chunk(global_pos, self.pos);
 		
 		if pos.x() < 0 || pos.x() >= CHUNK_SIZE as i32 || pos.y() < 0 || pos.y() >= CHUNK_SIZE as i32 || pos.z() < 0 || pos.z() >= CHUNK_SIZE as i32 {
 			FindOptions::Border
 		} else {
 			/* Sorts: [X -> Y -> Z] */
 			let index = (pos.x() * CHUNK_SIZE as i32 + pos.y()) * CHUNK_SIZE as i32 + pos.z();
-			FindOptions::InChunkSome(&self.voxels[index as usize])
+			FindOptions::InChunkSome(Voxel::new(global_pos, self.voxels[index as usize]))
 		}
 	}
 
 	/// Gives voxel by world coordinate
-	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<&Voxel> {
+	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<Voxel> {
 		match self.get_voxel_optional(pos) {
 			FindOptions::Border | FindOptions::InChunkNothing => None,
 			FindOptions::InChunkSome(chunk) => Some(chunk)
@@ -268,6 +292,66 @@ impl<'dp> Chunk<'dp> {
 
 		/* Frustum check */
 		camera.is_aabb_in_view(AABB::from_int3(lo, hi))
+	}
+}
+
+
+
+unsafe impl Reinterpret for VoxelArray { }
+
+unsafe impl ReinterpretAsBytes for VoxelArray {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		let mut bytes = Vec::with_capacity(Self::static_size());
+
+		for elem in self.into_iter() {
+			bytes.append(&mut elem.id.reinterpret_as_bytes());
+		}
+
+		return bytes;
+	}
+}
+
+unsafe impl ReinterpretFromBytes for VoxelArray {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		if source.len() == 0 {
+			return vec![];
+		} else {
+			/* Byte data should be aligned by destination byte size */
+			debug_assert_eq!(
+				source.len() % u32::static_size(), 0,
+				"Attempting to reinterpret unaligned bytes as aligned by {} bytes. Actual length is {}",
+				u32::static_size(),
+				source.len()
+			);
+
+			/* Counter */
+			let mut current: usize = 0;
+
+			/* Result */
+			let mut result = Vec::with_capacity(source.len() / u32::static_size());
+
+			/* Reintepret bytes until vector is full */
+			while current <= source.len() - u32::static_size() {
+				result.push(&VOXEL_DATA[
+					u32::reinterpret_from_bytes(&source[current .. current + u32::static_size()]) as usize
+				]);
+				current += u32::static_size();
+			}
+
+			return result;
+		}
+	}
+}
+
+unsafe impl ReinterpretSize for VoxelArray {
+	fn reinterpret_size(&self) -> usize {
+		self.len() * u32::static_size()
+	}
+}
+
+unsafe impl StaticSize for VoxelArray {
+	fn static_size() -> usize {
+		CHUNK_VOLUME * u32::static_size()
 	}
 }
 
@@ -289,9 +373,9 @@ unsafe impl<'c> ReinterpretAsBytes for Chunk<'c> {
 
 unsafe impl<'c> ReinterpretFromBytes for Chunk<'c> {
 	fn reinterpret_from_bytes(source: &[u8]) -> Self {
-		let voxel_array_size: usize = CHUNK_VOLUME * Voxel::static_size();
+		let voxel_array_size: usize = VoxelArray::static_size();
 
-		let voxels = VoxelArray::reinterpret_from_bytes(&source[.. voxel_array_size]);
+		let voxels = VoxelArray::reinterpret_from_bytes(&source[.. voxel_array_size]); // PANIC!
 		let pos = Int3::reinterpret_from_bytes(&source[voxel_array_size .. voxel_array_size + Int3::static_size()]);
 		let mesh = RefCell::new(None);
 
@@ -305,7 +389,7 @@ unsafe impl<'c> ReinterpretSize for Chunk<'c> {
 
 unsafe impl<'c> StaticSize for Chunk<'c> {
 	fn static_size() -> usize {
-		CHUNK_VOLUME * Voxel::static_size() + Int3::static_size() + 1
+		VoxelArray::static_size() + Int3::static_size() + 1
 	}
 }
 

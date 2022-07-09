@@ -440,7 +440,7 @@ unsafe impl<T: ReinterpretFromBytes + StaticSize> ReinterpretFromBytes for Vec<T
 			let mut current: usize = 0;
 
 			/* Result */
-			let mut result = Vec::with_capacity(source.len() % T::static_size());
+			let mut result = Vec::with_capacity(source.len() / T::static_size());
 
 			/* Reintepret bytes until vector is full */
 			while current <= source.len() - T::static_size() {
