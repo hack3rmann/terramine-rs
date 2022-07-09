@@ -104,6 +104,7 @@ impl<'a> ChunkArray<'a> {
 			file.seek_read(&mut bytes, (usize::static_size() * 2) as u64).unwrap();
 			let read_depth = usize::reinterpret_from_bytes(&bytes);
 
+			/* Size changed => regenerate world */
 			if read_width == width && read_height == height && read_depth == depth {
 				/* Current byte pointer */
 				let mut current: usize = 0;
