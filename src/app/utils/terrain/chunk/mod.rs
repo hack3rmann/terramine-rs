@@ -92,7 +92,7 @@ impl<'dp> Chunk<'dp> {
 			}
 			
 			/* Sine-like floor */
-			else if generator::sine(pos) {
+			else if generator::sine(global_pos) {
 				voxels.push(STONE_VOXEL_DATA);
 			}
 			
