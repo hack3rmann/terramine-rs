@@ -24,9 +24,6 @@ pub struct ChunkArray<'a> {
 
 	/* Chunk array itself */
 	chunks: Vec<Chunk<'a>>,
-
-	/* Dynamic world file */
-	file: File,
 }
 
 impl<'a> ChunkArray<'a> {
@@ -52,7 +49,7 @@ impl<'a> ChunkArray<'a> {
 		/* Offset of world bytes */
 		let world_offset = usize::static_size() * 3;
 
-		let file = if std::path::Path::new(filename).exists() {
+		if std::path::Path::new(filename).exists() {
 			/* World file */
 			let file = File::open(filename).expect(format!("Failed to open file {filename} in read-only mode!").as_str());
 
@@ -91,8 +88,6 @@ impl<'a> ChunkArray<'a> {
 				/* Increment current pointer */
 				current += Chunk::static_size();
 			}
-
-			file
 		} else {
 			/* World file */
 			let file = File::create(filename).expect(format!("Failed to create file {filename} in write-only mode!").as_str());
@@ -127,9 +122,7 @@ impl<'a> ChunkArray<'a> {
 				/* Push it to chunk array */
 				chunks.push(chunk);
 			}}}
-
-			file
-		};
+		}
 
 		/* Fill environments with references to chunk array */
 		for x in 0..width {
@@ -178,7 +171,7 @@ impl<'a> ChunkArray<'a> {
 		let mut env_iter = env.iter();
 		chunks.iter().for_each(|chunk| chunk.update_mesh(&graphics, env_iter.next().unwrap()));
 
-		ChunkArray { width, height, depth, chunks, file }
+		ChunkArray { width, height, depth, chunks }
 	}
 
 	/// Renders chunks.
