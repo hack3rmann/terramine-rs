@@ -40,7 +40,7 @@ const CHUNK_SIZE:	usize = 64;
 const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 /// Type of voxel array. May be something different during progress.
-type VoxelArray = Vec<&'static VoxelData>;
+type VoxelArray = Vec<u16>;
 
 #[allow(dead_code)]
 pub enum FindOptions {
@@ -88,17 +88,17 @@ impl<'dp> Chunk<'dp> {
 
 			/* Kind of trees generation */
 			if generator::trees(global_pos) {
-				voxels.push(LOG_VOXEL_DATA);
+				voxels.push(LOG_VOXEL_DATA.id);
 			}
 			
 			/* Sine-like floor */
 			else if generator::sine(global_pos) {
-				voxels.push(STONE_VOXEL_DATA);
+				voxels.push(STONE_VOXEL_DATA.id);
 			}
 			
 			/* Air */
 			else {
-			 	voxels.push(NOTHING_VOXEL_DATA)
+			 	voxels.push(NOTHING_VOXEL_DATA.id)
 			}
 		}}}
 		
@@ -133,15 +133,15 @@ impl<'dp> Chunk<'dp> {
 		self.mesh.replace({
 			/* Construct vertex array */
 			let mut vertices = Vec::<Vertex>::new();
-			for (i, &voxel) in self.voxels.iter().enumerate() {
-				if voxel != NOTHING_VOXEL_DATA {
+			for (i, &voxel_id) in self.voxels.iter().enumerate() {
+				if voxel_id != NOTHING_VOXEL_DATA.id {
 					/*
 					 * Safe because environment chunks lives as long as other chunks or that given chunk.
 					 * And it also needs only at chunk generation stage.
 					 */
 
 					/* Cube vertices generator */
-					let cube = Cube::new(voxel);
+					let cube = Cube::new(&VOXEL_DATA[voxel_id as usize]);
 
 					/* Get position from index */
 					let position = pos_in_chunk_to_world(position_function(i), self.pos);
@@ -262,7 +262,7 @@ impl<'dp> Chunk<'dp> {
 		} else {
 			/* Sorts: [X -> Y -> Z] */
 			let index = index_function(pos);
-			FindOptions::InChunkSome(Voxel::new(global_pos, self.voxels[index]))
+			FindOptions::InChunkSome(Voxel::new(global_pos, &VOXEL_DATA[self.voxels[index] as usize]))
 		}
 	}
 
@@ -285,67 +285,11 @@ impl<'dp> Chunk<'dp> {
 	}
 }
 
-
-
-unsafe impl Reinterpret for VoxelArray { }
-
-unsafe impl ReinterpretAsBytes for VoxelArray {
-	fn reinterpret_as_bytes(&self) -> Vec<u8> {
-		let mut bytes = Vec::with_capacity(Self::static_size());
-
-		for elem in self.into_iter() {
-			bytes.append(&mut elem.id.reinterpret_as_bytes());
-		}
-
-		return bytes;
-	}
-}
-
-unsafe impl ReinterpretFromBytes for VoxelArray {
-	fn reinterpret_from_bytes(source: &[u8]) -> Self {
-		if source.len() == 0 {
-			return vec![];
-		} else {
-			/* Byte data should be aligned by destination byte size */
-			debug_assert_eq!(
-				source.len() % u32::static_size(), 0,
-				"Attempting to reinterpret unaligned bytes as aligned by {} bytes. Actual length is {}",
-				u32::static_size(),
-				source.len()
-			);
-
-			/* Counter */
-			let mut current: usize = 0;
-
-			/* Result */
-			let mut result = Vec::with_capacity(source.len() / u32::static_size());
-
-			/* Reintepret bytes until vector is full */
-			while current <= source.len() - u32::static_size() {
-				result.push(&VOXEL_DATA[
-					u32::reinterpret_from_bytes(&source[current .. current + u32::static_size()]) as usize
-				]);
-				current += u32::static_size();
-			}
-
-			return result;
-		}
-	}
-}
-
-unsafe impl ReinterpretSize for VoxelArray {
-	fn reinterpret_size(&self) -> usize {
-		self.len() * u32::static_size()
-	}
-}
-
 unsafe impl StaticSize for VoxelArray {
 	fn static_size() -> usize {
-		CHUNK_VOLUME * u32::static_size()
+		CHUNK_VOLUME * u16::static_size()
 	}
 }
-
-
 
 unsafe impl<'c> Reinterpret for Chunk<'c> { }
 

@@ -4,7 +4,7 @@
 #[derive(Debug, PartialEq)]
 pub struct VoxelData {
 	pub name: &'static str,
-	pub id: u32,
+	pub id: u16,
 
 	pub textures: TextureSides
 }
