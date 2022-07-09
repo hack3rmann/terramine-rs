@@ -144,17 +144,7 @@ impl<'dp> Chunk<'dp> {
 					let cube = Cube::new(voxel);
 
 					/* Get position from index */
-					let position = {
-						/* Reference formula: `i = d(hx + y) + z` */
-						
-						let xy = i / CHUNK_SIZE;
-						let z  = i % CHUNK_SIZE;
-
-						let x = xy / CHUNK_SIZE;
-						let y = xy % CHUNK_SIZE;
-
-						pos_in_chunk_to_world(Int3::new(x as i32, y as i32, z as i32), self.pos)
-					};
+					let position = pos_in_chunk_to_world(position_function(i), self.pos);
 
 					/* Draw checker */
 					let check = |input: Option<Voxel>| -> bool {
@@ -271,8 +261,8 @@ impl<'dp> Chunk<'dp> {
 			FindOptions::Border
 		} else {
 			/* Sorts: [X -> Y -> Z] */
-			let index = (pos.x() * CHUNK_SIZE as i32 + pos.y()) * CHUNK_SIZE as i32 + pos.z();
-			FindOptions::InChunkSome(Voxel::new(global_pos, self.voxels[index as usize]))
+			let index = index_function(pos);
+			FindOptions::InChunkSome(Voxel::new(global_pos, self.voxels[index]))
 		}
 	}
 
@@ -453,4 +443,20 @@ pub fn world_coords_to_in_chunk(pos: Int3) -> Int3 {
 /// Transforms world coordinates to chunk 
 pub fn world_coords_to_in_some_chunk(pos: Int3, chunk: Int3) -> Int3 {
 	pos - chunk_cords_to_min_world(chunk)
+}
+
+/// Index function
+pub fn index_function(pos: Int3) -> usize {
+	(CHUNK_SIZE * pos.x() as usize + pos.y() as usize) * CHUNK_SIZE + pos.z() as usize
+}
+
+/// Position function
+pub fn position_function(i: usize) -> Int3 {
+	let xy = i / CHUNK_SIZE;
+
+	let z =  i % CHUNK_SIZE;
+	let x = xy / CHUNK_SIZE;
+	let y = xy % CHUNK_SIZE;
+
+	Int3::new(x as i32, y as i32, z as i32)
 }
