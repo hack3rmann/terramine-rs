@@ -86,7 +86,7 @@ impl<'dp> Chunk<'dp> {
 			}
 			
 			/* Air */
-			else { /* Air */
+			else {
 			 	voxels.push(Voxel::new(global_pos, NOTHING_VOXEL_DATA))
 			}
 		}}}
