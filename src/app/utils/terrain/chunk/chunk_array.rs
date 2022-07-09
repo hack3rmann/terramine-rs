@@ -78,13 +78,15 @@ impl<'a> ChunkArray<'a> {
 			/* Current byte pointer */
 			let mut current: usize = 0;
 
+			/* Bytes buffer */
+			let mut buffer = vec![0; Chunk::static_size()];
+
 			while current <= (volume - 1) * Chunk::static_size() {
 				/* Read exact bytes for one chunk */
-				let mut bytes = vec![0; Chunk::static_size()];
-				file.seek_read(&mut bytes, (current + world_offset) as u64).unwrap();
+				file.seek_read(&mut buffer, (current + world_offset) as u64).unwrap();
 
 				/* Push chunk to array */
-				chunks.push(Chunk::reinterpret_from_bytes(&bytes));
+				chunks.push(Chunk::reinterpret_from_bytes(&buffer));
 
 				/* Increment current pointer */
 				current += Chunk::static_size();
@@ -98,7 +100,7 @@ impl<'a> ChunkArray<'a> {
 
 			/* Write width, height and depth to file */
 			file.seek_write(&width.reinterpret_as_bytes(), 0).unwrap();
-			file.seek_write(&height.reinterpret_as_bytes(), (usize::static_size()) as u64).unwrap();
+			file.seek_write(&height.reinterpret_as_bytes(), usize::static_size() as u64).unwrap();
 			file.seek_write(&depth.reinterpret_as_bytes(), (usize::static_size() * 2) as u64).unwrap();
 
 			/* Fill vector with chunks with no mesh attached */

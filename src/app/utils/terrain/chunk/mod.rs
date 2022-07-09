@@ -25,6 +25,16 @@ use glium::{
 };
 use std::cell::RefCell;
 
+/**
+ * Index cheatsheet!
+ * 
+ * i = d(hx + y) + z
+ * 
+ * x = (i / d) / h
+ * y = (i / d) % h
+ * z = i % d
+ */
+
 /// Predefined chunk values.
 const CHUNK_SIZE:	usize = 64;
 const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
@@ -123,8 +133,8 @@ impl<'dp> Chunk<'dp> {
 		self.mesh.replace({
 			/* Construct vertex array */
 			let mut vertices = Vec::<Vertex>::new();
-			for (i, voxel) in self.voxels.iter().enumerate() {
-				if voxel != &NOTHING_VOXEL_DATA {
+			for (i, &voxel) in self.voxels.iter().enumerate() {
+				if voxel != NOTHING_VOXEL_DATA {
 					/*
 					 * Safe because environment chunks lives as long as other chunks or that given chunk.
 					 * And it also needs only at chunk generation stage.
@@ -143,7 +153,7 @@ impl<'dp> Chunk<'dp> {
 						let x = xy / CHUNK_SIZE;
 						let y = xy % CHUNK_SIZE;
 
-						Int3::new(x as i32, y as i32, z as i32)
+						pos_in_chunk_to_world(Int3::new(x as i32, y as i32, z as i32), self.pos)
 					};
 
 					/* Draw checker */
