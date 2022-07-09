@@ -1,5 +1,6 @@
 pub mod voxel_data;
 pub mod atlas;
+pub mod generator;
 
 use voxel_data::*;
 use crate::app::utils::{

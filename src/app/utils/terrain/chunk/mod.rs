@@ -3,7 +3,7 @@ pub mod chunk_array;
 use super::voxel::{
 	Voxel,
 	shape::Cube,
-	voxel_data::*,
+	voxel_data::*, generator,
 };
 use crate::app::utils::{
 	math::prelude::*,
@@ -74,14 +74,19 @@ impl<'dp> Chunk<'dp> {
 		for y in 0..CHUNK_SIZE {
 		for z in 0..CHUNK_SIZE {
 			let global_pos = pos_in_chunk_to_world(Int3::new(x as i32, y as i32, z as i32), pos);
-			if global_pos.y() < ((global_pos.x() as f32).sin() * 3.0 + (global_pos.z() as f32).sin() * 3.0 + (global_pos.x() as f32 / 80.0).sin() * 30.0 + (global_pos.z() as f32 / 80.0).sin() * 30.0 + 8.0) as i32 &&
-			   global_pos.y() >= ((global_pos.x() as f32 / 80.0).sin() * 30.0 + (global_pos.z() as f32 / 80.0).sin() * 30.0 + 8.0) as i32
-			{
+
+			/* Kind of trees generation */
+			if generator::trees(global_pos) {
 				voxels.push(Voxel::new(global_pos, LOG_VOXEL_DATA));
 			}
-			else if global_pos.y() < ((global_pos.x() as f32 / 80.0).sin() * 30.0 + (global_pos.z() as f32 / 80.0).sin() * 30.0 + 8.0) as i32 {
+			
+			/* Sine-like floor */
+			else if generator::sine(pos) {
 				voxels.push(Voxel::new(global_pos, STONE_VOXEL_DATA));
-			} else {
+			}
+			
+			/* Air */
+			else { /* Air */
 			 	voxels.push(Voxel::new(global_pos, NOTHING_VOXEL_DATA))
 			}
 		}}}
