@@ -110,20 +110,25 @@ impl<'a> ChunkArray<'a> {
 			/* Size changed => regenerate world */
 			if read_width == width && read_height == height && read_depth == depth {
 				/* Current byte pointer */
-				let mut current = chunk_heap_offset as u64;
+				let mut current = chunk_table_offset as u64;
 	
 				/* Bytes buffer */
 				let mut buffer = vec![0; Chunk::static_size()];
+				let mut chunk_offset_buffer = vec![0; u64::static_size()];
 	
-				while current <= ((volume - 1) * Chunk::static_size() + chunk_heap_offset) as u64 {
+				while current <= ((volume - 1) * u64::static_size() + chunk_table_offset) as u64 {
+					/* Read chunk offset from table */
+					file.seek_read(&mut chunk_offset_buffer, current).unwrap();
+					let chunk_offset = u64::reinterpret_from_bytes(&chunk_offset_buffer);
+
 					/* Read exact bytes for one chunk */
-					file.seek_read(&mut buffer, current).unwrap();
+					file.seek_read(&mut buffer, chunk_offset).unwrap();
 	
 					/* Push chunk to array */
 					chunks.push(Chunk::reinterpret_from_bytes(&buffer));
 	
 					/* Increment current pointer */
-					current += Chunk::static_size() as u64;
+					current += u64::static_size() as u64;
 				}
 			} else {
 				generate_file();
