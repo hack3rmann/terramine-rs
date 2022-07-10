@@ -33,7 +33,6 @@ impl<'a> ChunkArray<'a> {
 
 		/* Initialize vector */
 		let mut chunks = Vec::<Chunk>::with_capacity(volume);
-		let mut env = vec![ChunkEnv::none(); volume];
 
 		/* Name of world file */
 		let filename = "src/world.chunks";
@@ -129,7 +128,20 @@ impl<'a> ChunkArray<'a> {
 			generate_file();
 		}
 
-		/* Fill environments with references to chunk array */
+		/* Make environments with references to chunk array */
+		let env = Self::make_environment(&chunks, width, height, depth);
+
+		/* Create mesh for each chunk */
+		chunks.iter().zip(env.iter())
+			.for_each(|(chunk, env)| chunk.update_mesh(&graphics, env));
+
+		ChunkArray { width, height, depth, chunks }
+	}
+
+	/// Creates environment for ChunkArray
+	fn make_environment<'v, 'c>(chunks: &'v Vec<Chunk<'c>>, width: usize, height: usize, depth: usize) -> Vec<ChunkEnv<'c>> {
+		let mut env = vec![ChunkEnv::none(); width * height * depth];
+
 		for x in 0..width {
 		for y in 0..height {
 		for z in 0..depth {
@@ -170,11 +182,7 @@ impl<'a> ChunkArray<'a> {
 			}
 		}}}
 
-		/* Create mesh for each chunk */
-		let mut env_iter = env.iter();
-		chunks.iter().for_each(|chunk| chunk.update_mesh(&graphics, env_iter.next().unwrap()));
-
-		ChunkArray { width, height, depth, chunks }
+		return env;
 	}
 
 	/// Renders chunks.
