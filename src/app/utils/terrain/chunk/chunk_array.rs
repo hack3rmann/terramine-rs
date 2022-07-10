@@ -36,12 +36,16 @@ impl<'a> ChunkArray<'a> {
 		let mut env = vec![ChunkEnv::none(); volume];
 
 		/* Array borders */
-		let x_lo: isize = -(width  as isize) / 2;
-		let y_lo: isize = -(height as isize) / 2;
-		let z_lo: isize = -(depth  as isize) / 2;
-		let x_hi: isize = width  as isize + x_lo;
-		let y_hi: isize = height as isize + y_lo;
-		let z_hi: isize = depth  as isize + z_lo;
+		let (x_range, y_range, z_range) = {
+			let x_lo: isize = -(width  as isize) / 2;
+			let y_lo: isize = -(height as isize) / 2;
+			let z_lo: isize = -(depth  as isize) / 2;
+			let x_hi: isize = width  as isize + x_lo;
+			let y_hi: isize = height as isize + y_lo;
+			let z_hi: isize = depth  as isize + z_lo;
+
+			(x_lo..x_hi, y_lo..y_hi, z_lo..z_hi)
+		};
 
 		/* Name of world file */
 		let filename = "src/world.chunks";
@@ -61,15 +65,15 @@ impl<'a> ChunkArray<'a> {
 			file.seek_write(&depth.reinterpret_as_bytes(), (usize::static_size() * 2) as u64).unwrap();
 
 			/* Fill vector with chunks with no mesh attached */
-			for x in x_lo..x_hi {
-			for y in y_lo..y_hi {
-			for z in z_lo..z_hi {
+			for x in x_range.clone() {
+			for y in y_range.clone() {
+			for z in z_range.clone() {
 				/* Local index function */
 				let index = |mut x: isize, mut y: isize, mut z: isize| -> usize {
 					/* Conversion to [0; dim(p) - 1] */
-					x -= x_lo;
-					y -= y_lo;
-					z -= z_lo;
+					x -= x_range.start;
+					y -= y_range.start;
+					z -= z_range.start;
 
 					/* Index */
 					sdex::get_index(&[x as usize, y as usize, z as usize], &[width, height, depth])
