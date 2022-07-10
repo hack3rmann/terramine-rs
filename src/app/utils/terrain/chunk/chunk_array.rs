@@ -39,9 +39,9 @@ impl<'a> ChunkArray<'a> {
 		let x_lo: isize = -(width  as isize) / 2;
 		let y_lo: isize = -(height as isize) / 2;
 		let z_lo: isize = -(depth  as isize) / 2;
-		let x_hi: isize = (width  / 2 + width  % 2) as isize;
-		let y_hi: isize = (height / 2 + height % 2) as isize;
-		let z_hi: isize = (depth  / 2 + depth  % 2) as isize;
+		let x_hi: isize = width  as isize + x_lo;
+		let y_hi: isize = height as isize + y_lo;
+		let z_hi: isize = depth  as isize + z_lo;
 
 		/* Name of world file */
 		let filename = "src/world.chunks";
