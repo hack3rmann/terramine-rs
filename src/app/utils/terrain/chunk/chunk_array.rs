@@ -142,9 +142,7 @@ impl<'a> ChunkArray<'a> {
 		for y in 0..height {
 		for z in 0..depth {
 			/* Local index function */
-			let index = |x: usize, y: usize, z: usize| -> usize {
-				sdex::get_index(&[x, y, z], &[width, height, depth])
-			};
+			let index = |x, y, z| sdex::get_index(&[x, y, z], &[width, height, depth]);
 
 			/* Reference to current environment variable */
 			let env = &mut env[index(x, y, z)];
