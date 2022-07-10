@@ -2,7 +2,7 @@
 /// HINT: X -> Y -> Z and W -> H -> D
 pub fn get_index(pos: &[usize], dims: &[usize]) -> usize {
 	assert!(
-		pos.len() >= dims.len() - 1,
+		pos.len() >= dims.len(),
 		"`pos.len()` should be dimension of array with dimensions `dims.len()` but both equal: [{}, {}]",
 		pos.len(), dims.len()
 	);
