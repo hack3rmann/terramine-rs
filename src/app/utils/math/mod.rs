@@ -4,6 +4,7 @@ pub mod angle;
 pub mod plane;
 pub mod bounding_volumes;
 pub mod ray;
+pub mod space_index;
 
 pub mod prelude {
 	pub use super::{
@@ -15,5 +16,6 @@ pub mod prelude {
 			aabb::*,
 		},
 		ray::*,
+		space_index as sdex
 	};
 }

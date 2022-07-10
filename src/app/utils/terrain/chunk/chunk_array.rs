@@ -1,7 +1,7 @@
 use super::{Chunk, ChunkEnvironment as ChunkEnv};
 use crate::app::utils::{
 	graphics::Graphics,
-	math::vector::{Int3, swizzle::*},
+	math::prelude::*,
 	graphics::camera::Camera, reinterpreter::{StaticSize, ReinterpretAsBytes, ReinterpretFromBytes},
 };
 use glium::{
@@ -65,13 +65,13 @@ impl<'a> ChunkArray<'a> {
 			for z in z_lo..z_hi {
 				/* Local index function */
 				let index = |mut x: isize, mut y: isize, mut z: isize| -> usize {
-					/* Conversion to [0; +inf) */
+					/* Conversion to [0; dim(p) - 1] */
 					x -= x_lo;
 					y -= y_lo;
 					z -= z_lo;
 
 					/* Index */
-					((x * height as isize + y) * depth as isize + z) as usize
+					sdex::get_index(&[x as usize, y as usize, z as usize], &[width, height, depth])
 				};
 
 				/* Generate chunk */
@@ -135,7 +135,7 @@ impl<'a> ChunkArray<'a> {
 		for z in 0..depth {
 			/* Local index function */
 			let index = |x: usize, y: usize, z: usize| -> usize {
-				(x * height + y) * depth + z
+				sdex::get_index(&[x, y, z], &[width, height, depth])
 			};
 
 			/* Reference to current environment variable */

@@ -391,7 +391,7 @@ pub fn world_coords_to_in_some_chunk(pos: Int3, chunk: Int3) -> Int3 {
 
 /// Index function
 pub fn index_function(pos: Int3) -> usize {
-	(CHUNK_SIZE * pos.x() as usize + pos.y() as usize) * CHUNK_SIZE + pos.z() as usize
+	sdex::get_index(&[pos.x() as usize, pos.y() as usize, pos.z() as usize], &[CHUNK_SIZE; 3])
 }
 
 /// Position function
