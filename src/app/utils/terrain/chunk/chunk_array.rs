@@ -47,12 +47,13 @@ impl<'a> ChunkArray<'a> {
 		let filename = "src/world.chunks";
 
 		/* Offset of world bytes */
-		let world_offset = usize::static_size() * 3;
+		let chunk_table_offset = usize::static_size() * 3;
+		let chunk_heap_offset = chunk_table_offset + u64::static_size() * volume;
 
 		let mut generate_file = || {
 			/* World file */
 			let file = File::create(filename).expect(format!("Failed to create file {filename} in write-only mode!").as_str());
-			file.set_len((Chunk::static_size() * volume + world_offset) as u64).expect("Failed to set file size!");
+			file.set_len((Chunk::static_size() * volume + chunk_heap_offset) as u64).expect("Failed to set file size!");
 
 			/* Write width, height and depth to file */
 			file.seek_write(&width.reinterpret_as_bytes(), 0).unwrap();
@@ -78,7 +79,7 @@ impl<'a> ChunkArray<'a> {
 				let chunk = Chunk::new(None, Int3::new(x as i32, y as i32, z as i32), false);
 
 				/* Write it to file */
-				file.seek_write(&chunk.reinterpret_as_bytes(), (index(x, y, z) * Chunk::static_size() + world_offset) as u64).unwrap();
+				file.seek_write(&chunk.reinterpret_as_bytes(), (index(x, y, z) * Chunk::static_size() + chunk_heap_offset) as u64).unwrap();
 
 				/* Push it to chunk array */
 				chunks.push(chunk);
@@ -107,20 +108,20 @@ impl<'a> ChunkArray<'a> {
 			/* Size changed => regenerate world */
 			if read_width == width && read_height == height && read_depth == depth {
 				/* Current byte pointer */
-				let mut current: usize = 0;
+				let mut current = chunk_heap_offset as u64;
 	
 				/* Bytes buffer */
 				let mut buffer = vec![0; Chunk::static_size()];
 	
-				while current <= (volume - 1) * Chunk::static_size() {
+				while current <= ((volume - 1) * Chunk::static_size() + chunk_heap_offset) as u64 {
 					/* Read exact bytes for one chunk */
-					file.seek_read(&mut buffer, (current + world_offset) as u64).unwrap();
+					file.seek_read(&mut buffer, current).unwrap();
 	
 					/* Push chunk to array */
 					chunks.push(Chunk::reinterpret_from_bytes(&buffer));
 	
 					/* Increment current pointer */
-					current += Chunk::static_size();
+					current += Chunk::static_size() as u64;
 				}
 			} else {
 				generate_file();
