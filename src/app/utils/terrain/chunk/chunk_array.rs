@@ -79,7 +79,9 @@ impl<'a> ChunkArray<'a> {
 				let chunk = Chunk::new(None, Int3::new(x as i32, y as i32, z as i32), false);
 
 				/* Write it to file */
-				file.seek_write(&chunk.reinterpret_as_bytes(), (index(x, y, z) * Chunk::static_size() + chunk_heap_offset) as u64).unwrap();
+				let current_offset = (index(x, y, z) * Chunk::static_size() + chunk_heap_offset) as u64;
+				file.seek_write(&chunk.reinterpret_as_bytes(), current_offset).unwrap();
+				file.seek_write(&current_offset.reinterpret_as_bytes(), (index(x, y, z) * u64::static_size() + chunk_table_offset) as u64).unwrap();
 
 				/* Push it to chunk array */
 				chunks.push(chunk);
