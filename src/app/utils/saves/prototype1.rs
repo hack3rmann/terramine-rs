@@ -3,7 +3,7 @@ fn save() {
 		.write(SaveVersion::new(1, 3, 1, 4))
 		.write(&Int3::all(1))
 		.pointer(&Chunk::new())
-		.array(&Chunk::new(), CHUNK_ARRAY_VOLUME)
+		.array(CHUNK_ARRAY_VOLUME, |i| &CHUNKS[i])
 		.dynamic(&Chunk::new(), ChunkState::Full as u64)
 		.dyn_array(CHUNK_ARRAY_VOLUME, |i| (
 			ChunkState::AllSame as u64,
