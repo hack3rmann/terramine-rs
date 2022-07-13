@@ -1,3 +1,5 @@
+pub mod stack_heap;
+
 use std::marker::PhantomData;
 
 use super::reinterpreter::Reinterpret;
