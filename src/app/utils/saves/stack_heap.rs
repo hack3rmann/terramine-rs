@@ -46,6 +46,18 @@ impl StackHeap {
 		T::reinterpret_from_bytes(&buffer)
 	}
 
+	pub fn read_from_heap<T: ReinterpretFromBytes + StaticSize>(&self, stack_offset: Offset) -> T {
+		/* Read offset on heap from stack */
+		let heap_offset: Offset = self.read_from_stack(stack_offset);
+
+		/* Read bytes from heap */
+		let mut buffer = vec![0; T::static_size()];
+		self.heap.seek_read(&mut buffer, heap_offset).unwrap();
+
+		/* Reinterpret */
+		T::reinterpret_from_bytes(&buffer)
+	}
+
 	/// Allocates bytes on heap. Returns a pair of offsets on stack and on heap.
 	pub fn allocate(&mut self, data: &[u8]) -> (Offset, Offset) {
 		/* TODO: test freed memory */

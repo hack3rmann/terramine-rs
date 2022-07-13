@@ -103,6 +103,23 @@ impl<E: Copy + Into<u64>> Save<E> {
 		return result
 	}
 
+	/// Allocates data on heap of file with pointer on stack.
+	pub fn pointer<T: ReinterpretAsBytes + StaticSize>(mut self, value: &T, enumerator: E) -> Self {
+		/* Allocate bytes */
+		let bytes = value.reinterpret_as_bytes();
+		let (offset, _) = self.get_file_mut().allocate(&bytes);
+
+		/* Save offset */
+		self.save_offset(enumerator, offset);
+
+		return self
+	}
+
+	/// Reads data from heap by pointer on stack.
+	pub fn read_from_pointer<T: ReinterpretFromBytes + StaticSize>(&self, enumerator: E) -> T {
+		self.get_file_ref().read_from_heap(self.load_offset(enumerator))
+	}
+
 	/// Saves offset.
 	fn save_offset(&mut self, enumerator: E, offset: Offset) {
 		self.offests.insert(enumerator.into(), offset).expect("Trying to write same data to another place");
