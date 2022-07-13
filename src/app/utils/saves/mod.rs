@@ -50,16 +50,7 @@ impl<E: Copy + Into<u64>> Save<E> {
 
 	/// Reads enum-named value from file.
 	pub fn read<T: ReinterpretFromBytes + StaticSize>(&self, enumerator: E) -> T {
-		/* Initialyze buffer */
-		let mut buffer = vec![0; T::static_size()];
-
-		/* Read value from file */
-		self.get_file_ref().stack.seek_read(
-			&mut buffer,
-			self.load_offset(enumerator)
-		).unwrap();
-
-		T::reinterpret_from_bytes(&buffer)
+		self.get_file_ref().read_from_stack(self.load_offset(enumerator))
 	}
 
 	/// Writes enum-named array of values to file.
@@ -89,14 +80,10 @@ impl<E: Copy + Into<u64>> Save<E> {
 		let offset = self.load_offset(enumerator);
 
 		/* Read array length */
-		let length = {
-			let mut buffer = vec![0; Offset::static_size()];
-			self.get_file_ref().stack.seek_read(&mut buffer, offset).unwrap();
-			Offset::reinterpret_from_bytes(&buffer)
-		};
+		let length: Offset = self.get_file_ref().read_from_stack(offset);
 
 		/* Actual array offset */
-		let offset = offset + Offset::static_size() as u64;
+		let offset = offset + Offset::static_size() as Offset;
 
 		/* Loading buffer */
 		let mut buffer = vec![0; T::static_size()];

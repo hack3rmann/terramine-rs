@@ -1,6 +1,7 @@
 use std::{fs::File, os::windows::prelude::FileExt};
 
 use super::Offset;
+use crate::app::utils::reinterpreter::*;
 
 pub struct StackHeap {
 	pub stack: File,
@@ -28,5 +29,15 @@ impl StackHeap {
 		self.stack_ptr += data.len() as Offset;
 
 		return offset
+	}
+
+	/// Reads value from stack
+	pub fn read_from_stack<T: ReinterpretFromBytes + StaticSize>(&self, offset: Offset) -> T {
+		/* Read bytes */
+		let mut buffer = vec![0; T::static_size()];
+		self.stack.seek_read(&mut buffer, offset).unwrap();
+
+		/* Reinterpret */
+		T::reinterpret_from_bytes(&buffer)
 	}
 }
