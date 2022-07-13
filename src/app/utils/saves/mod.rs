@@ -12,7 +12,6 @@ pub struct Save<E> {
 	name: String,
 	file: Option<StackHeap>,
 	offests: HashMap<u64, Offset>,
-	eof: Offset,
 
 	_phantom_data: PhantomData<E>
 }
@@ -24,7 +23,6 @@ impl<E: Copy + Into<u64>> Save<E> {
 			name: name.to_owned(),
 			file: None,
 			offests: HashMap::new(),
-			eof: 0,
 
 			_phantom_data: PhantomData
 		}
@@ -40,13 +38,10 @@ impl<E: Copy + Into<u64>> Save<E> {
 	pub fn write<T: ReinterpretAsBytes + StaticSize>(mut self, value: &T, enumerator: E) -> Self {
 		/* Write value to file stack */
 		let bytes = value.reinterpret_as_bytes();
-		self.get_file_ref().stack.seek_write(&bytes, self.eof).unwrap();
+		self.get_file_mut().push(&bytes);
 
 		/* Saving offset of value */
 		self.offests.insert(enumerator.into(), T::static_size() as Offset).expect("Trying to write same data to another place");
-
-		/* Increment of `end of file` */
-		self.eof += T::static_size() as Offset;
 
 		return self
 	}
@@ -69,5 +64,10 @@ impl<E: Copy + Into<u64>> Save<E> {
 	/// Gives reference to file if it initialized.
 	fn get_file_ref(&self) -> &StackHeap {
 		self.file.as_ref().expect("File had not created! Consider call .create() method on Save.")
+	}
+
+	/// Gives mutable reference to file if it initialized.
+	fn get_file_mut(&mut self) -> &mut StackHeap {
+		self.file.as_mut().expect("File had not created! Consider call .create() method on Save.")
 	}
 }
