@@ -107,10 +107,10 @@ impl<E: Copy + Into<Offset>> Save<E> {
 	}
 
 	/// Writes enum-named array of values to file.
-	pub fn array<'t, T: 't, F>(mut self, length: usize, enumerator: E, elem: F) -> Self
+	pub fn array<'t, T: 't, F>(mut self, length: usize, enumerator: E, mut elem: F) -> Self
 	where
 		T: ReinterpretAsBytes + StaticSize,
-		F: Fn(usize) -> &'t T,
+		F: FnMut(usize) -> &'t T,
 	{
 		/* Write the array length and get offset */
 		let offset = self.get_file_mut().push(&(length as Offset).reinterpret_as_bytes());

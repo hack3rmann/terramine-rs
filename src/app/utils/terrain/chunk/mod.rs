@@ -396,11 +396,16 @@ pub fn index_function(pos: Int3) -> usize {
 
 /// Position function
 pub fn position_function(i: usize) -> Int3 {
-	let xy = i / CHUNK_SIZE;
+	general_position(i, CHUNK_SIZE, CHUNK_SIZE)
+}
 
-	let z =  i % CHUNK_SIZE;
-	let x = xy / CHUNK_SIZE;
-	let y = xy % CHUNK_SIZE;
+/// Position function
+pub fn general_position(i: usize, height: usize, depth: usize) -> Int3 {
+	let xy = i / depth;
+
+	let z =  i % depth;
+	let y = xy % height;
+	let x = xy / height;
 
 	Int3::new(x as i32, y as i32, z as i32)
 }
