@@ -2,7 +2,13 @@ use super::{Chunk, ChunkEnvironment as ChunkEnv};
 use crate::app::utils::{
 	graphics::Graphics,
 	math::prelude::{*, rges::*},
-	graphics::camera::Camera, reinterpreter::{StaticSize, ReinterpretAsBytes, ReinterpretFromBytes},
+	graphics::camera::Camera,
+	reinterpreter::{
+		StaticSize,
+		ReinterpretAsBytes,
+		ReinterpretFromBytes
+	},
+	saves::*,
 };
 use glium::{
 	uniforms::Uniforms,
@@ -26,6 +32,18 @@ pub struct ChunkArray<'a> {
 	chunks: Vec<Chunk<'a>>,
 }
 
+#[derive(Clone, Copy)]
+enum SaveType {
+	Width,
+	Height,
+	Depth,
+	_ChunkArray,
+}
+
+impl Into<Offset> for SaveType {
+	fn into(self) -> Offset { self as Offset }
+}
+
 impl<'a> ChunkArray<'a> {
 	pub fn new(graphics: &Graphics, width: usize, height: usize, depth: usize) -> Self {
 		/* Amount of voxels in chunks */
@@ -36,7 +54,16 @@ impl<'a> ChunkArray<'a> {
 
 		/* Name of world file */
 		let filename = "src/world.chunks";
+		let (path, name) = ("src/world", "world.chunks");
 
+		let _save = Save::new(name)
+			.create(path)
+			.write(&width, SaveType::Width)
+			.write(&height, SaveType::Height)
+			.write(&depth, SaveType::Depth)
+			.save().unwrap();
+
+		{
 		/* Offset of world bytes */
 		let chunk_table_offset = usize::static_size() * 3;
 		let chunk_heap_offset = chunk_table_offset + u64::static_size() * volume;
@@ -126,6 +153,7 @@ impl<'a> ChunkArray<'a> {
 			}
 		} else {
 			generate_file();
+		}
 		}
 
 		/* Make environments with references to chunk array */

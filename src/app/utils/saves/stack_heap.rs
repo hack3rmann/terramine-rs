@@ -15,6 +15,11 @@ pub struct StackHeap {
 impl StackHeap {
 	/// Makes new StackHeap struct and new directory for its files.
 	pub fn new(path: &str, name: &str) -> Self {
+		/* Create directory if this path doesn't exist */
+		if !std::path::Path::new(path).exists() {
+			std::fs::create_dir(path).unwrap();
+		}
+		
 		Self {
 			stack: OpenOptions::new().write(true).read(true).create(true).open(format!("{path}/{name}.stk")).unwrap(),
 			heap:  OpenOptions::new().write(true).read(true).create(true).open(format!("{path}/{name}.hp")).unwrap(),
