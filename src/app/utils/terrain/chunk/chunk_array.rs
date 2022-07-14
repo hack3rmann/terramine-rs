@@ -54,7 +54,7 @@ impl<'a> ChunkArray<'a> {
 
 		/* Name of world file */
 		let filename = "src/world.chunks";
-		let (path, name) = ("src/world", "world.chunks");
+		let (path, name) = ("src/world", "world");
 
 		let _save = Save::new(name)
 			.create(path)

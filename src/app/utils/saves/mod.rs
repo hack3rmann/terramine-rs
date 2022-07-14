@@ -2,7 +2,12 @@
 
 pub mod stack_heap;
 
-use std::{marker::PhantomData, collections::HashMap, os::windows::prelude::FileExt};
+use std::{
+	marker::PhantomData, 
+	collections::HashMap,
+	os::windows::prelude::FileExt,
+	fs::File,
+};
 
 use stack_heap::StackHeap;
 use crate::app::utils::{
@@ -20,25 +25,67 @@ pub struct Save<E> {
 	name: String,
 	file: Option<StackHeap>,
 	offests: HashMap<u64, Offset>,
+	offsets_save: Option<File>,
 
 	_phantom_data: PhantomData<E>
 }
 
-impl<E: Copy + Into<u64>> Save<E> {
+impl<E: Copy + Into<Offset>> Save<E> {
 	/// Creates new Save struct.
 	pub fn new(name: &str) -> Self {
 		Self {
 			name: name.to_owned(),
 			file: None,
 			offests: HashMap::new(),
+			offsets_save: None,
 
 			_phantom_data: PhantomData
 		}
 	}
 
+	/// Gives meta file path from given directory.
+	fn get_meta_path(path: &str) -> String {
+		format!("{path}/meta.off")
+	}
+
 	/// Creates heap-stack folder.
 	pub fn create(mut self, path: &str) -> Self {
 		self.file = Some(StackHeap::new(path, &self.name));
+		self.offsets_save = Some(File::create(Self::get_meta_path(path).as_str()).unwrap());
+
+		return self
+	}
+
+	/// Opens heap-stack folder.
+	pub fn open(mut self, path: &str) -> Self {
+		self.file = Some(StackHeap::new(path, &self.name));
+		self.offsets_save = Some(File::open(Self::get_meta_path(path).as_str()).unwrap());
+
+		/* Offsets save shortcut */
+		let offsets_save = self.offsets_save.as_ref().unwrap();
+
+		/* Read number of offsets */
+		let n_offsets = {
+			let mut buffer = vec![0; Offset::static_size()];
+			offsets_save.seek_read(&mut buffer, 0).unwrap();
+			Offset::reinterpret_from_bytes(&buffer)
+		};
+
+		/* Read all offsets to HashMap */
+		let offset_size = Offset::static_size() as Offset;
+		let mut buffer = vec![0; u64::static_size()];
+		for i in (1..).step_by(2).take(n_offsets as usize) {
+			let enumerator = {
+				offsets_save.seek_read(&mut buffer, offset_size * i).unwrap();
+				u64::reinterpret_from_bytes(&buffer)
+			};
+			let offset = {
+				offsets_save.seek_read(&mut buffer, offset_size * (i + 1)).unwrap();
+				Offset::reinterpret_from_bytes(&buffer)
+			};
+			self.offests.insert(enumerator, offset);
+		}
+
 		return self
 	}
 
@@ -146,7 +193,26 @@ impl<E: Copy + Into<u64>> Save<E> {
 
 	/// Saves the save.
 	pub fn save(self) -> std::io::Result<Self> {
+		/* Sync all changes to file */
 		self.get_file_ref().sync()?;
+
+		/* Get shortcut to offsets_save */
+		let offsets_save = self.offsets_save.as_ref().unwrap();
+
+		/* Save offsets length to `meta.off` file */
+		let n_offsets = self.offests.len() as Offset;
+		offsets_save.seek_write(&n_offsets.reinterpret_as_bytes(), 0).unwrap();
+
+		/* Save all offsets to `meta.off` file */
+		let offset_size = Offset::static_size() as Offset;
+		for ((&enumerator, &offset), i) in self.offests.iter().zip((1_u64..).step_by(2)) {
+			offsets_save.seek_write(&enumerator.reinterpret_as_bytes(), offset_size * i).unwrap();
+			offsets_save.seek_write(&offset.reinterpret_as_bytes(), offset_size * (i + 1)).unwrap();
+		}
+
+		/* Sync all changes to file */
+		offsets_save.sync_all().unwrap();
+
 		return Ok(self)
 	}
 
