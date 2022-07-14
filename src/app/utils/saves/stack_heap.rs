@@ -1,4 +1,4 @@
-use std::{fs::File, os::windows::prelude::FileExt, collections::HashSet, ops::Range};
+use std::{fs::File, fs::OpenOptions, os::windows::prelude::FileExt, collections::HashSet, ops::Range};
 
 use super::Offset;
 use crate::app::utils::reinterpreter::*;
@@ -16,12 +16,20 @@ impl StackHeap {
 	/// Makes new StackHeap struct and new directory for its files.
 	pub fn new(path: &str, name: &str) -> Self {
 		Self {
-			stack: File::create(format!("{path}/{name}.stk")).unwrap(),
-			heap:  File::create(format!("{path}/{name}.hp")).unwrap(),
+			stack: OpenOptions::new().write(true).read(true).create(true).open(format!("{path}/{name}.stk")).unwrap(),
+			heap:  OpenOptions::new().write(true).read(true).create(true).open(format!("{path}/{name}.hp")).unwrap(),
 			stack_ptr: 0,
 			eof: 0,
 			freed_space: HashSet::new(),
 		}
+	}
+
+	/// Saves file.
+	pub fn sync(&self) -> std::io::Result<()> {
+		self.stack.sync_all()?;
+		self.heap.sync_all()?;
+
+		Ok(())
 	}
 
 	/// Pushes data to stack. Returns an offset of that data.

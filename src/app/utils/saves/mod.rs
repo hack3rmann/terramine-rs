@@ -4,8 +4,14 @@ pub mod stack_heap;
 
 use std::{marker::PhantomData, collections::HashMap, os::windows::prelude::FileExt};
 
-use super::reinterpreter::{ReinterpretAsBytes, ReinterpretFromBytes, StaticSize};
 use stack_heap::StackHeap;
+use crate::app::utils::{
+	reinterpreter::{
+		ReinterpretAsBytes,
+		ReinterpretFromBytes,
+		StaticSize
+	},
+};
 
 pub type Offset = u64;
 
@@ -62,14 +68,14 @@ impl<E: Copy + Into<u64>> Save<E> {
 		/* Write the array length and get offset */
 		let offset = self.get_file_mut().push(&(length as Offset).reinterpret_as_bytes());
 
+		/* Save offset of an array */
+		self.save_offset(enumerator, offset);
+
 		/* Write all elements to file */
 		for i in 0..length {
 			let bytes = elem(i).reinterpret_as_bytes();
 			self.get_file_mut().push(&bytes);
 		}
-
-		/* Save offset of an array */
-		self.save_offset(enumerator, offset);
 
 		return self
 	}
@@ -94,7 +100,7 @@ impl<E: Copy + Into<u64>> Save<E> {
 		/* Read all elements to `result` */
 		for i in 0..length {
 			/* Read to buffer */
-			self.get_file_ref().stack.seek_read(&mut buffer, offset + i).unwrap();
+			self.get_file_ref().stack.seek_read(&mut buffer, offset + i * T::static_size() as Offset).unwrap();
 
 			/* Push value to `result` */
 			result.push(T::reinterpret_from_bytes(&buffer));
@@ -122,7 +128,10 @@ impl<E: Copy + Into<u64>> Save<E> {
 
 	/// Saves offset.
 	fn save_offset(&mut self, enumerator: E, offset: Offset) {
-		self.offests.insert(enumerator.into(), offset).expect("Trying to write same data to another place");
+		match self.offests.insert(enumerator.into(), offset) {
+			None => (),
+			Some(_) => panic!("Trying to write same data to another place")
+		}
 	}
 
 	/// Loads offset.
@@ -135,6 +144,12 @@ impl<E: Copy + Into<u64>> Save<E> {
 			).as_str())
 	}
 
+	/// Saves the save.
+	pub fn save(self) -> std::io::Result<Self> {
+		self.get_file_ref().sync()?;
+		return Ok(self)
+	}
+
 	/// Gives reference to file if it initialized.
 	fn get_file_ref(&self) -> &StackHeap {
 		self.file.as_ref().expect("File had not created! Consider call .create() method on Save.")
@@ -143,5 +158,44 @@ impl<E: Copy + Into<u64>> Save<E> {
 	/// Gives mutable reference to file if it initialized.
 	fn get_file_mut(&mut self) -> &mut StackHeap {
 		self.file.as_mut().expect("File had not created! Consider call .create() method on Save.")
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::app::utils::math::prelude::*;
+
+	#[derive(Clone, Copy)]
+	enum DataType {
+		Position,
+		Array,
+		Pointer,
+	}
+
+	impl Into<Offset> for DataType {
+		fn into(self) -> Offset { self as Offset }
+	}
+
+	#[test]
+	fn test() {
+		let array_before = [2, 3, 5, 1];
+		let pos_before = 123;
+		let ptr_before = Int3::new(34, 1, 5);
+
+		let save = Save::new("Test")
+			.create("")
+			.write(&pos_before, DataType::Position)
+			.array(array_before.len(), DataType::Array, |i| &array_before[i])
+			.pointer(&ptr_before, DataType::Pointer)
+			.save().unwrap();
+
+		let pos_after: i32 = save.read(DataType::Position);
+		let array_after: Vec<i32> = save.read_array(DataType::Array);
+		let ptr_after: Int3 = save.read_from_pointer(DataType::Pointer);
+
+		assert_eq!(pos_before, pos_after);
+		assert_eq!(array_before[..], array_after[..]);
+		assert_eq!(ptr_before, ptr_after);
 	}
 }
