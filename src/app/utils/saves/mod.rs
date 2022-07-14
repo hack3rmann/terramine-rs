@@ -107,7 +107,7 @@ impl<E: Copy + Into<u64>> Save<E> {
 	pub fn pointer<T: ReinterpretAsBytes + StaticSize>(mut self, value: &T, enumerator: E) -> Self {
 		/* Allocate bytes */
 		let bytes = value.reinterpret_as_bytes();
-		let (offset, _) = self.get_file_mut().allocate(&bytes);
+		let (offset, _) = self.get_file_mut().alloc(&bytes);
 
 		/* Save offset */
 		self.save_offset(enumerator, offset);
