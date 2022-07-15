@@ -55,7 +55,7 @@ impl StackHeap {
 	pub fn push(&mut self, data: &[u8]) -> Offset {
 		/* Write new data */
 		let offset = self.stack_ptr;
-		self.stack.seek_write(data, self.stack_ptr).unwrap();
+		self.stack.seek_write(data, offset).unwrap();
 
 		/* Increment stack pointer */
 		self.stack_ptr += data.len() as Size;
@@ -74,32 +74,40 @@ impl StackHeap {
 	}
 
 	/// Reads value from stack
-	fn read_from_heap<T: ReinterpretFromBytes + StaticSize>(&self, offset: Offset) -> T {
-		/* Read bytes */
-		let mut buffer = vec![0; T::static_size()];
-		self.heap.seek_read(&mut buffer, offset).unwrap();
+	pub fn read_from_heap(&self, heap_offset: Offset) -> Vec<u8> {
+		/* Read size */
+		let size = {
+			let mut buffer = vec![0; Size::static_size()];
+			self.heap.seek_read(&mut buffer, heap_offset).unwrap();
+			Size::reinterpret_from_bytes(&buffer)
+		};
 
-		/* Reinterpret */
-		T::reinterpret_from_bytes(&buffer)
+		/* Read data */
+		let mut buffer = vec![0; size as usize];
+		self.heap.seek_read(&mut buffer, heap_offset + Size::static_size() as Size).unwrap();
+
+		return buffer
 	}
 
 	/// Reads value from heap of file by offset from stack.
 	pub fn heap_read<T: ReinterpretFromBytes + StaticSize>(&self, stack_offset: Offset) -> T {
 		/* Read offset on heap from stack */
-		let data_offset = {
-			let offset: Offset = self.read_from_stack(stack_offset);
-			offset + Offset::static_size() as Size
-		};
+		let heap_offset: Offset = self.read_from_stack(stack_offset);
 
 		/* Read bytes from heap */
-		self.read_from_heap(data_offset)
+		T::reinterpret_from_bytes(&self.read_from_heap(heap_offset))
 	}
 
 	/// Allocates space on heap. Returns a pair of offsets on stack and on a heap.
 	pub fn alloc(&mut self, size: Size) -> Alloc {
 		/* Test freed memory */
-		let heap_offset = match self.freed_space.iter().find(|range| range.end - range.start >= size + Offset::static_size() as Size).cloned() {
-			None => self.eof,
+		let full_size = size + Offset::static_size() as Size;
+		let heap_offset = match self.freed_space.iter().find(|range| range.end - range.start >= full_size).cloned() {
+			None => {
+				let offset = self.eof;
+				self.eof += full_size;
+				offset
+			},
 			Some(range) => {
 				self.freed_space.remove(&range);
 				range.start
@@ -127,7 +135,7 @@ impl StackHeap {
 		/* Construct Alloc struct */
 		let alloc = {
 			let heap_offset: Offset = self.read_from_stack(stack_offset);
-			let size = self.read_from_heap(heap_offset);
+			let size = Size::reinterpret_from_bytes(&self.read_from_heap(heap_offset));
 			Alloc { stack_offset, heap_offset, size }
 		};
 		

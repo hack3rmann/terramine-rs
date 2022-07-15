@@ -96,7 +96,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		let offset = self.get_file_mut().push(&bytes);
 
 		/* Saving offset of value */
-		self.save_offset(enumerator, offset);
+		self.store_offset(enumerator, offset);
 
 		return self
 	}
@@ -116,7 +116,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		let offset = self.get_file_mut().push(&(length as Size).reinterpret_as_bytes());
 
 		/* Save offset of an array */
-		self.save_offset(enumerator, offset);
+		self.store_offset(enumerator, offset);
 
 		/* Write all elements to file */
 		for i in 0..length {
@@ -168,7 +168,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		};
 
 		/* Save offset */
-		self.save_offset(enumerator, offset);
+		self.store_offset(enumerator, offset);
 
 		return self
 	}
@@ -179,8 +179,53 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		self.get_file_ref().heap_read(self.load_offset(enumerator))
 	}
 
+	/// Allocates array of pinters on stack and array of data on heap.
+	pub fn pointer_array<F: FnMut(usize) -> Vec<u8>>(mut self, length: usize, enumerator: E, mut elem: F) -> Self {
+		/* Push size to stack and store its offset */
+		let stack_offset = self.get_file_mut().push(&(length as Size).reinterpret_as_bytes());
+		self.store_offset(enumerator, stack_offset);
+
+		/* Write all elements to heap */
+		for data in (0..length).map(|i| elem(i)) {
+			let alloc = self.get_file_mut().alloc(data.len() as Size);
+			self.get_file_ref().write_to_heap(alloc, &data);
+		}
+
+		return self
+	}
+
+	/// Reads array of pointers from stack and data from heap.
+	pub fn read_pointer_array<T, F>(&self, enumerator: E, mut elem: F) -> Vec<T>
+	where
+		F: FnMut(&[u8]) -> T
+	{
+		/* Load stack data offset */
+		let length_offset = self.load_offset(enumerator);
+
+		/* Read array length */
+		let length: Size = self.get_file_ref().read_from_stack(length_offset);
+
+		/* Resulting vector */
+		let mut result = Vec::with_capacity(length as usize);
+
+		/* Read all elements */
+		let offset_size = Size::static_size() as Size;
+		for i in 1 .. length + 1 {
+			/* Read offset on heap */
+			let heap_offset: Offset = self.get_file_ref().read_from_stack(length_offset + i * offset_size);
+
+			/* Read data bytes */
+			let bytes = self.get_file_ref().read_from_heap(heap_offset);
+
+			/* Reinterpret them and push to result */
+			result.push(elem(&bytes));
+		}
+
+		return result
+	}
+
 	/// Saves offset.
-	fn save_offset(&mut self, enumerator: E, offset: Offset) {
+	fn store_offset(&mut self, enumerator: E, offset: Offset) {
 		match self.offests.insert(enumerator.into(), offset) {
 			None => (),
 			Some(_) => panic!("Trying to write same data to another place")
@@ -243,6 +288,7 @@ mod tests {
 		Position,
 		Array,
 		Pointer,
+		HardData
 	}
 
 	impl Into<Offset> for DataType {
@@ -251,24 +297,44 @@ mod tests {
 
 	#[test]
 	fn test() {
+		let pos_before = Float4::new(124.5, 124.6, 9912.5, 1145.678);
 		let array_before = [2, 3, 5, 1];
-		let pos_before = 123;
-		let ptr_before = Int3::new(34, 1, 5);
+		let ptr_before = Int3::new(128, 1, 5);
+		let hard_data_before = [23_i32, 1, 1, 4, 6, 1];
 
+		use DataType::*;
 		Save::new("Test")
 			.create("test")
-			.write(&pos_before, DataType::Position)
-			.array(array_before.len(), DataType::Array, |i| &array_before[i])
-			.pointer(&ptr_before, DataType::Pointer)
+			.write(&pos_before, Position)
+			.array(array_before.len(), Array, |i| &array_before[i])
+			.pointer(&ptr_before, Pointer)
+			.pointer_array(hard_data_before.len(), HardData, |i| {
+				let condition = hard_data_before[i] % 2 == 0;
+				let num = if condition {
+					hard_data_before[i] / 2
+				} else { hard_data_before[i] };
+
+				let mut bytes = (condition as u8).reinterpret_as_bytes();
+				bytes.append(&mut num.reinterpret_as_bytes());
+
+				bytes
+			})
 			.save().unwrap();
 		let save = Save::new("Test").open("test");
 
-		let pos_after: i32 = save.read(DataType::Position);
+		let pos_after: Float4 = save.read(DataType::Position);
 		let array_after: Vec<i32> = save.read_array(DataType::Array);
 		let ptr_after: Int3 = save.read_from_pointer(DataType::Pointer);
+		let hard_data_after: Vec<i32> = save.read_pointer_array(HardData, |bytes| {
+			let condition = bytes[0] != 0;
+			let num = i32::reinterpret_from_bytes(&bytes[1..]);
+
+			if condition { num * 2 } else { num }
+		});
 
 		assert_eq!(pos_before, pos_after);
 		assert_eq!(array_before[..], array_after[..]);
 		assert_eq!(ptr_before, ptr_after);
+		assert_eq!(hard_data_before[..], hard_data_after[..]);
 	}
 }
