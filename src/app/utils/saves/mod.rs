@@ -107,6 +107,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 	}
 
 	/// Writes enum-named array of values to file.
+	#[allow(dead_code)]
 	pub fn array<'t, T: 't, F>(mut self, length: usize, enumerator: E, mut elem: F) -> Self
 	where
 		T: ReinterpretAsBytes + StaticSize,
@@ -128,6 +129,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 	}
 
 	/// Reads enum-named array of values from file.
+	#[allow(dead_code)]
 	pub fn read_array<T: ReinterpretFromBytes + StaticSize>(&self, enumerator: E) -> Vec<T> {
 		/* Getting offset of array length */
 		let offset = self.load_offset(enumerator);

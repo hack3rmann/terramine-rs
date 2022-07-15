@@ -4,6 +4,11 @@ use crate::app::utils::{
 	math::prelude::*,
 	graphics::camera::Camera,
 	saves::*,
+	reinterpreter::{
+		ReinterpretAsBytes,
+		ReinterpretFromBytes
+	},
+	terrain::voxel::voxel_data::NOTHING_VOXEL_DATA,
 };
 use glium::{
 	uniforms::Uniforms,
@@ -38,6 +43,11 @@ impl Into<Offset> for SaveType {
 	fn into(self) -> Offset { self as Offset }
 }
 
+enum ChunkState {
+	Full,
+	Empty,
+}
+
 impl<'a> ChunkArray<'a> {
 	pub fn new(graphics: &Graphics, width: usize, height: usize, depth: usize) -> Self {
 		/* Amount of voxels in chunks */
@@ -67,7 +77,21 @@ impl<'a> ChunkArray<'a> {
 				.write(&width, Width)
 				.write(&height, Height)
 				.write(&depth, Depth)
-				.array(volume, ChunkArray, |i| &chunks[i])
+				.pointer_array(volume, ChunkArray, |i|
+					if chunks[i].voxels.iter().all(|&id| id == NOTHING_VOXEL_DATA.id) {
+						/* Save only chunk position if it is empty */
+						let mut state = (ChunkState::Empty as u8).reinterpret_as_bytes();
+						state.append(&mut chunks[i].pos.reinterpret_as_bytes());
+
+						state
+					} else {
+						/* Save chunk fully */
+						let mut state = (ChunkState::Full as u8).reinterpret_as_bytes();
+						state.append(&mut chunks[i].reinterpret_as_bytes());
+
+						state
+					}
+				)
 				.save().unwrap();
 		};
 
@@ -77,7 +101,13 @@ impl<'a> ChunkArray<'a> {
 			let save = Save::new(name).open(path);
 
 			if (width, height, depth) == (save.read(Width), save.read(Height), save.read(Depth)) {
-				chunks = save.read_array(ChunkArray);
+				chunks = save.read_pointer_array(ChunkArray, |bytes|
+					if bytes[0] == ChunkState::Full as u8 {
+						Chunk::reinterpret_from_bytes(&bytes[1..])
+					} else {
+						Chunk::new(None, Int3::reinterpret_from_bytes(&bytes[1..]), false)
+					}
+				);
 			} else {
 				generate_file()
 			}
