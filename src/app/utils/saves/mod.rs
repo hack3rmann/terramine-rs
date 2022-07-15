@@ -17,6 +17,7 @@ use crate::app::utils::{
 };
 
 pub type Offset = u64;
+pub type Size   = u64;
 
 /// Handle for save files framework.
 pub struct Save<E> {
@@ -64,13 +65,13 @@ impl<E: Copy + Into<Offset>> Save<E> {
 
 		/* Read number of offsets */
 		let n_offsets = {
-			let mut buffer = vec![0; Offset::static_size()];
+			let mut buffer = vec![0; Size::static_size()];
 			offsets_save.seek_read(&mut buffer, 0).unwrap();
-			Offset::reinterpret_from_bytes(&buffer)
+			Size::reinterpret_from_bytes(&buffer)
 		};
 
 		/* Read all offsets to HashMap */
-		let offset_size = Offset::static_size() as Offset;
+		let offset_size = Offset::static_size() as Size;
 		let mut buffer = vec![0; u64::static_size()];
 		for i in (1..).step_by(2).take(n_offsets as usize) {
 			let enumerator = {
@@ -111,7 +112,7 @@ impl<E: Copy + Into<Offset>> Save<E> {
 		F: FnMut(usize) -> &'t T,
 	{
 		/* Write the array length and get offset */
-		let offset = self.get_file_mut().push(&(length as Offset).reinterpret_as_bytes());
+		let offset = self.get_file_mut().push(&(length as Size).reinterpret_as_bytes());
 
 		/* Save offset of an array */
 		self.save_offset(enumerator, offset);
@@ -131,10 +132,10 @@ impl<E: Copy + Into<Offset>> Save<E> {
 		let offset = self.load_offset(enumerator);
 
 		/* Read array length */
-		let length: Offset = self.get_file_ref().read_from_stack(offset);
+		let length: Size = self.get_file_ref().read_from_stack(offset);
 
 		/* Actual array offset */
-		let offset = offset + Offset::static_size() as Offset;
+		let offset = offset + Offset::static_size() as Size;
 
 		/* Loading buffer */
 		let mut buffer = vec![0; T::static_size()];
@@ -145,7 +146,7 @@ impl<E: Copy + Into<Offset>> Save<E> {
 		/* Read all elements to `result` */
 		for i in 0..length {
 			/* Read to buffer */
-			self.get_file_ref().stack.seek_read(&mut buffer, offset + i * T::static_size() as Offset).unwrap();
+			self.get_file_ref().stack.seek_read(&mut buffer, offset + i * T::static_size() as Size).unwrap();
 
 			/* Push value to `result` */
 			result.push(T::reinterpret_from_bytes(&buffer));
@@ -200,11 +201,11 @@ impl<E: Copy + Into<Offset>> Save<E> {
 		let offsets_save = self.offsets_save.as_ref().unwrap();
 
 		/* Save offsets length to `meta.off` file */
-		let n_offsets = self.offests.len() as Offset;
+		let n_offsets = self.offests.len() as Size;
 		offsets_save.seek_write(&n_offsets.reinterpret_as_bytes(), 0).unwrap();
 
 		/* Save all offsets to `meta.off` file */
-		let offset_size = Offset::static_size() as Offset;
+		let offset_size = Offset::static_size() as Size;
 		for ((&enumerator, &offset), i) in self.offests.iter().zip((1_u64..).step_by(2)) {
 			offsets_save.seek_write(&enumerator.reinterpret_as_bytes(), offset_size * i).unwrap();
 			offsets_save.seek_write(&offset.reinterpret_as_bytes(), offset_size * (i + 1)).unwrap();

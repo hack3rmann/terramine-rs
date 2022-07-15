@@ -1,6 +1,6 @@
 use std::{fs::File, fs::OpenOptions, os::windows::prelude::FileExt, collections::HashSet, ops::Range};
 
-use super::Offset;
+use super::{Offset, Size};
 use crate::app::utils::reinterpreter::*;
 
 pub struct StackHeap {
@@ -10,6 +10,11 @@ pub struct StackHeap {
 	pub heap: File,
 	pub eof: Offset,
 	freed_space: HashSet<Range<Offset>>,
+}
+
+struct Alloc {
+	offset: Offset,
+	size: Size,
 }
 
 impl StackHeap {
@@ -44,7 +49,7 @@ impl StackHeap {
 		self.stack.seek_write(data, self.stack_ptr).unwrap();
 
 		/* Increment stack pointer */
-		self.stack_ptr += data.len() as Offset;
+		self.stack_ptr += data.len() as Size;
 
 		return offset
 	}
@@ -66,7 +71,7 @@ impl StackHeap {
 
 		/* Read bytes from heap */
 		let mut buffer = vec![0; T::static_size()];
-		self.heap.seek_read(&mut buffer, heap_offset + Offset::static_size() as Offset).unwrap();
+		self.heap.seek_read(&mut buffer, heap_offset + Offset::static_size() as Size).unwrap();
 
 		/* Reinterpret */
 		T::reinterpret_from_bytes(&buffer)
@@ -75,8 +80,8 @@ impl StackHeap {
 	/// Allocates bytes on heap. Returns a pair of offsets on stack and on heap.
 	pub fn alloc(&mut self, data: &[u8]) -> (Offset, Offset) {
 		/* Test freed memory */
-		let size = data.len() as Offset;
-		let heap_offset = match self.freed_space.iter().find(|range| range.end - range.start >= size + Offset::static_size() as Offset).cloned() {
+		let size = data.len() as Size;
+		let heap_offset = match self.freed_space.iter().find(|range| range.end - range.start >= size + Offset::static_size() as Size).cloned() {
 			None => self.eof,
 			Some(range) => {
 				self.freed_space.remove(&range);
@@ -85,10 +90,10 @@ impl StackHeap {
 		};
 
 		/* Save size of data to heap */
-		self.heap.seek_write(&(data.len() as Offset).reinterpret_as_bytes(), heap_offset).unwrap();
+		self.heap.seek_write(&(data.len() as Size).reinterpret_as_bytes(), heap_offset).unwrap();
 
 		/* Save data */
-		self.heap.seek_write(data, heap_offset + Offset::static_size() as Offset).unwrap();
+		self.heap.seek_write(data, heap_offset + Offset::static_size() as Size).unwrap();
 
 		/* Save this offset on stack */
 		let stack_offset = self.push(&heap_offset.reinterpret_as_bytes());
