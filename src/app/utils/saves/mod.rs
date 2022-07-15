@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 pub mod stack_heap;
 
 use std::{
@@ -157,6 +155,7 @@ impl<E: Copy + Into<Offset>> Save<E> {
 	}
 
 	/// Allocates data on heap of file with pointer on stack.
+	#[allow(dead_code)]
 	pub fn pointer<T: ReinterpretAsBytes + StaticSize>(mut self, value: &T, enumerator: E) -> Self {
 		/* Allocate bytes */
 		let bytes = value.reinterpret_as_bytes();
@@ -169,6 +168,7 @@ impl<E: Copy + Into<Offset>> Save<E> {
 	}
 
 	/// Reads data from heap by pointer on stack.
+	#[allow(dead_code)]
 	pub fn read_from_pointer<T: ReinterpretFromBytes + StaticSize>(&self, enumerator: E) -> T {
 		self.get_file_ref().read_from_heap(self.load_offset(enumerator))
 	}

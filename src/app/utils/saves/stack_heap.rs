@@ -97,6 +97,7 @@ impl StackHeap {
 	}
 
 	/// Marks memory as free.
+	#[allow(dead_code)]
 	pub fn free(&mut self, offset: Offset) {
 		/* Read size from heap */
 		let size = {
