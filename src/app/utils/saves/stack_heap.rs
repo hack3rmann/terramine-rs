@@ -3,6 +3,20 @@ use std::{fs::File, fs::OpenOptions, os::windows::prelude::FileExt, collections:
 use super::{Offset, Size};
 use crate::app::utils::reinterpreter::*;
 
+#[derive(Clone, Copy)]
+pub struct Alloc {
+	pub(in super::stack_heap) stack_offset: Offset,
+	pub(in super::stack_heap) heap_offset: Offset,
+	pub(in super::stack_heap) size: Size,
+}
+
+#[allow(dead_code)]
+impl Alloc {
+	pub fn get_stack_offset(self) -> Offset { self.stack_offset }
+	pub fn get_heap_offset(self) -> Offset { self.heap_offset }
+	pub fn get_size(self) -> Offset { self.size }
+}
+
 pub struct StackHeap {
 	pub stack: File,
 	pub stack_ptr: Offset,
@@ -10,11 +24,6 @@ pub struct StackHeap {
 	pub heap: File,
 	pub eof: Offset,
 	freed_space: HashSet<Range<Offset>>,
-}
-
-struct Alloc {
-	offset: Offset,
-	size: Size,
 }
 
 impl StackHeap {
@@ -77,10 +86,9 @@ impl StackHeap {
 		T::reinterpret_from_bytes(&buffer)
 	}
 
-	/// Allocates bytes on heap. Returns a pair of offsets on stack and on heap.
-	pub fn alloc(&mut self, data: &[u8]) -> (Offset, Offset) {
+	/// Allocates space on heap. Returns a pair of offsets on stack and on a heap.
+	pub fn alloc(&mut self, size: Size) -> Alloc {
 		/* Test freed memory */
-		let size = data.len() as Size;
 		let heap_offset = match self.freed_space.iter().find(|range| range.end - range.start >= size + Offset::static_size() as Size).cloned() {
 			None => self.eof,
 			Some(range) => {
@@ -90,15 +98,18 @@ impl StackHeap {
 		};
 
 		/* Save size of data to heap */
-		self.heap.seek_write(&(data.len() as Size).reinterpret_as_bytes(), heap_offset).unwrap();
-
-		/* Save data */
-		self.heap.seek_write(data, heap_offset + Offset::static_size() as Size).unwrap();
+		self.heap.seek_write(&size.reinterpret_as_bytes(), heap_offset).unwrap();
 
 		/* Save this offset on stack */
 		let stack_offset = self.push(&heap_offset.reinterpret_as_bytes());
 
-		(stack_offset, heap_offset)
+		Alloc { stack_offset, heap_offset, size }
+	}
+
+	/// Writes bytes to heap.
+	pub fn write_to_heap(&self, Alloc { size, heap_offset: offset, .. }: Alloc, data: &[u8]) {
+		assert!(size >= data.len() as Size, "Data size passed to this function should be not greater than allowed allocation!");
+		self.heap.seek_write(data, offset + Size::static_size() as Size).unwrap();
 	}
 
 	/// Marks memory as free.

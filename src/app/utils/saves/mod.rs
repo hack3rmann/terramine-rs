@@ -18,18 +18,19 @@ use crate::app::utils::{
 
 pub type Offset = u64;
 pub type Size   = u64;
+pub type Enumerator = u64;
 
 /// Handle for save files framework.
 pub struct Save<E> {
 	name: String,
 	file: Option<StackHeap>,
-	offests: HashMap<u64, Offset>,
+	offests: HashMap<Enumerator, Offset>,
 	offsets_save: Option<File>,
 
 	_phantom_data: PhantomData<E>
 }
 
-impl<E: Copy + Into<Offset>> Save<E> {
+impl<E: Copy + Into<Enumerator>> Save<E> {
 	/// Creates new Save struct.
 	pub fn new(name: &str) -> Self {
 		Self {
@@ -72,11 +73,11 @@ impl<E: Copy + Into<Offset>> Save<E> {
 
 		/* Read all offsets to HashMap */
 		let offset_size = Offset::static_size() as Size;
-		let mut buffer = vec![0; u64::static_size()];
+		let mut buffer = vec![0; Enumerator::static_size()];
 		for i in (1..).step_by(2).take(n_offsets as usize) {
 			let enumerator = {
 				offsets_save.seek_read(&mut buffer, offset_size * i).unwrap();
-				u64::reinterpret_from_bytes(&buffer)
+				Enumerator::reinterpret_from_bytes(&buffer)
 			};
 			let offset = {
 				offsets_save.seek_read(&mut buffer, offset_size * (i + 1)).unwrap();
@@ -160,7 +161,11 @@ impl<E: Copy + Into<Offset>> Save<E> {
 	pub fn pointer<T: ReinterpretAsBytes + StaticSize>(mut self, value: &T, enumerator: E) -> Self {
 		/* Allocate bytes */
 		let bytes = value.reinterpret_as_bytes();
-		let (offset, _) = self.get_file_mut().alloc(&bytes);
+		let offset = {
+			let alloc = self.get_file_mut().alloc(bytes.len() as Size);
+			self.get_file_ref().write_to_heap(alloc, &bytes);
+			alloc.get_stack_offset()
+		};
 
 		/* Save offset */
 		self.save_offset(enumerator, offset);
