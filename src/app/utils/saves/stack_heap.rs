@@ -132,6 +132,29 @@ impl StackHeap {
 		};
 		
 		/* Insert free range */
-		self.freed_space.insert(alloc.heap_offset .. alloc.heap_offset + alloc.size);
+		self.insert_free(alloc);
+	}
+
+	/// Inserts free space Alloc to set.
+	fn insert_free(&mut self, alloc: Alloc) {
+		/* Insert new free space marker */
+		let free_range = alloc.heap_offset .. alloc.heap_offset + alloc.size;
+		self.freed_space.insert(free_range.clone());
+
+		/* Seek all mergable ranges */
+		let mut repeated = Vec::with_capacity(3);
+		for (curr, next) in self.freed_space.iter().zip(self.freed_space.iter().skip(1)) {
+			if curr.end == next.start {
+				repeated.push(curr.clone());
+				repeated.push(next.clone());
+			}
+		}
+
+		/* Then merge them */
+		if !repeated.is_empty() {
+			repeated.iter().for_each(|range| { self.freed_space.remove(range); });
+			let merged = repeated.first().unwrap().start .. repeated.last().unwrap().end;
+			self.freed_space.insert(merged);
+		}
 	}
 }
