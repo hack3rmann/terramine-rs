@@ -73,17 +73,26 @@ impl StackHeap {
 		T::reinterpret_from_bytes(&buffer)
 	}
 
-	/// Reads value from heap of file by offset from stack.
-	pub fn read_from_heap<T: ReinterpretFromBytes + StaticSize>(&self, stack_offset: Offset) -> T {
-		/* Read offset on heap from stack */
-		let heap_offset: Offset = self.read_from_stack(stack_offset);
-
-		/* Read bytes from heap */
+	/// Reads value from stack
+	fn read_from_heap<T: ReinterpretFromBytes + StaticSize>(&self, offset: Offset) -> T {
+		/* Read bytes */
 		let mut buffer = vec![0; T::static_size()];
-		self.heap.seek_read(&mut buffer, heap_offset + Offset::static_size() as Size).unwrap();
+		self.heap.seek_read(&mut buffer, offset).unwrap();
 
 		/* Reinterpret */
 		T::reinterpret_from_bytes(&buffer)
+	}
+
+	/// Reads value from heap of file by offset from stack.
+	pub fn heap_read<T: ReinterpretFromBytes + StaticSize>(&self, stack_offset: Offset) -> T {
+		/* Read offset on heap from stack */
+		let data_offset = {
+			let offset: Offset = self.read_from_stack(stack_offset);
+			offset + Offset::static_size() as Size
+		};
+
+		/* Read bytes from heap */
+		self.read_from_heap(data_offset)
 	}
 
 	/// Allocates space on heap. Returns a pair of offsets on stack and on a heap.
@@ -114,15 +123,15 @@ impl StackHeap {
 
 	/// Marks memory as free.
 	#[allow(dead_code)]
-	pub fn free(&mut self, offset: Offset) {
-		/* Read size from heap */
-		let size = {
-			let mut buffer = vec![0; Offset::static_size()];
-			self.heap.seek_read(&mut buffer, offset).unwrap();
-			Offset::reinterpret_from_bytes(&buffer)
+	pub fn free(&mut self, stack_offset: Offset) {
+		/* Construct Alloc struct */
+		let alloc = {
+			let heap_offset: Offset = self.read_from_stack(stack_offset);
+			let size = self.read_from_heap(heap_offset);
+			Alloc { stack_offset, heap_offset, size }
 		};
-
+		
 		/* Insert free range */
-		self.freed_space.insert(offset .. offset + size);
+		self.freed_space.insert(alloc.heap_offset .. alloc.heap_offset + alloc.size);
 	}
 }

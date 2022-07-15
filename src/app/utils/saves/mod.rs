@@ -176,7 +176,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 	/// Reads data from heap by pointer on stack.
 	#[allow(dead_code)]
 	pub fn read_from_pointer<T: ReinterpretFromBytes + StaticSize>(&self, enumerator: E) -> T {
-		self.get_file_ref().read_from_heap(self.load_offset(enumerator))
+		self.get_file_ref().heap_read(self.load_offset(enumerator))
 	}
 
 	/// Saves offset.
@@ -255,12 +255,13 @@ mod tests {
 		let pos_before = 123;
 		let ptr_before = Int3::new(34, 1, 5);
 
-		let save = Save::new("Test")
-			.create("")
+		Save::new("Test")
+			.create("test")
 			.write(&pos_before, DataType::Position)
 			.array(array_before.len(), DataType::Array, |i| &array_before[i])
 			.pointer(&ptr_before, DataType::Pointer)
 			.save().unwrap();
+		let save = Save::new("Test").open("test");
 
 		let pos_after: i32 = save.read(DataType::Position);
 		let array_after: Vec<i32> = save.read_array(DataType::Array);
