@@ -108,6 +108,16 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		return self
 	}
 
+	/// Assigns value to stack
+	pub fn assign<T: ReinterpretAsBytes + StaticSize>(&mut self, value: &T, enumerator: E) {
+		/* Get bytes and offset */
+		let bytes = value.reinterpret_as_bytes();
+		let offset = self.load_offset(enumerator);
+
+		/* Assign new data to stack */
+		self.get_file_mut().write_to_stack(offset, &bytes);
+	}
+
 	/// Reads enum-named value from file.
 	pub fn read<T: ReinterpretFromBytes + StaticSize>(&self, enumerator: E) -> T {
 		self.get_file_ref().read_from_stack(self.load_offset(enumerator))
@@ -133,6 +143,46 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		}
 
 		return self
+	}
+
+	/// Assignes to an array
+	pub fn assign_array<'t, T: 't, F>(&mut self, enumerator: E, mut elem: F)
+	where
+		T: ReinterpretAsBytes + StaticSize,
+		F: FnMut(usize) -> &'t T,
+	{
+		/* Load offset */
+		let offset = self.load_offset(enumerator);
+
+		/* Read length of the data */
+		let length: Size = self.get_file_ref().read_from_stack(offset);
+
+		/* Iterate all elements and assign to them offsets */
+		let elements = (0..).map(|i| elem(i));
+		let offsets = (1..).map(|i| offset + i * T::static_size() as Size);
+		
+		/* Write them to file */
+		for (elem, offset) in elements.zip(offsets).take(length as usize) {
+			self.get_file_mut().write_to_stack(offset, &elem.reinterpret_as_bytes());
+		}
+	}
+
+	/// Assings to some element in the array
+	pub fn assign_array_element<T: ReinterpretAsBytes + StaticSize>(&mut self, enumerator: E, elem: T, idx: usize) {
+		/* Load offset */
+		let offset = self.load_offset(enumerator);
+
+		/* Read length of an array */
+		let length: Size = self.get_file_ref().read_from_stack(offset);
+
+		/* Test if given index passed into length */
+		assert!((idx as Offset) < length, "Given index ({}) should be in 0..{}", idx, length);
+
+		/* Get offset of an element */
+		let offset = offset + idx as Offset * T::static_size() as Size + Size::static_size() as Size;
+
+		/* Write element */
+		self.get_file_mut().write_to_stack(offset, &elem.reinterpret_as_bytes());
 	}
 
 	/// Reads enum-named array of values from file.
@@ -163,6 +213,24 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		}
 
 		return result
+	}
+
+	/// Reads element of an array
+	pub fn read_array_element<T: ReinterpretFromBytes + StaticSize>(&self, enumerator: E, idx: usize) -> T {
+		/* Load offset */
+		let offset = self.load_offset(enumerator);
+
+		/* Read length */
+		let length: Size = self.get_file_ref().read_from_stack(offset);
+
+		/* Test if index if off available range */
+		assert!((idx as Offset) < length, "Given index ({}) should be in 0..{}", idx, length);
+
+		/* Get data offset */
+		let offset = offset + idx as Offset * T::static_size() as Size + Size::static_size() as Size;
+
+		/* Read element */
+		self.get_file_ref().read_from_stack(offset)
 	}
 
 	/// Allocates data on heap of file with pointer on stack.
@@ -217,6 +285,46 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		}
 
 		return self
+	}
+
+	/// Assigns array of pointers elements.
+	pub fn assign_pointer_array<F: FnMut(usize) -> Vec<u8>>(&mut self, enumerator: E, mut elem: F) {
+		/* Load offset */
+		let stack_offset = self.load_offset(enumerator);
+
+		/* Read length */
+		let length: Size = self.get_file_ref().read_from_stack(stack_offset);
+
+		/* Offsets iterator */
+		let offsets = (1..).map(|i| stack_offset + i * Offset::static_size() as Size);
+
+		/* Elements iterator */
+		let elements = (0..).map(|i| elem(i));
+
+		/* Write bytes */
+		for (bytes, offset) in elements.zip(offsets).take(length as usize) {
+			let alloc = self.get_file_mut().realloc(bytes.len() as Size, offset);
+			self.get_file_ref().write_to_heap(alloc, &bytes);
+		}
+	}
+
+	/// Assigns new element to an index of pointer array.
+	pub fn assign_pointer_array_elem(&mut self, enumerator: E, bytes: Vec<u8>, idx: usize) {
+		/* Load offset */
+		let offset = self.load_offset(enumerator);
+
+		/* Read length of an array */
+		let length: Size = self.get_file_ref().read_from_stack(offset);
+
+		/* Test if index if off available range */
+		assert!((idx as Offset) < length, "Given index ({}) should be in 0..{}", idx, length);
+
+		/* Calculate offset on stack */
+		let offset = offset + (idx + 1) as Offset * Offset::static_size() as Size;
+
+		/* Rewrite data */
+		let alloc = self.get_file_mut().realloc(bytes.len() as Size, offset);
+		self.get_file_ref().write_to_heap(alloc, &bytes);
 	}
 
 	/// Reads array of pointers from stack and data from heap.
@@ -321,7 +429,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test() {
+	fn test1() {
 		let pos_before = Float4::new(124.5, 124.6, 9912.5, 1145.678);
 		let array_before = [2, 3, 5, 1];
 		let ptr_start = Int3::new(128, 1, 5);
@@ -363,5 +471,52 @@ mod tests {
 		assert_eq!(array_before[..], array_after[..]);
 		assert_eq!(ptr_before, ptr_after);
 		assert_eq!(hard_data_before[..], hard_data_after[..]);
+	}
+
+	#[derive(Clone, Copy)]
+	enum Enumerator2 {
+		Data
+	}
+
+	impl Into<Offset> for Enumerator2 {
+		fn into(self) -> Offset { self as Offset }
+	}
+
+	#[test]
+	fn test_assign() {
+		let data_before = Int3::new(213, 56, 123);
+		let data_expected = Int3::new(213, 28, 123);
+
+		use Enumerator2::*;
+		let mut save = Save::new("Test2")
+			.create("test")
+			.write(&data_before, Data)
+			.save().unwrap();
+		save.assign(&data_expected, Data);
+
+		let save = Save::new("Test2").open("test");
+		let data_after: Int3 = save.read(Data);
+
+		assert_eq!(data_expected, data_after);
+	}
+
+	#[test]
+	fn test_assign_array() {
+		let data_before = [1234_i32, 134, 134, 1455, 41];
+		let data_expected = [13441_i32, 1441888, 14, 313, 144];
+
+		// !NOT WORKING!
+
+		use Enumerator2::*;
+		let mut save = Save::new("Test2")
+			.create("test")
+			.array(data_before.len(), Data, |i| &data_before[i])
+			.save().unwrap();
+		save.assign_array(Data, |i| &data_expected[i]);
+
+		let save = Save::new("Test2").open("test");
+		let data_after: Vec<i32> = save.read_array(Data);
+
+		assert_eq!(data_expected[..], data_after[..]);
 	}
 }
