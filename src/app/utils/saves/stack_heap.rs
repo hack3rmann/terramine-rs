@@ -63,6 +63,11 @@ impl StackHeap {
 		return offset
 	}
 
+	/// Writes data to stack by its offset
+	pub fn write_to_stack(&mut self, offset: Offset, data: &[u8]) {
+		self.stack.seek_write(data, offset).unwrap();
+	}
+
 	/// Reads value from stack
 	pub fn read_from_stack<T: ReinterpretFromBytes + StaticSize>(&self, offset: Offset) -> T {
 		/* Read bytes */
@@ -103,17 +108,7 @@ impl StackHeap {
 	pub fn alloc(&mut self, size: Size) -> Alloc {
 		/* Test freed memory */
 		let full_size = size + Offset::static_size() as Size;
-		let heap_offset = match self.freed_space.iter().find(|range| range.end - range.start >= full_size).cloned() {
-			None => {
-				let offset = self.eof;
-				self.eof += full_size;
-				offset
-			},
-			Some(range) => {
-				self.freed_space.remove(&range);
-				range.start
-			}
-		};
+		let heap_offset = self.get_available_offset(full_size);
 
 		/* Save size of data to heap */
 		self.heap.seek_write(&size.reinterpret_as_bytes(), heap_offset).unwrap();
@@ -122,6 +117,39 @@ impl StackHeap {
 		let stack_offset = self.push(&heap_offset.reinterpret_as_bytes());
 
 		Alloc { stack_offset, heap_offset, size }
+	}
+
+	/// Allocates space on heap. Returns a pair of offsets on stack and on a heap.
+	pub fn realloc(&mut self, size: Size, stack_offset: Offset) -> Alloc {
+		/* Free data on offset */
+		self.free(stack_offset);
+
+		/* Test freed memory */
+		let full_size = size + Offset::static_size() as Size;
+		let heap_offset = self.get_available_offset(full_size);
+
+		/* Save size of data to heap */
+		self.heap.seek_write(&size.reinterpret_as_bytes(), heap_offset).unwrap();
+
+		/* Save this offset on stack */
+		self.write_to_stack(stack_offset, &heap_offset.reinterpret_as_bytes());
+
+		Alloc { stack_offset, heap_offset, size }
+	}
+
+	/// Gives available offset on heap.
+	fn get_available_offset(&mut self, size: Size) -> Offset {
+		match self.freed_space.iter().find(|range| range.end - range.start >= size).cloned() {
+			None => {
+				let offset = self.eof;
+				self.eof += size;
+				offset
+			},
+			Some(range) => {
+				self.freed_space.remove(&range);
+				range.start
+			}
+		}
 	}
 
 	/// Writes bytes to heap.

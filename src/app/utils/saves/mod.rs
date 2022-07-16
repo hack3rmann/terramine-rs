@@ -4,7 +4,7 @@ use std::{
 	marker::PhantomData, 
 	collections::HashMap,
 	os::windows::prelude::FileExt,
-	fs::File,
+	fs::{File, OpenOptions},
 };
 
 use stack_heap::StackHeap;
@@ -59,7 +59,14 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 	/// Opens heap-stack folder.
 	pub fn open(mut self, path: &str) -> Self {
 		self.file = Some(StackHeap::new(path, &self.name));
-		self.offsets_save = Some(File::open(Self::get_meta_path(path).as_str()).unwrap());
+		self.offsets_save = Some(
+			OpenOptions::new()
+				.read(true)
+				.write(true)
+				.create(false)
+				.open(Self::get_meta_path(path).as_str())
+				.unwrap()
+		);
 
 		/* Offsets save shortcut */
 		let offsets_save = self.offsets_save.as_ref().unwrap();
@@ -172,6 +179,17 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		self.store_offset(enumerator, offset);
 
 		return self
+	}
+
+	/// Replaces pointer data with new data.
+	#[allow(dead_code)]
+	pub fn assign_to_pointer(&mut self, bytes: Vec<u8>, enumerator: E) {
+		/* Load offset */
+		let stack_offset = self.load_offset(enumerator);
+
+		/* Allocate new data */
+		let alloc = self.get_file_mut().realloc(bytes.len() as Size, stack_offset);
+		self.get_file_ref().write_to_heap(alloc, &bytes);
 	}
 
 	/// Reads data from heap by pointer on stack.
