@@ -160,9 +160,8 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
 	/// Allocates data on heap of file with pointer on stack.
 	#[allow(dead_code)]
-	pub fn pointer<T: ReinterpretAsBytes + StaticSize>(mut self, value: &T, enumerator: E) -> Self {
+	pub fn pointer(mut self, bytes: Vec<u8>, enumerator: E) -> Self {
 		/* Allocate bytes */
-		let bytes = value.reinterpret_as_bytes();
 		let offset = {
 			let alloc = self.get_file_mut().alloc(bytes.len() as Size);
 			self.get_file_ref().write_to_heap(alloc, &bytes);
@@ -177,8 +176,14 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
 	/// Reads data from heap by pointer on stack.
 	#[allow(dead_code)]
-	pub fn read_from_pointer<T: ReinterpretFromBytes + StaticSize>(&self, enumerator: E) -> T {
-		self.get_file_ref().heap_read(self.load_offset(enumerator))
+	pub fn read_from_pointer<T, F: FnOnce(&[u8]) -> T>(&self, enumerator: E, item: F) -> T {
+		/* Load offsets */
+		let stack_offset = self.load_offset(enumerator);
+		let heap_offset: Offset = self.get_file_ref().read_from_stack(stack_offset);
+
+		/* Read data */
+		let bytes = self.get_file_ref().read_from_heap(heap_offset);
+		item(&bytes)
 	}
 
 	/// Allocates array of pinters on stack and array of data on heap.
@@ -309,7 +314,7 @@ mod tests {
 			.create("test")
 			.write(&pos_before, Position)
 			.array(array_before.len(), Array, |i| &array_before[i])
-			.pointer(&ptr_before, Pointer)
+			.pointer(ptr_before.reinterpret_as_bytes(), Pointer)
 			.pointer_array(hard_data_before.len(), HardData, |i| {
 				let condition = hard_data_before[i] % 2 == 0;
 				let num = if condition {
@@ -326,7 +331,7 @@ mod tests {
 
 		let pos_after: Float4 = save.read(DataType::Position);
 		let array_after: Vec<i32> = save.read_array(DataType::Array);
-		let ptr_after: Int3 = save.read_from_pointer(DataType::Pointer);
+		let ptr_after = save.read_from_pointer(DataType::Pointer, |bytes| Int3::reinterpret_from_bytes(bytes));
 		let hard_data_after: Vec<i32> = save.read_pointer_array(HardData, |bytes| {
 			let condition = bytes[0] != 0;
 			let num = i32::reinterpret_from_bytes(&bytes[1..]);

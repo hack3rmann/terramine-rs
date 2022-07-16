@@ -90,6 +90,7 @@ impl StackHeap {
 	}
 
 	/// Reads value from heap of file by offset from stack.
+	#[allow(dead_code)]
 	pub fn heap_read<T: ReinterpretFromBytes + StaticSize>(&self, stack_offset: Offset) -> T {
 		/* Read offset on heap from stack */
 		let heap_offset: Offset = self.read_from_stack(stack_offset);
