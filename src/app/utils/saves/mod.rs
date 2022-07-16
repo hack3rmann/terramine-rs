@@ -324,15 +324,16 @@ mod tests {
 	fn test() {
 		let pos_before = Float4::new(124.5, 124.6, 9912.5, 1145.678);
 		let array_before = [2, 3, 5, 1];
-		let ptr_before = Int3::new(128, 1, 5);
+		let ptr_start = Int3::new(128, 1, 5);
+		let ptr_before = Float4::new(141.4, 12441.5, 1451.511, 1151.63);
 		let hard_data_before = [23_i32, 1, 1, 4, 6, 1];
 
 		use DataType::*;
-		Save::new("Test")
+		let mut save = Save::new("Test")
 			.create("test")
 			.write(&pos_before, Position)
 			.array(array_before.len(), Array, |i| &array_before[i])
-			.pointer(ptr_before.reinterpret_as_bytes(), Pointer)
+			.pointer(ptr_start.reinterpret_as_bytes(), Pointer)
 			.pointer_array(hard_data_before.len(), HardData, |i| {
 				let condition = hard_data_before[i] % 2 == 0;
 				let num = if condition {
@@ -345,11 +346,12 @@ mod tests {
 				bytes
 			})
 			.save().unwrap();
+		save.assign_to_pointer(ptr_before.reinterpret_as_bytes(), Pointer);
 		let save = Save::new("Test").open("test");
 
 		let pos_after: Float4 = save.read(DataType::Position);
 		let array_after: Vec<i32> = save.read_array(DataType::Array);
-		let ptr_after = save.read_from_pointer(DataType::Pointer, |bytes| Int3::reinterpret_from_bytes(bytes));
+		let ptr_after = save.read_from_pointer(DataType::Pointer, |bytes| Float4::reinterpret_from_bytes(bytes));
 		let hard_data_after: Vec<i32> = save.read_pointer_array(HardData, |bytes| {
 			let condition = bytes[0] != 0;
 			let num = i32::reinterpret_from_bytes(&bytes[1..]);
