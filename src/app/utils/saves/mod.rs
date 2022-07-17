@@ -108,7 +108,8 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		return self
 	}
 
-	/// Assigns value to stack
+	/// Assigns value to stack.
+	#[allow(dead_code)]
 	pub fn assign<T: ReinterpretAsBytes + StaticSize>(&mut self, value: &T, enumerator: E) {
 		/* Get bytes and offset */
 		let bytes = value.reinterpret_as_bytes();
@@ -145,7 +146,8 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		return self
 	}
 
-	/// Assignes to an array
+	/// Assignes to an array.
+	#[allow(dead_code)]
 	pub fn assign_array<'t, T: 't, F>(&mut self, enumerator: E, mut elem: F)
 	where
 		T: ReinterpretAsBytes + StaticSize,
@@ -167,7 +169,8 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		}
 	}
 
-	/// Assings to some element in the array
+	/// Assings to some element in the array.
+	#[allow(dead_code)]
 	pub fn assign_array_element<T: ReinterpretAsBytes + StaticSize>(&mut self, enumerator: E, elem: T, idx: usize) {
 		/* Load offset */
 		let offset = self.load_offset(enumerator);
@@ -215,7 +218,8 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		return result
 	}
 
-	/// Reads element of an array
+	/// Reads element of an array.
+	#[allow(dead_code)]
 	pub fn read_array_element<T: ReinterpretFromBytes + StaticSize>(&self, enumerator: E, idx: usize) -> T {
 		/* Load offset */
 		let offset = self.load_offset(enumerator);
@@ -288,6 +292,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 	}
 
 	/// Assigns array of pointers elements.
+	#[allow(dead_code)]
 	pub fn assign_pointer_array<F: FnMut(usize) -> Vec<u8>>(&mut self, enumerator: E, mut elem: F) {
 		/* Load offset */
 		let stack_offset = self.load_offset(enumerator);
@@ -309,6 +314,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 	}
 
 	/// Assigns new element to an index of pointer array.
+	#[allow(dead_code)]
 	pub fn assign_pointer_array_element(&mut self, enumerator: E, bytes: Vec<u8>, idx: usize) {
 		/* Load offset */
 		let offset = self.load_offset(enumerator);
@@ -355,6 +361,32 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		}
 
 		return result
+	}
+
+	/// Reads pointer array element at index idx.
+	#[allow(dead_code)]
+	pub fn read_pointer_array_element<T, F>(&self, enumerator: E, idx: usize, elem: F) -> T
+	where
+		F: FnOnce(&[u8]) -> T
+	{
+		/* Load offset */
+		let offset = self.load_offset(enumerator);
+
+		/* Read length */
+		let length: Size = self.get_file_ref().read_from_stack(offset);
+
+		/* Test if index if off available range */
+		assert!((idx as Offset) < length, "Given index ({}) should be in 0..{}", idx, length);
+
+		/* Calculate actual offsets */
+		let offset = offset + Size::static_size() as Size + idx as Offset * Offset::static_size() as Size;
+		let heap_offset = self.get_file_ref().read_from_stack(offset);
+
+		/* Read data bytes */
+		let bytes = self.get_file_ref().read_from_heap(heap_offset);
+
+		/* Return data */
+		elem(&bytes)
 	}
 
 	/// Saves offset.
@@ -437,8 +469,8 @@ mod tests {
 		let hard_data_before = [23_i32, 1, 1, 4, 6, 1];
 
 		use DataType::*;
-		let mut save = Save::new("Test")
-			.create("test")
+		let mut save = Save::new("Test1")
+			.create("test1")
 			.write(&pos_before, Position)
 			.array(array_before.len(), Array, |i| &array_before[i])
 			.pointer(ptr_start.reinterpret_as_bytes(), Pointer)
@@ -455,7 +487,7 @@ mod tests {
 			})
 			.save().unwrap();
 		save.assign_to_pointer(ptr_before.reinterpret_as_bytes(), Pointer);
-		let save = Save::new("Test").open("test");
+		let save = Save::new("Test1").open("test1");
 
 		let pos_after: Float4 = save.read(DataType::Position);
 		let array_after: Vec<i32> = save.read_array(DataType::Array);
@@ -489,12 +521,12 @@ mod tests {
 
 		use Enumerator2::*;
 		let mut save = Save::new("Test2")
-			.create("test")
+			.create("test2")
 			.write(&data_before, Data)
 			.save().unwrap();
 		save.assign(&data_expected, Data);
 
-		let save = Save::new("Test2").open("test");
+		let save = Save::new("Test2").open("test2");
 		let data_after: Int3 = save.read(Data);
 
 		assert_eq!(data_expected, data_after);
@@ -506,13 +538,13 @@ mod tests {
 		let data_expected = [13441_i32, 1441888, 14, 313, 144];
 
 		use Enumerator2::*;
-		let mut save = Save::new("Test2")
-			.create("test")
+		let mut save = Save::new("Test3")
+			.create("test3")
 			.array(data_before.len(), Data, |i| &data_before[i])
 			.save().unwrap();
 		save.assign_array(Data, |i| &data_expected[i]);
 
-		let save = Save::new("Test2").open("test");
+		let save = Save::new("Test3").open("test3");
 		let data_after: Vec<i32> = save.read_array(Data);
 
 		assert_eq!(data_expected[..], data_after[..]);
@@ -524,13 +556,13 @@ mod tests {
 		let data_expected = [1234_i32, 134, 999, 1455, 41];
 
 		use Enumerator2::*;
-		let mut save = Save::new("Test2")
-			.create("test")
+		let mut save = Save::new("Test4")
+			.create("test4")
 			.array(data_before.len(), Data, |i| &data_before[i])
 			.save().unwrap();
 		save.assign_array_element(Data, 999, 2);
 
-		let save = Save::new("Test2").open("test");
+		let save = Save::new("Test4").open("test4");
 		let data_after: Vec<i32> = save.read_array(Data);
 
 		assert_eq!(data_expected[..], data_after[..]);
@@ -541,12 +573,12 @@ mod tests {
 		let data_before = [1234_i32, 134, 134, 1455, 41];
 
 		use Enumerator2::*;
-		Save::new("Test2")
-			.create("test")
+		Save::new("Test5")
+			.create("test5")
 			.array(data_before.len(), Data, |i| &data_before[i])
 			.save().unwrap();
 
-		let save = Save::new("Test2").open("test");
+		let save = Save::new("Test5").open("test5");
 		let mut data_after = Vec::with_capacity(data_before.len());
 
 		for num in (0..).map(|i| -> i32 { save.read_array_element(Data, i) }).take(data_before.len()) {
@@ -562,13 +594,13 @@ mod tests {
 		let data_expected = [13441_i32, 1441888, 14, 313, 144];
 
 		use Enumerator2::*;
-		let mut save = Save::new("Test2")
-			.create("test")
+		let mut save = Save::new("Test6")
+			.create("test6")
 			.pointer_array(data_before.len(), Data, |i| data_expected[i].reinterpret_as_bytes())
 			.save().unwrap();
 		save.assign_pointer_array(Data, |i| data_expected[i].reinterpret_as_bytes());
 
-		let save = Save::new("Test2").open("test");
+		let save = Save::new("Test6").open("test6");
 		let data_after = save.read_pointer_array(Data, |bytes| i32::reinterpret_from_bytes(bytes));
 
 		assert_eq!(data_expected[..], data_after[..]);
@@ -580,15 +612,39 @@ mod tests {
 		let data_expected = [1234_i32, 134, 999, 1455, 41];
 
 		use Enumerator2::*;
-		let mut save = Save::new("Test2")
-			.create("test")
+		let mut save = Save::new("Test7")
+			.create("test7")
 			.pointer_array(data_before.len(), Data, |i| data_before[i].reinterpret_as_bytes())
 			.save().unwrap();
 		save.assign_pointer_array_element(Data, 999.reinterpret_as_bytes(), 2);
 
-		let save = Save::new("Test2").open("test");
+		let save = Save::new("Test7").open("test7");
 		let data_after = save.read_pointer_array(Data, |bytes| i32::reinterpret_from_bytes(bytes));
 
 		assert_eq!(data_expected[..], data_after[..]);
+	}
+
+	#[test]
+	fn test_read_pointer_array_element() {
+		let data_before = [1234_i32, 134, 134, 1455, 41];
+
+		use Enumerator2::*;
+		Save::new("Test8")
+			.create("test8")
+			.pointer_array(data_before.len(), Data, |i| data_before[i].reinterpret_as_bytes())
+			.save().unwrap();
+
+		let save = Save::new("Test8").open("test8");
+		let mut data_after = Vec::with_capacity(data_before.len());
+
+		let nums = (0..).map(|i|
+			save.read_pointer_array_element(Data, i, |bytes| i32::reinterpret_from_bytes(bytes))
+		);
+
+		for num in nums.take(data_before.len()) {
+			data_after.push(num)
+		}
+
+		assert_eq!(data_before[..], data_after[..]);
 	}
 }
