@@ -159,7 +159,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
 		/* Iterate all elements and assign to them offsets */
 		let elements = (0..).map(|i| elem(i));
-		let offsets = (1..).map(|i| offset + i * T::static_size() as Size);
+		let offsets = (0..).map(|i| offset + i * T::static_size() as Size + Size::static_size() as Size);
 		
 		/* Write them to file */
 		for (elem, offset) in elements.zip(offsets).take(length as usize) {
