@@ -460,6 +460,13 @@ mod tests {
 		fn into(self) -> Offset { self as Offset }
 	}
 
+	#[derive(Clone, Copy)]
+	enum MinorTestDataType { Data }
+
+	impl Into<Offset> for MinorTestDataType {
+		fn into(self) -> Offset { self as Offset }
+	}
+
 	#[test]
 	fn test1() {
 		let pos_before = Float4::new(124.5, 124.6, 9912.5, 1145.678);
@@ -505,21 +512,12 @@ mod tests {
 		assert_eq!(hard_data_before[..], hard_data_after[..]);
 	}
 
-	#[derive(Clone, Copy)]
-	enum Enumerator2 {
-		Data
-	}
-
-	impl Into<Offset> for Enumerator2 {
-		fn into(self) -> Offset { self as Offset }
-	}
-
 	#[test]
 	fn test_assign() {
 		let data_before = Int3::new(213, 56, 123);
 		let data_expected = Int3::new(213, 28, 123);
 
-		use Enumerator2::*;
+		use MinorTestDataType::*;
 		let mut save = Save::new("Test2")
 			.create("test2")
 			.write(&data_before, Data)
@@ -537,7 +535,7 @@ mod tests {
 		let data_before = [1234_i32, 134, 134, 1455, 41];
 		let data_expected = [13441_i32, 1441888, 14, 313, 144];
 
-		use Enumerator2::*;
+		use MinorTestDataType::*;
 		let mut save = Save::new("Test3")
 			.create("test3")
 			.array(data_before.len(), Data, |i| &data_before[i])
@@ -555,7 +553,7 @@ mod tests {
 		let data_before =   [1234_i32, 134, 134, 1455, 41];
 		let data_expected = [1234_i32, 134, 999, 1455, 41];
 
-		use Enumerator2::*;
+		use MinorTestDataType::*;
 		let mut save = Save::new("Test4")
 			.create("test4")
 			.array(data_before.len(), Data, |i| &data_before[i])
@@ -572,7 +570,7 @@ mod tests {
 	fn test_read_array_element() {
 		let data_before = [1234_i32, 134, 134, 1455, 41];
 
-		use Enumerator2::*;
+		use MinorTestDataType::*;
 		Save::new("Test5")
 			.create("test5")
 			.array(data_before.len(), Data, |i| &data_before[i])
@@ -593,7 +591,7 @@ mod tests {
 		let data_before = [1234_i32, 134, 134, 1455, 41];
 		let data_expected = [13441_i32, 1441888, 14, 313, 144];
 
-		use Enumerator2::*;
+		use MinorTestDataType::*;
 		let mut save = Save::new("Test6")
 			.create("test6")
 			.pointer_array(data_before.len(), Data, |i| data_expected[i].reinterpret_as_bytes())
@@ -611,7 +609,7 @@ mod tests {
 		let data_before   = [1234_i32, 134, 134, 1455, 41];
 		let data_expected = [1234_i32, 134, 999, 1455, 41];
 
-		use Enumerator2::*;
+		use MinorTestDataType::*;
 		let mut save = Save::new("Test7")
 			.create("test7")
 			.pointer_array(data_before.len(), Data, |i| data_before[i].reinterpret_as_bytes())
@@ -628,7 +626,7 @@ mod tests {
 	fn test_read_pointer_array_element() {
 		let data_before = [1234_i32, 134, 134, 1455, 41];
 
-		use Enumerator2::*;
+		use MinorTestDataType::*;
 		Save::new("Test8")
 			.create("test8")
 			.pointer_array(data_before.len(), Data, |i| data_before[i].reinterpret_as_bytes())
