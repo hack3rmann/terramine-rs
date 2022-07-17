@@ -303,13 +303,13 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
 		/* Write bytes */
 		for (bytes, offset) in elements.zip(offsets).take(length as usize) {
-			let alloc = self.get_file_mut().realloc(bytes.len() as Size, offset);
+			let alloc = self.get_file_mut().realloc(bytes.len() as Size, offset); // !PANIC!
 			self.get_file_ref().write_to_heap(alloc, &bytes);
 		}
 	}
 
 	/// Assigns new element to an index of pointer array.
-	pub fn assign_pointer_array_elem(&mut self, enumerator: E, bytes: Vec<u8>, idx: usize) {
+	pub fn assign_pointer_array_element(&mut self, enumerator: E, bytes: Vec<u8>, idx: usize) {
 		/* Load offset */
 		let offset = self.load_offset(enumerator);
 
@@ -505,8 +505,6 @@ mod tests {
 		let data_before = [1234_i32, 134, 134, 1455, 41];
 		let data_expected = [13441_i32, 1441888, 14, 313, 144];
 
-		// !NOT WORKING!
-
 		use Enumerator2::*;
 		let mut save = Save::new("Test2")
 			.create("test")
@@ -516,6 +514,80 @@ mod tests {
 
 		let save = Save::new("Test2").open("test");
 		let data_after: Vec<i32> = save.read_array(Data);
+
+		assert_eq!(data_expected[..], data_after[..]);
+	}
+
+	#[test]
+	fn test_assign_array_element() {
+		let data_before =   [1234_i32, 134, 134, 1455, 41];
+		let data_expected = [1234_i32, 134, 999, 1455, 41];
+
+		use Enumerator2::*;
+		let mut save = Save::new("Test2")
+			.create("test")
+			.array(data_before.len(), Data, |i| &data_before[i])
+			.save().unwrap();
+		save.assign_array_element(Data, 999, 2);
+
+		let save = Save::new("Test2").open("test");
+		let data_after: Vec<i32> = save.read_array(Data);
+
+		assert_eq!(data_expected[..], data_after[..]);
+	}
+
+	#[test]
+	fn test_read_array_element() {
+		let data_before = [1234_i32, 134, 134, 1455, 41];
+
+		use Enumerator2::*;
+		Save::new("Test2")
+			.create("test")
+			.array(data_before.len(), Data, |i| &data_before[i])
+			.save().unwrap();
+
+		let save = Save::new("Test2").open("test");
+		let mut data_after = Vec::with_capacity(data_before.len());
+
+		for num in (0..).map(|i| -> i32 { save.read_array_element(Data, i) }).take(data_before.len()) {
+			data_after.push(num)
+		}
+
+		assert_eq!(data_before[..], data_after[..]);
+	}
+
+	#[test]
+	fn test_assign_pointer_array() {
+		let data_before = [1234_i32, 134, 134, 1455, 41];
+		let data_expected = [13441_i32, 1441888, 14, 313, 144];
+
+		use Enumerator2::*;
+		let mut save = Save::new("Test2")
+			.create("test")
+			.pointer_array(data_before.len(), Data, |i| data_expected[i].reinterpret_as_bytes())
+			.save().unwrap();
+		save.assign_pointer_array(Data, |i| data_expected[i].reinterpret_as_bytes());
+
+		let save = Save::new("Test2").open("test");
+		let data_after = save.read_pointer_array(Data, |bytes| i32::reinterpret_from_bytes(bytes));
+
+		assert_eq!(data_expected[..], data_after[..]);
+	}
+
+	#[test]
+	fn test_assign_pointer_array_element() {
+		let data_before   = [1234_i32, 134, 134, 1455, 41];
+		let data_expected = [1234_i32, 134, 999, 1455, 41];
+
+		use Enumerator2::*;
+		let mut save = Save::new("Test2")
+			.create("test")
+			.pointer_array(data_before.len(), Data, |i| data_before[i].reinterpret_as_bytes())
+			.save().unwrap();
+		save.assign_pointer_array_element(Data, 999.reinterpret_as_bytes(), 2);
+
+		let save = Save::new("Test2").open("test");
+		let data_after = save.read_pointer_array(Data, |bytes| i32::reinterpret_from_bytes(bytes));
 
 		assert_eq!(data_expected[..], data_after[..]);
 	}

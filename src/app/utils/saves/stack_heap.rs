@@ -164,7 +164,12 @@ impl StackHeap {
 		/* Construct Alloc struct */
 		let alloc = {
 			let heap_offset: Offset = self.read_from_stack(stack_offset);
-			let size = Size::reinterpret_from_bytes(&self.read_from_heap(heap_offset));
+			let size = {
+				let mut buffer = vec![0; Size::static_size()];
+				self.heap.seek_read(&mut buffer, heap_offset).unwrap();
+				Size::reinterpret_from_bytes(&buffer)
+			};
+			
 			Alloc { stack_offset, heap_offset, size }
 		};
 		
