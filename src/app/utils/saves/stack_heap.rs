@@ -195,7 +195,11 @@ impl StackHeap {
 		/* Then merge them */
 		if !repeated.is_empty() {
 			repeated.iter().for_each(|range| { self.freed_space.remove(range); });
-			let merged = repeated.first().unwrap().start .. repeated.last().unwrap().end;
+			let merged = {
+				let min = repeated.iter().map(|range| range.start).min().unwrap();
+				let max = repeated.iter().map(|range| range.end  ).max().unwrap();
+				min .. max
+			};
 			self.freed_space.insert(merged);
 		}
 	}
