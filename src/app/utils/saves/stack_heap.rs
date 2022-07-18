@@ -146,7 +146,15 @@ impl StackHeap {
 				offset
 			},
 			Some(range) => {
+				/* Remove range from freed_space */
 				self.freed_space.remove(&range);
+
+				/* Compare sizes and insert remainder range */
+				let range_size = range.end - range.start;
+				if range_size != size {
+					self.freed_space.insert(range.start .. range.start + size);
+				}
+
 				range.start
 			}
 		}
