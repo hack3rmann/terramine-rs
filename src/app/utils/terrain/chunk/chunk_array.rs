@@ -102,10 +102,14 @@ impl<'a> ChunkArray<'a> {
 
 			if (width, height, depth) == (save.read(Width), save.read(Height), save.read(Depth)) {
 				chunks = save.read_pointer_array(ChunkArray, |bytes|
-					if bytes[0] == ChunkState::Full as u8 {
+					if bytes[0] == ChunkState::Full  as u8 {
 						Chunk::reinterpret_from_bytes(&bytes[1..])
-					} else {
+					} else
+					if bytes[0] == ChunkState::Empty as u8 {
 						Chunk::new(None, Int3::reinterpret_from_bytes(&bytes[1..]), false)
+					}
+					else {
+						panic!("Unknown state ({})!", bytes[0]);
 					}
 				);
 			} else {
