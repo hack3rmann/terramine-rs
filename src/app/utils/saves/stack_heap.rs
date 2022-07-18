@@ -146,7 +146,12 @@ impl StackHeap {
 			self.write_to_stack(stack_offset, &heap_offset.reinterpret_as_bytes());
 
 			Alloc { stack_offset, heap_offset, size }
-		} else { 
+		} else {
+			/* If new size cause free memory then use it */
+			if before_size != size {
+				self.insert_free(heap_offset + full_size, before_size - size);
+			}
+
 			/* Write size to heap */
 			self.heap.seek_write(&size.reinterpret_as_bytes(), heap_offset).unwrap();
 
@@ -187,25 +192,21 @@ impl StackHeap {
 	#[allow(dead_code)]
 	pub fn free(&mut self, stack_offset: Offset) {
 		/* Construct Alloc struct */
-		let alloc = {
-			let heap_offset: Offset = self.read_from_stack(stack_offset);
-			let size = {
-				let mut buffer = vec![0; Size::static_size()];
-				self.heap.seek_read(&mut buffer, heap_offset).unwrap();
-				Size::reinterpret_from_bytes(&buffer)
-			};
-			
-			Alloc { stack_offset, heap_offset, size }
+		let heap_offset: Offset = self.read_from_stack(stack_offset);
+		let size = {
+			let mut buffer = vec![0; Size::static_size()];
+			self.heap.seek_read(&mut buffer, heap_offset).unwrap();
+			Size::reinterpret_from_bytes(&buffer)
 		};
 		
 		/* Insert free range */
-		self.insert_free(alloc);
+		self.insert_free(heap_offset, size);
 	}
 
 	/// Inserts free space Alloc to set.
-	fn insert_free(&mut self, alloc: Alloc) {
+	fn insert_free(&mut self, heap_offset: Offset, size: Size) {
 		/* Insert new free space marker */
-		let free_range = alloc.heap_offset .. alloc.heap_offset + alloc.size;
+		let free_range = heap_offset .. heap_offset + size;
 		self.freed_space.insert(free_range.clone());
 
 		/* Seek all mergable ranges */
