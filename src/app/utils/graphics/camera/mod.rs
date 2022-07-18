@@ -17,11 +17,13 @@ pub struct Camera {
 	pub far: f32,
 
 	/* Additional control */
-	pub speed: f64,
+	pub speed_factor: f64,
 	pub grabbes_cursor: bool,
 
 	/* Position */
 	pub pos: Float4,
+	pub speed: Float4,
+	pub speed_falloff: f32,
 
 	/* Rotation */
 	pub rotation: Matrix4,
@@ -75,7 +77,7 @@ impl Camera {
 	}
 
 	/// Moves camera towards its vectors.
-	pub fn move_pos(&mut self, front: f64, up: f64, right: f64) {
+	pub fn move_relative(&mut self, front: f64, up: f64, right: f64) {
 		/* Front */
 		self.pos += Float4::xyz1(self.front.x(), 0.0, self.front.z()).normalyze() * front as f32;
 
@@ -84,6 +86,11 @@ impl Camera {
 
 		/* Right */
 		self.pos += self.right * right as f32;
+	}
+
+	/// Moves camera towards coordinates.
+	pub fn move_absolute(&mut self, ds: Float4) {
+		self.pos += ds
 	}
 
 	/// Rotates camera.
@@ -117,21 +124,32 @@ impl Camera {
 	/// Updates camera (key press checking, etc).
 	pub fn update(&mut self, input: &mut InputManager, dt: f64) {
 		/* Camera move vector */
-		let mut move_vector = Float4::all(0.0);
+		let mut new_speed = Float4::all(0.0);
 
 		/* Movement controls */
-		if input.keyboard.is_pressed(KeyCode::W)		{ move_vector += Float4::xyz1(1.0, 0.0, 0.0) }
-		if input.keyboard.is_pressed(KeyCode::S)		{ move_vector -= Float4::xyz1(1.0, 0.0, 0.0) }
-		if input.keyboard.is_pressed(KeyCode::A)		{ move_vector += Float4::xyz1(0.0, 0.0, 1.0) }
-		if input.keyboard.is_pressed(KeyCode::D)		{ move_vector -= Float4::xyz1(0.0, 0.0, 1.0) }
-		if input.keyboard.is_pressed(KeyCode::Space)	{ move_vector += Float4::xyz1(0.0, 1.0, 0.0) }
-		if input.keyboard.is_pressed(KeyCode::LShift)	{ move_vector -= Float4::xyz1(0.0, 1.0, 0.0) }
+		if input.keyboard.is_pressed(KeyCode::W)		{ new_speed += Float4::xyz0(self.front.x(), 0.0, self.front.z()).normalyze() }
+		if input.keyboard.is_pressed(KeyCode::S)		{ new_speed -= Float4::xyz0(self.front.x(), 0.0, self.front.z()).normalyze() }
+		if input.keyboard.is_pressed(KeyCode::A)		{ new_speed += self.right.normalyze() }
+		if input.keyboard.is_pressed(KeyCode::D)		{ new_speed -= self.right.normalyze() }
+		if input.keyboard.is_pressed(KeyCode::Space)	{ new_speed += Float4::xyz0(0.0, 1.0, 0.0) }
+		if input.keyboard.is_pressed(KeyCode::LShift)	{ new_speed -= Float4::xyz0(0.0, 1.0, 0.0) }
+
+		/* Calculate new speed */
+		new_speed = new_speed.normalyze() * self.speed_factor as f32;
 
 		/* Normalyzing direction vector */
-		move_vector = move_vector.normalyze() * dt as f32 * self.speed as f32;
+		self.speed = if new_speed != Float4::all(0.0) {
+			self.speed / 2.0 + new_speed / 2.0
+		} else {
+			if self.speed.abs() > 0.1 {
+				self.speed * self.speed_falloff
+			} else {
+				Float4::all(0.0)
+			}
+		};
 
 		/* Move camera with move vector */
-		self.move_pos(move_vector.x() as f64, move_vector.y() as f64, move_vector.z() as f64);
+		self.move_absolute(self.speed * dt as f32);
 
 		/* Reset */
 		if input.keyboard.just_pressed(KeyCode::P) {
@@ -198,9 +216,11 @@ impl Default for Camera {
 			near: 0.5,
 			far: 1000.0,
 			grabbes_cursor: false,
-			speed: 10.0,
+			speed_factor: 10.0,
+			speed_falloff: 0.88,
 			aspect_ratio: 768.0 / 1024.0,
 			pos: Float4::xyz1(0.0, 0.0, -3.0),
+			speed: Float4::all(0.0),
 			up: Float4::xyz1(0.0, 1.0, 0.0),
 			front: Float4::xyz1(0.0, 0.0, -1.0),
 			right: Float4::xyz1(1.0, 0.0, 0.0),

@@ -165,11 +165,13 @@ impl App {
 				ui.text("Rotation");
 				ui.text(format!("roll: {roll:.3}, pitch: {pitch:.3}, yaw: {yaw:.3}", roll = camera.roll, pitch = camera.pitch, yaw = camera.yaw));
 				ui.separator();
-				ui.text("Speed factor");
-				imgui::Slider::new("Camera speed", 5.0, 300.0)
+				imgui::Slider::new("Speed", 5.0, 300.0)
 					.display_format("%.1f")
-					.build(&ui, &mut camera.speed);
-				imgui::Slider::new("Camera fov", 1.0, 180.0)
+					.build(&ui, &mut camera.speed_factor);
+				imgui::Slider::new("Speed falloff", 0.0, 1.0)
+					.display_format("%.3f")
+					.build(&ui, &mut camera.speed_falloff);
+				imgui::Slider::new("FOV", 1.0, 180.0)
 					.display_format("%.0f")
 					.build(&ui, camera.fov.get_degrees_mut());
 				camera.fov.update_from_degrees();
