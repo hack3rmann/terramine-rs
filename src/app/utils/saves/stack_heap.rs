@@ -175,7 +175,7 @@ impl StackHeap {
 				/* Compare sizes and insert remainder range */
 				let range_size = range.end - range.start;
 				if range_size != size {
-					self.freed_space.insert(range.start .. range.start + size);
+					self.freed_space.insert(range.start + size .. range.end);
 				}
 
 				range.start
@@ -210,26 +210,87 @@ impl StackHeap {
 	fn insert_free(&mut self, heap_offset: Offset, size: Size) {
 		/* Insert new free space marker */
 		let free_range = heap_offset .. heap_offset + size;
-		self.freed_space.insert(free_range.clone());
 
 		/* Seek all mergable ranges */
-		let mut repeated = Vec::with_capacity(3);
-		for (curr, next) in self.freed_space.iter().zip(self.freed_space.iter().skip(1)) {
-			if curr.end == next.start {
-				repeated.push(curr.clone());
-				repeated.push(next.clone());
-			}
+		let mut repeated = [free_range.clone(), free_range.clone(), free_range.clone()];
+		for range in self.freed_space.iter() {
+			if range.end   == free_range.start {
+				repeated[0] = range.clone();
+			} else
+			if range.start == free_range.end {
+				repeated[2] = range.clone();
+			}			
 		}
 
-		/* Then merge them */
-		if !repeated.is_empty() {
-			repeated.iter().for_each(|range| { self.freed_space.remove(range); });
-			let merged = {
-				let min = repeated.iter().map(|range| range.start).min().unwrap();
-				let max = repeated.iter().map(|range| range.end  ).max().unwrap();
-				min .. max
-			};
-			self.freed_space.insert(merged);
-		}
+		/* Remove all found ranges */
+		self.freed_space.remove(&repeated[0]);
+		self.freed_space.remove(&repeated[2]);
+
+		/* Insert all-include range */
+		self.freed_space.insert(repeated[0].start .. repeated[2].end);
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_allocation() {
+		let name = "test_allocation";
+		let mut file = StackHeap::new(name, name);
+
+		let bytes_64:  Vec<_> = (0_u64..).flat_map(|num| num.reinterpret_as_bytes()).take(64) .collect();
+		let bytes_128: Vec<_> = (0_u64..).flat_map(|num| num.reinterpret_as_bytes()).take(128).collect();
+
+		let bytes_64_rev: Vec<_> = bytes_64.iter().map(|&byte| byte).rev().collect();
+
+		let alloc_64 = file.alloc(64);
+		file.write_to_heap(alloc_64, &bytes_64);
+
+		let alloc_128 = file.realloc(128, alloc_64.get_stack_offset());
+		file.write_to_heap(alloc_128, &bytes_128);
+
+		let alloc_64_rev = file.alloc(64);
+		file.write_to_heap(alloc_64_rev, &bytes_64_rev);
+
+		let bytes_after = file.read_from_heap(alloc_128.get_heap_offset());
+		let bytes_rev_after = file.read_from_heap(alloc_64_rev.get_heap_offset());
+
+		assert_eq!(bytes_128, bytes_after);
+		assert_eq!(bytes_64_rev, bytes_rev_after);
+		assert_eq!(file.stack_ptr, 2 * Offset::static_size() as Size);
+		assert_eq!(file.eof, 64 + 128 + 2 * Size::static_size() as Size);
+	}
+
+	#[test]
+	fn test_merging() {
+		let name = "test_merging";
+		let mut file = StackHeap::new(name, name);
+
+		let bytes_64:  Vec<_> = (0_u64..).flat_map(|num| num.reinterpret_as_bytes()).take(64) .collect();
+		let bytes_128: Vec<_> = (0_u64..).flat_map(|num| num.reinterpret_as_bytes()).take(128).collect();
+
+		let alloc_64_1 = file.alloc(64);
+		file.write_to_heap(alloc_64_1, &bytes_64);
+
+		let alloc_64_2 = file.alloc(64);
+		file.write_to_heap(alloc_64_2, &bytes_64);
+
+		assert_eq!(bytes_64, file.read_from_heap(alloc_64_1.get_heap_offset()));
+		assert_eq!(bytes_64, file.read_from_heap(alloc_64_2.get_heap_offset()));
+
+		file.free(alloc_64_1.get_stack_offset());
+		file.free(alloc_64_2.get_stack_offset());
+
+		let alloc_128 = file.alloc(128);
+		file.write_to_heap(alloc_128, &bytes_128);
+
+		assert_eq!(bytes_128, file.read_from_heap(alloc_128.get_heap_offset()));
+		assert_eq!(file.stack_ptr, 3 * Offset::static_size() as Size);
+		assert_eq!(file.eof, 2 * 64 + 2 * Size::static_size() as Size);
+
+		let range = 128 + Size::static_size() as Size .. 2 * (64 + Size::static_size() as Size);
+		assert!(file.freed_space.contains(&range));
 	}
 }
