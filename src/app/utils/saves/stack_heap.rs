@@ -121,20 +121,37 @@ impl StackHeap {
 
 	/// Allocates space on heap. Returns a pair of offsets on stack and on a heap.
 	pub fn realloc(&mut self, size: Size, stack_offset: Offset) -> Alloc {
-		/* Free data on offset */
-		self.free(stack_offset);
+		/* Read size that was before */
+		let heap_offset = self.read_from_stack(stack_offset);
+		let before_size = {
+			let mut buffer = vec![0; Size::static_size()];
+			self.heap.seek_read(&mut buffer, heap_offset).unwrap();
+			Size::reinterpret_from_bytes(&buffer)
+		};
 
-		/* Test freed memory */
-		let full_size = size + Offset::static_size() as Size;
-		let heap_offset = self.get_available_offset(full_size);
+		/* Calculate size include sizes bytes */
+		let full_size = size + Size::static_size() as Size;
 
-		/* Save size of data to heap */
-		self.heap.seek_write(&size.reinterpret_as_bytes(), heap_offset).unwrap();
+		if before_size < size {
+			/* Free data on offset */
+			self.free(stack_offset);
 
-		/* Save this offset on stack */
-		self.write_to_stack(stack_offset, &heap_offset.reinterpret_as_bytes());
+			/* Test freed memory */
+			let heap_offset = self.get_available_offset(full_size);
 
-		Alloc { stack_offset, heap_offset, size }
+			/* Save size of data to heap */
+			self.heap.seek_write(&size.reinterpret_as_bytes(), heap_offset).unwrap();
+
+			/* Save this offset on stack */
+			self.write_to_stack(stack_offset, &heap_offset.reinterpret_as_bytes());
+
+			Alloc { stack_offset, heap_offset, size }
+		} else { 
+			/* Write size to heap */
+			self.heap.seek_write(&size.reinterpret_as_bytes(), heap_offset).unwrap();
+
+			Alloc { stack_offset, heap_offset, size }
+		}
 	}
 
 	/// Gives available offset on heap.
