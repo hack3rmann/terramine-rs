@@ -3,11 +3,16 @@ use std::{fs::File, fs::OpenOptions, os::windows::prelude::FileExt, collections:
 use super::{Offset, Size};
 use crate::app::utils::reinterpreter::*;
 
+#[derive(Debug)]
+pub struct ShError(pub String);
+
+pub type ShResult<T> = Result<T, ShError>;
+
 #[derive(Clone, Copy)]
 pub struct Alloc {
-	pub(in super::stack_heap) stack_offset: Offset,
-	pub(in super::stack_heap) heap_offset: Offset,
-	pub(in super::stack_heap) size: Size,
+	pub(in self) stack_offset: Offset,
+	pub(in self) heap_offset: Offset,
+	pub(in self) size: Size,
 }
 
 #[allow(dead_code)]
@@ -97,12 +102,19 @@ impl StackHeap {
 
 	/// Reads value from heap of file by offset on stack.
 	#[allow(dead_code)]
-	pub fn heap_read<T: ReinterpretFromBytes + StaticSize>(&self, stack_offset: Offset) -> T {
+	pub fn heap_read<T: ReinterpretFromBytes + StaticSize>(&self, stack_offset: Offset) -> ShResult<T> {
 		/* Read offset on heap from stack */
 		let heap_offset: Offset = self.read_from_stack(stack_offset);
 
+		/* Read bytes */
+		let bytes = self.read_from_heap(heap_offset);
+
 		/* Read bytes from heap */
-		T::reinterpret_from_bytes(&self.read_from_heap(heap_offset))
+		if bytes.len() == T::static_size() {
+			Ok(T::reinterpret_from_bytes(&bytes))
+		} else {
+			Err(ShError("Data lengthes on given offset and on passed type T are not equal!".to_owned()))
+		}
 	}
 
 	/// Allocates space on heap. Returns an Alloc struct that contains all information about this allocation.
@@ -186,9 +198,16 @@ impl StackHeap {
 	}
 
 	/// Writes bytes to heap. Alloc struct must be passed in. It's a contract to write to available allocated chunk of bytes.
-	pub fn write_to_heap(&self, Alloc { size, heap_offset: offset, .. }: Alloc, data: &[u8]) {
-		assert!(size >= data.len() as Size, "Data size passed to this function should be not greater than allowed allocation!");
-		self.heap.seek_write(data, offset + Size::static_size() as Size).unwrap();
+	pub fn write_to_heap(&self, Alloc { size, heap_offset: offset, .. }: Alloc, data: &[u8]) -> ShResult<()> {
+		if size >= data.len() as Size {
+			self.heap.seek_write(data, offset + Size::static_size() as Size).unwrap();
+			Ok(())
+		} else {
+			Err(ShError(format!(
+				"Data size ({}) passed to this function should be not greater than allowed allocation ({})!",
+				size, data.len()
+			)))
+		}
 	}
 
 	/// Marks memory as free.
@@ -248,13 +267,13 @@ mod tests {
 		let bytes_64_rev: Vec<_> = bytes_64.iter().map(|&byte| byte).rev().collect();
 
 		let alloc_64 = file.alloc(64);
-		file.write_to_heap(alloc_64, &bytes_64);
+		file.write_to_heap(alloc_64, &bytes_64).unwrap();
 
 		let alloc_128 = file.realloc(128, alloc_64.get_stack_offset());
-		file.write_to_heap(alloc_128, &bytes_128);
+		file.write_to_heap(alloc_128, &bytes_128).unwrap();
 
 		let alloc_64_rev = file.alloc(64);
-		file.write_to_heap(alloc_64_rev, &bytes_64_rev);
+		file.write_to_heap(alloc_64_rev, &bytes_64_rev).unwrap();
 
 		let bytes_after = file.read_from_heap(alloc_128.get_heap_offset());
 		let bytes_rev_after = file.read_from_heap(alloc_64_rev.get_heap_offset());
@@ -274,10 +293,10 @@ mod tests {
 		let bytes_128: Vec<_> = (0_u64..).flat_map(|num| num.reinterpret_as_bytes()).take(128).collect();
 
 		let alloc_64_1 = file.alloc(64);
-		file.write_to_heap(alloc_64_1, &bytes_64);
+		file.write_to_heap(alloc_64_1, &bytes_64).unwrap();
 
 		let alloc_64_2 = file.alloc(64);
-		file.write_to_heap(alloc_64_2, &bytes_64);
+		file.write_to_heap(alloc_64_2, &bytes_64).unwrap();
 
 		assert_eq!(bytes_64, file.read_from_heap(alloc_64_1.get_heap_offset()));
 		assert_eq!(bytes_64, file.read_from_heap(alloc_64_2.get_heap_offset()));
@@ -286,7 +305,7 @@ mod tests {
 		file.free(alloc_64_2.get_stack_offset());
 
 		let alloc_128 = file.alloc(128);
-		file.write_to_heap(alloc_128, &bytes_128);
+		file.write_to_heap(alloc_128, &bytes_128).unwrap();
 
 		assert_eq!(bytes_128, file.read_from_heap(alloc_128.get_heap_offset()));
 		assert_eq!(file.stack_ptr, 3 * Offset::static_size() as Size);
