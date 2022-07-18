@@ -104,7 +104,7 @@ impl StackHeap {
 		T::reinterpret_from_bytes(&self.read_from_heap(heap_offset))
 	}
 
-	/// Allocates space on heap. Returns a pair of offsets on stack and on a heap.
+	/// Allocates space on heap. Returns an Alloc struct that contains all information about this allocation.
 	pub fn alloc(&mut self, size: Size) -> Alloc {
 		/* Test freed memory */
 		let full_size = size + Offset::static_size() as Size;
@@ -119,7 +119,7 @@ impl StackHeap {
 		Alloc { stack_offset, heap_offset, size }
 	}
 
-	/// Allocates space on heap. Returns a pair of offsets on stack and on a heap.
+	/// Reallocates space on heap. Returns an Alloc struct that contains all information about this allocation.
 	pub fn realloc(&mut self, size: Size, stack_offset: Offset) -> Alloc {
 		/* Read size that was before */
 		let heap_offset = self.read_from_stack(stack_offset);
@@ -160,6 +160,7 @@ impl StackHeap {
 	}
 
 	/// Gives available offset on heap.
+	///  * Note: size is a full size of allocation, include size mark in heap
 	fn get_available_offset(&mut self, size: Size) -> Offset {
 		match self.freed_space.iter().find(|range| range.end - range.start >= size).cloned() {
 			None => {
@@ -191,12 +192,14 @@ impl StackHeap {
 	/// Marks memory as free.
 	#[allow(dead_code)]
 	pub fn free(&mut self, stack_offset: Offset) {
-		/* Construct Alloc struct */
+		/* Read offset and size */
 		let heap_offset: Offset = self.read_from_stack(stack_offset);
 		let size = {
 			let mut buffer = vec![0; Size::static_size()];
 			self.heap.seek_read(&mut buffer, heap_offset).unwrap();
-			Size::reinterpret_from_bytes(&buffer)
+
+			/* Note: Size mark in heap is included */
+			Size::reinterpret_from_bytes(&buffer) + Size::static_size() as Size
 		};
 		
 		/* Insert free range */
