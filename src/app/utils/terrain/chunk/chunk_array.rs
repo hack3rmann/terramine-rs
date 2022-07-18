@@ -1,15 +1,20 @@
 use super::{Chunk, ChunkEnvironment as ChunkEnv};
 use crate::app::utils::{
 	graphics::Graphics,
-	math::prelude::{*, rges::*},
-	graphics::camera::Camera, reinterpreter::{StaticSize, ReinterpretAsBytes, ReinterpretFromBytes},
+	math::prelude::*,
+	graphics::camera::Camera,
+	saves::*,
+	reinterpreter::{
+		ReinterpretAsBytes,
+		ReinterpretFromBytes
+	},
+	terrain::voxel::voxel_data::NOTHING_VOXEL_DATA,
 };
 use glium::{
 	uniforms::Uniforms,
 	DrawError,
 	Frame
 };
-use std::{fs::File, os::windows::prelude::FileExt};
 
 /// Represents self-controlling chunk array.
 /// * Width is bigger if you go to x+ direction
@@ -26,106 +31,88 @@ pub struct ChunkArray<'a> {
 	chunks: Vec<Chunk<'a>>,
 }
 
+#[derive(Clone, Copy)]
+enum SaveType {
+	Width,
+	Height,
+	Depth,
+	ChunkArray,
+}
+
+impl Into<Offset> for SaveType {
+	fn into(self) -> Offset { self as Offset }
+}
+
+enum ChunkState {
+	Full,
+	Empty,
+}
+
 impl<'a> ChunkArray<'a> {
 	pub fn new(graphics: &Graphics, width: usize, height: usize, depth: usize) -> Self {
 		/* Amount of voxels in chunks */
 		let volume = width * height * depth;
 
 		/* Initialize vector */
-		let mut chunks = Vec::<Chunk>::with_capacity(volume);
+		let mut chunks = vec![];
 
 		/* Name of world file */
-		let filename = "src/world.chunks";
+		let (path, name) = ("src/world", "world");
 
-		/* Offset of world bytes */
-		let chunk_table_offset = usize::static_size() * 3;
-		let chunk_heap_offset = chunk_table_offset + u64::static_size() * volume;
-
+		/* File generator */
 		let mut generate_file = || {
-			/* World file */
-			let file = File::create(filename).expect(format!("Failed to create file {filename} in write-only mode!").as_str());
-			file.set_len((Chunk::static_size() * volume + chunk_heap_offset) as u64).expect("Failed to set file size!");
-
-			/* Write width, height and depth to file */
-			file.seek_write(&width.reinterpret_as_bytes(), 0).unwrap();
-			file.seek_write(&height.reinterpret_as_bytes(), usize::static_size() as u64).unwrap();
-			file.seek_write(&depth.reinterpret_as_bytes(), (usize::static_size() * 2) as u64).unwrap();
-
-			/* Fill vector with chunks with no mesh attached */
-			for x in (0..width).center() {
-			for y in (0..height).center() {
-			for z in (0..depth).center() {
-				/* Local index function */
-				let index = |mut x: isize, mut y: isize, mut z: isize| -> usize {
-					/* Conversion to [0; dim(p) - 1] */
-					x -= (0..width) .center().start;
-					y -= (0..height).center().start;
-					z -= (0..depth) .center().start;
-
-					/* Index */
-					sdex::get_index(&[x as usize, y as usize, z as usize], &[width, height, depth])
-				};
-
-				/* Generate chunk */
-				let chunk = Chunk::new(None, Int3::new(x as i32, y as i32, z as i32), false);
-
-				/* Write it to file */
-				let current_offset = (index(x, y, z) * Chunk::static_size() + chunk_heap_offset) as u64;
-				file.seek_write(&chunk.reinterpret_as_bytes(), current_offset).unwrap();
-				file.seek_write(&current_offset.reinterpret_as_bytes(), (index(x, y, z) * u64::static_size() + chunk_table_offset) as u64).unwrap();
-
-				/* Push it to chunk array */
-				chunks.push(chunk);
+			/* Generate chunks */
+			chunks = Vec::with_capacity(volume);
+			for x in 0..width {
+			for y in 0..height {
+			for z in 0..depth {
+				let pos = Int3::new(x as i32, y as i32, z as i32) - Int3::new(width as i32, height as i32, depth as i32) / 2;
+				chunks.push(Chunk::new(None, pos, false));
 			}}}
+
+			/* Save */
+			use SaveType::*;
+			Save::new(name)
+				.create(path)
+				.write(&width, Width)
+				.write(&height, Height)
+				.write(&depth, Depth)
+				.pointer_array(volume, ChunkArray, |i|
+					if chunks[i].voxels.iter().all(|&id| id == NOTHING_VOXEL_DATA.id) {
+						/* Save only chunk position if it is empty */
+						let mut state = (ChunkState::Empty as u8).reinterpret_as_bytes();
+						state.append(&mut chunks[i].pos.reinterpret_as_bytes());
+
+						state
+					} else {
+						/* Save chunk fully */
+						let mut state = (ChunkState::Full as u8).reinterpret_as_bytes();
+						state.append(&mut chunks[i].reinterpret_as_bytes());
+
+						state
+					}
+				)
+				.save().unwrap();
 		};
 
-		if std::path::Path::new(filename).exists() {
-			/* World file */
-			let file = File::open(filename).expect(format!("Failed to open file {filename} in read-only mode!").as_str());
+		/* File reader */
+		if std::path::Path::new(path).exists() {
+			use SaveType::*;
+			let save = Save::new(name).open(path);
 
-			/* Read dimensions of world */
-			let mut bytes = vec![0; usize::static_size()];
-
-			/* Width */
-			file.seek_read(&mut bytes, 0).unwrap();
-			let read_width = usize::reinterpret_from_bytes(&bytes);
-
-			/* Height */
-			file.seek_read(&mut bytes, (usize::static_size()) as u64).unwrap();
-			let read_height = usize::reinterpret_from_bytes(&bytes);
-
-			/* Depth */
-			file.seek_read(&mut bytes, (usize::static_size() * 2) as u64).unwrap();
-			let read_depth = usize::reinterpret_from_bytes(&bytes);
-
-			/* Size changed => regenerate world */
-			if read_width == width && read_height == height && read_depth == depth {
-				/* Current byte pointer */
-				let mut current = chunk_table_offset as u64;
-	
-				/* Bytes buffer */
-				let mut buffer = vec![0; Chunk::static_size()];
-				let mut chunk_offset_buffer = vec![0; u64::static_size()];
-	
-				while current <= ((volume - 1) * u64::static_size() + chunk_table_offset) as u64 {
-					/* Read chunk offset from table */
-					file.seek_read(&mut chunk_offset_buffer, current).unwrap();
-					let chunk_offset = u64::reinterpret_from_bytes(&chunk_offset_buffer);
-
-					/* Read exact bytes for one chunk */
-					file.seek_read(&mut buffer, chunk_offset).unwrap();
-	
-					/* Push chunk to array */
-					chunks.push(Chunk::reinterpret_from_bytes(&buffer));
-	
-					/* Increment current pointer */
-					current += u64::static_size() as u64;
-				}
+			if (width, height, depth) == (save.read(Width), save.read(Height), save.read(Depth)) {
+				chunks = save.read_pointer_array(ChunkArray, |bytes|
+					if bytes[0] == ChunkState::Full as u8 {
+						Chunk::reinterpret_from_bytes(&bytes[1..])
+					} else {
+						Chunk::new(None, Int3::reinterpret_from_bytes(&bytes[1..]), false)
+					}
+				);
 			} else {
-				generate_file();
+				generate_file()
 			}
 		} else {
-			generate_file();
+			generate_file()
 		}
 
 		/* Make environments with references to chunk array */

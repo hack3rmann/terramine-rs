@@ -162,9 +162,11 @@ impl App {
 			camera_window.build(&ui, || {
 				ui.text("Position");
 				ui.text(format!("x: {x:.3}, y: {y:.3}, z: {z:.3}", x = camera.get_x(), y = camera.get_y(), z = camera.get_z()));
+				ui.text("Rotation");
+				ui.text(format!("roll: {roll:.3}, pitch: {pitch:.3}, yaw: {yaw:.3}", roll = camera.roll, pitch = camera.pitch, yaw = camera.yaw));
 				ui.separator();
 				ui.text("Speed factor");
-				imgui::Slider::new("Camera speed", 5.0, 150.0)
+				imgui::Slider::new("Camera speed", 5.0, 300.0)
 					.display_format("%.1f")
 					.build(&ui, &mut camera.speed);
 				imgui::Slider::new("Camera fov", 1.0, 180.0)
