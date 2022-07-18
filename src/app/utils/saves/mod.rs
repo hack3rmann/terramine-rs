@@ -56,7 +56,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		return self
 	}
 
-	/// Opens heap-stack folder.
+	/// Opens heap-stack folder. And reads all offsets from save `meta.off`.
 	pub fn open(mut self, path: &str) -> Self {
 		self.file = Some(StackHeap::new(path, &self.name));
 		self.offsets_save = Some(
@@ -96,7 +96,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		return self
 	}
 
-	/// Writes enum-named value to file.
+	/// Writes enum-named value to stack file.
 	pub fn write<T: ReinterpretAsBytes + StaticSize>(mut self, value: &T, enumerator: E) -> Self {
 		/* Write value to file stack */
 		let bytes = value.reinterpret_as_bytes();
@@ -108,7 +108,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		return self
 	}
 
-	/// Assigns value to stack.
+	/// Assigns enum-named value to value on stack.
 	#[allow(dead_code)]
 	pub fn assign<T: ReinterpretAsBytes + StaticSize>(&mut self, value: &T, enumerator: E) {
 		/* Get bytes and offset */
@@ -119,12 +119,12 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		self.get_file_mut().write_to_stack(offset, &bytes);
 	}
 
-	/// Reads enum-named value from file.
+	/// Reads enum-named value from stack file.
 	pub fn read<T: ReinterpretFromBytes + StaticSize>(&self, enumerator: E) -> T {
 		self.get_file_ref().read_from_stack(self.load_offset(enumerator))
 	}
 
-	/// Writes enum-named array of values to file.
+	/// Writes enum-named array of values to stack file.
 	#[allow(dead_code)]
 	pub fn array<'t, T: 't, F>(mut self, length: usize, enumerator: E, mut elem: F) -> Self
 	where
@@ -146,7 +146,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		return self
 	}
 
-	/// Assignes to an array.
+	/// Assignes new values to enum-named array.
 	#[allow(dead_code)]
 	pub fn assign_array<'t, T: 't, F>(&mut self, enumerator: E, mut elem: F)
 	where
@@ -169,7 +169,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		}
 	}
 
-	/// Assings to some element in the array.
+	/// Assings new value to some element in enum-named array.
 	#[allow(dead_code)]
 	pub fn assign_array_element<T: ReinterpretAsBytes + StaticSize>(&mut self, enumerator: E, elem: T, idx: usize) {
 		/* Load offset */
@@ -188,7 +188,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		self.get_file_mut().write_to_stack(offset, &elem.reinterpret_as_bytes());
 	}
 
-	/// Reads enum-named array of values from file.
+	/// Reads enum-named array of values from stack file.
 	#[allow(dead_code)]
 	pub fn read_array<T: ReinterpretFromBytes + StaticSize>(&self, enumerator: E) -> Vec<T> {
 		/* Getting offset of array length */
@@ -218,7 +218,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		return result
 	}
 
-	/// Reads element of an array.
+	/// Reads element of enum-named array on stack by index `idx`.
 	#[allow(dead_code)]
 	pub fn read_array_element<T: ReinterpretFromBytes + StaticSize>(&self, enumerator: E, idx: usize) -> T {
 		/* Load offset */
@@ -237,7 +237,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		self.get_file_ref().read_from_stack(offset)
 	}
 
-	/// Allocates data on heap of file with pointer on stack.
+	/// Allocates data on heap of file with pointer on stack and writes all given bytes.
 	#[allow(dead_code)]
 	pub fn pointer(mut self, bytes: Vec<u8>, enumerator: E) -> Self {
 		/* Allocate bytes */
@@ -253,7 +253,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		return self
 	}
 
-	/// Replaces pointer data with new data.
+	/// Assignes new data to the value of pointer to heap.
 	#[allow(dead_code)]
 	pub fn assign_to_pointer(&mut self, bytes: Vec<u8>, enumerator: E) {
 		/* Load offset */
@@ -264,7 +264,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		self.get_file_ref().write_to_heap(alloc, &bytes);
 	}
 
-	/// Reads data from heap by pointer on stack.
+	/// Reads data from heap by stack pointer to heap on.
 	#[allow(dead_code)]
 	pub fn read_from_pointer<T, F: FnOnce(&[u8]) -> T>(&self, enumerator: E, item: F) -> T {
 		/* Load offsets */
@@ -276,7 +276,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		item(&bytes)
 	}
 
-	/// Allocates array of pinters on stack and array of data on heap.
+	/// Allocates an array of pinters on stack and array of data on heap.
 	pub fn pointer_array<F: FnMut(usize) -> Vec<u8>>(mut self, length: usize, enumerator: E, mut elem: F) -> Self {
 		/* Push size to stack and store its offset */
 		let stack_offset = self.get_file_mut().push(&(length as Size).reinterpret_as_bytes());
@@ -291,7 +291,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		return self
 	}
 
-	/// Assigns array of pointers elements.
+	/// Assigns new array of pointers to existed one.
 	#[allow(dead_code)]
 	pub fn assign_pointer_array<F: FnMut(usize) -> Vec<u8>>(&mut self, enumerator: E, mut elem: F) {
 		/* Load offset */
@@ -308,12 +308,12 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
 		/* Write bytes */
 		for (bytes, offset) in elements.zip(offsets).take(length as usize) {
-			let alloc = self.get_file_mut().realloc(bytes.len() as Size, offset); // !PANIC!
+			let alloc = self.get_file_mut().realloc(bytes.len() as Size, offset);
 			self.get_file_ref().write_to_heap(alloc, &bytes);
 		}
 	}
 
-	/// Assigns new element to an index of pointer array.
+	/// Assigns new element to the element by index of pointer on stack.
 	#[allow(dead_code)]
 	pub fn assign_pointer_array_element(&mut self, enumerator: E, bytes: Vec<u8>, idx: usize) {
 		/* Load offset */
@@ -333,7 +333,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		self.get_file_ref().write_to_heap(alloc, &bytes);
 	}
 
-	/// Reads array of pointers from stack and data from heap.
+	/// Reads an array of data from heap.
 	pub fn read_pointer_array<T, F>(&self, enumerator: E, mut elem: F) -> Vec<T>
 	where
 		F: FnMut(&[u8]) -> T
@@ -363,7 +363,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		return result
 	}
 
-	/// Reads pointer array element at index idx.
+	/// Reads a pointer array element at index `idx`.
 	#[allow(dead_code)]
 	pub fn read_pointer_array_element<T, F>(&self, enumerator: E, idx: usize, elem: F) -> T
 	where
@@ -389,7 +389,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		elem(&bytes)
 	}
 
-	/// Saves offset.
+	/// Saves offset by enumerator.
 	fn store_offset(&mut self, enumerator: E, offset: Offset) {
 		match self.offests.insert(enumerator.into(), offset) {
 			None => (),
@@ -397,7 +397,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		}
 	}
 
-	/// Loads offset.
+	/// Loads offset by enumerator.
 	fn load_offset(&self, enumerator: E) -> Offset {
 		*self.offests
 			.get(&enumerator.into())

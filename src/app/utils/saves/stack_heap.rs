@@ -27,7 +27,7 @@ pub struct StackHeap {
 }
 
 impl StackHeap {
-	/// Makes new StackHeap struct and new directory for its files.
+	/// Makes new StackHeap struct and new directory for their files.
 	pub fn new(path: &str, name: &str) -> Self {
 		/* Create directory if this path doesn't exist */
 		if !std::path::Path::new(path).exists() {
@@ -43,7 +43,7 @@ impl StackHeap {
 		}
 	}
 
-	/// Saves file.
+	/// Saves the files.
 	pub fn sync(&self) -> std::io::Result<()> {
 		self.stack.sync_all()?;
 		self.heap.sync_all()?;
@@ -51,7 +51,7 @@ impl StackHeap {
 		Ok(())
 	}
 
-	/// Pushes data to stack. Returns an offset of that data.
+	/// Pushes data to stack. Returns an offset of the data.
 	pub fn push(&mut self, data: &[u8]) -> Offset {
 		/* Write new data */
 		let offset = self.stack_ptr;
@@ -63,12 +63,12 @@ impl StackHeap {
 		return offset
 	}
 
-	/// Writes data to stack by its offset
+	/// Writes data to stack by its offset.
 	pub fn write_to_stack(&mut self, offset: Offset, data: &[u8]) {
 		self.stack.seek_write(data, offset).unwrap();
 	}
 
-	/// Reads value from stack
+	/// Reads value from stack.
 	pub fn read_from_stack<T: ReinterpretFromBytes + StaticSize>(&self, offset: Offset) -> T {
 		/* Read bytes */
 		let mut buffer = vec![0; T::static_size()];
@@ -78,7 +78,8 @@ impl StackHeap {
 		T::reinterpret_from_bytes(&buffer)
 	}
 
-	/// Reads value from stack
+	/// Reads value from heap by `heap_offset`.
+	/// * Note: `heap_offset` should be point on Size mark of the data.
 	pub fn read_from_heap(&self, heap_offset: Offset) -> Vec<u8> {
 		/* Read size */
 		let size = {
@@ -94,7 +95,7 @@ impl StackHeap {
 		return buffer
 	}
 
-	/// Reads value from heap of file by offset from stack.
+	/// Reads value from heap of file by offset on stack.
 	#[allow(dead_code)]
 	pub fn heap_read<T: ReinterpretFromBytes + StaticSize>(&self, stack_offset: Offset) -> T {
 		/* Read offset on heap from stack */
@@ -120,6 +121,7 @@ impl StackHeap {
 	}
 
 	/// Reallocates space on heap. Returns an Alloc struct that contains all information about this allocation.
+	/// * Note: it can avoid alocation if new size isn't greater than old.
 	pub fn realloc(&mut self, size: Size, stack_offset: Offset) -> Alloc {
 		/* Read size that was before */
 		let heap_offset = self.read_from_stack(stack_offset);
@@ -159,8 +161,8 @@ impl StackHeap {
 		}
 	}
 
-	/// Gives available offset on heap.
-	///  * Note: size is a full size of allocation, include size mark in heap
+	/// Stoles available offset from heap. It can edit freed_space so it is expensive.
+	/// * Note: size is a full size of allocation, include size mark in heap
 	fn get_available_offset(&mut self, size: Size) -> Offset {
 		match self.freed_space.iter().find(|range| range.end - range.start >= size).cloned() {
 			None => {
@@ -183,7 +185,7 @@ impl StackHeap {
 		}
 	}
 
-	/// Writes bytes to heap.
+	/// Writes bytes to heap. Alloc struct must be passed in. It's a contract to write to available allocated chunk of bytes.
 	pub fn write_to_heap(&self, Alloc { size, heap_offset: offset, .. }: Alloc, data: &[u8]) {
 		assert!(size >= data.len() as Size, "Data size passed to this function should be not greater than allowed allocation!");
 		self.heap.seek_write(data, offset + Size::static_size() as Size).unwrap();
@@ -206,7 +208,7 @@ impl StackHeap {
 		self.insert_free(heap_offset, size);
 	}
 
-	/// Inserts free space Alloc to set.
+	/// Inserts free space to freed_space HashSet and merges free ranges.
 	fn insert_free(&mut self, heap_offset: Offset, size: Size) {
 		/* Insert new free space marker */
 		let free_range = heap_offset .. heap_offset + size;
