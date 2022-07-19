@@ -87,7 +87,7 @@ impl App {
 			Event::WindowEvent { event, .. } => match event {
 				/* Close event */
 				WindowEvent::CloseRequested => {
-					*control_flow = glium::glutin::event_loop::ControlFlow::Exit;
+					*control_flow = ControlFlow::Exit;
 				},
 				WindowEvent::Resized(new_size) => {
 					self.camera.aspect_ratio = new_size.height as f32 / new_size.width as f32;
@@ -97,10 +97,10 @@ impl App {
 			Event::MainEventsCleared => {
 				self.main_events_cleared(control_flow);
 			},
-			glium::glutin::event::Event::RedrawRequested(_) => {
+			Event::RedrawRequested(_) => {
 				self.redraw_requested();
 			},
-			glium::glutin::event::Event::NewEvents(_) => {
+			Event::NewEvents(_) => {
 				self.new_events();			
 			},
 			_ => ()
@@ -108,10 +108,10 @@ impl App {
 	}
 
 	/// Main events cleared.
-	fn main_events_cleared(&mut self, control_flow: &mut glium::glutin::event_loop::ControlFlow) {
+	fn main_events_cleared(&mut self, control_flow: &mut ControlFlow) {
 		/* Close window is `escape` pressed */
 		if self.input_manager.keyboard.just_pressed(KeyCode::Escape) {
-			*control_flow = glium::glutin::event_loop::ControlFlow::Exit;
+			*control_flow = ControlFlow::Exit;
 		}
 
 		/* Control camera by user input */
