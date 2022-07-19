@@ -91,7 +91,7 @@ impl AABB {
 	}
 
 	/// Tests ray intersection.
-	/// Source reference: https://tavianator.com/2011/ray_box.html
+	/// Source reference: <https://tavianator.com/2011/ray_box.html>
 	pub fn is_intersected_by_ray(self, ray: Ray) -> bool {
 		let mut t_max = f32::INFINITY;
 		let mut t_min = f32::NEG_INFINITY;
