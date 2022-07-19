@@ -7,7 +7,7 @@ use glium::{
 			Event,
 			WindowEvent,
 		},
-		event_loop::ControlFlow,
+		event_loop::ControlFlow, dpi::PhysicalSize,
 	},
 	Surface,
 	uniform
@@ -34,9 +34,10 @@ pub struct App {
 	graphics: Graphics,
 	camera: Camera,
 	timer: Timer,
+	window_size: PhysicalSize<u32>,
 
 	/* Temp voxel */
-	chunk_arr: ChunkArray<'static>,
+	chunk_arr: Option<ChunkArray<'static>>,
 
 	/* Second layer temporary stuff */
 	texture: Texture
@@ -54,16 +55,14 @@ impl App {
 		/* Texture loading */
 		let texture = Texture::from("src/image/texture_atlas.png", &graphics.display).unwrap();
 
-		/* Chunk */
-		let chunk_arr = ChunkArray::new(&graphics, 7, 1, 7);
-
 		App {
-			chunk_arr,
+			chunk_arr: None,
 			graphics,
 			camera,
 			texture,
 			timer: Timer::new(),
 			input_manager: InputManager::new(),
+			window_size: PhysicalSize::new(1024, 768)
 		}
 	}
 
@@ -91,6 +90,7 @@ impl App {
 				},
 				WindowEvent::Resized(new_size) => {
 					self.camera.aspect_ratio = new_size.height as f32 / new_size.width as f32;
+					self.window_size = new_size;
 				},
 				_ => (),
 			},
@@ -139,6 +139,10 @@ impl App {
 
 	/// Prepares the frame.
 	fn redraw_requested(&mut self) {
+		/* Chunk generation flag */
+		let mut generate_chunks = false;
+		static mut SIZES: [i32; 3] = [7, 1, 7];
+
 		/* InGui draw data */
 		let draw_data = {
 			/* Aliasing */
@@ -180,6 +184,25 @@ impl App {
 			/* Profiler window */
 			profiler::update_and_build_window(&ui, &self.timer, &self.input_manager);
 
+			/* Chunk generation window */
+			if self.chunk_arr.is_none() {
+				imgui::Window::new("Chunk generator")
+					.position_pivot([0.5, 0.5])
+					.position([self.window_size.width as f32 * 0.5, self.window_size.height as f32 * 0.5], imgui::Condition::Always)
+					.movable(false)
+					.size_constraints([150.0, 100.0], [300.0, 200.0])
+					.focused(true)
+					.save_settings(false)
+					.build(&ui, || {
+						ui.text("How many?");
+						ui.input_int3("Sizes", unsafe { &mut SIZES })
+							.auto_select_all(true)
+							.enter_returns_true(true)
+							.build();
+						generate_chunks = ui.button("Generate");
+					});
+			}
+
 			/* Render UI */
 			self.graphics.imguiw.prepare_render(&ui, self.graphics.display.gl_window().window());
 			ui.render()
@@ -197,13 +220,29 @@ impl App {
 		/* Actual drawing */
 		let mut target = self.graphics.display.draw(); 
 		target.clear_all((0.01, 0.01, 0.01, 1.0), 1.0, 0); {
-			self.chunk_arr.render(&mut target, &uniforms, &self.camera).unwrap();
+			match self.chunk_arr.as_mut() {
+				Some(chunk_arr) => chunk_arr.render(&mut target, &uniforms, &self.camera).unwrap(),
+				None => (),
+			}
 
 			self.graphics.imguir
 				.render(&mut target, draw_data)
 				.expect("Error rendering imgui");
 
 		} target.finish().unwrap();
+
+		/* Chunk generation */
+		if generate_chunks {
+			unsafe {
+				let chunk_arr = Some(ChunkArray::new(
+					&self.graphics,
+					SIZES[0] as usize,
+					SIZES[1] as usize,
+					SIZES[2] as usize
+				));
+				self.chunk_arr = chunk_arr;
+			}
+		}
 	}
 
 	/// Updates things.
