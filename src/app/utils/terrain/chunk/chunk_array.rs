@@ -16,21 +16,6 @@ use glium::{
 	Frame
 };
 
-/// Represents self-controlling chunk array.
-/// * Width is bigger if you go to x+ direction
-/// * Height is bigger if you go to y+ direction
-/// * Depth is bigger if you go to z+ direction
-#[allow(dead_code)]
-pub struct ChunkArray<'a> {
-	/* Size */
-	width:	usize,
-	height:	usize,
-	depth:	usize,
-
-	/* Chunk array itself */
-	chunks: Vec<Chunk<'a>>,
-}
-
 #[derive(Clone, Copy)]
 enum SaveType {
 	Width,
@@ -48,8 +33,37 @@ enum ChunkState {
 	Empty,
 }
 
-impl<'a> ChunkArray<'a> {
-	pub fn new(graphics: &Graphics, width: usize, height: usize, depth: usize) -> Self {
+pub struct GeneratedChunkArray<'c, 'e>(ChunkArray<'c>, Vec<ChunkEnv<'e>>);
+
+impl<'c, 'e> GeneratedChunkArray<'c, 'e> {
+	pub fn update_mesh(self, graphics: &Graphics) -> ChunkArray<'c> {
+		let (chunk_array, chunk_env) = (self.0, self.1);
+
+		/* Create mesh for each chunk */
+		chunk_array.chunks.iter().zip(chunk_env.iter())
+			.for_each(|(chunk, env)| chunk.update_mesh(&graphics, env));
+
+		return chunk_array
+	}
+}
+
+/// Represents self-controlling chunk array.
+/// * Width is bigger if you go to x+ direction
+/// * Height is bigger if you go to y+ direction
+/// * Depth is bigger if you go to z+ direction
+#[allow(dead_code)]
+pub struct ChunkArray<'ch> {
+	/* Size */
+	width:	usize,
+	height:	usize,
+	depth:	usize,
+
+	/* Chunk array itself */
+	chunks: Vec<Chunk<'ch>>,
+}
+
+impl<'ch> ChunkArray<'ch> {
+	pub fn generate(width: usize, height: usize, depth: usize) -> GeneratedChunkArray<'ch, 'ch> {
 		/* Amount of voxels in chunks */
 		let volume = width * height * depth;
 
@@ -122,11 +136,7 @@ impl<'a> ChunkArray<'a> {
 		/* Make environments with references to chunk array */
 		let env = Self::make_environment(&chunks, width, height, depth);
 
-		/* Create mesh for each chunk */
-		chunks.iter().zip(env.iter())
-			.for_each(|(chunk, env)| chunk.update_mesh(&graphics, env));
-
-		ChunkArray { width, height, depth, chunks }
+		GeneratedChunkArray(ChunkArray { width, height, depth, chunks }, env)
 	}
 
 	/// Creates environment for ChunkArray

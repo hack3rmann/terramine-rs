@@ -233,15 +233,12 @@ impl App {
 
 		/* Chunk generation */
 		if generate_chunks {
-			unsafe {
-				let chunk_arr = Some(ChunkArray::new(
-					&self.graphics,
-					SIZES[0] as usize,
-					SIZES[1] as usize,
-					SIZES[2] as usize
-				));
-				self.chunk_arr = chunk_arr;
-			}
+			let (width, height, depth) = unsafe {
+				(SIZES[0] as usize, SIZES[1] as usize, SIZES[2] as usize)
+			};
+
+			let chunk_arr = Some(ChunkArray::generate(width, height, depth).update_mesh(&self.graphics));
+			self.chunk_arr = chunk_arr;
 		}
 	}
 
