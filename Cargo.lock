@@ -1471,6 +1471,7 @@ checksum = "36ae8932fcfea38b7d3883ae2ab357b0d57a02caaa18ebb4f5ece08beaec4aa0"
 name = "terramine"
 version = "0.0.1"
 dependencies = [
+ "crossbeam",
  "directx_math",
  "glium",
  "image",

@@ -14,6 +14,7 @@ imgui-glium-renderer = "*"
 imgui-winit-support = "*"
 winapi = "*"
 profiler = { path = "../profiler" }
+crossbeam = "0.8.1"
 
 [features]
 release = []
