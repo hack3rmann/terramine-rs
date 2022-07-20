@@ -66,9 +66,10 @@ pub struct ChunkArray<'ch> {
 }
 
 impl<'ch> ChunkArray<'ch> {
-	pub fn generate(width: usize, height: usize, depth: usize) -> Receiver<GeneratedChunkArray<'static, 'static>> {
-		/* Create channel */
-		let (tx, rx) = std::sync::mpsc::channel();
+	pub fn generate(width: usize, height: usize, depth: usize) -> (Receiver<GeneratedChunkArray<'static, 'static>>, Receiver<f64>) {
+		/* Create channels */
+		let (result_tx, result_rx) = std::sync::mpsc::channel();
+		let (percenatge_tx, percentage_rx) = std::sync::mpsc::channel();
 
 		std::thread::spawn(move || {
 			/* Amount of voxels in chunks */
@@ -89,6 +90,10 @@ impl<'ch> ChunkArray<'ch> {
 				for z in 0..depth {
 					let pos = Int3::new(x as i32, y as i32, z as i32) - Int3::new(width as i32, height as i32, depth as i32) / 2;
 					chunks.push(Chunk::new(None, pos, false));
+
+					/* Calculating percentage */
+					let idx = (sdex::get_index(&[x, y, z], &[width, height, depth]) + 1) as f64;
+					percenatge_tx.send(idx / volume as f64).unwrap();
 				}}}
 
 				/* Save */
@@ -122,17 +127,24 @@ impl<'ch> ChunkArray<'ch> {
 				let save = Save::new(name).open(path);
 
 				if (width, height, depth) == (save.read(Width), save.read(Height), save.read(Depth)) {
-					chunks = save.read_pointer_array(ChunkArray, |bytes|
+					chunks = save.read_pointer_array(ChunkArray, |mut i, bytes| {
+						let elem;
 						if bytes[0] == ChunkState::Full  as u8 {
-							Chunk::reinterpret_from_bytes(&bytes[1..])
+							elem = Chunk::reinterpret_from_bytes(&bytes[1..])
 						} else
 						if bytes[0] == ChunkState::Empty as u8 {
-							Chunk::new(None, Int3::reinterpret_from_bytes(&bytes[1..]), false)
+							elem = Chunk::new(None, Int3::reinterpret_from_bytes(&bytes[1..]), false)
 						}
 						else {
-							panic!("Unknown state ({})!", bytes[0]);
+							panic!("Unknown state ({})!", bytes[0])
 						}
-					);
+
+						/* Calculate percent */
+						i += 1;
+						percenatge_tx.send(i as f64 / volume as f64).unwrap();
+
+						return elem
+					});
 				} else {
 					generate_file()
 				}
@@ -145,11 +157,11 @@ impl<'ch> ChunkArray<'ch> {
 
 			/* Create and send generated data */
 			let array = ChunkArray { width, height, depth, chunks };
-			tx.send(GeneratedChunkArray(array, env)).unwrap();
+			result_tx.send(GeneratedChunkArray(array, env)).unwrap();
 		});
 
 		/* Return reciever */
-		return rx
+		return (result_rx, percentage_rx)
 	}
 
 	/// Creates environment for ChunkArray.

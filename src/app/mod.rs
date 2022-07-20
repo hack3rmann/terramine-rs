@@ -147,6 +147,7 @@ impl App {
 		/* Chunk generation flag */
 		let mut generate_chunks = false;
 		static mut SIZES: [i32; 3] = [7, 1, 7];
+		static mut GENERATION_PERCENTAGE: f64 = 0.0;
 
 		/* InGui draw data */
 		let draw_data = {
@@ -205,6 +206,12 @@ impl App {
 							.enter_returns_true(true)
 							.build();
 						generate_chunks = ui.button("Generate");
+
+						unsafe {
+							if GENERATION_PERCENTAGE != 0.0 {
+								ui.text(format!("Generation in proggress: {:.1}%", GENERATION_PERCENTAGE * 100.0));
+							}
+						}
 					});
 			}
 
@@ -237,23 +244,37 @@ impl App {
 		} target.finish().unwrap();
 
 		/* Chunk reciever */
-		static mut RECIEVE: Option<Receiver<GeneratedChunkArray>> = None;
+		static mut CHUNKS_RECEIVER: Option<Receiver<GeneratedChunkArray>> = None;
+		static mut PERCENTAGE_RECEIVER: Option<Receiver<f64>> = None;
 		if generate_chunks {
 			let (width, height, depth) = unsafe {
 				(SIZES[0] as usize, SIZES[1] as usize, SIZES[2] as usize)
 			};
 
-			unsafe { RECIEVE = Some(ChunkArray::generate(width, height, depth)) };
+			let receivers = ChunkArray::generate(width, height, depth);
+
+			unsafe {
+				(CHUNKS_RECEIVER, PERCENTAGE_RECEIVER) = (Some(receivers.0), Some(receivers.1))
+			};
 		}
 
 		/* If array recieved then store it in self */
-		if let Some(rx) = unsafe { &RECIEVE } {
+		if let Some(rx) = unsafe { &CHUNKS_RECEIVER } {
 			match rx.try_recv() {
 				Ok(array) => {
 					let array = array.update_mesh(&self.graphics);
 					self.chunk_arr = Some(array);
 				},
-				Err(TryRecvError::Disconnected) => unsafe { RECIEVE = None },
+				Err(TryRecvError::Disconnected) => unsafe { CHUNKS_RECEIVER = None },
+				_ => (),
+			}
+		}
+
+		/* Receive percentage */
+		if let Some(rx) = unsafe { &PERCENTAGE_RECEIVER } {
+			match rx.try_recv() {
+				Ok(percent) => unsafe { GENERATION_PERCENTAGE = percent },
+				Err(TryRecvError::Disconnected) => unsafe { PERCENTAGE_RECEIVER = None },
 				_ => (),
 			}
 		}

@@ -342,7 +342,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 	/// Reads an array of data from heap.
 	pub fn read_pointer_array<T, F>(&self, enumerator: E, mut elem: F) -> Vec<T>
 	where
-		F: FnMut(&[u8]) -> T
+		F: FnMut(usize, &[u8]) -> T
 	{
 		/* Load stack data offset */
 		let length_offset = self.load_offset(enumerator);
@@ -363,7 +363,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 			let bytes = self.get_file_ref().read_from_heap(heap_offset);
 
 			/* Reinterpret them and push to result */
-			result.push(elem(&bytes));
+			result.push(elem(i as usize - 1, &bytes));
 		}
 
 		return result
@@ -515,7 +515,7 @@ mod tests {
 		let pos_after: Float4 = save.read(DataType::Position);
 		let array_after: Vec<i32> = save.read_array(DataType::Array);
 		let ptr_after = save.read_from_pointer(DataType::Pointer, |bytes| Float4::reinterpret_from_bytes(bytes));
-		let hard_data_after: Vec<i32> = save.read_pointer_array(HardData, |bytes| {
+		let hard_data_after: Vec<i32> = save.read_pointer_array(HardData, |_, bytes| {
 			let condition = bytes[0] != 0;
 			let num = i32::reinterpret_from_bytes(&bytes[1..]);
 
@@ -615,7 +615,7 @@ mod tests {
 		save.assign_pointer_array(Data, |i| data_expected[i].reinterpret_as_bytes());
 
 		let save = Save::new("Test6").open("test6");
-		let data_after = save.read_pointer_array(Data, |bytes| i32::reinterpret_from_bytes(bytes));
+		let data_after = save.read_pointer_array(Data, |_, bytes| i32::reinterpret_from_bytes(bytes));
 
 		assert_eq!(data_expected[..], data_after[..]);
 	}
@@ -633,7 +633,7 @@ mod tests {
 		save.assign_pointer_array_element(Data, 999.reinterpret_as_bytes(), 2).unwrap();
 
 		let save = Save::new("Test7").open("test7");
-		let data_after = save.read_pointer_array(Data, |bytes| i32::reinterpret_from_bytes(bytes));
+		let data_after = save.read_pointer_array(Data, |_, bytes| i32::reinterpret_from_bytes(bytes));
 
 		assert_eq!(data_expected[..], data_after[..]);
 	}
