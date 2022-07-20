@@ -1,5 +1,7 @@
 pub mod utils;
 
+use std::sync::mpsc::{Receiver, TryRecvError};
+
 /* Glium includes */
 use glium::{
 	glutin::{
@@ -22,7 +24,10 @@ use utils::{
 		camera::Camera,
 		texture::Texture,
 	},
-	terrain::chunk::{chunk_array::ChunkArray},
+	terrain::chunk::chunk_array::{
+		ChunkArray,
+		GeneratedChunkArray
+	},
 	time::timer::Timer,
 	profiler,
 };
@@ -231,14 +236,26 @@ impl App {
 
 		} target.finish().unwrap();
 
-		/* Chunk generation */
+		/* Chunk reciever */
+		static mut RECIEVE: Option<Receiver<GeneratedChunkArray>> = None;
 		if generate_chunks {
 			let (width, height, depth) = unsafe {
 				(SIZES[0] as usize, SIZES[1] as usize, SIZES[2] as usize)
 			};
 
-			let chunk_arr = Some(ChunkArray::generate(width, height, depth).update_mesh(&self.graphics));
-			self.chunk_arr = chunk_arr;
+			unsafe { RECIEVE = Some(ChunkArray::generate(width, height, depth)) };
+		}
+
+		/* If array recieved then store it in self */
+		if let Some(rx) = unsafe { &RECIEVE } {
+			match rx.try_recv() {
+				Ok(array) => {
+					let array = array.update_mesh(&self.graphics);
+					self.chunk_arr = Some(array);
+				},
+				Err(TryRecvError::Disconnected) => unsafe { RECIEVE = None },
+				_ => (),
+			}
 		}
 	}
 

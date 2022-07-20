@@ -9,13 +9,13 @@ use crate::app::utils::{
 		ReinterpretFromBytes
 	},
 	terrain::voxel::voxel_data::NOTHING_VOXEL_DATA,
-	crossbeam,
 };
 use glium::{
 	uniforms::Uniforms,
 	DrawError,
 	Frame
 };
+use std::sync::mpsc::Receiver;
 
 #[derive(Clone, Copy)]
 enum SaveType {
@@ -66,85 +66,90 @@ pub struct ChunkArray<'ch> {
 }
 
 impl<'ch> ChunkArray<'ch> {
-	pub fn generate(width: usize, height: usize, depth: usize) -> GeneratedChunkArray<'ch, 'ch> {
-		crossbeam::scope(|s| {
-			let handle = s.spawn(|_| {
-				/* Amount of voxels in chunks */
-				let volume = width * height * depth;
+	pub fn generate(width: usize, height: usize, depth: usize) -> Receiver<GeneratedChunkArray<'static, 'static>> {
+		/* Create channel */
+		let (tx, rx) = std::sync::mpsc::channel();
 
-				/* Initialize vector */
-				let mut chunks = vec![];
+		std::thread::spawn(move || {
+			/* Amount of voxels in chunks */
+			let volume = width * height * depth;
 
-				/* Name of world file */
-				let (path, name) = ("src/world", "world");
+			/* Initialize vector */
+			let mut chunks = vec![];
 
-				/* File generator */
-				let mut generate_file = || {
-					/* Generate chunks */
-					chunks = Vec::with_capacity(volume);
-					for x in 0..width {
-					for y in 0..height {
-					for z in 0..depth {
-						let pos = Int3::new(x as i32, y as i32, z as i32) - Int3::new(width as i32, height as i32, depth as i32) / 2;
-						chunks.push(Chunk::new(None, pos, false));
-					}}}
+			/* Name of world file */
+			let (path, name) = ("src/world", "world");
 
-					/* Save */
-					use SaveType::*;
-					Save::new(name)
-						.create(path)
-						.write(&width, Width)
-						.write(&height, Height)
-						.write(&depth, Depth)
-						.pointer_array(volume, ChunkArray, |i|
-							if chunks[i].voxels.iter().all(|&id| id == NOTHING_VOXEL_DATA.id) {
-								/* Save only chunk position if it is empty */
-								let mut state = (ChunkState::Empty as u8).reinterpret_as_bytes();
-								state.append(&mut chunks[i].pos.reinterpret_as_bytes());
+			/* File generator */
+			let mut generate_file = || {
+				/* Generate chunks */
+				chunks = Vec::with_capacity(volume);
+				for x in 0..width {
+				for y in 0..height {
+				for z in 0..depth {
+					let pos = Int3::new(x as i32, y as i32, z as i32) - Int3::new(width as i32, height as i32, depth as i32) / 2;
+					chunks.push(Chunk::new(None, pos, false));
+				}}}
 
-								state
-							} else {
-								/* Save chunk fully */
-								let mut state = (ChunkState::Full as u8).reinterpret_as_bytes();
-								state.append(&mut chunks[i].reinterpret_as_bytes());
+				/* Save */
+				use SaveType::*;
+				Save::new(name)
+					.create(path)
+					.write(&width, Width)
+					.write(&height, Height)
+					.write(&depth, Depth)
+					.pointer_array(volume, ChunkArray, |i|
+						if chunks[i].voxels.iter().all(|&id| id == NOTHING_VOXEL_DATA.id) {
+							/* Save only chunk position if it is empty */
+							let mut state = (ChunkState::Empty as u8).reinterpret_as_bytes();
+							state.append(&mut chunks[i].pos.reinterpret_as_bytes());
 
-								state
-							}
-						)
-						.save().unwrap();
-				};
+							state
+						} else {
+							/* Save chunk fully */
+							let mut state = (ChunkState::Full as u8).reinterpret_as_bytes();
+							state.append(&mut chunks[i].reinterpret_as_bytes());
 
-				/* File reader */
-				if std::path::Path::new(path).exists() {
-					use SaveType::*;
-					let save = Save::new(name).open(path);
+							state
+						}
+					)
+					.save().unwrap();
+			};
 
-					if (width, height, depth) == (save.read(Width), save.read(Height), save.read(Depth)) {
-						chunks = save.read_pointer_array(ChunkArray, |bytes|
-							if bytes[0] == ChunkState::Full  as u8 {
-								Chunk::reinterpret_from_bytes(&bytes[1..])
-							} else
-							if bytes[0] == ChunkState::Empty as u8 {
-								Chunk::new(None, Int3::reinterpret_from_bytes(&bytes[1..]), false)
-							}
-							else {
-								panic!("Unknown state ({})!", bytes[0]);
-							}
-						);
-					} else {
-						generate_file()
-					}
+			/* File reader */
+			if std::path::Path::new(path).exists() {
+				use SaveType::*;
+				let save = Save::new(name).open(path);
+
+				if (width, height, depth) == (save.read(Width), save.read(Height), save.read(Depth)) {
+					chunks = save.read_pointer_array(ChunkArray, |bytes|
+						if bytes[0] == ChunkState::Full  as u8 {
+							Chunk::reinterpret_from_bytes(&bytes[1..])
+						} else
+						if bytes[0] == ChunkState::Empty as u8 {
+							Chunk::new(None, Int3::reinterpret_from_bytes(&bytes[1..]), false)
+						}
+						else {
+							panic!("Unknown state ({})!", bytes[0]);
+						}
+					);
 				} else {
 					generate_file()
 				}
+			} else {
+				generate_file()
+			}
 
-				/* Make environments with references to chunk array */
-				let env = Self::make_environment(&chunks, width, height, depth);
+			/* Make environments with references to chunk array */
+			let env = Self::make_environment(&chunks, width, height, depth);
 
-				GeneratedChunkArray(ChunkArray { width, height, depth, chunks }, env)
-			});
-			handle.join().unwrap()
-		}).unwrap()
+			/* Create and send generated data */
+			let array = ChunkArray { width, height, depth, chunks };
+			tx.send(GeneratedChunkArray(array, env)).unwrap();
+		});
+
+		/* Return reciever */
+		return rx
 	}
 
 	/// Creates environment for ChunkArray.
