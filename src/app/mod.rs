@@ -267,7 +267,7 @@ impl App {
 		if let Some(rx) = unsafe { &CHUNKS_RECEIVER } {
 			match rx.try_recv() {
 				Ok(array) => {
-					let array = array.update_mesh(&self.graphics);
+					let array = array.generate_mesh(&self.graphics);
 					self.chunk_arr = Some(array.recv().unwrap());
 				},
 				Err(TryRecvError::Disconnected) => unsafe { CHUNKS_RECEIVER = None },
