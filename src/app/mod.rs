@@ -217,7 +217,7 @@ impl App {
 							if GENERATION_PERCENTAGE != 0.0 {
 								imgui::ProgressBar::new(GENERATION_PERCENTAGE as f32)
 									.overlay_text(format!(
-										"Generation in proggress... ({:.1}%)",
+										"Generation ({:.1}%)",
 										GENERATION_PERCENTAGE * 100.0
 									))
 									.build(&ui);

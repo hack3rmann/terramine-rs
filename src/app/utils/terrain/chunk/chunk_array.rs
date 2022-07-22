@@ -15,7 +15,7 @@ use glium::{
 	DrawError,
 	Frame
 };
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Sender, Receiver};
 
 #[derive(Clone, Copy)]
 enum SaveType {
@@ -108,8 +108,9 @@ impl<'ch> ChunkArray<'ch> {
 					.write(&width, Width)
 					.write(&height, Height)
 					.write(&depth, Depth)
-					.pointer_array(volume, ChunkArray, |i|
-						if chunks[i].voxels.iter().all(|&id| id == NOTHING_VOXEL_DATA.id) {
+					.pointer_array(volume, ChunkArray, |i| {
+						/* Write chunk */
+						let result = if chunks[i].voxels.iter().all(|&id| id == NOTHING_VOXEL_DATA.id) {
 							/* Save only chunk position if it is empty */
 							let mut state = (ChunkState::Empty as u8).reinterpret_as_bytes();
 							state.append(&mut chunks[i].pos.reinterpret_as_bytes());
@@ -121,8 +122,15 @@ impl<'ch> ChunkArray<'ch> {
 							state.append(&mut chunks[i].reinterpret_as_bytes());
 
 							state
-						}
-					)
+						};
+
+						/* Calculate percentage */
+						let i = i + 1;
+						percenatge_tx.send(i as f64 / volume as f64).unwrap();
+
+						/* Return chunk */
+						return result
+					})
 					.save().unwrap();
 			};
 
@@ -158,7 +166,7 @@ impl<'ch> ChunkArray<'ch> {
 			}
 
 			/* Make environments with references to chunk array */
-			let env = Self::make_environment(&chunks, width, height, depth);
+			let env = Self::make_environment(&chunks, width, height, depth, None);
 
 			/* Create and send generated data */
 			let array = ChunkArray { width, height, depth, chunks };
@@ -170,8 +178,9 @@ impl<'ch> ChunkArray<'ch> {
 	}
 
 	/// Creates environment for ChunkArray.
-	fn make_environment<'v, 'c>(chunks: &'v Vec<Chunk<'c>>, width: usize, height: usize, depth: usize) -> Vec<ChunkEnv<'c>> {
-		let mut env = vec![ChunkEnv::none(); width * height * depth];
+	fn make_environment<'v, 'c>(chunks: &'v Vec<Chunk<'c>>, width: usize, height: usize, depth: usize, percentage_tx: Option<Sender<f64>>) -> Vec<ChunkEnv<'c>> {
+		let volume = width * height * depth;
+		let mut env = vec![ChunkEnv::none(); volume];
 
 		for x in 0..width {
 		for y in 0..height {
@@ -210,6 +219,12 @@ impl<'ch> ChunkArray<'ch> {
 			/* For `right` side */
 			if z + 1 < depth {
 				env.right	= Some(&chunks[index(x, y, z + 1)]);
+			}
+
+			/* Calculate percentage */
+			if let Some(tx) = &percentage_tx {
+				let i = index(x, y, z) + 1;
+				tx.send(i as f64 / volume as f64).unwrap();
 			}
 		}}}
 
