@@ -1,4 +1,4 @@
-use super::{Chunk, ChunkEnvironment as ChunkEnv};
+use super::{MeshedChunk, ChunkEnvironment as ChunkEnv};
 use crate::app::utils::{
 	graphics::Vertex,
 	math::prelude::*,
@@ -36,7 +36,7 @@ enum ChunkState {
 
 pub struct GeneratedChunkArray<'c, 'e>(ChunkArray<'c>, Vec<ChunkEnv<'e>>);
 
-impl<'c, 'e> GeneratedChunkArray<'c, 'e> {
+impl<'c> GeneratedChunkArray<'c, '_> {
 	pub fn generate_mesh(self) -> Receiver<(ChunkArray<'c>, Vec<Vec<Vertex>>)> {
 		let (chunk_array, chunk_env) = (self.0, self.1);
 
@@ -68,7 +68,7 @@ pub struct ChunkArray<'ch> {
 	depth:	usize,
 
 	/* Chunk array itself */
-	chunks: Vec<Chunk<'ch>>,
+	chunks: Vec<MeshedChunk<'ch>>,
 }
 
 impl<'ch> ChunkArray<'ch> {
@@ -95,7 +95,7 @@ impl<'ch> ChunkArray<'ch> {
 				for y in 0..height {
 				for z in 0..depth {
 					let pos = Int3::new(x as i32, y as i32, z as i32) - Int3::new(width as i32, height as i32, depth as i32) / 2;
-					chunks.push(Chunk::new(None, pos, false));
+					chunks.push(MeshedChunk::new(None, pos));
 
 					/* Calculating percentage */
 					let idx = (sdex::get_index(&[x, y, z], &[width, height, depth]) + 1) as f64;
@@ -111,10 +111,10 @@ impl<'ch> ChunkArray<'ch> {
 					.write(&depth, Depth)
 					.pointer_array(volume, ChunkArray, |i| {
 						/* Write chunk */
-						let result = if chunks[i].voxels.iter().all(|&id| id == NOTHING_VOXEL_DATA.id) {
+						let result = if chunks[i].inner.voxels.iter().all(|&id| id == NOTHING_VOXEL_DATA.id) {
 							/* Save only chunk position if it is empty */
 							let mut state = (ChunkState::Empty as u8).reinterpret_as_bytes();
-							state.append(&mut chunks[i].pos.reinterpret_as_bytes());
+							state.append(&mut chunks[i].inner.pos.reinterpret_as_bytes());
 
 							state
 						} else {
@@ -144,10 +144,10 @@ impl<'ch> ChunkArray<'ch> {
 					chunks = save.read_pointer_array(ChunkArray, |mut i, bytes| {
 						let elem;
 						if bytes[0] == ChunkState::Full  as u8 {
-							elem = Chunk::reinterpret_from_bytes(&bytes[1..])
+							elem = MeshedChunk::reinterpret_from_bytes(&bytes[1..])
 						} else
 						if bytes[0] == ChunkState::Empty as u8 {
-							elem = Chunk::new(None, Int3::reinterpret_from_bytes(&bytes[1..]), false)
+							elem = MeshedChunk::new(None, Int3::reinterpret_from_bytes(&bytes[1..]))
 						}
 						else {
 							panic!("Unknown state ({})!", bytes[0])
@@ -179,7 +179,7 @@ impl<'ch> ChunkArray<'ch> {
 	}
 
 	/// Creates environment for ChunkArray.
-	fn make_environment<'v, 'c>(chunks: &'v Vec<Chunk<'c>>, width: usize, height: usize, depth: usize, percentage_tx: Option<Sender<f64>>) -> Vec<ChunkEnv<'c>> {
+	fn make_environment<'v, 'c>(chunks: &'v Vec<MeshedChunk<'c>>, width: usize, height: usize, depth: usize, percentage_tx: Option<Sender<f64>>) -> Vec<ChunkEnv<'c>> {
 		let volume = width * height * depth;
 		let mut env = vec![ChunkEnv::none(); volume];
 
@@ -194,32 +194,32 @@ impl<'ch> ChunkArray<'ch> {
 
 			/* For `front` side */
 			if x as isize - 1 >= 0 {
-				env.front	= Some(&chunks[index(x - 1, y, z)]);
+				env.front	= Some(&chunks[index(x - 1, y, z)].inner);
 			}
 
 			/* For `back` side */
 			if x + 1 < width {
-				env.back	= Some(&chunks[index(x + 1, y, z)]);
+				env.back	= Some(&chunks[index(x + 1, y, z)].inner);
 			}
 
 			/* For `bottom` side */
 			if y as isize - 1 >= 0 {
-				env.bottom	= Some(&chunks[index(x, y - 1, z)]);
+				env.bottom	= Some(&chunks[index(x, y - 1, z)].inner);
 			}
 		
 			/* For `top` side */
 			if y + 1 < height {
-				env.top		= Some(&chunks[index(x, y + 1, z)]);
+				env.top		= Some(&chunks[index(x, y + 1, z)].inner);
 			}
 
 			/* For `left` side */
 			if z as isize - 1 >= 0 {
-				env.left	= Some(&chunks[index(x, y, z - 1)]);
+				env.left	= Some(&chunks[index(x, y, z - 1)].inner);
 			}
 
 			/* For `right` side */
 			if z + 1 < depth {
-				env.right	= Some(&chunks[index(x, y, z + 1)]);
+				env.right	= Some(&chunks[index(x, y, z + 1)].inner);
 			}
 
 			/* Calculate percentage */
@@ -243,12 +243,12 @@ impl<'ch> ChunkArray<'ch> {
 
 	/// Gives an iterator over chunks.
 	#[allow(dead_code)]
-	pub fn iter(&self) -> impl Iterator<Item = &Chunk<'ch>> {
+	pub fn iter(&self) -> impl Iterator<Item = &MeshedChunk<'ch>> {
 		self.chunks.iter()
 	}
 
 	/// Gives an iterator over chunks.
-	pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Chunk<'ch>> {
+	pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut MeshedChunk<'ch>> {
 		self.chunks.iter_mut()
 	}
 }

@@ -23,7 +23,7 @@ use glium::{
 	uniforms::Uniforms,
 	Frame
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, marker::PhantomData};
 
 /**
  * Index cheatsheet!
@@ -50,35 +50,14 @@ pub enum FindOptions {
 }
 
 /// Chunk struct.
-pub struct Chunk<'dp> {
-	voxels: VoxelArray,
-	pos: Int3,
-	mesh: RefCell<Option<Mesh<'dp>>>
+pub struct MeshlessChunk {
+	pub voxels: VoxelArray,
+	pub pos: Int3,
 }
 
-/// Describes blocked chunks by environent or not. 
-#[derive(Clone, Default)]
-pub struct ChunkEnvironment<'c> {
-	pub top:	Option<*const Chunk<'c>>,
-	pub bottom:	Option<*const Chunk<'c>>,
-	pub front:	Option<*const Chunk<'c>>,
-	pub back:	Option<*const Chunk<'c>>,
-	pub left:	Option<*const Chunk<'c>>,
-	pub right:	Option<*const Chunk<'c>>,
-}
-
-unsafe impl<'c> Send for ChunkEnvironment<'c> { }
-
-impl<'c> ChunkEnvironment<'c> {
-	/// Empty description.
-	pub fn none() -> Self {
-		ChunkEnvironment { top: None, bottom: None, front: None, back: None, left: None, right: None }
-	}
-}
-
-impl<'dp> Chunk<'dp> {
+impl MeshlessChunk {
 	/// Constructs new chunk in given position 
-	pub fn new(graphics: Option<&Graphics>, pos: Int3, generate_mesh: bool) -> Self {
+	pub fn new(pos: Int3) -> Self {
 		/* Voxel array initialization */
 		let mut voxels = VoxelArray::with_capacity(CHUNK_VOLUME);
 
@@ -104,54 +83,7 @@ impl<'dp> Chunk<'dp> {
 			}
 		}}}
 		
-		/* Create chunk */
-		let chunk = Chunk { voxels, pos, mesh: RefCell::new(None) };
-
-		/* Create mesh for chunk */
-		if generate_mesh {
-			chunk.update_mesh(&graphics.unwrap().display, chunk.to_triangles(&ChunkEnvironment::none()));
-		}
-
-		return chunk;
-	}
-
-	/// Renders chunk.
-	/// * Mesh should be constructed before this function call.
-	pub fn render<U: Uniforms>(&self, target: &mut Frame, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
-		let mesh = self.mesh.borrow();
-		let mesh = mesh.as_ref().unwrap();
-
-		/* Check if vertex array is empty */
-		if !mesh.is_empty() && self.is_visible(camera) {
-			/* Iterating through array */
-			mesh.render(target, uniforms)
-		} else {
-			Ok(())
-		}
-	}
-
-	/// Updates mesh.
-	pub fn update_mesh(&self, display: &glium::Display, vertices: Vec<Vertex>) {
-		self.mesh.replace({
-			/* Chunk draw parameters */
-			let draw_params = glium::DrawParameters {
-				depth: glium::Depth {
-					test: glium::DepthTest::IfLess,
-					write: true,
-					.. Default::default()
-				},
-				backface_culling: glium::BackfaceCullingMode::CullClockwise,
-				.. Default::default()
-			};
-			
-			/* Shader for chunks */
-			let shader = Shader::new("vertex_shader", "fragment_shader", display);
-			
-			/* Vertex buffer for chunks */
-			let vertex_buffer = VertexBuffer::from_vertices(display, vertices);
-	
-			Some(Mesh::new(vertex_buffer, shader, draw_params))
-		});
+		MeshlessChunk { voxels, pos }
 	}
 
 	/// Creates trianlges Vec from Chunk and its environment.
@@ -256,10 +188,10 @@ impl<'dp> Chunk<'dp> {
 		/* Shrink vector */
 		vertices.shrink_to_fit();
 
-		vertices
+		return vertices
 	}
 
-	/// Gives voxel by world coordinate
+	/// Gives voxel by world coordinate.
 	pub fn get_voxel_optional(&self, global_pos: Int3) -> FindOptions {
 		/* Transform to local */
 		let pos = world_coords_to_in_some_chunk(global_pos, self.pos);
@@ -273,7 +205,7 @@ impl<'dp> Chunk<'dp> {
 		}
 	}
 
-	/// Gives voxel by world coordinate
+	/// Gives voxel by world coordinate.
 	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<Voxel> {
 		match self.get_voxel_optional(pos) {
 			FindOptions::Border | FindOptions::InChunkNothing => None,
@@ -281,7 +213,7 @@ impl<'dp> Chunk<'dp> {
 		}
 	}
 
-	/// Checks if chunk is in camera view
+	/// Checks if chunk is in camera view.
 	pub fn is_visible(&self, camera: &Camera) -> bool {
 		/* AABB init */
 		let lo = chunk_cords_to_min_world(self.pos);
@@ -292,27 +224,133 @@ impl<'dp> Chunk<'dp> {
 	}
 }
 
+/// Chunk struct.
+pub struct MeshedChunk<'dp> {
+	inner: MeshlessChunk,
+	mesh: RefCell<Option<Mesh<'dp>>>
+}
+
+/// Describes blocked chunks by environent or not. 
+#[derive(Clone, Default)]
+pub struct ChunkEnvironment<'l> {
+	pub top:	Option<*const MeshlessChunk>,
+	pub bottom:	Option<*const MeshlessChunk>,
+	pub front:	Option<*const MeshlessChunk>,
+	pub back:	Option<*const MeshlessChunk>,
+	pub left:	Option<*const MeshlessChunk>,
+	pub right:	Option<*const MeshlessChunk>,
+
+	pub _phantom: PhantomData<&'l MeshlessChunk>
+}
+
+unsafe impl<'c> Send for ChunkEnvironment<'c> { }
+
+impl<'c> ChunkEnvironment<'c> {
+	/// Empty description.
+	pub fn none() -> Self {
+		ChunkEnvironment { top: None, bottom: None, front: None, back: None, left: None, right: None, _phantom: PhantomData }
+	}
+}
+
+impl<'dp> MeshedChunk<'dp> {
+	/// Constructs new chunk in given position.
+	pub fn new(graphics: Option<&Graphics>, pos: Int3) -> Self {
+		let meshless = MeshlessChunk::new(pos);
+		
+		/* Create chunk */
+		let chunk = MeshedChunk { inner: meshless, mesh: RefCell::new(None) };
+
+		/* Create mesh for chunk */
+		if let Some(graphics) = graphics {
+			chunk.update_mesh(&graphics.display, chunk.to_triangles(&ChunkEnvironment::none()));
+		}
+
+		return chunk
+	}
+
+	/// Renders chunk.
+	/// * Mesh should be constructed before this function call.
+	pub fn render<U: Uniforms>(&self, target: &mut Frame, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
+		let mesh = self.mesh.borrow();
+		let mesh = mesh.as_ref().unwrap();
+
+		/* Check if vertex array is empty */
+		if !mesh.is_empty() && self.is_visible(camera) {
+			/* Iterating through array */
+			mesh.render(target, uniforms)
+		} else {
+			Ok(())
+		}
+	}
+
+	/// Updates mesh.
+	pub fn update_mesh(&self, display: &glium::Display, vertices: Vec<Vertex>) {
+		self.mesh.replace({
+			/* Chunk draw parameters */
+			let draw_params = glium::DrawParameters {
+				depth: glium::Depth {
+					test: glium::DepthTest::IfLess,
+					write: true,
+					.. Default::default()
+				},
+				backface_culling: glium::BackfaceCullingMode::CullClockwise,
+				.. Default::default()
+			};
+			
+			/* Shader for chunks */
+			let shader = Shader::new("vertex_shader", "fragment_shader", display);
+			
+			/* Vertex buffer for chunks */
+			let vertex_buffer = VertexBuffer::from_vertices(display, vertices);
+	
+			Some(Mesh::new(vertex_buffer, shader, draw_params))
+		});
+	}
+
+	/// Creates trianlges Vec from Chunk and its environment.
+	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<Vertex> {
+		self.inner.to_triangles(env)
+	}
+
+	/// Gives voxel by world coordinate.
+	#[allow(dead_code)]
+	pub fn get_voxel_optional(&self, global_pos: Int3) -> FindOptions {
+		self.inner.get_voxel_optional(global_pos)
+	}
+
+	/// Gives voxel by world coordinate.
+	#[allow(dead_code)]
+	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<Voxel> {
+		self.inner.get_voxel_or_none(pos)
+	}
+
+	/// Checks if chunk is in camera view.
+	pub fn is_visible(&self, camera: &Camera) -> bool {
+		self.inner.is_visible(camera)
+	}
+}
+
 unsafe impl StaticSize for VoxelArray {
 	fn static_size() -> usize {
 		CHUNK_VOLUME * u16::static_size()
 	}
 }
 
-unsafe impl<'c> Reinterpret for Chunk<'c> { }
+unsafe impl<'c> Reinterpret for MeshedChunk<'c> { }
 
-unsafe impl<'c> ReinterpretAsBytes for Chunk<'c> {
+unsafe impl<'c> ReinterpretAsBytes for MeshedChunk<'c> {
 	fn reinterpret_as_bytes(&self) -> Vec<u8> {
 		let mut bytes = Vec::with_capacity(Self::static_size());
 
-		bytes.append(&mut self.voxels.reinterpret_as_bytes());
-		bytes.append(&mut self.pos.reinterpret_as_bytes());
+		bytes.append(&mut self.inner.voxels.reinterpret_as_bytes());
+		bytes.append(&mut self.inner.pos.reinterpret_as_bytes());
 		bytes.push(self.mesh.borrow().as_ref().is_some() as u8);
 
 		return bytes;
 	}
 }
 
-unsafe impl<'c> ReinterpretFromBytes for Chunk<'c> {
+unsafe impl<'c> ReinterpretFromBytes for MeshedChunk<'c> {
 	fn reinterpret_from_bytes(source: &[u8]) -> Self {
 		let voxel_array_size: usize = VoxelArray::static_size();
 
@@ -320,15 +358,15 @@ unsafe impl<'c> ReinterpretFromBytes for Chunk<'c> {
 		let pos = Int3::reinterpret_from_bytes(&source[voxel_array_size .. voxel_array_size + Int3::static_size()]);
 		let mesh = RefCell::new(None);
 
-		Self { voxels, pos, mesh }
+		Self { inner: MeshlessChunk { voxels, pos }, mesh }
 	}
 }
 
-unsafe impl<'c> ReinterpretSize for Chunk<'c> {
+unsafe impl<'c> ReinterpretSize for MeshedChunk<'c> {
 	fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl<'c> StaticSize for Chunk<'c> {
+unsafe impl<'c> StaticSize for MeshedChunk<'c> {
 	fn static_size() -> usize {
 		VoxelArray::static_size() + Int3::static_size() + 1
 	}
@@ -340,11 +378,11 @@ mod reinterpret_test {
 
 	#[test]
 	fn reinterpret_chunk() {
-		let before = Chunk::new(None, Int3::new(12, 12, 11), false);
-		let after = Chunk::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+		let before = MeshedChunk::new(None, Int3::new(12, 12, 11));
+		let after = MeshedChunk::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
-		assert_eq!(before.voxels, after.voxels);
-		assert_eq!(before.pos, after.pos);
+		assert_eq!(before.inner.voxels, after.inner.voxels);
+		assert_eq!(before.inner.pos, after.inner.pos);
 	}
 }
 
