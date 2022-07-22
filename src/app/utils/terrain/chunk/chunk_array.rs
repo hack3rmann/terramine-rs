@@ -1,6 +1,6 @@
 use super::{Chunk, ChunkEnvironment as ChunkEnv};
 use crate::app::utils::{
-	graphics::Graphics,
+	graphics::Vertex,
 	math::prelude::*,
 	graphics::camera::Camera,
 	saves::*,
@@ -37,16 +37,17 @@ enum ChunkState {
 pub struct GeneratedChunkArray<'c, 'e>(ChunkArray<'c>, Vec<ChunkEnv<'e>>);
 
 impl<'c, 'e> GeneratedChunkArray<'c, 'e> {
-	pub fn generate_mesh(self, graphics: &Graphics) -> Receiver<ChunkArray<'c>> {
+	pub fn generate_mesh(self) -> Receiver<(ChunkArray<'c>, Vec<Vec<Vertex>>)> {
 		let (chunk_array, chunk_env) = (self.0, self.1);
 
 		let (tx, rx) = std::sync::mpsc::channel();
 
 		//std::thread::spawn(move || {
 			/* Create mesh for each chunk */
-			chunk_array.chunks.iter().zip(chunk_env.iter())
-				.for_each(|(chunk, env)| chunk.update_mesh(&graphics.display, env));
-			tx.send(chunk_array).unwrap();
+			let meshes: Vec<_> = chunk_array.chunks.iter().zip(chunk_env.iter())
+				.map(|(chunk, env)| chunk.to_triangles(env))
+				.collect();
+			tx.send((chunk_array, meshes)).unwrap();
 		//});
 
 		return rx
@@ -238,5 +239,16 @@ impl<'ch> ChunkArray<'ch> {
 			chunk.render(target, uniforms, camera)?
 		}
 		Ok(())
+	}
+
+	/// Gives an iterator over chunks.
+	#[allow(dead_code)]
+	pub fn iter(&self) -> impl Iterator<Item = &Chunk<'ch>> {
+		self.chunks.iter()
+	}
+
+	/// Gives an iterator over chunks.
+	pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Chunk<'ch>> {
+		self.chunks.iter_mut()
 	}
 }

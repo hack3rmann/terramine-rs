@@ -243,9 +243,8 @@ impl App {
 		/* Actual drawing */
 		let mut target = self.graphics.display.draw(); 
 		target.clear_all((0.01, 0.01, 0.01, 1.0), 1.0, 0); {
-			match self.chunk_arr.as_mut() {
-				Some(chunk_arr) => chunk_arr.render(&mut target, &uniforms, &self.camera).unwrap(),
-				None => (),
+			if let Some(chunk_arr) = self.chunk_arr.as_mut() {
+				chunk_arr.render(&mut target, &uniforms, &self.camera).unwrap();
 			}
 
 			self.graphics.imguir
@@ -258,14 +257,17 @@ impl App {
 		static mut CHUNKS_RECEIVER: Option<Receiver<GeneratedChunkArray>> = None;
 		static mut PERCENTAGE_RECEIVER: Option<Receiver<f64>> = None;
 		if generate_chunks {
+			/* Dimensions shortcut */
 			let (width, height, depth) = unsafe {
 				(SIZES[0] as usize, SIZES[1] as usize, SIZES[2] as usize)
 			};
 
-			let receivers = ChunkArray::generate(width, height, depth);
+			/* Get receivers */
+			let (array_rx, percentage_rx) = ChunkArray::generate(width, height, depth);
 
+			/* Write to statics */
 			unsafe {
-				(CHUNKS_RECEIVER, PERCENTAGE_RECEIVER) = (Some(receivers.0), Some(receivers.1))
+				(CHUNKS_RECEIVER, PERCENTAGE_RECEIVER) = (Some(array_rx), Some(percentage_rx))
 			};
 		}
 
@@ -273,8 +275,17 @@ impl App {
 		if let Some(rx) = unsafe { &CHUNKS_RECEIVER } {
 			match rx.try_recv() {
 				Ok(array) => {
-					let array = array.generate_mesh(&self.graphics);
-					self.chunk_arr = Some(array.recv().unwrap());
+					/* Receive all data */
+					let rx = array.generate_mesh();
+					let (mut array, meshes) = rx.recv().unwrap();
+
+					/* Apply meshes to chunks */
+					array.iter_mut()
+						.zip(meshes.into_iter())
+						.for_each(|(chunk, vertices)| chunk.update_mesh(&self.graphics.display, vertices));
+
+					/* Move result */
+					self.chunk_arr = Some(array);
 				},
 				Err(TryRecvError::Disconnected) => unsafe { CHUNKS_RECEIVER = None },
 				_ => (),

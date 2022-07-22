@@ -67,6 +67,8 @@ pub struct ChunkEnvironment<'c> {
 	pub right:	Option<*const Chunk<'c>>,
 }
 
+unsafe impl<'c> Send for ChunkEnvironment<'c> { }
+
 impl<'c> ChunkEnvironment<'c> {
 	/// Empty description.
 	pub fn none() -> Self {
@@ -107,7 +109,7 @@ impl<'dp> Chunk<'dp> {
 
 		/* Create mesh for chunk */
 		if generate_mesh {
-			chunk.update_mesh(&graphics.unwrap().display, &ChunkEnvironment::none());
+			chunk.update_mesh(&graphics.unwrap().display, chunk.to_triangles(&ChunkEnvironment::none()));
 		}
 
 		return chunk;
@@ -129,11 +131,8 @@ impl<'dp> Chunk<'dp> {
 	}
 
 	/// Updates mesh.
-	pub fn update_mesh(&self, display: &glium::Display, env: &ChunkEnvironment) {
+	pub fn update_mesh(&self, display: &glium::Display, vertices: Vec<Vertex>) {
 		self.mesh.replace({
-			/* Construct vertex array */
-			let vertices = self.to_triangles(env);
-
 			/* Chunk draw parameters */
 			let draw_params = glium::DrawParameters {
 				depth: glium::Depth {
