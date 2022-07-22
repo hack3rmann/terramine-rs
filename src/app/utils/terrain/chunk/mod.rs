@@ -107,7 +107,7 @@ impl<'dp> Chunk<'dp> {
 
 		/* Create mesh for chunk */
 		if generate_mesh {
-			chunk.update_mesh(graphics.unwrap(), &ChunkEnvironment::none());
+			chunk.update_mesh(&graphics.unwrap().display, &ChunkEnvironment::none());
 		}
 
 		return chunk;
@@ -124,12 +124,12 @@ impl<'dp> Chunk<'dp> {
 			/* Iterating through array */
 			mesh.render(target, uniforms)
 		} else {
-			Ok(( ))
+			Ok(())
 		}
 	}
 
-	/// Updates mesh
-	pub fn update_mesh(&self, graphics: &Graphics, env: &ChunkEnvironment) {
+	/// Updates mesh.
+	pub fn update_mesh(&self, display: &glium::Display, env: &ChunkEnvironment) {
 		self.mesh.replace({
 			/* Construct vertex array */
 			let mut vertices = Vec::<Vertex>::new();
@@ -243,10 +243,10 @@ impl<'dp> Chunk<'dp> {
 			};
 			
 			/* Shader for chunks */
-			let shader = Shader::new("vertex_shader", "fragment_shader", &graphics.display);
+			let shader = Shader::new("vertex_shader", "fragment_shader", display);
 			
 			/* Vertex buffer for chunks */
-			let vertex_buffer = VertexBuffer::from_vertices(graphics, vertices);
+			let vertex_buffer = VertexBuffer::from_vertices(display, vertices);
 	
 			Some(Mesh::new(vertex_buffer, shader, draw_params))
 		});

@@ -1,6 +1,11 @@
 pub mod utils;
 
-use std::sync::mpsc::{Receiver, TryRecvError};
+use std::sync::{
+	mpsc::{
+		Receiver,
+		TryRecvError
+	},
+};
 
 /* Glium includes */
 use glium::{
@@ -263,7 +268,7 @@ impl App {
 			match rx.try_recv() {
 				Ok(array) => {
 					let array = array.update_mesh(&self.graphics);
-					self.chunk_arr = Some(array);
+					self.chunk_arr = Some(array.recv().unwrap());
 				},
 				Err(TryRecvError::Disconnected) => unsafe { CHUNKS_RECEIVER = None },
 				_ => (),

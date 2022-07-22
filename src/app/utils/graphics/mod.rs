@@ -32,7 +32,7 @@ pub struct Graphics {
 	pub display:	glium::Display,
 
 	/* OpenGL pipeline stuff */
-	pub event_loop:		Option<EventLoop<()>>,
+	pub event_loop:	Option<EventLoop<()>>,
 
 	/* ImGui stuff */
 	pub imguic:		imgui::Context,

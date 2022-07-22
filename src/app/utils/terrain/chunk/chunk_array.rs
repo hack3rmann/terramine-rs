@@ -37,14 +37,19 @@ enum ChunkState {
 pub struct GeneratedChunkArray<'c, 'e>(ChunkArray<'c>, Vec<ChunkEnv<'e>>);
 
 impl<'c, 'e> GeneratedChunkArray<'c, 'e> {
-	pub fn update_mesh(self, graphics: &Graphics) -> ChunkArray<'c> {
+	pub fn update_mesh(self, graphics: &Graphics) -> Receiver<ChunkArray<'c>> {
 		let (chunk_array, chunk_env) = (self.0, self.1);
 
-		/* Create mesh for each chunk */
-		chunk_array.chunks.iter().zip(chunk_env.iter())
-			.for_each(|(chunk, env)| chunk.update_mesh(&graphics, env));
+		let (tx, rx) = std::sync::mpsc::channel();
 
-		return chunk_array
+		//std::thread::spawn(move || {
+			/* Create mesh for each chunk */
+			chunk_array.chunks.iter().zip(chunk_env.iter())
+				.for_each(|(chunk, env)| chunk.update_mesh(&graphics.display, env));
+			tx.send(chunk_array).unwrap();
+		//});
+
+		return rx
 	}
 }
 
