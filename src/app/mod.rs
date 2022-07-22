@@ -202,6 +202,7 @@ impl App {
 					.position([self.window_size.width as f32 * 0.5, self.window_size.height as f32 * 0.5], imgui::Condition::Always)
 					.movable(false)
 					.size_constraints([150.0, 100.0], [300.0, 200.0])
+					.always_auto_resize(true)
 					.focused(true)
 					.save_settings(false)
 					.build(&ui, || {
@@ -214,7 +215,12 @@ impl App {
 
 						unsafe {
 							if GENERATION_PERCENTAGE != 0.0 {
-								ui.text(format!("Generation in proggress: {:.1}%", GENERATION_PERCENTAGE * 100.0));
+								imgui::ProgressBar::new(GENERATION_PERCENTAGE as f32)
+									.overlay_text(format!(
+										"Generation in proggress... ({:.1}%)",
+										GENERATION_PERCENTAGE * 100.0
+									))
+									.build(&ui);
 							}
 						}
 					});
