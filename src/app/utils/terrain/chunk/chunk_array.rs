@@ -37,20 +37,15 @@ enum ChunkState {
 pub struct GeneratedChunkArray<'e>(MeshlessChunkArray, Vec<ChunkEnv<'e>>);
 
 impl GeneratedChunkArray<'static> {
-	pub fn generate_mesh(self) -> Receiver<(MeshlessChunkArray, Vec<Vec<Vertex>>)> {
+	pub fn generate_mesh(self) -> (MeshlessChunkArray, Vec<Vec<Vertex>>) {
 		let (chunk_array, chunk_env) = (self.0, self.1);
 
-		let (tx, rx) = std::sync::mpsc::channel();
+		/* Create mesh for each chunk */
+		let meshes: Vec<_> = chunk_array.chunks.iter().zip(chunk_env.iter())
+			.map(|(chunk, env)| chunk.to_triangles(env))
+			.collect();
 
-		std::thread::spawn(move || {
-			/* Create mesh for each chunk */
-			let meshes: Vec<_> = chunk_array.chunks.iter().zip(chunk_env.iter())
-				.map(|(chunk, env)| chunk.to_triangles(env))
-				.collect();
-			tx.send((chunk_array, meshes)).unwrap();
-		});
-
-		return rx
+		(chunk_array, meshes)
 	}
 }
 
@@ -72,7 +67,7 @@ pub struct MeshlessChunkArray {
 }
 
 impl MeshlessChunkArray {
-	pub fn generate(width: usize, height: usize, depth: usize) -> (Receiver<GeneratedChunkArray<'static>>, Receiver<f64>) {
+	pub fn generate(width: usize, height: usize, depth: usize) -> (Receiver<(MeshlessChunkArray, Vec<Vec<Vertex>>)>, Receiver<f64>) {
 		/* Create channels */
 		let (result_tx, result_rx) = std::sync::mpsc::channel();
 		let (percenatge_tx, percentage_rx) = std::sync::mpsc::channel();
@@ -169,9 +164,12 @@ impl MeshlessChunkArray {
 			/* Make environments with references to chunk array */
 			let env = Self::make_environment(&chunks, width, height, depth, None);
 
-			/* Create and send generated data */
+			/* Create generated data */
 			let array = MeshlessChunkArray { width, height, depth, chunks };
-			result_tx.send(GeneratedChunkArray(array, env)).unwrap();
+			let result = GeneratedChunkArray(array, env).generate_mesh();
+
+			/* Send */
+			result_tx.send(result).unwrap();
 		});
 
 		/* Return reciever */

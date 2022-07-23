@@ -28,11 +28,11 @@ use utils::{
 		Graphics,
 		camera::Camera,
 		texture::Texture,
+		Vertex,
 	},
 	terrain::chunk::chunk_array::{
 		MeshlessChunkArray,
 		MeshedChunkArray,
-		GeneratedChunkArray,
 	},
 	time::timer::Timer,
 	profiler,
@@ -255,7 +255,7 @@ impl App {
 		} target.finish().unwrap();
 
 		/* Chunk reciever */
-		static mut CHUNKS_RECEIVER: Option<Receiver<GeneratedChunkArray>> = None;
+		static mut CHUNKS_RECEIVER: Option<Receiver<(MeshlessChunkArray, Vec<Vec<Vertex>>)>> = None;
 		static mut PERCENTAGE_RECEIVER: Option<Receiver<f64>> = None;
 		if generate_chunks {
 			/* Dimensions shortcut */
@@ -276,12 +276,11 @@ impl App {
 		if let Some(rx) = unsafe { &CHUNKS_RECEIVER } {
 			match rx.try_recv() {
 				Ok(array) => {
-					/* Receive all data */
-					let rx = array.generate_mesh();
-					let (array, meshes) = rx.recv().unwrap();
-
 					/* Apply meshes to chunks */
-					let array = array.upgrade(&self.graphics, meshes);
+					let array = {
+						let (array, meshes) = array;
+						array.upgrade(&self.graphics, meshes)
+					};
 
 					/* Move result */
 					self.chunk_arr = Some(array);

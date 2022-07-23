@@ -224,6 +224,7 @@ impl MeshlessChunk {
 	}
 
 	/// Upgrades chunk to be meshed.
+	#[allow(dead_code)]
 	pub fn envs_upgrade<'dp, 'g: 'dp>(self, graphics: &'g Graphics, env: &ChunkEnvironment) -> MeshedChunk<'dp> {
 		MeshedChunk::from_meshless_envs(graphics, self, env)
 	}
@@ -264,6 +265,7 @@ impl<'c> ChunkEnvironment<'c> {
 
 impl<'dp> MeshedChunk<'dp> {
 	/// Constructs new chunk in given position.
+	#[allow(dead_code)]
 	pub fn from_envs<'g>(graphics: &'g Graphics, pos: Int3, env: &ChunkEnvironment) -> Self {
 		/* Construct new meshless */
 		let meshless = MeshlessChunk::new(pos);
@@ -273,6 +275,7 @@ impl<'dp> MeshedChunk<'dp> {
 	}
 
 	/// Constructs mesh for meshless chunk.
+	#[allow(dead_code)]
 	pub fn from_meshless_envs<'g>(graphics: &'g Graphics, meshless: MeshlessChunk, env: &ChunkEnvironment) -> Self {
 		/* Create chunk */
 		let triangles = meshless.to_triangles(env);
@@ -329,6 +332,7 @@ impl<'dp> MeshedChunk<'dp> {
 	}
 
 	/// Creates trianlges Vec from Chunk and its environment.
+	#[allow(dead_code)]
 	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<Vertex> {
 		self.inner.to_triangles(env)
 	}
