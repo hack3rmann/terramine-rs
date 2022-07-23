@@ -132,8 +132,7 @@ impl MeshlessChunkArray {
 						};
 
 						/* Calculate percentage */
-						let i = i + 1;
-						percenatge_tx.send(i as f64 / volume as f64).unwrap();
+						percenatge_tx.send((i + 1) as f64 / volume as f64).unwrap();
 
 						/* Return chunk */
 						return result
@@ -147,7 +146,7 @@ impl MeshlessChunkArray {
 				let save = Save::new(name).open(path);
 
 				if (width, height, depth) == (save.read(Width), save.read(Height), save.read(Depth)) {
-					chunks = save.read_pointer_array(ChunkArray, |mut i, bytes| {
+					chunks = save.read_pointer_array(ChunkArray, |i, bytes| {
 						let elem;
 						if bytes[0] == ChunkState::Full  as u8 {
 							elem = MeshlessChunk::reinterpret_from_bytes(&bytes[1..])
@@ -160,8 +159,7 @@ impl MeshlessChunkArray {
 						}
 
 						/* Calculate percent */
-						i += 1;
-						percenatge_tx.send(i as f64 / volume as f64).unwrap();
+						percenatge_tx.send((i + 1) as f64 / volume as f64).unwrap();
 
 						return elem
 					});
@@ -173,11 +171,11 @@ impl MeshlessChunkArray {
 			}
 
 			/* Make environments with references to chunk array */
-			let env = Self::make_environment(&chunks, width, height, depth, None);
+			let env = Self::make_environment(&chunks, width, height, depth, Some(percenatge_tx.clone()));
 
 			/* Create generated data */
 			let array = MeshlessChunkArray { width, height, depth, chunks };
-			let result = GeneratedChunkArray(array, env).generate_mesh(percenatge_tx.clone());
+			let result = GeneratedChunkArray(array, env).generate_mesh(percenatge_tx);
 
 			/* Send */
 			result_tx.send(result).unwrap();

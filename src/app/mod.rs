@@ -219,7 +219,7 @@ impl App {
 		}
 
 		/* If array recieved then store it in self */
-		if let Some(rx) = unsafe { &CHUNKS_RECEIVER } {
+		if let Some(rx) = unsafe { CHUNKS_RECEIVER.as_ref() } {
 			match rx.try_recv() {
 				Ok(array) => {
 					/* Apply meshes to chunks */
@@ -237,11 +237,9 @@ impl App {
 		}
 
 		/* Receive percentage */
-		if let Some(rx) = unsafe { &PERCENTAGE_RECEIVER } {
-			match rx.try_recv() {
-				Ok(percent) => unsafe { GENERATION_PERCENTAGE = percent },
-				Err(TryRecvError::Disconnected) => unsafe { PERCENTAGE_RECEIVER = None },
-				_ => (),
+		if let Some(rx) = unsafe { PERCENTAGE_RECEIVER.as_ref() } {
+			if let Some(percent) = rx.try_iter().last() {
+				unsafe { GENERATION_PERCENTAGE = percent } 
 			}
 		}
 	}
