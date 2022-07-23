@@ -30,8 +30,9 @@ use utils::{
 		texture::Texture,
 	},
 	terrain::chunk::chunk_array::{
-		ChunkArray,
-		GeneratedChunkArray
+		MeshlessChunkArray,
+		MeshedChunkArray,
+		GeneratedChunkArray,
 	},
 	time::timer::Timer,
 	profiler,
@@ -47,7 +48,7 @@ pub struct App {
 	window_size: PhysicalSize<u32>,
 
 	/* Temp voxel */
-	chunk_arr: Option<ChunkArray<'static>>,
+	chunk_arr: Option<MeshedChunkArray<'static>>,
 
 	/* Second layer temporary stuff */
 	texture: Texture
@@ -263,7 +264,7 @@ impl App {
 			};
 
 			/* Get receivers */
-			let (array_rx, percentage_rx) = ChunkArray::generate(width, height, depth);
+			let (array_rx, percentage_rx) = MeshlessChunkArray::generate(width, height, depth);
 
 			/* Write to statics */
 			unsafe {
@@ -277,12 +278,10 @@ impl App {
 				Ok(array) => {
 					/* Receive all data */
 					let rx = array.generate_mesh();
-					let (mut array, meshes) = rx.recv().unwrap();
+					let (array, meshes) = rx.recv().unwrap();
 
 					/* Apply meshes to chunks */
-					array.iter_mut()
-						.zip(meshes.into_iter())
-						.for_each(|(chunk, vertices)| chunk.update_mesh(&self.graphics.display, vertices));
+					let array = array.upgrade(&self.graphics, meshes);
 
 					/* Move result */
 					self.chunk_arr = Some(array);

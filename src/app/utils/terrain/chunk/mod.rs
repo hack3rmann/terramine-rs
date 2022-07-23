@@ -222,12 +222,22 @@ impl MeshlessChunk {
 		/* Frustum check */
 		camera.is_aabb_in_view(AABB::from_int3(lo, hi))
 	}
+
+	/// Upgrades chunk to be meshed.
+	pub fn envs_upgrade<'dp, 'g: 'dp>(self, graphics: &'g Graphics, env: &ChunkEnvironment) -> MeshedChunk<'dp> {
+		MeshedChunk::from_meshless_envs(graphics, self, env)
+	}
+
+	/// Upgrades chunk to be meshed.
+	pub fn triangles_upgrade<'dp, 'g>(self, graphics: &'g Graphics, triangles: Vec<Vertex>) -> MeshedChunk<'dp> {
+		MeshedChunk::from_meshless_triangles(graphics, self, triangles)
+	}
 }
 
 /// Chunk struct.
 pub struct MeshedChunk<'dp> {
 	inner: MeshlessChunk,
-	mesh: RefCell<Option<Mesh<'dp>>>
+	mesh: RefCell<Mesh<'dp>>
 }
 
 /// Describes blocked chunks by environent or not. 
@@ -254,25 +264,38 @@ impl<'c> ChunkEnvironment<'c> {
 
 impl<'dp> MeshedChunk<'dp> {
 	/// Constructs new chunk in given position.
-	pub fn new(graphics: Option<&Graphics>, pos: Int3) -> Self {
+	pub fn from_envs<'g>(graphics: &'g Graphics, pos: Int3, env: &ChunkEnvironment) -> Self {
+		/* Construct new meshless */
 		let meshless = MeshlessChunk::new(pos);
 		
+		/* Upgrade it */
+		Self::from_meshless_envs(graphics, meshless, env)
+	}
+
+	/// Constructs mesh for meshless chunk.
+	pub fn from_meshless_envs<'g>(graphics: &'g Graphics, meshless: MeshlessChunk, env: &ChunkEnvironment) -> Self {
 		/* Create chunk */
-		let chunk = MeshedChunk { inner: meshless, mesh: RefCell::new(None) };
+		let triangles = meshless.to_triangles(env);
 
-		/* Create mesh for chunk */
-		if let Some(graphics) = graphics {
-			chunk.update_mesh(&graphics.display, chunk.to_triangles(&ChunkEnvironment::none()));
+		MeshedChunk {
+			inner: meshless,
+			mesh: RefCell::new(Self::make_mesh(&graphics.display, triangles))
 		}
+	}
 
-		return chunk
+	/// Constructs mesh for meshless chunk.
+	pub fn from_meshless_triangles<'g>(graphics: &'g Graphics, meshless: MeshlessChunk, triangles: Vec<Vertex>) -> Self {
+		MeshedChunk {
+			inner: meshless,
+			mesh: RefCell::new(Self::make_mesh(&graphics.display, triangles))
+		}
 	}
 
 	/// Renders chunk.
 	/// * Mesh should be constructed before this function call.
 	pub fn render<U: Uniforms>(&self, target: &mut Frame, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
+		/* Borrow mesh */
 		let mesh = self.mesh.borrow();
-		let mesh = mesh.as_ref().unwrap();
 
 		/* Check if vertex array is empty */
 		if !mesh.is_empty() && self.is_visible(camera) {
@@ -284,27 +307,25 @@ impl<'dp> MeshedChunk<'dp> {
 	}
 
 	/// Updates mesh.
-	pub fn update_mesh(&self, display: &glium::Display, vertices: Vec<Vertex>) {
-		self.mesh.replace({
-			/* Chunk draw parameters */
-			let draw_params = glium::DrawParameters {
-				depth: glium::Depth {
-					test: glium::DepthTest::IfLess,
-					write: true,
-					.. Default::default()
-				},
-				backface_culling: glium::BackfaceCullingMode::CullClockwise,
+	pub fn make_mesh<'d>(display: &'d glium::Display, vertices: Vec<Vertex>) -> Mesh<'dp> {
+		/* Chunk draw parameters */
+		let draw_params = glium::DrawParameters {
+			depth: glium::Depth {
+				test: glium::DepthTest::IfLess,
+				write: true,
 				.. Default::default()
-			};
-			
-			/* Shader for chunks */
-			let shader = Shader::new("vertex_shader", "fragment_shader", display);
-			
-			/* Vertex buffer for chunks */
-			let vertex_buffer = VertexBuffer::from_vertices(display, vertices);
-	
-			Some(Mesh::new(vertex_buffer, shader, draw_params))
-		});
+			},
+			backface_culling: glium::BackfaceCullingMode::CullClockwise,
+			.. Default::default()
+		};
+		
+		/* Shader for chunks */
+		let shader = Shader::new("vertex_shader", "fragment_shader", display);
+		
+		/* Vertex buffer for chunks */
+		let vertex_buffer = VertexBuffer::from_vertices(display, vertices);
+
+		Mesh::new(vertex_buffer, shader, draw_params)
 	}
 
 	/// Creates trianlges Vec from Chunk and its environment.
@@ -336,37 +357,35 @@ unsafe impl StaticSize for VoxelArray {
 	}
 }
 
-unsafe impl<'c> Reinterpret for MeshedChunk<'c> { }
+unsafe impl Reinterpret for MeshlessChunk { }
 
-unsafe impl<'c> ReinterpretAsBytes for MeshedChunk<'c> {
+unsafe impl ReinterpretAsBytes for MeshlessChunk {
 	fn reinterpret_as_bytes(&self) -> Vec<u8> {
 		let mut bytes = Vec::with_capacity(Self::static_size());
 
-		bytes.append(&mut self.inner.voxels.reinterpret_as_bytes());
-		bytes.append(&mut self.inner.pos.reinterpret_as_bytes());
-		bytes.push(self.mesh.borrow().as_ref().is_some() as u8);
+		bytes.append(&mut self.voxels.reinterpret_as_bytes());
+		bytes.append(&mut self.pos.reinterpret_as_bytes());
 
 		return bytes;
 	}
 }
 
-unsafe impl<'c> ReinterpretFromBytes for MeshedChunk<'c> {
+unsafe impl ReinterpretFromBytes for MeshlessChunk {
 	fn reinterpret_from_bytes(source: &[u8]) -> Self {
 		let voxel_array_size: usize = VoxelArray::static_size();
 
-		let voxels = VoxelArray::reinterpret_from_bytes(&source[.. voxel_array_size]); // PANIC!
+		let voxels = VoxelArray::reinterpret_from_bytes(&source[.. voxel_array_size]);
 		let pos = Int3::reinterpret_from_bytes(&source[voxel_array_size .. voxel_array_size + Int3::static_size()]);
-		let mesh = RefCell::new(None);
 
-		Self { inner: MeshlessChunk { voxels, pos }, mesh }
+		MeshlessChunk { voxels, pos }
 	}
 }
 
-unsafe impl<'c> ReinterpretSize for MeshedChunk<'c> {
+unsafe impl ReinterpretSize for MeshlessChunk {
 	fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl<'c> StaticSize for MeshedChunk<'c> {
+unsafe impl StaticSize for MeshlessChunk {
 	fn static_size() -> usize {
 		VoxelArray::static_size() + Int3::static_size() + 1
 	}
@@ -378,11 +397,11 @@ mod reinterpret_test {
 
 	#[test]
 	fn reinterpret_chunk() {
-		let before = MeshedChunk::new(None, Int3::new(12, 12, 11));
-		let after = MeshedChunk::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+		let before = MeshlessChunk::new(Int3::new(12, 12, 11));
+		let after = MeshlessChunk::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
-		assert_eq!(before.inner.voxels, after.inner.voxels);
-		assert_eq!(before.inner.pos, after.inner.pos);
+		assert_eq!(before.voxels, after.voxels);
+		assert_eq!(before.pos, after.pos);
 	}
 }
 
