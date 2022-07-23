@@ -157,78 +157,24 @@ impl App {
 
 		/* InGui draw data */
 		let draw_data = {
-			/* Aliasing */
-			let camera = &mut self.camera;
-
 			/* Get UI frame renderer */
 			let ui = self.graphics.imguic.frame();
 
-			/* Camera control window */
-			let mut camera_window = imgui::Window::new("Camera");
-
-			/* Move and resize if pressed I key */
-			if !self.input_manager.keyboard.is_pressed(KeyCode::I) {
-				camera_window = camera_window
-					.resizable(false)
-					.movable(false)
-					.collapsible(false)
-			}
-
-			/* UI building */
-			camera_window.build(&ui, || {
-				ui.text("Position");
-				ui.text(format!("x: {x:.3}, y: {y:.3}, z: {z:.3}", x = camera.get_x(), y = camera.get_y(), z = camera.get_z()));
-				ui.text("Rotation");
-				ui.text(format!("roll: {roll:.3}, pitch: {pitch:.3}, yaw: {yaw:.3}", roll = camera.roll, pitch = camera.pitch, yaw = camera.yaw));
-				ui.separator();
-				imgui::Slider::new("Speed", 5.0, 300.0)
-					.display_format("%.1f")
-					.build(&ui, &mut camera.speed_factor);
-				imgui::Slider::new("Speed falloff", 0.0, 1.0)
-					.display_format("%.3f")
-					.build(&ui, &mut camera.speed_falloff);
-				imgui::Slider::new("FOV", 1.0, 180.0)
-					.display_format("%.0f")
-					.build(&ui, camera.fov.get_degrees_mut());
-				camera.fov.update_from_degrees();
-			});
+			/* Camera window */
+			self.camera.spawn_control_window(&ui, &mut self.input_manager);
 
 			/* Profiler window */
 			profiler::update_and_build_window(&ui, &self.timer, &self.input_manager);
 
 			/* Chunk generation window */
-			if self.chunk_arr.is_none() {
-				imgui::Window::new("Chunk generator")
-					.position_pivot([0.5, 0.5])
-					.position([self.window_size.width as f32 * 0.5, self.window_size.height as f32 * 0.5], imgui::Condition::Always)
-					.movable(false)
-					.size_constraints([150.0, 100.0], [300.0, 200.0])
-					.always_auto_resize(true)
-					.focused(true)
-					.save_settings(false)
-					.build(&ui, || {
-						ui.text("How many?");
-						ui.input_int3("Sizes", unsafe { &mut SIZES })
-							.auto_select_all(true)
-							.enter_returns_true(true)
-							.build();
-						generate_chunks = ui.button("Generate");
-
-						unsafe {
-							if GENERATION_PERCENTAGE != 0.0 {
-								imgui::ProgressBar::new(GENERATION_PERCENTAGE as f32)
-									.overlay_text(format!(
-										"Generation ({:.1}%)",
-										GENERATION_PERCENTAGE * 100.0
-									))
-									.build(&ui);
-							}
-						}
-					});
-			}
+			Self::spawn_chunk_generation_window(
+				&ui, self.chunk_arr.is_some(), self.window_size.width as f32, self.window_size.height as f32,
+				&mut generate_chunks, unsafe { &mut SIZES }, unsafe { GENERATION_PERCENTAGE }
+			);
 
 			/* Render UI */
 			self.graphics.imguiw.prepare_render(&ui, self.graphics.display.gl_window().window());
+
 			ui.render()
 		};
 
@@ -313,5 +259,36 @@ impl App {
 
 		/* Input update */
 		self.input_manager.update(&self.graphics);		
+	}
+
+	/// Spawns chunk generation window.
+	pub fn spawn_chunk_generation_window(ui: &imgui::Ui, inited: bool, width: f32, height: f32, generate_chunks: &mut bool, sizes: &mut [i32; 3], gen_percent: f64) {
+		if !inited {
+			imgui::Window::new("Chunk generator")
+				.position_pivot([0.5, 0.5])
+				.position([width * 0.5, height as f32 * 0.5], imgui::Condition::Always)
+				.movable(false)
+				.size_constraints([150.0, 100.0], [300.0, 200.0])
+				.always_auto_resize(true)
+				.focused(true)
+				.save_settings(false)
+				.build(&ui, || {
+					ui.text("How many?");
+					ui.input_int3("Sizes", sizes)
+						.auto_select_all(true)
+						.enter_returns_true(true)
+						.build();
+					*generate_chunks = ui.button("Generate");
+
+					if gen_percent != 0.0 {
+						imgui::ProgressBar::new(gen_percent as f32)
+							.overlay_text(format!(
+								"Generation ({:.1}%)",
+								gen_percent * 100.0
+							))
+							.build(&ui);
+					}
+				});
+		}
 	}
 }
