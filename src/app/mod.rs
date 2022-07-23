@@ -1,12 +1,5 @@
 pub mod utils;
 
-use std::sync::{
-	mpsc::{
-		Receiver,
-		TryRecvError
-	},
-};
-
 /* Glium includes */
 use glium::{
 	glutin::{
@@ -36,9 +29,10 @@ use utils::{
 	},
 	time::timer::Timer,
 	profiler,
+	concurrency::promise::Promise,
 };
 
-use crate::app::utils::loading::Loading;
+use crate::app::utils::concurrency::loading::Loading;
 
 /// Struct that handles everything.
 pub struct App {
@@ -203,8 +197,8 @@ impl App {
 		} target.finish().unwrap();
 
 		/* Chunk reciever */
-		static mut CHUNKS_RECEIVER: Option<Receiver<(MeshlessChunkArray, Vec<Vec<Vertex>>)>> = None;
-		static mut PERCENTAGE_RECEIVER: Option<Receiver<Loading>> = None;
+		static mut CHUNKS_PROMISE: Option<Promise<(MeshlessChunkArray, Vec<Vec<Vertex>>)>> = None;
+		static mut PERCENTAGE_PROMISE: Option<Promise<Loading>> = None;
 		if generate_chunks {
 			/* Dimensions shortcut */
 			let (width, height, depth) = unsafe {
@@ -212,35 +206,31 @@ impl App {
 			};
 
 			/* Get receivers */
-			let (array_rx, percentage_rx) = MeshlessChunkArray::generate(width, height, depth);
+			let (array, percentage) = MeshlessChunkArray::generate(width, height, depth);
 
 			/* Write to statics */
 			unsafe {
-				(CHUNKS_RECEIVER, PERCENTAGE_RECEIVER) = (Some(array_rx), Some(percentage_rx))
+				(CHUNKS_PROMISE, PERCENTAGE_PROMISE) = (Some(array), Some(percentage))
 			};
 		}
 
 		/* If array recieved then store it in self */
-		if let Some(rx) = unsafe { CHUNKS_RECEIVER.as_ref() } {
-			match rx.try_recv() {
-				Ok(array) => {
-					/* Apply meshes to chunks */
-					let array = {
-						let (array, meshes) = array;
-						array.upgrade(&self.graphics, meshes)
-					};
+		if let Some(promise) = unsafe { CHUNKS_PROMISE.as_ref() } {
+			promise.poll_do_cleanup(|array| {
+				/* Apply meshes to chunks */
+				let array = {
+					let (array, meshes) = array;
+					array.upgrade(&self.graphics, meshes)
+				};
 
-					/* Move result */
-					self.chunk_arr = Some(array);
-				},
-				Err(TryRecvError::Disconnected) => unsafe { CHUNKS_RECEIVER = None },
-				_ => (),
-			}
+				/* Move result */
+				self.chunk_arr = Some(array);
+			}, || unsafe { CHUNKS_PROMISE = None });
 		}
 
 		/* Receive percentage */
-		if let Some(rx) = unsafe { PERCENTAGE_RECEIVER.as_ref() } {
-			if let Some(percent) = rx.try_iter().last() {
+		if let Some(promise) = unsafe { PERCENTAGE_PROMISE.as_ref() } {
+			if let Some(percent) = promise.iter().last() {
 				unsafe { GENERATION_PERCENTAGE = percent } 
 			}
 		}

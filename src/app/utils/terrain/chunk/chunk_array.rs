@@ -9,14 +9,17 @@ use crate::app::utils::{
 		ReinterpretFromBytes
 	},
 	terrain::voxel::voxel_data::NOTHING_VOXEL_DATA,
-	loading::Loading,
+	concurrency::{
+		loading::Loading,
+		promise::Promise,
+	},
 };
 use glium::{
 	uniforms::Uniforms,
 	DrawError,
 	Frame
 };
-use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc::{Sender};
 
 #[derive(Clone, Copy)]
 enum SaveType {
@@ -79,7 +82,7 @@ pub struct MeshlessChunkArray {
 }
 
 impl MeshlessChunkArray {
-	pub fn generate(width: usize, height: usize, depth: usize) -> (Receiver<(MeshlessChunkArray, Vec<Vec<Vertex>>)>, Receiver<Loading>) {
+	pub fn generate(width: usize, height: usize, depth: usize) -> (Promise<(MeshlessChunkArray, Vec<Vec<Vertex>>)>, Promise<Loading>) {
 		/* Create channels */
 		let (result_tx, result_rx) = std::sync::mpsc::channel();
 		let (percenatge_tx, percentage_rx) = std::sync::mpsc::channel();
@@ -183,7 +186,7 @@ impl MeshlessChunkArray {
 		});
 
 		/* Return reciever */
-		return (result_rx, percentage_rx)
+		return (Promise(result_rx), Promise(percentage_rx))
 	}
 
 	/// Creates environment for ChunkArray.
