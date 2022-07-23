@@ -9,6 +9,7 @@ use crate::app::utils::{
 		ReinterpretFromBytes
 	},
 	terrain::voxel::voxel_data::NOTHING_VOXEL_DATA,
+	loading::Loading,
 };
 use glium::{
 	uniforms::Uniforms,
@@ -37,7 +38,7 @@ enum ChunkState {
 pub struct GeneratedChunkArray<'e>(MeshlessChunkArray, Vec<ChunkEnv<'e>>);
 
 impl GeneratedChunkArray<'static> {
-	pub fn generate_mesh(self, percentage_tx: Sender<f64>) -> (MeshlessChunkArray, Vec<Vec<Vertex>>) {
+	pub fn generate_mesh(self, percentage_tx: Sender<Loading>) -> (MeshlessChunkArray, Vec<Vec<Vertex>>) {
 		let GeneratedChunkArray(chunk_array, chunk_env) = self;
 		let volume = chunk_array.width * chunk_array.height * chunk_array.depth;
 
@@ -50,7 +51,7 @@ impl GeneratedChunkArray<'static> {
 				let result = chunk.to_triangles(env);
 
 				/* Calculate percentage */
-				percentage_tx.send(i as f64 / volume as f64).unwrap();
+				percentage_tx.send(Loading::from_range("Mesh generation", i, 0..volume)).unwrap();
 
 				return result
 			})
@@ -78,7 +79,7 @@ pub struct MeshlessChunkArray {
 }
 
 impl MeshlessChunkArray {
-	pub fn generate(width: usize, height: usize, depth: usize) -> (Receiver<(MeshlessChunkArray, Vec<Vec<Vertex>>)>, Receiver<f64>) {
+	pub fn generate(width: usize, height: usize, depth: usize) -> (Receiver<(MeshlessChunkArray, Vec<Vec<Vertex>>)>, Receiver<Loading>) {
 		/* Create channels */
 		let (result_tx, result_rx) = std::sync::mpsc::channel();
 		let (percenatge_tx, percentage_rx) = std::sync::mpsc::channel();
@@ -104,8 +105,8 @@ impl MeshlessChunkArray {
 					chunks.push(MeshlessChunk::new(pos));
 
 					/* Calculating percentage */
-					let idx = (sdex::get_index(&[x, y, z], &[width, height, depth]) + 1) as f64;
-					percenatge_tx.send(idx / volume as f64).unwrap();
+					let idx = sdex::get_index(&[x, y, z], &[width, height, depth]);
+					percenatge_tx.send(Loading::from_range("Chunk generation", idx, 0..volume)).unwrap();
 				}}}
 
 				/* Save */
@@ -132,7 +133,7 @@ impl MeshlessChunkArray {
 						};
 
 						/* Calculate percentage */
-						percenatge_tx.send((i + 1) as f64 / volume as f64).unwrap();
+						percenatge_tx.send(Loading::from_range("Saving to file", i, 0..volume)).unwrap();
 
 						/* Return chunk */
 						return result
@@ -159,7 +160,7 @@ impl MeshlessChunkArray {
 						}
 
 						/* Calculate percent */
-						percenatge_tx.send((i + 1) as f64 / volume as f64).unwrap();
+						percenatge_tx.send(Loading::from_range("Reading from file", i, 0..volume)).unwrap();
 
 						return elem
 					});
@@ -186,7 +187,7 @@ impl MeshlessChunkArray {
 	}
 
 	/// Creates environment for ChunkArray.
-	fn make_environment<'v, 'c>(chunks: &'v Vec<MeshlessChunk>, width: usize, height: usize, depth: usize, percentage_tx: Option<Sender<f64>>) -> Vec<ChunkEnv<'c>> {
+	fn make_environment<'v, 'c>(chunks: &'v Vec<MeshlessChunk>, width: usize, height: usize, depth: usize, percentage_tx: Option<Sender<Loading>>) -> Vec<ChunkEnv<'c>> {
 		let volume = width * height * depth;
 		let mut env = vec![ChunkEnv::none(); volume];
 
@@ -231,8 +232,8 @@ impl MeshlessChunkArray {
 
 			/* Calculate percentage */
 			if let Some(tx) = &percentage_tx {
-				let i = index(x, y, z) + 1;
-				tx.send(i as f64 / volume as f64).unwrap();
+				let i = index(x, y, z);
+				tx.send(Loading::from_range("Calculating environment", i, 0..volume)).unwrap();
 			}
 		}}}
 

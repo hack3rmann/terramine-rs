@@ -38,6 +38,8 @@ use utils::{
 	profiler,
 };
 
+use crate::app::utils::loading::Loading;
+
 /// Struct that handles everything.
 pub struct App {
 	/* Important stuff */
@@ -153,7 +155,7 @@ impl App {
 		/* Chunk generation flag */
 		let mut generate_chunks = false;
 		static mut SIZES: [i32; 3] = [7, 1, 7];
-		static mut GENERATION_PERCENTAGE: f64 = 0.0;
+		static mut GENERATION_PERCENTAGE: Loading = Loading::none();
 
 		/* InGui draw data */
 		let draw_data = {
@@ -202,7 +204,7 @@ impl App {
 
 		/* Chunk reciever */
 		static mut CHUNKS_RECEIVER: Option<Receiver<(MeshlessChunkArray, Vec<Vec<Vertex>>)>> = None;
-		static mut PERCENTAGE_RECEIVER: Option<Receiver<f64>> = None;
+		static mut PERCENTAGE_RECEIVER: Option<Receiver<Loading>> = None;
 		if generate_chunks {
 			/* Dimensions shortcut */
 			let (width, height, depth) = unsafe {
@@ -260,7 +262,7 @@ impl App {
 	}
 
 	/// Spawns chunk generation window.
-	pub fn spawn_chunk_generation_window(ui: &imgui::Ui, inited: bool, width: f32, height: f32, generate_chunks: &mut bool, sizes: &mut [i32; 3], gen_percent: f64) {
+	pub fn spawn_chunk_generation_window(ui: &imgui::Ui, inited: bool, width: f32, height: f32, generate_chunks: &mut bool, sizes: &mut [i32; 3], gen_percent: Loading) {
 		if !inited {
 			imgui::Window::new("Chunk generator")
 				.position_pivot([0.5, 0.5])
@@ -278,11 +280,12 @@ impl App {
 						.build();
 					*generate_chunks = ui.button("Generate");
 
-					if gen_percent != 0.0 {
-						imgui::ProgressBar::new(gen_percent as f32)
+					if gen_percent != Loading::none() {
+						imgui::ProgressBar::new(gen_percent.percent as f32)
 							.overlay_text(format!(
-								"Generation ({:.1}%)",
-								gen_percent * 100.0
+								"{state} ({percent:.1}%)",
+								percent = gen_percent.percent * 100.0,
+								state = gen_percent.state
 							))
 							.build(&ui);
 					}
