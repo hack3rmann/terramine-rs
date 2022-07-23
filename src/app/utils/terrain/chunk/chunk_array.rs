@@ -37,12 +37,23 @@ enum ChunkState {
 pub struct GeneratedChunkArray<'e>(MeshlessChunkArray, Vec<ChunkEnv<'e>>);
 
 impl GeneratedChunkArray<'static> {
-	pub fn generate_mesh(self) -> (MeshlessChunkArray, Vec<Vec<Vertex>>) {
-		let (chunk_array, chunk_env) = (self.0, self.1);
+	pub fn generate_mesh(self, percentage_tx: Sender<f64>) -> (MeshlessChunkArray, Vec<Vec<Vertex>>) {
+		let GeneratedChunkArray(chunk_array, chunk_env) = self;
+		let volume = chunk_array.width * chunk_array.height * chunk_array.depth;
 
 		/* Create mesh for each chunk */
-		let meshes: Vec<_> = chunk_array.chunks.iter().zip(chunk_env.iter())
-			.map(|(chunk, env)| chunk.to_triangles(env))
+		let meshes: Vec<_> = chunk_array.chunks.iter()
+			.zip(chunk_env.iter())
+			.zip(1_usize..)
+			.map(|((chunk, env), i)| {
+				/* Get mesh */
+				let result = chunk.to_triangles(env);
+
+				/* Calculate percentage */
+				percentage_tx.send(i as f64 / volume as f64).unwrap();
+
+				return result
+			})
 			.collect();
 
 		(chunk_array, meshes)
@@ -166,7 +177,7 @@ impl MeshlessChunkArray {
 
 			/* Create generated data */
 			let array = MeshlessChunkArray { width, height, depth, chunks };
-			let result = GeneratedChunkArray(array, env).generate_mesh();
+			let result = GeneratedChunkArray(array, env).generate_mesh(percenatge_tx.clone());
 
 			/* Send */
 			result_tx.send(result).unwrap();
