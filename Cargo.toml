@@ -15,6 +15,7 @@ imgui-winit-support = "*"
 winapi = "*"
 profiler = { path = "../profiler" }
 crossbeam = "0.8.1"
+tokio = { version = "1.19.2", features = ["full"] }
 
 [features]
 release = []

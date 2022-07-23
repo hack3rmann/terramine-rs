@@ -4,6 +4,7 @@ pub extern crate imgui_glium_renderer;
 pub extern crate imgui;
 pub extern crate winapi;
 pub extern crate crossbeam;
+pub extern crate tokio;
 pub mod window;
 pub mod graphics;
 pub mod user_io;
