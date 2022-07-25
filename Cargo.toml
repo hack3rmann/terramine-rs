@@ -6,13 +6,13 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-glium = "0.30.1"
-image = "*"
-directx_math = "*"
-imgui = "*"
-imgui-glium-renderer = "*"
-imgui-winit-support = "*"
-winapi = "*"
+glium = "0.30.2"
+image = "0.24.3"
+directx_math = "0.2.2"
+imgui = "0.8.2"
+imgui-glium-renderer = "0.8.2"
+imgui-winit-support = "0.8.2"
+winapi = "0.3.9"
 profiler = { path = "../profiler" }
 crossbeam = "0.8.1"
 tokio = { version = "1.19.2", features = ["full"] }
