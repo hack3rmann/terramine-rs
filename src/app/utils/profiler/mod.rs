@@ -1,15 +1,5 @@
 #![allow(dead_code)]
 
-use std::{
-	collections::HashMap,
-	time::Instant
-};
-
-use crate::app::utils::{
-	time::timer::Timer,
-	user_io::{InputManager, KeyCode},
-};
-
 pub mod prelude {
 	pub use super::{
 		profiler_target as profile,
@@ -17,6 +7,17 @@ pub mod prelude {
 		ID,
 	};
 }
+
+use {
+	std::{
+		collections::HashMap,
+		time::Instant,
+	},
+	crate::app::utils::{
+		time::timer::Timer,
+		user_io::{InputManager, KeyCode},
+	},
+};
 
 pub extern crate profiler as profiler_target_macro;
 pub use profiler_target_macro::profiler_target;

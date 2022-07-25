@@ -1,5 +1,7 @@
-use crate::app::utils::graphics::camera::Camera;
-use crate::app::utils::math::prelude::*;
+use crate::app::utils::{
+	graphics::camera::Camera,
+	math::prelude::*
+};
 
 /// Represents the camera frustum
 #[derive(Clone)]

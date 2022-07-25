@@ -2,14 +2,14 @@ pub mod voxel_data;
 pub mod atlas;
 pub mod generator;
 
-use voxel_data::*;
-use crate::app::utils::{
-	math::vector::*,
-	graphics::{
-		Vertex,
+use {
+	crate::app::utils::{
+		math::vector::*,
+		graphics::Vertex,
+		terrain::voxel::VoxelData,
+		reinterpreter::*,
 	},
-	terrain::voxel::VoxelData,
-	reinterpreter::*,
+	voxel_data::*,
 };
 
 /// Represents voxel.

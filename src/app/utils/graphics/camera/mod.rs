@@ -4,9 +4,13 @@
 
 pub mod frustum;
 
-use crate::app::utils::user_io::{InputManager, KeyCode};
-use crate::app::utils::math::prelude::*;
-use frustum::Frustum;
+use {
+	crate::app::utils::{
+		user_io::{InputManager, KeyCode},
+		math::prelude::*,
+	},
+	frustum::Frustum,
+};
 
 /// Camera handler.
 pub struct Camera {

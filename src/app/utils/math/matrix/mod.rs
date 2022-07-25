@@ -1,8 +1,9 @@
 mod traits;
-use directx_math::*;
-use super::vector::Float4;
-use traits::{
-	Inverse
+
+use {
+	super::vector::Float4,
+	directx_math::*,
+	traits::Inverse,
 };
 
 #[allow(dead_code)]

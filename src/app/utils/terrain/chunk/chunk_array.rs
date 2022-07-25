@@ -1,25 +1,31 @@
-use super::{MeshedChunk, MeshlessChunk, ChunkEnvironment as ChunkEnv};
-use crate::app::utils::{
-	graphics::Vertex,
-	math::prelude::*,
-	graphics::{camera::Camera, Graphics},
-	saves::*,
-	reinterpreter::{
-		ReinterpretAsBytes,
-		ReinterpretFromBytes
+use {
+	super::{
+		MeshedChunk,
+		MeshlessChunk,
+		ChunkEnvironment as ChunkEnv,
 	},
-	terrain::voxel::voxel_data::NOTHING_VOXEL_DATA,
-	concurrency::{
-		loading::Loading,
-		promise::Promise,
+	crate::app::utils::{
+		graphics::Vertex,
+		math::prelude::*,
+		graphics::{camera::Camera, Graphics},
+		saves::*,
+		reinterpreter::{
+			ReinterpretAsBytes,
+			ReinterpretFromBytes,
+		},
+		terrain::voxel::voxel_data::NOTHING_VOXEL_DATA,
+		concurrency::{
+			loading::Loading,
+			promise::Promise,
+		},
 	},
+	glium::{
+		uniforms::Uniforms,
+		DrawError,
+		Frame,
+	},
+	std::sync::mpsc::Sender,
 };
-use glium::{
-	uniforms::Uniforms,
-	DrawError,
-	Frame
-};
-use std::sync::mpsc::{Sender};
 
 #[derive(Clone, Copy)]
 enum SaveType {

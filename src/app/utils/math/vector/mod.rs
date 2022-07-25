@@ -1,9 +1,10 @@
 pub mod swizzle;
-
-use directx_math::*;
 pub use swizzle::*;
 
-use crate::app::utils::reinterpreter::*;
+use {
+	directx_math::*,
+	crate::app::utils::reinterpreter::*
+};
 
 /// Represents 4D 32-bit float vector.
 #[derive(Clone, Copy, Debug)]

@@ -1,6 +1,7 @@
-use std::io::Cursor;
-use std::fs;
-use glium::uniforms::SamplerWrapFunction;
+use {
+	std::{io::Cursor, fs},
+	glium::uniforms::SamplerWrapFunction
+};
 
 /// Texture struct.
 /// Contains texture stuff.

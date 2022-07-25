@@ -1,7 +1,13 @@
-use std::{fs::File, fs::OpenOptions, os::windows::prelude::FileExt, collections::HashSet, ops::Range};
-
-use super::{Offset, Size};
-use crate::app::utils::reinterpreter::*;
+use {
+	super::{Offset, Size},
+	crate::app::utils::reinterpreter::*,
+	std::{
+		fs::{File, OpenOptions},
+		os::windows::prelude::FileExt,
+		collections::HashSet,
+		ops::Range
+	},
+};
 
 #[derive(Debug)]
 pub struct ShError(pub String);
@@ -10,9 +16,9 @@ pub type ShResult<T> = Result<T, ShError>;
 
 #[derive(Clone, Copy)]
 pub struct Alloc {
-	pub(in self) stack_offset: Offset,
-	pub(in self) heap_offset: Offset,
-	pub(in self) size: Size,
+	pub(self) stack_offset: Offset,
+	pub(self) heap_offset: Offset,
+	pub(self) size: Size,
 }
 
 #[allow(dead_code)]

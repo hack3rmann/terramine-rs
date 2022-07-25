@@ -1,14 +1,15 @@
-use crate::app::utils::graphics::{
-	VertexBuffer,
-	Shader
-};
-
-use glium::{
-	DrawParameters,
-	Frame,
-	Surface,
-	DrawError,
-	uniforms::Uniforms
+use {
+	crate::app::utils::graphics::{
+		VertexBuffer,
+		Shader
+	},
+	glium::{
+		DrawParameters,
+		Frame,
+		Surface,
+		DrawError,
+		uniforms::Uniforms
+	},
 };
 
 /// Handles vertex_buffer and shader.

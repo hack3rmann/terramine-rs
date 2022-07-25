@@ -1,29 +1,31 @@
 pub mod chunk_array;
 
-use super::voxel::{
-	Voxel,
-	shape::Cube,
-	voxel_data::*,
-	generator,
-};
-use crate::app::utils::{
-	math::prelude::*,
-	graphics::{
-		Graphics,
-		mesh::Mesh,
-		Vertex,
-		shader::Shader,
-		vertex_buffer::VertexBuffer,
-		camera::Camera,
+use {
+	super::voxel::{
+		Voxel,
+		shape::Cube,
+		voxel_data::*,
+		generator,
 	},
-	reinterpreter::*,
+	crate::app::utils::{
+		math::prelude::*,
+		graphics::{
+			Graphics,
+			mesh::Mesh,
+			Vertex,
+			shader::Shader,
+			vertex_buffer::VertexBuffer,
+			camera::Camera,
+		},
+		reinterpreter::*,
+	},
+	glium::{
+		DrawError,
+		uniforms::Uniforms,
+		Frame,
+	},
+	std::{cell::RefCell, marker::PhantomData},
 };
-use glium::{
-	DrawError,
-	uniforms::Uniforms,
-	Frame
-};
-use std::{cell::RefCell, marker::PhantomData};
 
 /**
  * Index cheatsheet!

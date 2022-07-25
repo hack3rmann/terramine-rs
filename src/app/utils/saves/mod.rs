@@ -1,22 +1,21 @@
 pub mod stack_heap;
 
-use std::{
-	marker::PhantomData, 
-	collections::HashMap,
-	os::windows::prelude::FileExt,
-	fs::{File, OpenOptions},
+use {
+	crate::app::utils::{
+		reinterpreter::{
+			ReinterpretAsBytes,
+			ReinterpretFromBytes,
+			StaticSize
+		},
+	},
+	std::{
+		marker::PhantomData, 
+		collections::HashMap,
+		os::windows::prelude::FileExt,
+		fs::{File, OpenOptions},
+	},
+	stack_heap::{StackHeap, ShResult, ShError},
 };
-
-use stack_heap::StackHeap;
-use crate::app::utils::{
-	reinterpreter::{
-		ReinterpretAsBytes,
-		ReinterpretFromBytes,
-		StaticSize
-	}, saves::stack_heap::ShError,
-};
-
-use self::stack_heap::ShResult;
 
 pub type Offset = u64;
 pub type Size   = u64;
