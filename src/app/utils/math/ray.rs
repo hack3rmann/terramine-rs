@@ -1,14 +1,14 @@
 #![allow(dead_code)]
 
-use {
-	super::prelude::*,
-	crate::app::utils::graphics::{
-		mesh::Mesh,
-		Graphics,
-		shader::Shader,
-		vertex_buffer::VertexBuffer,
-		Vertex,
-	},
+use super::prelude::*;
+
+#[cfg(not(feature = "release"))]
+use crate::app::utils::graphics::{
+	mesh::Mesh,
+	Graphics,
+	shader::Shader,
+	vertex_buffer::VertexBuffer,
+	Vertex,
 };
 
 /// Represents mathematical ray
