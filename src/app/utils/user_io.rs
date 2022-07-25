@@ -9,11 +9,15 @@ pub use glium::glutin::event::{
 	Event,
 	WindowEvent
 };
-use std::collections::HashMap;
-use super::graphics::Graphics;
-use winapi::um::winuser::GetCursorPos;
-use winapi::shared::windef::LPPOINT;
-use winapi::shared::windef::POINT;
+
+use {
+	super::graphics::Graphics,
+	winapi::{
+		um::winuser::GetCursorPos,
+		shared::windef::{LPPOINT, POINT},
+	},
+	std::collections::HashMap,
+};
 
 /// Keyboard handler.
 #[derive(Default)]

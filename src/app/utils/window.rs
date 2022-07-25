@@ -3,20 +3,18 @@
  */
 
 /* Glium stuff */
-use glium::{
-	glutin::{
-		event_loop::{EventLoop},
-		window::{
-			WindowBuilder,
-			Icon,
-			Window as GWindow
-		},
-		dpi::PhysicalSize,
-		ContextWrapper,
-		PossiblyCurrent,
-		ContextBuilder,
-		GlRequest,
-	}
+use glium::glutin::{
+	event_loop::EventLoop,
+	window::{
+		WindowBuilder,
+		Icon,
+		Window as GWindow
+	},
+	dpi::PhysicalSize,
+	ContextWrapper,
+	PossiblyCurrent,
+	ContextBuilder,
+	GlRequest,
 };
 
 /// Temporary holds glutin window.

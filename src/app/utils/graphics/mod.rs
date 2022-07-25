@@ -4,26 +4,27 @@ pub mod vertex_buffer;
 pub mod camera;
 pub mod mesh;
 
-//use crate::window::Window;
-use shader::Shader;
-use vertex_buffer::VertexBuffer;
-use super::window::Window;
-use crate::app::glium::{
-	self,
-	implement_vertex,
-	backend::Facade,
-	glutin::event_loop::EventLoop,
-	glutin::event::{
-		Event,
-		WindowEvent,
+use {
+	shader::Shader,
+	vertex_buffer::VertexBuffer,
+	super::window::Window,
+	crate::app::glium::{
+		self,
+		implement_vertex,
+		backend::Facade,
+		glutin::event_loop::EventLoop,
+		glutin::event::{
+			Event,
+			WindowEvent,
+		},
+		glutin::dpi,
 	},
-	glutin::dpi,
-};
-use std::{
-	sync::atomic::{
-		AtomicBool, Ordering
-	},
-	path::PathBuf,
+	std::{
+		sync::atomic::{
+			AtomicBool, Ordering
+		},
+		path::PathBuf,
+	}
 };
 
 /// Struct that handles graphics.
@@ -32,7 +33,7 @@ pub struct Graphics {
 	pub display:	glium::Display,
 
 	/* OpenGL pipeline stuff */
-	pub event_loop:		Option<EventLoop<()>>,
+	pub event_loop:	Option<EventLoop<()>>,
 
 	/* ImGui stuff */
 	pub imguic:		imgui::Context,

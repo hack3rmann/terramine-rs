@@ -1,8 +1,9 @@
 mod traits;
-use directx_math::*;
-use super::vector::Float4;
-use traits::{
-	Inverse
+
+use {
+	super::vector::Float4,
+	directx_math::*,
+	traits::Inverse,
 };
 
 #[allow(dead_code)]
@@ -122,14 +123,14 @@ impl Matrix4x4 {
 	/// Gives perspective matrix for left-handed coordinate system with fov setting.
 	pub fn perspective_fov_lh(fov: f32, aspect_ratio: f32, near: f32, far: f32) -> Self {
 		Matrix4x4 {
-			mat: XMMatrixPerspectiveLH(fov, aspect_ratio, near, far)
+			mat: XMMatrixPerspectiveFovLH(fov, 1.0 / aspect_ratio, near, far)
 		}
 	}
 
 	/// Gives perspective matrix for right-handed coordinate system with fov setting.
 	pub fn perspective_fov_rh(fov: f32, aspect_ratio: f32, near: f32, far: f32) -> Self {
 		Matrix4x4 {
-			mat: XMMatrixPerspectiveRH(fov, aspect_ratio, near, far)
+			mat: XMMatrixPerspectiveFovRH(fov, 1.0 / aspect_ratio, near, far)
 		}
 	}
 

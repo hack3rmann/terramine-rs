@@ -1,15 +1,19 @@
 pub mod swizzle;
-use directx_math::*;
 pub use swizzle::*;
 
+use {
+	directx_math::*,
+	crate::app::utils::reinterpreter::*
+};
+
 /// Represents 4D 32-bit float vector.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Float4 {
 	pub i_vec: XMVECTOR
 }
 
 /// Represents 3D 32-bit int vector.
-#[derive(Clone, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Default, PartialEq, Debug)]
 pub struct Int3 {
 	x: i32,
 	y: i32,
@@ -43,6 +47,23 @@ impl Float4 {
 		Float4 {
 			i_vec: XMVector3Normalize(self.i_vec)
 		}
+	}
+
+	/// Gives dot product of two vectors
+	pub fn dot(self, other: Float4) -> f32 {
+		XMVectorGetX(XMVector3Dot(self.i_vec, other.i_vec))
+	}
+
+	/// Gives cross product of two vectors
+	pub fn cross(self, other: Float4) -> Self {
+		Float4 {
+			i_vec: XMVector3Cross(self.i_vec, other.i_vec)
+		}
+	}
+
+	/// Gives absolute value of vector
+	pub fn abs(self) -> f32 {
+		XMVectorGetX(XMVector3Length(self.i_vec))
 	}
 }
 
@@ -280,3 +301,98 @@ impl Set3Dto1<i32> for Int3 {
 
 impl Vec4Swizzles4<f32> for Float4 { }
 impl Vec3Swizzles3<i32> for Int3 { }
+
+/**
+ * Reinterpretor section
+ */
+
+unsafe impl Reinterpret for Int3 { }
+
+unsafe impl ReinterpretAsBytes for Int3 {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		let mut out = Vec::with_capacity(Self::static_size());
+
+		out.append(&mut self.x().reinterpret_as_bytes());
+		out.append(&mut self.y().reinterpret_as_bytes());
+		out.append(&mut self.z().reinterpret_as_bytes());
+
+		return out;
+	}
+}
+
+unsafe impl ReinterpretFromBytes for Int3 {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		let x = i32::reinterpret_from_bytes(&source[0..4]);
+		let y = i32::reinterpret_from_bytes(&source[4..8]);
+		let z = i32::reinterpret_from_bytes(&source[8..12]);
+
+		Self::new(x, y, z)
+	}
+}
+
+unsafe impl ReinterpretSize for Int3 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for Int3 {
+	fn static_size() -> usize { 12 }
+}
+
+
+
+unsafe impl Reinterpret for Float4 { }
+
+unsafe impl ReinterpretAsBytes for Float4 {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		let mut out = Vec::with_capacity(Self::static_size());
+
+		out.append(&mut self.x().reinterpret_as_bytes());
+		out.append(&mut self.y().reinterpret_as_bytes());
+		out.append(&mut self.z().reinterpret_as_bytes());
+		out.append(&mut self.w().reinterpret_as_bytes());
+
+		return out;
+	}
+}
+
+unsafe impl ReinterpretFromBytes for Float4 {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		let x = f32::reinterpret_from_bytes(&source[0..4]);
+		let y = f32::reinterpret_from_bytes(&source[4..8]);
+		let z = f32::reinterpret_from_bytes(&source[8..12]);
+		let w = f32::reinterpret_from_bytes(&source[12..16]);
+
+		Self::new(x, y, z, w)
+	}
+}
+
+unsafe impl ReinterpretSize for Float4 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for Float4 {
+	fn static_size() -> usize { 16 }
+}
+
+
+
+#[cfg(test)]
+mod test {
+	use super::*;
+
+	#[test]
+	fn reinterpret_int3() {
+		let before = Int3::new(23, 441, 52);
+		let after = Int3::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+
+		assert_eq!(before, after);
+	}
+
+	#[test]
+	fn reinterpret_float4() {
+		let before = Float4::new(233.7, 123.5, 123123.5, 444.5);
+		let after = Float4::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+
+		assert_eq!(before, after);
+	}
+}
