@@ -1,38 +1,41 @@
 pub mod utils;
 
-/* Glium includes */
-use glium::{
-	glutin::{
-		event::{
-			Event,
-			WindowEvent,
+use {
+	/* Glium includes */
+	glium::{
+		glutin::{
+			event::{
+				Event,
+				WindowEvent,
+			},
+			event_loop::ControlFlow, dpi::PhysicalSize,
 		},
-		event_loop::ControlFlow, dpi::PhysicalSize,
+		Surface,
+		uniform
 	},
-	Surface,
-	uniform
-};
 
-/* Other files */
-use utils::{
-	*,
-	user_io::{InputManager, KeyCode},
-	graphics::{
-		Graphics,
-		camera::Camera,
-		texture::Texture,
-		Vertex,
+	/* Other files */
+	utils::{
+		*,
+		user_io::{InputManager, KeyCode},
+		graphics::{
+			Graphics,
+			camera::Camera,
+			texture::Texture,
+			Vertex,
+		},
+		terrain::chunk::chunk_array::{
+			MeshlessChunkArray,
+			MeshedChunkArray,
+		},
+		time::timer::Timer,
+		profiler,
+		concurrency::promise::Promise,
+		runtime::prelude::*,
 	},
-	terrain::chunk::chunk_array::{
-		MeshlessChunkArray,
-		MeshedChunkArray,
-	},
-	time::timer::Timer,
-	profiler,
-	concurrency::promise::Promise,
-};
 
-use crate::app::utils::concurrency::loading::Loading;
+	crate::app::utils::concurrency::loading::Loading,
+};
 
 /// Struct that handles everything.
 pub struct App {
@@ -77,12 +80,14 @@ impl App {
 	pub fn run(mut self) {
 		/* Event/game loop */
 		self.graphics.take_event_loop().run(move |event, _, control_flow| {
-			self.run_frame_loop(event, control_flow)
+			runtime().block_on(async {
+				self.run_frame_loop(event, control_flow).await
+			})
 		});
 	}
 
 	/// Event loop run function
-	pub fn run_frame_loop(&mut self, event: Event<()>, control_flow: &mut ControlFlow) {
+	pub async fn run_frame_loop<'e>(&mut self, event: Event<'e, ()>, control_flow: &mut ControlFlow) {
 		/* Event handlers */
 		self.graphics.imguiw.handle_event(self.graphics.imguic.io_mut(), self.graphics.display.gl_window().window(), &event);
 		self.input_manager.handle_event(&event, &self.graphics);
