@@ -204,6 +204,39 @@ impl Camera {
 
 	/// Returns Z component of pos vector.
 	pub fn get_z(&self) -> f32 { self.pos.z() }
+
+	/// Spawns camera control window.
+	pub fn spawn_control_window(&mut self, ui: &imgui::Ui, input: &mut InputManager) {
+		/* Camera control window */
+		let mut camera_window = imgui::Window::new("Camera");
+
+		/* Move and resize if pressed I key */
+		if !input.keyboard.is_pressed(KeyCode::I) {
+			camera_window = camera_window
+				.resizable(false)
+				.movable(false)
+				.collapsible(false)
+		}
+
+		/* UI building */
+		camera_window.build(&ui, || {
+			ui.text("Position");
+			ui.text(format!("x: {x:.3}, y: {y:.3}, z: {z:.3}", x = self.get_x(), y = self.get_y(), z = self.get_z()));
+			ui.text("Rotation");
+			ui.text(format!("roll: {roll:.3}, pitch: {pitch:.3}, yaw: {yaw:.3}", roll = self.roll, pitch = self.pitch, yaw = self.yaw));
+			ui.separator();
+			imgui::Slider::new("Speed", 5.0, 300.0)
+				.display_format("%.1f")
+				.build(&ui, &mut self.speed_factor);
+			imgui::Slider::new("Speed falloff", 0.0, 1.0)
+				.display_format("%.3f")
+				.build(&ui, &mut self.speed_falloff);
+			imgui::Slider::new("FOV", 1.0, 180.0)
+				.display_format("%.0f")
+				.build(&ui, self.fov.get_degrees_mut());
+			self.fov.update_from_degrees();
+		});
+	}
 }
 
 impl Default for Camera {

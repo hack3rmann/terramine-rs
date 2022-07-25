@@ -23,7 +23,7 @@ use glium::{
 	uniforms::Uniforms,
 	Frame
 };
-use std::cell::RefCell;
+use std::{cell::RefCell, marker::PhantomData};
 
 /**
  * Index cheatsheet!
@@ -50,33 +50,14 @@ pub enum FindOptions {
 }
 
 /// Chunk struct.
-pub struct Chunk<'dp> {
-	voxels: VoxelArray,
-	pos: Int3,
-	mesh: RefCell<Option<Mesh<'dp>>>
+pub struct MeshlessChunk {
+	pub voxels: VoxelArray,
+	pub pos: Int3,
 }
 
-/// Describes blocked chunks by environent or not. 
-#[derive(Clone, Default)]
-pub struct ChunkEnvironment<'c> {
-	pub top:	Option<*const Chunk<'c>>,
-	pub bottom:	Option<*const Chunk<'c>>,
-	pub front:	Option<*const Chunk<'c>>,
-	pub back:	Option<*const Chunk<'c>>,
-	pub left:	Option<*const Chunk<'c>>,
-	pub right:	Option<*const Chunk<'c>>,
-}
-
-impl<'c> ChunkEnvironment<'c> {
-	/// Empty description.
-	pub fn none() -> Self {
-		ChunkEnvironment { top: None, bottom: None, front: None, back: None, left: None, right: None }
-	}
-}
-
-impl<'dp> Chunk<'dp> {
+impl MeshlessChunk {
 	/// Constructs new chunk in given position 
-	pub fn new(graphics: Option<&Graphics>, pos: Int3, generate_mesh: bool) -> Self {
+	pub fn new(pos: Int3) -> Self {
 		/* Voxel array initialization */
 		let mut voxels = VoxelArray::with_capacity(CHUNK_VOLUME);
 
@@ -102,157 +83,115 @@ impl<'dp> Chunk<'dp> {
 			}
 		}}}
 		
-		/* Create chunk */
-		let chunk = Chunk { voxels, pos, mesh: RefCell::new(None) };
-
-		/* Create mesh for chunk */
-		if generate_mesh {
-			chunk.update_mesh(graphics.unwrap(), &ChunkEnvironment::none());
-		}
-
-		return chunk;
+		MeshlessChunk { voxels, pos }
 	}
 
-	/// Renders chunk.
-	/// * Mesh should be constructed before this function call.
-	pub fn render<U: Uniforms>(&self, target: &mut Frame, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
-		let mesh = self.mesh.borrow();
-		let mesh = mesh.as_ref().unwrap();
+	/// Creates trianlges Vec from Chunk and its environment.
+	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<Vertex> {
+		/* Construct vertex array */
+		let mut vertices = Vec::<Vertex>::new();
+		for (i, &voxel_id) in self.voxels.iter().enumerate() {
+			if voxel_id != NOTHING_VOXEL_DATA.id {
+				/*
+				 * Safe because environment chunks lives as long as other chunks or that given chunk.
+				 * And it also needs only at chunk generation stage.
+				 */
 
-		/* Check if vertex array is empty */
-		if !mesh.is_empty() && self.is_visible(camera) {
-			/* Iterating through array */
-			mesh.render(target, uniforms)
-		} else {
-			Ok(( ))
-		}
-	}
+				/* Cube vertices generator */
+				let cube = Cube::new(&VOXEL_DATA[voxel_id as usize]);
 
-	/// Updates mesh
-	pub fn update_mesh(&self, graphics: &Graphics, env: &ChunkEnvironment) {
-		self.mesh.replace({
-			/* Construct vertex array */
-			let mut vertices = Vec::<Vertex>::new();
-			for (i, &voxel_id) in self.voxels.iter().enumerate() {
-				if voxel_id != NOTHING_VOXEL_DATA.id {
-					/*
-					 * Safe because environment chunks lives as long as other chunks or that given chunk.
-					 * And it also needs only at chunk generation stage.
-					 */
+				/* Get position from index */
+				let position = pos_in_chunk_to_world(position_function(i), self.pos);
 
-					/* Cube vertices generator */
-					let cube = Cube::new(&VOXEL_DATA[voxel_id as usize]);
-
-					/* Get position from index */
-					let position = pos_in_chunk_to_world(position_function(i), self.pos);
-
-					/* Draw checker */
-					let check = |input: Option<Voxel>| -> bool {
-						match input {
-							None => true,
-							Some(voxel) => voxel.data == NOTHING_VOXEL_DATA,
-						}
-					};
-
-					/* Top face check */
-					if check(self.get_voxel_or_none(Int3::new(position.x(), position.y() + 1, position.z()))) {
-						match env.top {
-							Some(chunk) => {
-								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y() + 1, position.z())) }) {
-									cube.top(position, &mut vertices)
-								}
-							},
-							None => cube.top(position, &mut vertices)
-						}
+				/* Draw checker */
+				let check = |input: Option<Voxel>| -> bool {
+					match input {
+						None => true,
+						Some(voxel) => voxel.data == NOTHING_VOXEL_DATA,
 					}
+				};
 
-					/* Bottom face check */
-					if check(self.get_voxel_or_none(Int3::new(position.x(), position.y() - 1, position.z()))) {
-						match env.bottom {
-							Some(chunk) => {
-								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y() - 1, position.z())) }) {
-									cube.bottom(position, &mut vertices)
-								}
-							},
-							None => cube.bottom(position, &mut vertices)
-						}
+				/* Top face check */
+				if check(self.get_voxel_or_none(Int3::new(position.x(), position.y() + 1, position.z()))) {
+					match env.top {
+						Some(chunk) => {
+							if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y() + 1, position.z())) }) {
+								cube.top(position, &mut vertices)
+							}
+						},
+						None => cube.top(position, &mut vertices)
 					}
-					
-					/* Back face check */
-					if check(self.get_voxel_or_none(Int3::new(position.x() + 1, position.y(), position.z()))) {
-						match env.back {
-							Some(chunk) => {
-								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x() + 1, position.y(), position.z())) }) {
-									cube.back(position, &mut vertices)
-								}
-							},
-							None => cube.back(position, &mut vertices)
-						}
+				}
+
+				/* Bottom face check */
+				if check(self.get_voxel_or_none(Int3::new(position.x(), position.y() - 1, position.z()))) {
+					match env.bottom {
+						Some(chunk) => {
+							if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y() - 1, position.z())) }) {
+								cube.bottom(position, &mut vertices)
+							}
+						},
+						None => cube.bottom(position, &mut vertices)
 					}
-					
-					/* Front face check */
-					if check(self.get_voxel_or_none(Int3::new(position.x() - 1, position.y(), position.z()))) {
-						match env.front {
-							Some(chunk) => {
-								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x() - 1, position.y(), position.z())) }) {
-									cube.front(position, &mut vertices)
-								}
-							},
-							None => cube.front(position, &mut vertices)
-						}
+				}
+				
+				/* Back face check */
+				if check(self.get_voxel_or_none(Int3::new(position.x() + 1, position.y(), position.z()))) {
+					match env.back {
+						Some(chunk) => {
+							if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x() + 1, position.y(), position.z())) }) {
+								cube.back(position, &mut vertices)
+							}
+						},
+						None => cube.back(position, &mut vertices)
 					}
-					
-					/* Right face check */
-					if check(self.get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() + 1))) {
-						match env.right {
-							Some(chunk) => {
-								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() + 1)) }) {
-									cube.right(position, &mut vertices)
-								}
-							},
-							None => cube.right(position, &mut vertices)
-						}
+				}
+				
+				/* Front face check */
+				if check(self.get_voxel_or_none(Int3::new(position.x() - 1, position.y(), position.z()))) {
+					match env.front {
+						Some(chunk) => {
+							if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x() - 1, position.y(), position.z())) }) {
+								cube.front(position, &mut vertices)
+							}
+						},
+						None => cube.front(position, &mut vertices)
 					}
-					
-					/* Left face check */
-					if check(self.get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() - 1))) {
-						match env.left {
-							Some(chunk) => {
-								if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() - 1)) }) {
-									cube.left(position, &mut vertices)
-								}
-							},
-							None => cube.left(position, &mut vertices)
-						}
+				}
+				
+				/* Right face check */
+				if check(self.get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() + 1))) {
+					match env.right {
+						Some(chunk) => {
+							if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() + 1)) }) {
+								cube.right(position, &mut vertices)
+							}
+						},
+						None => cube.right(position, &mut vertices)
+					}
+				}
+				
+				/* Left face check */
+				if check(self.get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() - 1))) {
+					match env.left {
+						Some(chunk) => {
+							if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() - 1)) }) {
+								cube.left(position, &mut vertices)
+							}
+						},
+						None => cube.left(position, &mut vertices)
 					}
 				}
 			}
+		}
 
-			/* Shrink vector */
-			vertices.shrink_to_fit();
+		/* Shrink vector */
+		vertices.shrink_to_fit();
 
-			/* Chunk draw parameters */
-			let draw_params = glium::DrawParameters {
-				depth: glium::Depth {
-					test: glium::DepthTest::IfLess,
-					write: true,
-					.. Default::default()
-				},
-				backface_culling: glium::BackfaceCullingMode::CullClockwise,
-				.. Default::default()
-			};
-			
-			/* Shader for chunks */
-			let shader = Shader::new("vertex_shader", "fragment_shader", &graphics.display);
-			
-			/* Vertex buffer for chunks */
-			let vertex_buffer = VertexBuffer::from_vertices(graphics, vertices);
-	
-			Some(Mesh::new(vertex_buffer, shader, draw_params))
-		});
+		return vertices
 	}
 
-	/// Gives voxel by world coordinate
+	/// Gives voxel by world coordinate.
 	pub fn get_voxel_optional(&self, global_pos: Int3) -> FindOptions {
 		/* Transform to local */
 		let pos = world_coords_to_in_some_chunk(global_pos, self.pos);
@@ -266,7 +205,7 @@ impl<'dp> Chunk<'dp> {
 		}
 	}
 
-	/// Gives voxel by world coordinate
+	/// Gives voxel by world coordinate.
 	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<Voxel> {
 		match self.get_voxel_optional(pos) {
 			FindOptions::Border | FindOptions::InChunkNothing => None,
@@ -274,7 +213,7 @@ impl<'dp> Chunk<'dp> {
 		}
 	}
 
-	/// Checks if chunk is in camera view
+	/// Checks if chunk is in camera view.
 	pub fn is_visible(&self, camera: &Camera) -> bool {
 		/* AABB init */
 		let lo = chunk_cords_to_min_world(self.pos);
@@ -282,6 +221,137 @@ impl<'dp> Chunk<'dp> {
 
 		/* Frustum check */
 		camera.is_aabb_in_view(AABB::from_int3(lo, hi))
+	}
+
+	/// Upgrades chunk to be meshed.
+	#[allow(dead_code)]
+	pub fn envs_upgrade<'dp, 'g: 'dp>(self, graphics: &'g Graphics, env: &ChunkEnvironment) -> MeshedChunk<'dp> {
+		MeshedChunk::from_meshless_envs(graphics, self, env)
+	}
+
+	/// Upgrades chunk to be meshed.
+	pub fn triangles_upgrade<'dp, 'g>(self, graphics: &'g Graphics, triangles: Vec<Vertex>) -> MeshedChunk<'dp> {
+		MeshedChunk::from_meshless_triangles(graphics, self, triangles)
+	}
+}
+
+/// Chunk struct.
+pub struct MeshedChunk<'dp> {
+	inner: MeshlessChunk,
+	mesh: RefCell<Mesh<'dp>>
+}
+
+/// Describes blocked chunks by environent or not. 
+#[derive(Clone, Default)]
+pub struct ChunkEnvironment<'l> {
+	pub top:	Option<*const MeshlessChunk>,
+	pub bottom:	Option<*const MeshlessChunk>,
+	pub front:	Option<*const MeshlessChunk>,
+	pub back:	Option<*const MeshlessChunk>,
+	pub left:	Option<*const MeshlessChunk>,
+	pub right:	Option<*const MeshlessChunk>,
+
+	pub _phantom: PhantomData<&'l MeshlessChunk>
+}
+
+unsafe impl<'c> Send for ChunkEnvironment<'c> { }
+
+impl<'c> ChunkEnvironment<'c> {
+	/// Empty description.
+	pub fn none() -> Self {
+		ChunkEnvironment { top: None, bottom: None, front: None, back: None, left: None, right: None, _phantom: PhantomData }
+	}
+}
+
+impl<'dp> MeshedChunk<'dp> {
+	/// Constructs new chunk in given position.
+	#[allow(dead_code)]
+	pub fn from_envs<'g>(graphics: &'g Graphics, pos: Int3, env: &ChunkEnvironment) -> Self {
+		/* Construct new meshless */
+		let meshless = MeshlessChunk::new(pos);
+		
+		/* Upgrade it */
+		Self::from_meshless_envs(graphics, meshless, env)
+	}
+
+	/// Constructs mesh for meshless chunk.
+	#[allow(dead_code)]
+	pub fn from_meshless_envs<'g>(graphics: &'g Graphics, meshless: MeshlessChunk, env: &ChunkEnvironment) -> Self {
+		/* Create chunk */
+		let triangles = meshless.to_triangles(env);
+
+		MeshedChunk {
+			inner: meshless,
+			mesh: RefCell::new(Self::make_mesh(&graphics.display, triangles))
+		}
+	}
+
+	/// Constructs mesh for meshless chunk.
+	pub fn from_meshless_triangles<'g>(graphics: &'g Graphics, meshless: MeshlessChunk, triangles: Vec<Vertex>) -> Self {
+		MeshedChunk {
+			inner: meshless,
+			mesh: RefCell::new(Self::make_mesh(&graphics.display, triangles))
+		}
+	}
+
+	/// Renders chunk.
+	/// * Mesh should be constructed before this function call.
+	pub fn render<U: Uniforms>(&self, target: &mut Frame, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
+		/* Borrow mesh */
+		let mesh = self.mesh.borrow();
+
+		/* Check if vertex array is empty */
+		if !mesh.is_empty() && self.is_visible(camera) {
+			/* Iterating through array */
+			mesh.render(target, uniforms)
+		} else {
+			Ok(())
+		}
+	}
+
+	/// Updates mesh.
+	pub fn make_mesh<'d>(display: &'d glium::Display, vertices: Vec<Vertex>) -> Mesh<'dp> {
+		/* Chunk draw parameters */
+		let draw_params = glium::DrawParameters {
+			depth: glium::Depth {
+				test: glium::DepthTest::IfLess,
+				write: true,
+				.. Default::default()
+			},
+			backface_culling: glium::BackfaceCullingMode::CullClockwise,
+			.. Default::default()
+		};
+		
+		/* Shader for chunks */
+		let shader = Shader::new("vertex_shader", "fragment_shader", display);
+		
+		/* Vertex buffer for chunks */
+		let vertex_buffer = VertexBuffer::from_vertices(display, vertices);
+
+		Mesh::new(vertex_buffer, shader, draw_params)
+	}
+
+	/// Creates trianlges Vec from Chunk and its environment.
+	#[allow(dead_code)]
+	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<Vertex> {
+		self.inner.to_triangles(env)
+	}
+
+	/// Gives voxel by world coordinate.
+	#[allow(dead_code)]
+	pub fn get_voxel_optional(&self, global_pos: Int3) -> FindOptions {
+		self.inner.get_voxel_optional(global_pos)
+	}
+
+	/// Gives voxel by world coordinate.
+	#[allow(dead_code)]
+	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<Voxel> {
+		self.inner.get_voxel_or_none(pos)
+	}
+
+	/// Checks if chunk is in camera view.
+	pub fn is_visible(&self, camera: &Camera) -> bool {
+		self.inner.is_visible(camera)
 	}
 }
 
@@ -291,37 +361,35 @@ unsafe impl StaticSize for VoxelArray {
 	}
 }
 
-unsafe impl<'c> Reinterpret for Chunk<'c> { }
+unsafe impl Reinterpret for MeshlessChunk { }
 
-unsafe impl<'c> ReinterpretAsBytes for Chunk<'c> {
+unsafe impl ReinterpretAsBytes for MeshlessChunk {
 	fn reinterpret_as_bytes(&self) -> Vec<u8> {
 		let mut bytes = Vec::with_capacity(Self::static_size());
 
 		bytes.append(&mut self.voxels.reinterpret_as_bytes());
 		bytes.append(&mut self.pos.reinterpret_as_bytes());
-		bytes.push(self.mesh.borrow().as_ref().is_some() as u8);
 
 		return bytes;
 	}
 }
 
-unsafe impl<'c> ReinterpretFromBytes for Chunk<'c> {
+unsafe impl ReinterpretFromBytes for MeshlessChunk {
 	fn reinterpret_from_bytes(source: &[u8]) -> Self {
 		let voxel_array_size: usize = VoxelArray::static_size();
 
-		let voxels = VoxelArray::reinterpret_from_bytes(&source[.. voxel_array_size]); // PANIC!
+		let voxels = VoxelArray::reinterpret_from_bytes(&source[.. voxel_array_size]);
 		let pos = Int3::reinterpret_from_bytes(&source[voxel_array_size .. voxel_array_size + Int3::static_size()]);
-		let mesh = RefCell::new(None);
 
-		Self { voxels, pos, mesh }
+		MeshlessChunk { voxels, pos }
 	}
 }
 
-unsafe impl<'c> ReinterpretSize for Chunk<'c> {
+unsafe impl ReinterpretSize for MeshlessChunk {
 	fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl<'c> StaticSize for Chunk<'c> {
+unsafe impl StaticSize for MeshlessChunk {
 	fn static_size() -> usize {
 		VoxelArray::static_size() + Int3::static_size() + 1
 	}
@@ -333,8 +401,8 @@ mod reinterpret_test {
 
 	#[test]
 	fn reinterpret_chunk() {
-		let before = Chunk::new(None, Int3::new(12, 12, 11), false);
-		let after = Chunk::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+		let before = MeshlessChunk::new(Int3::new(12, 12, 11));
+		let after = MeshlessChunk::reinterpret_from_bytes(&before.reinterpret_as_bytes());
 
 		assert_eq!(before.voxels, after.voxels);
 		assert_eq!(before.pos, after.pos);

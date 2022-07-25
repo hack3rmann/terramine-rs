@@ -14,6 +14,9 @@ imgui-glium-renderer = "*"
 imgui-winit-support = "*"
 winapi = "*"
 profiler = { path = "../profiler" }
+crossbeam = "0.8.1"
+tokio = { version = "1.19.2", features = ["full"] }
+tokio-stream = "0.1.9"
 
 [features]
 release = []

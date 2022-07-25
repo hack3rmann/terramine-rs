@@ -51,7 +51,7 @@ impl Ray {
 		let shader = Shader::new("vertex_shader", "fragment_shader", &graphics.display);
 		
 		/* Vertex buffer for chunks */
-		let vertex_buffer = VertexBuffer::from_vertices(graphics, vertices);
+		let vertex_buffer = VertexBuffer::from_vertices(&graphics.display, vertices);
 
 		Mesh::new(vertex_buffer, shader, draw_params)
 	}
