@@ -107,20 +107,20 @@ impl App {
 				_ => (),
 			},
 			Event::MainEventsCleared => {
-				self.main_events_cleared(control_flow);
+				self.main_events_cleared(control_flow).await;
 			},
 			Event::RedrawRequested(_) => {
-				self.redraw_requested();
+				self.redraw_requested().await;
 			},
 			Event::NewEvents(_) => {
-				self.new_events();			
+				self.new_events().await;
 			},
 			_ => ()
 		}
 	}
 
 	/// Main events cleared.
-	fn main_events_cleared(&mut self, control_flow: &mut ControlFlow) {
+	async fn main_events_cleared(&mut self, control_flow: &mut ControlFlow) {
 		/* Close window is `escape` pressed */
 		if self.input_manager.keyboard.just_pressed(KeyCode::Escape) {
 			*control_flow = ControlFlow::Exit;
@@ -150,7 +150,7 @@ impl App {
 	}
 
 	/// Prepares the frame.
-	fn redraw_requested(&mut self) {
+	async fn redraw_requested(&mut self) {
 		/* Chunk generation flag */
 		let mut generate_chunks = false;
 		static mut SIZES: [i32; 3] = [7, 1, 7];
@@ -242,7 +242,7 @@ impl App {
 	}
 
 	/// Updates things.
-	fn new_events(&mut self) {
+	async fn new_events(&mut self) {
 		/* Update time */
 		self.timer.update();
 		self.graphics.imguic
