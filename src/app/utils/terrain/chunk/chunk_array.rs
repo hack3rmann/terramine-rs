@@ -64,8 +64,6 @@ impl GeneratedChunkArray<'static> {
 	}
 }
 
-unsafe impl<'e> Send for GeneratedChunkArray<'e> { }
-
 /// Represents self-controlling chunk array.
 /// * Width is bigger if you go to x+ direction
 /// * Height is bigger if you go to y+ direction
