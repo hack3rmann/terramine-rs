@@ -299,14 +299,14 @@ impl<'dp> MeshedChunk<'dp> {
 
 	/// Renders chunk.
 	/// * Mesh should be constructed before this function call.
-	pub fn render<U: Uniforms>(&self, target: &mut Frame, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
+	pub fn render<U: Uniforms>(&self, target: &mut Frame, shader: &Shader, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
 		/* Borrow mesh */
 		let mesh = self.mesh.borrow();
 
 		/* Check if vertex array is empty */
 		if !mesh.is_empty() && self.is_visible(camera) {
 			/* Iterating through array */
-			mesh.render(target, uniforms)
+			mesh.render(target, shader, uniforms)
 		} else {
 			Ok(())
 		}
@@ -325,13 +325,10 @@ impl<'dp> MeshedChunk<'dp> {
 			.. Default::default()
 		};
 		
-		/* Shader for chunks */
-		let shader = Shader::new("vertex_shader", "fragment_shader", display);
-		
 		/* Vertex buffer for chunks */
 		let vertex_buffer = VertexBuffer::from_vertices(display, vertices);
 
-		Mesh::new(vertex_buffer, shader, draw_params)
+		Mesh::new(vertex_buffer, draw_params)
 	}
 
 	/// Creates trianlges Vec from Chunk and its environment.

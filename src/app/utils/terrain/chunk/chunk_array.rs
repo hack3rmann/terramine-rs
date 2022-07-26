@@ -3,7 +3,7 @@ use {
 		werror::prelude::*,
 		graphics::Vertex,
 		math::prelude::*,
-		graphics::{camera::Camera, Graphics},
+		graphics::{camera::Camera, Graphics, shader::Shader},
 		saves::*,
 		reinterpreter::{
 			ReinterpretAsBytes,
@@ -268,7 +268,10 @@ impl MeshlessChunkArray {
 			.map(|(chunk, triangles)| chunk.triangles_upgrade(graphics, triangles))
 			.collect();
 
-		MeshedChunkArray { width, height, depth, chunks }
+		/* Create shader */
+		let shader = Shader::new("vertex_shader", "fragment_shader", &graphics.display);
+
+		MeshedChunkArray { width, height, depth, chunks, shader }
 	}
 }
 
@@ -286,7 +289,8 @@ pub struct MeshedChunkArray<'dp> {
 	pub height: usize,
 	pub depth: usize,
 
-	pub chunks: Vec<MeshedChunk<'dp>>
+	pub chunks: Vec<MeshedChunk<'dp>>,
+	pub shader: Shader,
 }
 
 impl<'dp> MeshedChunkArray<'dp> {
@@ -294,7 +298,7 @@ impl<'dp> MeshedChunkArray<'dp> {
 	pub fn render<U: Uniforms>(&mut self, target: &mut Frame, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
 		/* Iterating through array */
 		for chunk in self.chunks.iter_mut() {
-			chunk.render(target, uniforms, camera)?
+			chunk.render(target, &self.shader, uniforms, camera)?
 		}
 		Ok(())
 	}

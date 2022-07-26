@@ -6,7 +6,6 @@ use super::prelude::*;
 use crate::app::utils::graphics::{
 	mesh::Mesh,
 	Graphics,
-	shader::Shader,
 	vertex_buffer::VertexBuffer,
 	Vertex,
 };
@@ -49,12 +48,9 @@ impl Ray {
 			.. Default::default()
 		};
 		
-		/* Shader for chunks */
-		let shader = Shader::new("vertex_shader", "fragment_shader", &graphics.display);
-		
 		/* Vertex buffer for chunks */
 		let vertex_buffer = VertexBuffer::from_vertices(&graphics.display, vertices);
 
-		Mesh::new(vertex_buffer, shader, draw_params)
+		Mesh::new(vertex_buffer, draw_params)
 	}
 }
