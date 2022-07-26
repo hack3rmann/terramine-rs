@@ -16,3 +16,4 @@ pub mod reinterpreter;
 pub mod saves;
 pub mod concurrency;
 pub mod runtime;
+pub mod werror;
