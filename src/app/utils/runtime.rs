@@ -1,3 +1,5 @@
+use crate::app::utils::werror::prelude::*;
+
 pub mod prelude {
 	pub use super::{
 		runtime,
@@ -12,13 +14,13 @@ pub fn initialyze() {
 			tokio::runtime::Builder::new_multi_thread()
 				.enable_all()
 				.build()
-				.unwrap()
+				.wunwrap()
 		)
 	};
 }
 
 pub fn runtime<'l>() -> &'l tokio::runtime::Runtime {
 	unsafe {
-		RUNTIME.as_ref().expect("Runtime is not initialyzed!")
+		RUNTIME.as_ref().wexpect("Runtime is not initialyzed!")
 	}
 }

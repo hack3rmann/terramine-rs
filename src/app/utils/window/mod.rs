@@ -1,20 +1,24 @@
+pub mod message_box;
+
 /**
  *  Adds container to window stuff
  */
 
-/* Glium stuff */
-use glium::glutin::{
-	event_loop::EventLoop,
-	window::{
-		WindowBuilder,
-		Icon,
-		Window as GWindow
+use {
+	crate::app::utils::werror::prelude::*,
+	glium::glutin::{
+		event_loop::EventLoop,
+		window::{
+			WindowBuilder,
+			Icon,
+			Window as GWindow
+		},
+		dpi::PhysicalSize,
+		ContextWrapper,
+		PossiblyCurrent,
+		ContextBuilder,
+		GlRequest,
 	},
-	dpi::PhysicalSize,
-	ContextWrapper,
-	PossiblyCurrent,
-	ContextBuilder,
-	GlRequest,
 };
 
 /// Temporary holds glutin window.
@@ -36,9 +40,9 @@ impl Window {
 			.with_stencil_buffer(8)
 			.with_vsync(true)
 			.build_windowed(window, event_loop)
-			.unwrap();
+			.wunwrap();
 		let window = unsafe {
-			window.make_current().unwrap()
+			window.make_current().wunwrap()
 		};
 
 		Window { window: Some(window) }
@@ -47,7 +51,7 @@ impl Window {
 	fn load_icon() -> Icon {
 		/* Bytes vector from bmp file */
 		/* File formatted in BGRA */
-		let raw_data = include_bytes!("../../image/TerramineIcon32p.bmp");
+		let raw_data = include_bytes!("../../../image/TerramineIcon32p.bmp");
 		let mut raw_data = *raw_data;
 
 		/* Bytemap pointer load from 4 bytes of file */
@@ -70,7 +74,7 @@ impl Window {
 		/* Upload data */
 		let mut data = Vec::with_capacity(raw_data.len());
 		data.extend_from_slice(raw_data);
-		Icon::from_rgba(data, 32, 32).unwrap()
+		Icon::from_rgba(data, 32, 32).wunwrap()
 	}
 
 	/// Gives window and removes it from graphics struct
@@ -81,7 +85,7 @@ impl Window {
 		} else {
 			let mut window = None;
 			std::mem::swap(&mut window, &mut self.window);
-			window.unwrap()
+			window.wunwrap()
 		}
 	}
 }

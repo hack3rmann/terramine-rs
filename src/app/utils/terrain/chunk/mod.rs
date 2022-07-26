@@ -1,13 +1,8 @@
 pub mod chunk_array;
 
 use {
-	super::voxel::{
-		Voxel,
-		shape::Cube,
-		voxel_data::*,
-		generator,
-	},
 	crate::app::utils::{
+		werror::prelude::*,
 		math::prelude::*,
 		graphics::{
 			Graphics,
@@ -18,6 +13,12 @@ use {
 			camera::Camera,
 		},
 		reinterpreter::*,
+	},
+	super::voxel::{
+		Voxel,
+		shape::Cube,
+		voxel_data::*,
+		generator,
 	},
 	glium::{
 		DrawError,
@@ -117,7 +118,7 @@ impl MeshlessChunk {
 				if check(self.get_voxel_or_none(Int3::new(position.x(), position.y() + 1, position.z()))) {
 					match env.top {
 						Some(chunk) => {
-							if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y() + 1, position.z())) }) {
+							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x(), position.y() + 1, position.z())) }) {
 								cube.top(position, &mut vertices)
 							}
 						},
@@ -129,7 +130,7 @@ impl MeshlessChunk {
 				if check(self.get_voxel_or_none(Int3::new(position.x(), position.y() - 1, position.z()))) {
 					match env.bottom {
 						Some(chunk) => {
-							if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y() - 1, position.z())) }) {
+							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x(), position.y() - 1, position.z())) }) {
 								cube.bottom(position, &mut vertices)
 							}
 						},
@@ -141,7 +142,7 @@ impl MeshlessChunk {
 				if check(self.get_voxel_or_none(Int3::new(position.x() + 1, position.y(), position.z()))) {
 					match env.back {
 						Some(chunk) => {
-							if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x() + 1, position.y(), position.z())) }) {
+							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x() + 1, position.y(), position.z())) }) {
 								cube.back(position, &mut vertices)
 							}
 						},
@@ -153,7 +154,7 @@ impl MeshlessChunk {
 				if check(self.get_voxel_or_none(Int3::new(position.x() - 1, position.y(), position.z()))) {
 					match env.front {
 						Some(chunk) => {
-							if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x() - 1, position.y(), position.z())) }) {
+							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x() - 1, position.y(), position.z())) }) {
 								cube.front(position, &mut vertices)
 							}
 						},
@@ -165,7 +166,7 @@ impl MeshlessChunk {
 				if check(self.get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() + 1))) {
 					match env.right {
 						Some(chunk) => {
-							if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() + 1)) }) {
+							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() + 1)) }) {
 								cube.right(position, &mut vertices)
 							}
 						},
@@ -177,7 +178,7 @@ impl MeshlessChunk {
 				if check(self.get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() - 1))) {
 					match env.left {
 						Some(chunk) => {
-							if check(unsafe { chunk.as_ref().unwrap().get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() - 1)) }) {
+							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() - 1)) }) {
 								cube.left(position, &mut vertices)
 							}
 						},

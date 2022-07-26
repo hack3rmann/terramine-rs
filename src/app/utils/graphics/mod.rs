@@ -5,10 +5,11 @@ pub mod camera;
 pub mod mesh;
 
 use {
+	crate::app::utils::werror::prelude::*,
+	super::window::Window,
 	shader::Shader,
 	vertex_buffer::VertexBuffer,
-	super::window::Window,
-	crate::app::glium::{
+	glium::{
 		self,
 		implement_vertex,
 		backend::Facade,
@@ -75,10 +76,10 @@ impl Graphics {
 		imgui_context.style_mut().window_rounding = 16.0;
 
 		/* Glium setup. */
-		let display = glium::Display::from_gl_window(window).unwrap();
+		let display = glium::Display::from_gl_window(window).wunwrap();
 
 		/* ImGui glium renderer setup. */
-		let imgui_renderer = imgui_glium_renderer::Renderer::init(&mut imgui_context, &display).unwrap();
+		let imgui_renderer = imgui_glium_renderer::Renderer::init(&mut imgui_context, &display).wunwrap();
 
 		Ok (
 			Graphics {
@@ -103,7 +104,7 @@ impl Graphics {
 		}
 	}
 
-	/// Gives event_loop and removes it from graphics struct
+	/// Gives event_loop and removes it from graphics struct.
 	pub fn take_event_loop(&mut self) -> glium::glutin::event_loop::EventLoop<()> {
 		/* Swaps struct variable with returned */
 		if let None = self.event_loop {
@@ -111,7 +112,7 @@ impl Graphics {
 		} else {
 			let mut event_loop = None;
 			std::mem::swap(&mut event_loop, &mut self.event_loop);
-			event_loop.unwrap()
+			event_loop.wunwrap()
 		}
 	}
 

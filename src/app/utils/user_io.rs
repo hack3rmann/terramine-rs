@@ -11,6 +11,7 @@ pub use glium::glutin::event::{
 };
 
 use {
+	crate::app::utils::werror::prelude::*,
 	super::graphics::Graphics,
 	winapi::{
 		um::winuser::GetCursorPos,
@@ -119,7 +120,7 @@ impl Mouse {
 	/// Update mouse delta.
 	pub fn update(&mut self, graphics: &Graphics) {
 		/* Get cursor position from WinAPI */
-		let (x, y) = Self::get_cursor_pos(graphics).unwrap();
+		let (x, y) = Self::get_cursor_pos(graphics).wunwrap();
 
 		/* Update struct */
 		self.dx = x - self.x;
@@ -134,7 +135,7 @@ impl Mouse {
 		if self.is_grabbed {
 			graphics.display.gl_window().window().set_cursor_position(
 				glium::glutin::dpi::PhysicalPosition::new(wsize.width / 2, wsize.height / 2)
-			).unwrap();
+			).wunwrap();
 			self.x = (wsize.width  / 2) as f64;
 			self.y = (wsize.height / 2) as f64;
 		}
@@ -160,21 +161,21 @@ impl Mouse {
 	/// Gives cursor position in window cordinates.
 	pub fn get_cursor_pos(graphics: &Graphics) -> Result<(f64, f64), &'static str> {
 		let (x, y) = Self::get_cursor_screen_pos()?;
-		let window_pos = graphics.display.gl_window().window().inner_position().unwrap();
+		let window_pos = graphics.display.gl_window().window().inner_position().wunwrap();
 
 		Ok((x - window_pos.x as f64, y - window_pos.y as f64))
 	}
 
 	/// Grabs the cursor for camera control.
 	pub fn grab_cursor(&mut self, graphics: &Graphics) {
-		graphics.display.gl_window().window().set_cursor_grab(true).unwrap();
+		graphics.display.gl_window().window().set_cursor_grab(true).wunwrap();
 		graphics.display.gl_window().window().set_cursor_visible(false);
 		self.is_grabbed = true;
 	}
 
 	/// Releases cursor for standart input.
 	pub fn release_cursor(&mut self, graphics: &Graphics) {
-		graphics.display.gl_window().window().set_cursor_grab(false).unwrap();
+		graphics.display.gl_window().window().set_cursor_grab(false).wunwrap();
 		graphics.display.gl_window().window().set_cursor_visible(true);
 		self.is_grabbed = false;
 	}

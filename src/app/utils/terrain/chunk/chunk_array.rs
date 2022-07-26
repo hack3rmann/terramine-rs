@@ -1,10 +1,6 @@
 use {
-	super::{
-		MeshedChunk,
-		MeshlessChunk,
-		ChunkEnvironment as ChunkEnv,
-	},
 	crate::app::utils::{
+		werror::prelude::*,
 		graphics::Vertex,
 		math::prelude::*,
 		graphics::{camera::Camera, Graphics},
@@ -18,6 +14,11 @@ use {
 			loading::Loading,
 			promise::Promise,
 		},
+	},
+	super::{
+		MeshedChunk,
+		MeshlessChunk,
+		ChunkEnvironment as ChunkEnv,
 	},
 	glium::{
 		uniforms::Uniforms,
@@ -60,7 +61,7 @@ impl GeneratedChunkArray<'static> {
 				let result = chunk.to_triangles(env);
 
 				/* Calculate percentage */
-				percentage_tx.send(Loading::from_range("Mesh generation", i, 0..volume)).unwrap();
+				percentage_tx.send(Loading::from_range("Mesh generation", i, 0..volume)).wunwrap();
 
 				return result
 			})
@@ -113,7 +114,7 @@ impl MeshlessChunkArray {
 
 					/* Calculating percentage */
 					let idx = sdex::get_index(&[x, y, z], &[width, height, depth]);
-					percenatge_tx.send(Loading::from_range("Chunk generation", idx, 0..volume)).unwrap();
+					percenatge_tx.send(Loading::from_range("Chunk generation", idx, 0..volume)).wunwrap();
 				}}}
 
 				/* Save */
@@ -140,12 +141,12 @@ impl MeshlessChunkArray {
 						};
 
 						/* Calculate percentage */
-						percenatge_tx.send(Loading::from_range("Saving to file", i, 0..volume)).unwrap();
+						percenatge_tx.send(Loading::from_range("Saving to file", i, 0..volume)).wunwrap();
 
 						/* Return chunk */
 						return result
 					})
-					.save().unwrap();
+					.save().wunwrap();
 			};
 
 			/* File reader */
@@ -167,7 +168,7 @@ impl MeshlessChunkArray {
 						}
 
 						/* Calculate percent */
-						percenatge_tx.send(Loading::from_range("Reading from file", i, 0..volume)).unwrap();
+						percenatge_tx.send(Loading::from_range("Reading from file", i, 0..volume)).wunwrap();
 
 						return elem
 					});
@@ -186,7 +187,7 @@ impl MeshlessChunkArray {
 			let result = GeneratedChunkArray(array, env).generate_mesh(percenatge_tx);
 
 			/* Send */
-			result_tx.send(result).unwrap();
+			result_tx.send(result).wunwrap();
 		});
 
 		/* Return reciever */
@@ -240,7 +241,7 @@ impl MeshlessChunkArray {
 			/* Calculate percentage */
 			if let Some(tx) = &percentage_tx {
 				let i = index(x, y, z);
-				tx.send(Loading::from_range("Calculating environment", i, 0..volume)).unwrap();
+				tx.send(Loading::from_range("Calculating environment", i, 0..volume)).wunwrap();
 			}
 		}}}
 

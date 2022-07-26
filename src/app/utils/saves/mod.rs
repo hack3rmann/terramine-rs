@@ -2,6 +2,7 @@ pub mod stack_heap;
 
 use {
 	crate::app::utils::{
+		werror::prelude::*,
 		reinterpreter::{
 			ReinterpretAsBytes,
 			ReinterpretFromBytes,
@@ -52,7 +53,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 	/// Creates heap-stack folder.
 	pub fn create(mut self, path: &str) -> Self {
 		self.file = Some(StackHeap::new(path, &self.name));
-		self.offsets_save = Some(File::create(Self::get_meta_path(path).as_str()).unwrap());
+		self.offsets_save = Some(File::create(Self::get_meta_path(path).as_str()).wunwrap());
 
 		return self
 	}
@@ -66,16 +67,16 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 				.write(true)
 				.create(false)
 				.open(Self::get_meta_path(path).as_str())
-				.unwrap()
+				.wunwrap()
 		);
 
 		/* Offsets save shortcut */
-		let offsets_save = self.offsets_save.as_ref().unwrap();
+		let offsets_save = self.offsets_save.as_ref().wunwrap();
 
 		/* Read number of offsets */
 		let n_offsets = {
 			let mut buffer = vec![0; Size::static_size()];
-			offsets_save.seek_read(&mut buffer, 0).unwrap();
+			offsets_save.seek_read(&mut buffer, 0).wunwrap();
 			Size::reinterpret_from_bytes(&buffer)
 		};
 
@@ -84,11 +85,11 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		let mut buffer = vec![0; Enumerator::static_size()];
 		for i in (1..).step_by(2).take(n_offsets as usize) {
 			let enumerator = {
-				offsets_save.seek_read(&mut buffer, offset_size * i).unwrap();
+				offsets_save.seek_read(&mut buffer, offset_size * i).wunwrap();
 				Enumerator::reinterpret_from_bytes(&buffer)
 			};
 			let offset = {
-				offsets_save.seek_read(&mut buffer, offset_size * (i + 1)).unwrap();
+				offsets_save.seek_read(&mut buffer, offset_size * (i + 1)).wunwrap();
 				Offset::reinterpret_from_bytes(&buffer)
 			};
 			self.offests.insert(enumerator, offset);
@@ -104,7 +105,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		let offset = self.get_file_mut().push(&bytes);
 
 		/* Saving offset of value */
-		self.store_offset(enumerator, offset).unwrap();
+		self.store_offset(enumerator, offset).wunwrap();
 
 		return self
 	}
@@ -136,7 +137,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		let offset = self.get_file_mut().push(&(length as Size).reinterpret_as_bytes());
 
 		/* Save offset of an array */
-		self.store_offset(enumerator, offset).unwrap();
+		self.store_offset(enumerator, offset).wunwrap();
 
 		/* Write all elements to file */
 		for i in 0..length {
@@ -212,7 +213,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		/* Read all elements to `result` */
 		for i in 0..length {
 			/* Read to buffer */
-			self.get_file_ref().stack.seek_read(&mut buffer, offset + i * T::static_size() as Size).unwrap();
+			self.get_file_ref().stack.seek_read(&mut buffer, offset + i * T::static_size() as Size).wunwrap();
 
 			/* Push value to `result` */
 			result.push(T::reinterpret_from_bytes(&buffer));
@@ -246,12 +247,12 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		/* Allocate bytes */
 		let offset = {
 			let alloc = self.get_file_mut().alloc(bytes.len() as Size);
-			self.get_file_ref().write_to_heap(alloc, &bytes).unwrap();
+			self.get_file_ref().write_to_heap(alloc, &bytes).wunwrap();
 			alloc.get_stack_offset()
 		};
 
 		/* Save offset */
-		self.store_offset(enumerator, offset).unwrap();
+		self.store_offset(enumerator, offset).wunwrap();
 
 		return self
 	}
@@ -264,7 +265,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
 		/* Allocate new data */
 		let alloc = self.get_file_mut().realloc(bytes.len() as Size, stack_offset);
-		self.get_file_ref().write_to_heap(alloc, &bytes).unwrap();
+		self.get_file_ref().write_to_heap(alloc, &bytes).wunwrap();
 	}
 
 	/// Reads data from heap by stack pointer to heap on.
@@ -283,12 +284,12 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 	pub fn pointer_array<F: FnMut(usize) -> Vec<u8>>(mut self, length: usize, enumerator: E, mut elem: F) -> Self {
 		/* Push size to stack and store its offset */
 		let stack_offset = self.get_file_mut().push(&(length as Size).reinterpret_as_bytes());
-		self.store_offset(enumerator, stack_offset).unwrap();
+		self.store_offset(enumerator, stack_offset).wunwrap();
 
 		/* Write all elements to heap */
 		for data in (0..length).map(|i| elem(i)) {
 			let alloc = self.get_file_mut().alloc(data.len() as Size);
-			self.get_file_ref().write_to_heap(alloc, &data).unwrap();
+			self.get_file_ref().write_to_heap(alloc, &data).wunwrap();
 		}
 
 		return self
@@ -312,7 +313,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		/* Write bytes */
 		for (bytes, offset) in elements.zip(offsets).take(length as usize) {
 			let alloc = self.get_file_mut().realloc(bytes.len() as Size, offset);
-			self.get_file_ref().write_to_heap(alloc, &bytes).unwrap();
+			self.get_file_ref().write_to_heap(alloc, &bytes).wunwrap();
 		}
 	}
 
@@ -333,7 +334,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
 		/* Rewrite data */
 		let alloc = self.get_file_mut().realloc(bytes.len() as Size, offset);
-		self.get_file_ref().write_to_heap(alloc, &bytes).unwrap();
+		self.get_file_ref().write_to_heap(alloc, &bytes).wunwrap();
 
 		Ok(())
 	}
@@ -409,7 +410,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 	fn load_offset(&self, enumerator: E) -> Offset {
 		*self.offests
 			.get(&enumerator.into())
-			.expect(format!(
+			.wexpect(format!(
 				"There is no data enumerated by {}",
 				enumerator.into()
 			).as_str())
@@ -421,33 +422,33 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		self.get_file_ref().sync()?;
 
 		/* Get shortcut to offsets_save */
-		let offsets_save = self.offsets_save.as_ref().unwrap();
+		let offsets_save = self.offsets_save.as_ref().wunwrap();
 
 		/* Save offsets length to `meta.off` file */
 		let n_offsets = self.offests.len() as Size;
-		offsets_save.seek_write(&n_offsets.reinterpret_as_bytes(), 0).unwrap();
+		offsets_save.seek_write(&n_offsets.reinterpret_as_bytes(), 0).wunwrap();
 
 		/* Save all offsets to `meta.off` file */
 		let offset_size = Offset::static_size() as Size;
 		for ((&enumerator, &offset), i) in self.offests.iter().zip((1_u64..).step_by(2)) {
-			offsets_save.seek_write(&enumerator.reinterpret_as_bytes(), offset_size * i).unwrap();
-			offsets_save.seek_write(&offset.reinterpret_as_bytes(), offset_size * (i + 1)).unwrap();
+			offsets_save.seek_write(&enumerator.reinterpret_as_bytes(), offset_size * i).wunwrap();
+			offsets_save.seek_write(&offset.reinterpret_as_bytes(), offset_size * (i + 1)).wunwrap();
 		}
 
 		/* Sync all changes to file */
-		offsets_save.sync_all().unwrap();
+		offsets_save.sync_all().wunwrap();
 
 		return Ok(self)
 	}
 
 	/// Gives reference to file if it initialized.
 	fn get_file_ref(&self) -> &StackHeap {
-		self.file.as_ref().expect("File had not created! Consider call .create() method on Save.")
+		self.file.as_ref().wexpect("File had not created! Consider call .create() method on Save.")
 	}
 
 	/// Gives mutable reference to file if it initialized.
 	fn get_file_mut(&mut self) -> &mut StackHeap {
-		self.file.as_mut().expect("File had not created! Consider call .create() method on Save.")
+		self.file.as_mut().wexpect("File had not created! Consider call .create() method on Save.")
 	}
 
 	/// Test if given index is valid.
@@ -507,7 +508,7 @@ mod tests {
 
 				bytes
 			})
-			.save().unwrap();
+			.save().wunwrap();
 		save.assign_to_pointer(ptr_before.reinterpret_as_bytes(), Pointer);
 		let save = Save::new("Test1").open("test1");
 
@@ -536,7 +537,7 @@ mod tests {
 		let mut save = Save::new("Test2")
 			.create("test2")
 			.write(&data_before, Data)
-			.save().unwrap();
+			.save().wunwrap();
 		save.assign(&data_expected, Data);
 
 		let save = Save::new("Test2").open("test2");
@@ -554,7 +555,7 @@ mod tests {
 		let mut save = Save::new("Test3")
 			.create("test3")
 			.array(data_before.len(), Data, |i| &data_before[i])
-			.save().unwrap();
+			.save().wunwrap();
 		save.assign_array(Data, |i| &data_expected[i]);
 
 		let save = Save::new("Test3").open("test3");
@@ -572,8 +573,8 @@ mod tests {
 		let mut save = Save::new("Test4")
 			.create("test4")
 			.array(data_before.len(), Data, |i| &data_before[i])
-			.save().unwrap();
-		save.assign_array_element(Data, 999, 2).unwrap();
+			.save().wunwrap();
+		save.assign_array_element(Data, 999, 2).wunwrap();
 
 		let save = Save::new("Test4").open("test4");
 		let data_after: Vec<i32> = save.read_array(Data);
@@ -589,12 +590,12 @@ mod tests {
 		Save::new("Test5")
 			.create("test5")
 			.array(data_before.len(), Data, |i| &data_before[i])
-			.save().unwrap();
+			.save().wunwrap();
 
 		let save = Save::new("Test5").open("test5");
 		let mut data_after = Vec::with_capacity(data_before.len());
 
-		for num in (0..).map(|i| -> i32 { save.read_array_element(Data, i).unwrap() }).take(data_before.len()) {
+		for num in (0..).map(|i| -> i32 { save.read_array_element(Data, i).wunwrap() }).take(data_before.len()) {
 			data_after.push(num)
 		}
 
@@ -610,7 +611,7 @@ mod tests {
 		let mut save = Save::new("Test6")
 			.create("test6")
 			.pointer_array(data_before.len(), Data, |i| data_expected[i].reinterpret_as_bytes())
-			.save().unwrap();
+			.save().wunwrap();
 		save.assign_pointer_array(Data, |i| data_expected[i].reinterpret_as_bytes());
 
 		let save = Save::new("Test6").open("test6");
@@ -628,8 +629,8 @@ mod tests {
 		let mut save = Save::new("Test7")
 			.create("test7")
 			.pointer_array(data_before.len(), Data, |i| data_before[i].reinterpret_as_bytes())
-			.save().unwrap();
-		save.assign_pointer_array_element(Data, 999.reinterpret_as_bytes(), 2).unwrap();
+			.save().wunwrap();
+		save.assign_pointer_array_element(Data, 999.reinterpret_as_bytes(), 2).wunwrap();
 
 		let save = Save::new("Test7").open("test7");
 		let data_after = save.read_pointer_array(Data, |_, bytes| i32::reinterpret_from_bytes(bytes));
@@ -645,13 +646,13 @@ mod tests {
 		Save::new("Test8")
 			.create("test8")
 			.pointer_array(data_before.len(), Data, |i| data_before[i].reinterpret_as_bytes())
-			.save().unwrap();
+			.save().wunwrap();
 
 		let save = Save::new("Test8").open("test8");
 		let mut data_after = Vec::with_capacity(data_before.len());
 
 		let nums = (0..).map(|i|
-			save.read_pointer_array_element(Data, i, |bytes| i32::reinterpret_from_bytes(bytes)).unwrap()
+			save.read_pointer_array_element(Data, i, |bytes| i32::reinterpret_from_bytes(bytes)).wunwrap()
 		);
 
 		for num in nums.take(data_before.len()) {
