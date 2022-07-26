@@ -1,3 +1,5 @@
+pub mod message_box;
+
 /**
  *  Adds container to window stuff
  */
@@ -47,7 +49,7 @@ impl Window {
 	fn load_icon() -> Icon {
 		/* Bytes vector from bmp file */
 		/* File formatted in BGRA */
-		let raw_data = include_bytes!("../../image/TerramineIcon32p.bmp");
+		let raw_data = include_bytes!("../../../image/TerramineIcon32p.bmp");
 		let mut raw_data = *raw_data;
 
 		/* Bytemap pointer load from 4 bytes of file */
