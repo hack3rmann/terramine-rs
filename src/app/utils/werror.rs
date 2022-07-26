@@ -102,8 +102,18 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn test() {
+	fn test_result() {
 		let result: Result<u32, u32> = Err(15);
-		result.wunwrap();
+		let num = result.wunwrap();
+
+		assert_eq!(num, 15);
+	}
+
+	#[test]
+	fn test_option() {
+		let option: Option<u32> = None;
+		let num = option.wunwrap();
+
+		assert_eq!(num, 15);
 	}
 }
