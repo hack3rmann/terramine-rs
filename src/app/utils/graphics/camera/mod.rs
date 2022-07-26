@@ -6,6 +6,7 @@ pub mod frustum;
 
 use {
 	crate::app::utils::{
+		werror::prelude::*,
 		user_io::{InputManager, KeyCode},
 		math::prelude::*,
 	},
@@ -196,7 +197,7 @@ impl Camera {
 		if self.frustum.is_none() {
 			Frustum::new(self)
 		} else {
-			self.frustum.as_ref().unwrap().clone()
+			self.frustum.as_ref().wunwrap().clone()
 		}
 	}
 

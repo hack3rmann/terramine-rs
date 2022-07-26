@@ -9,13 +9,14 @@ pub mod prelude {
 }
 
 use {
+	crate::app::utils::{
+		werror::prelude::*,
+		time::timer::Timer,
+		user_io::{InputManager, KeyCode},
+	},
 	std::{
 		collections::HashMap,
 		time::Instant,
-	},
-	crate::app::utils::{
-		time::timer::Timer,
-		user_io::{InputManager, KeyCode},
 	},
 };
 
@@ -92,15 +93,15 @@ pub fn initialyze() {
 /// Adds profile
 pub fn add_profile(profile: Profile, id: ID) {
 	unsafe {
-		PROFILER.profiles.as_mut().unwrap().insert(id, profile);
+		PROFILER.profiles.as_mut().wunwrap().insert(id, profile);
 	}
 }
 
 /// Uploads measure
 pub fn upload_measure(measure: &Measure) {
 	unsafe {
-		PROFILER.profiles.as_mut().unwrap()
-			.get_mut(&measure.id).unwrap()
+		PROFILER.profiles.as_mut().wunwrap()
+			.get_mut(&measure.id).wunwrap()
 			.measures.push(measure.value);
 	}
 }
@@ -108,7 +109,7 @@ pub fn upload_measure(measure: &Measure) {
 /// Starting capturing to to profile under given `id`
 pub fn start_capture(target_name: &str, id: ID) -> Measure {
 	unsafe {
-		match PROFILER.profiles.as_mut().unwrap().get(&id) {
+		match PROFILER.profiles.as_mut().wunwrap().get(&id) {
 			None => add_profile(Profile::new(target_name), id),
 			_ => ()
 		}
@@ -129,7 +130,7 @@ pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer, input: &InputManag
 /// * CallTime
 pub fn get_result<'t, 's>(timer: &'t Timer) -> DataSummary<'s> {
 	unsafe {
-		PROFILER.profiles.as_ref().unwrap()
+		PROFILER.profiles.as_ref().wunwrap()
 			.iter()
 			.map(|e| {
 				let time_summary = e.1.measures.iter().sum::<f64>();
@@ -148,7 +149,7 @@ pub fn get_result<'t, 's>(timer: &'t Timer) -> DataSummary<'s> {
 /// * Clears mesures
 pub fn update() {
 	unsafe {
-		for profile in PROFILER.profiles.as_mut().unwrap().iter_mut() {
+		for profile in PROFILER.profiles.as_mut().wunwrap().iter_mut() {
 			profile.1.measures.clear()
 		}
 	}

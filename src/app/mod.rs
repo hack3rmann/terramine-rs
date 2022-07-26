@@ -32,6 +32,7 @@ use {
 		profiler,
 		concurrency::promise::Promise,
 		runtime::prelude::*,
+		werror::prelude::*,
 	},
 
 	crate::app::utils::concurrency::loading::Loading,
@@ -50,20 +51,20 @@ pub struct App {
 	chunk_arr: Option<MeshedChunkArray<'static>>,
 
 	/* Second layer temporary stuff */
-	texture: Texture
+	texture: Texture,
 }
 
 impl App {
 	/// Constructs app struct.
 	pub fn new() -> Self {
 		/* Graphics initialization */
-		let graphics = Graphics::initialize().unwrap();
+		let graphics = Graphics::initialize().wunwrap();
 	
 		/* Camera handle */
 		let camera = Camera::new().with_position(0.0, 0.0, 2.0);
 	
 		/* Texture loading */
-		let texture = Texture::from("src/image/texture_atlas.png", &graphics.display).unwrap();
+		let texture = Texture::from("src/image/texture_atlas.png", &graphics.display).wunwrap();
 
 		App {
 			chunk_arr: None,
@@ -143,7 +144,7 @@ impl App {
 		/* Update ImGui stuff */
 		self.graphics.imguiw
 			.prepare_frame(self.graphics.imguic.io_mut(), self.graphics.display.gl_window().window())
-			.unwrap();
+			.wunwrap();
 
 		/* Moves to `RedrawRequested` stage */
 		self.graphics.display.gl_window().window().request_redraw();
@@ -192,14 +193,14 @@ impl App {
 		let mut target = self.graphics.display.draw(); 
 		target.clear_all((0.01, 0.01, 0.01, 1.0), 1.0, 0); {
 			if let Some(chunk_arr) = self.chunk_arr.as_mut() {
-				chunk_arr.render(&mut target, &uniforms, &self.camera).unwrap();
+				chunk_arr.render(&mut target, &uniforms, &self.camera).wunwrap();
 			}
 
 			self.graphics.imguir
 				.render(&mut target, draw_data)
-				.expect("Error rendering imgui");
+				.wexpect("Error rendering imgui");
 
-		} target.finish().unwrap();
+		} target.finish().wunwrap();
 
 		/* Chunk reciever */
 		static mut CHUNKS_PROMISE: Option<Promise<(MeshlessChunkArray, Vec<Vec<Vertex>>)>> = None;

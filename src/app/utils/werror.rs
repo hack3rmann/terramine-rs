@@ -3,6 +3,13 @@ use {
 	std::fmt::Debug,
 };
 
+pub mod prelude {
+	pub use super::{
+		WErrorBackward,
+		WErrorForward,
+	};
+}
+
 /// Standart panic error.
 pub trait WErrorForward<T, E: Debug> {
 	fn wexpect(self, msg: &str) -> T;
