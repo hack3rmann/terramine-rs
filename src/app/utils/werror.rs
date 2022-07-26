@@ -1,5 +1,5 @@
 use {
-	crate::app::utils::window::message_box::MessageBox,
+	crate::app::utils::window::message_box::{MessageBox, self},
 	std::fmt::Debug,
 };
 
@@ -88,12 +88,12 @@ impl<T> WErrorForward<T, ()> for Option<T> {
 }
 
 /// Constructs error message box.
-pub fn error_message(msg: &str, error: &dyn Debug) -> Result<(), u32> {
+pub fn error_message(msg: &str, error: &dyn Debug) -> message_box::result::Result {
 	MessageBox::new("Error message:", &format!("{msg}: {error:?}")).errored().show()
 }
 
 /// Constructs error message box.
-pub fn message(msg: &str) -> Result<(), u32> {
+pub fn message(msg: &str) -> message_box::result::Result {
 	MessageBox::new("Error message:", &format!("{msg}: no details available.")).errored().show()
 }
 

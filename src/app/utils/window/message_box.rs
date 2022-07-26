@@ -73,14 +73,21 @@ impl MessageBox {
 	}
 
 	/// Shows message.
-	pub fn show(self) -> Result<(), u32> {
+	pub fn show(self) -> result::Result {
 		unsafe {
 			match message_box(std::ptr::null_mut(), self.body.as_ptr(), self.title.as_ptr(), self.flags.compose()) {
 				MessageBoxResult::Error => Err(GetLastError()),
-				_ => Ok(())
+				result => Ok(result),
 			}
 		}
 	}
+}
+
+pub mod result {
+    use super::MessageBoxResult;
+	use std::result::Result as SResult;
+
+	pub type Result = SResult<MessageBoxResult, u32>;
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -169,7 +176,7 @@ pub mod flags {
 	}
 }
 
-enum MessageBoxResult {
+pub enum MessageBoxResult {
 	Error = 0,
 	Ok = 1,
 	Cancel = 2,
