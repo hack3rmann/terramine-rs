@@ -18,9 +18,8 @@ pub struct VertexBuffer<Idx> {
 	pub indices: Idx
 }
 
-impl<'a, Idx: Into<IndicesSource<'a>>> VertexBuffer<Idx> {
+impl<'src, Idx: Into<IndicesSource<'src>>> VertexBuffer<Idx> {
 	/// Constructs [`VertexBuffer`] from vertex vector.
-	#[allow(dead_code)]
 	pub fn new(display: &Display, vertices: Vec<Vertex>, indices: Idx) -> Self {
 		/* Define vertex buffer */
 		let vertex_buffer = GVertexBuffer::new(display, &vertices).wunwrap();
@@ -32,9 +31,6 @@ impl<'a, Idx: Into<IndicesSource<'a>>> VertexBuffer<Idx> {
 impl VertexBuffer<NoIndices> {
 	/// Constructs new [`VertexBuffer`] from vertices and [`PrimitiveType`].
 	pub fn no_indices(display: &Display, vertices: Vec<Vertex>, primitive_type: PrimitiveType) -> Self {
-		/* Define vertex buffer */
-		let vertex_buffer = GVertexBuffer::new(display, &vertices).wunwrap();
-
-		VertexBuffer { inner: vertex_buffer, indices: NoIndices(primitive_type) }
+		Self::new(display, vertices, NoIndices(primitive_type))
 	}
 }
