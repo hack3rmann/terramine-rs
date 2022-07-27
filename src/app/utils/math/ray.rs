@@ -4,7 +4,7 @@ use super::prelude::*;
 
 #[cfg(not(feature = "release"))]
 use crate::app::utils::graphics::{
-	mesh::Mesh,
+	mesh::{Mesh, UnindexedMesh},
 	Graphics,
 	vertex_buffer::VertexBuffer,
 	Vertex,
@@ -29,7 +29,9 @@ impl Ray {
 	/// Gives temporary mesh. Good for debugging
 	#[allow(dead_code)]
 	#[cfg(not(feature = "release"))]
-	pub fn get_mesh(self, graphics: &Graphics) -> Mesh {
+	pub fn get_mesh(self, graphics: &Graphics) -> UnindexedMesh {
+		use glium::index::PrimitiveType;
+		
 		let far = (self.origin + self.direction) * 100.0;
 
 		let vertices = vec![
@@ -38,7 +40,7 @@ impl Ray {
 		];
 		
 		/* Vertex buffer for chunks */
-		let vertex_buffer = VertexBuffer::from_vertices(&graphics.display, vertices);
+		let vertex_buffer = VertexBuffer::no_indices(&graphics.display, vertices, PrimitiveType::TrianglesList);
 
 		Mesh::new(vertex_buffer)
 	}

@@ -6,7 +6,7 @@ use {
 		math::prelude::*,
 		graphics::{
 			Graphics,
-			mesh::Mesh,
+			mesh::{Mesh, UnindexedMesh},
 			Vertex,
 			shader::Shader,
 			vertex_buffer::VertexBuffer,
@@ -24,6 +24,7 @@ use {
 		DrawError,
 		uniforms::Uniforms,
 		Frame,
+		index::PrimitiveType
 	},
 	std::{cell::RefCell, marker::PhantomData},
 };
@@ -241,7 +242,7 @@ impl MeshlessChunk {
 /// Chunk struct.
 pub struct MeshedChunk {
 	inner: MeshlessChunk,
-	mesh: RefCell<Mesh>
+	mesh: RefCell<UnindexedMesh>
 }
 
 /// Describes blocked chunks by environent or not. 
@@ -313,9 +314,9 @@ impl MeshedChunk {
 	}
 
 	/// Updates mesh.
-	pub fn make_mesh(display: &glium::Display, vertices: Vec<Vertex>) -> Mesh {
+	pub fn make_mesh(display: &glium::Display, vertices: Vec<Vertex>) -> UnindexedMesh {
 		/* Vertex buffer for chunks */
-		let vertex_buffer = VertexBuffer::from_vertices(display, vertices);
+		let vertex_buffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
 
 		Mesh::new(vertex_buffer)
 	}
