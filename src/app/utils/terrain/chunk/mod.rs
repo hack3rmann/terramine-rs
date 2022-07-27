@@ -228,20 +228,20 @@ impl MeshlessChunk {
 
 	/// Upgrades chunk to be meshed.
 	#[allow(dead_code)]
-	pub fn envs_upgrade<'dp, 'g: 'dp>(self, graphics: &'g Graphics, env: &ChunkEnvironment) -> MeshedChunk<'dp> {
+	pub fn envs_upgrade(self, graphics: &Graphics, env: &ChunkEnvironment) -> MeshedChunk {
 		MeshedChunk::from_meshless_envs(graphics, self, env)
 	}
 
 	/// Upgrades chunk to be meshed.
-	pub fn triangles_upgrade<'dp, 'g>(self, graphics: &'g Graphics, triangles: Vec<Vertex>) -> MeshedChunk<'dp> {
+	pub fn triangles_upgrade(self, graphics: &Graphics, triangles: Vec<Vertex>) -> MeshedChunk {
 		MeshedChunk::from_meshless_triangles(graphics, self, triangles)
 	}
 }
 
 /// Chunk struct.
-pub struct MeshedChunk<'dp> {
+pub struct MeshedChunk {
 	inner: MeshlessChunk,
-	mesh: RefCell<Mesh<'dp>>
+	mesh: RefCell<Mesh>
 }
 
 /// Describes blocked chunks by environent or not. 
@@ -266,10 +266,10 @@ impl<'c> ChunkEnvironment<'c> {
 	}
 }
 
-impl<'dp> MeshedChunk<'dp> {
+impl MeshedChunk {
 	/// Constructs new chunk in given position.
 	#[allow(dead_code)]
-	pub fn from_envs<'g>(graphics: &'g Graphics, pos: Int3, env: &ChunkEnvironment) -> Self {
+	pub fn from_envs(graphics: &Graphics, pos: Int3, env: &ChunkEnvironment) -> Self {
 		/* Construct new meshless */
 		let meshless = MeshlessChunk::new(pos);
 		
@@ -279,7 +279,7 @@ impl<'dp> MeshedChunk<'dp> {
 
 	/// Constructs mesh for meshless chunk.
 	#[allow(dead_code)]
-	pub fn from_meshless_envs<'g>(graphics: &'g Graphics, meshless: MeshlessChunk, env: &ChunkEnvironment) -> Self {
+	pub fn from_meshless_envs(graphics: &Graphics, meshless: MeshlessChunk, env: &ChunkEnvironment) -> Self {
 		/* Create chunk */
 		let triangles = meshless.to_triangles(env);
 
@@ -290,7 +290,7 @@ impl<'dp> MeshedChunk<'dp> {
 	}
 
 	/// Constructs mesh for meshless chunk.
-	pub fn from_meshless_triangles<'g>(graphics: &'g Graphics, meshless: MeshlessChunk, triangles: Vec<Vertex>) -> Self {
+	pub fn from_meshless_triangles(graphics: &Graphics, meshless: MeshlessChunk, triangles: Vec<Vertex>) -> Self {
 		MeshedChunk {
 			inner: meshless,
 			mesh: RefCell::new(Self::make_mesh(&graphics.display, triangles))
@@ -299,36 +299,25 @@ impl<'dp> MeshedChunk<'dp> {
 
 	/// Renders chunk.
 	/// * Mesh should be constructed before this function call.
-	pub fn render<U: Uniforms>(&self, target: &mut Frame, shader: &Shader, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
+	pub fn render<U: Uniforms>(&self, target: &mut Frame, shader: &Shader, uniforms: &U, draw_params: &glium::DrawParameters, camera: &Camera) -> Result<(), DrawError> {
 		/* Borrow mesh */
 		let mesh = self.mesh.borrow();
 
 		/* Check if vertex array is empty */
 		if !mesh.is_empty() && self.is_visible(camera) {
 			/* Iterating through array */
-			mesh.render(target, shader, uniforms)
+			mesh.render(target, shader, draw_params, uniforms)
 		} else {
 			Ok(())
 		}
 	}
 
 	/// Updates mesh.
-	pub fn make_mesh<'d>(display: &'d glium::Display, vertices: Vec<Vertex>) -> Mesh<'dp> {
-		/* Chunk draw parameters */
-		let draw_params = glium::DrawParameters {
-			depth: glium::Depth {
-				test: glium::DepthTest::IfLess,
-				write: true,
-				.. Default::default()
-			},
-			backface_culling: glium::BackfaceCullingMode::CullClockwise,
-			.. Default::default()
-		};
-		
+	pub fn make_mesh(display: &glium::Display, vertices: Vec<Vertex>) -> Mesh {
 		/* Vertex buffer for chunks */
 		let vertex_buffer = VertexBuffer::from_vertices(display, vertices);
 
-		Mesh::new(vertex_buffer, draw_params)
+		Mesh::new(vertex_buffer)
 	}
 
 	/// Creates trianlges Vec from Chunk and its environment.

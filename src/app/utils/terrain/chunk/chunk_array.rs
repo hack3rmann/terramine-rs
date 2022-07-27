@@ -24,6 +24,10 @@ use {
 		uniforms::Uniforms,
 		DrawError,
 		Frame,
+		DrawParameters,
+		Depth,
+		DepthTest,
+		BackfaceCullingMode,
 	},
 	std::sync::mpsc::Sender,
 };
@@ -268,10 +272,21 @@ impl MeshlessChunkArray {
 			.map(|(chunk, triangles)| chunk.triangles_upgrade(graphics, triangles))
 			.collect();
 
+		/* Chunk draw parameters */
+		let draw_params = DrawParameters {
+			depth: Depth {
+				test: DepthTest::IfLess,
+				write: true,
+				.. Default::default()
+			},
+			backface_culling: BackfaceCullingMode::CullClockwise,
+			.. Default::default()
+		};
+		
 		/* Create shader */
 		let shader = Shader::new("vertex_shader", "fragment_shader", &graphics.display);
 
-		MeshedChunkArray { width, height, depth, chunks, shader }
+		MeshedChunkArray { width, height, depth, chunks, shader, draw_params }
 	}
 }
 
@@ -284,21 +299,22 @@ impl IntoIterator for MeshlessChunkArray {
 	}
 }
 
-pub struct MeshedChunkArray<'dp> {
+pub struct MeshedChunkArray<'a> {
 	pub width: usize,
 	pub height: usize,
 	pub depth: usize,
 
-	pub chunks: Vec<MeshedChunk<'dp>>,
+	pub chunks: Vec<MeshedChunk>,
 	pub shader: Shader,
+	pub draw_params: DrawParameters<'a>
 }
 
-impl<'dp> MeshedChunkArray<'dp> {
+impl<'a> MeshedChunkArray<'a> {
 	/// Renders chunks.
 	pub fn render<U: Uniforms>(&mut self, target: &mut Frame, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
 		/* Iterating through array */
 		for chunk in self.chunks.iter_mut() {
-			chunk.render(target, &self.shader, uniforms, camera)?
+			chunk.render(target, &self.shader, uniforms, &self.draw_params, camera)?
 		}
 		Ok(())
 	}

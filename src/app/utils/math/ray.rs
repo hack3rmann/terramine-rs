@@ -29,28 +29,17 @@ impl Ray {
 	/// Gives temporary mesh. Good for debugging
 	#[allow(dead_code)]
 	#[cfg(not(feature = "release"))]
-	pub fn get_mesh<'g, 'm>(self, graphics: &'g Graphics) -> Mesh<'m> {
+	pub fn get_mesh(self, graphics: &Graphics) -> Mesh {
 		let far = (self.origin + self.direction) * 100.0;
 
 		let vertices = vec![
 			Vertex { position: [self.origin.x(), self.origin.y(), self.origin.z()], tex_coords: [0.0, 0.0], light: 1.0 },
 			Vertex { position: [        far.x(),         far.y(),         far.z()], tex_coords: [0.0, 0.0], light: 1.0 },
 		];
-			
-		/* Chunk draw parameters */
-		let draw_params = glium::DrawParameters {
-			depth: glium::Depth {
-				test: glium::DepthTest::IfLess,
-				write: true,
-				.. Default::default()
-			},
-			backface_culling: glium::BackfaceCullingMode::CullClockwise,
-			.. Default::default()
-		};
 		
 		/* Vertex buffer for chunks */
 		let vertex_buffer = VertexBuffer::from_vertices(&graphics.display, vertices);
 
-		Mesh::new(vertex_buffer, draw_params)
+		Mesh::new(vertex_buffer)
 	}
 }

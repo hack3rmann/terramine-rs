@@ -13,20 +13,19 @@ use {
 };
 
 /// Handles vertex_buffer and shader.
-pub struct Mesh<'dp> {
+pub struct Mesh {
 	vertex_buffer: VertexBuffer,
-	draw_params: DrawParameters<'dp>,
 }
 
-impl<'dp> Mesh<'dp> {
+impl Mesh {
 	/// Constructs new mesh.
-	pub fn new(vertex_buffer: VertexBuffer, draw_params: DrawParameters<'dp>) -> Self {
-		Mesh { vertex_buffer, draw_params }
+	pub fn new(vertex_buffer: VertexBuffer) -> Self {
+		Mesh { vertex_buffer }
 	}
 
 	/// Renders mesh.
-	pub fn render<U: Uniforms>(&self, target: &mut Frame, shader: &Shader, uniforms: &U) -> Result<(), DrawError> {
-		target.draw(&self.vertex_buffer.vertex_buffer, &self.vertex_buffer.indices, &shader.program, uniforms, &self.draw_params)
+	pub fn render<U: Uniforms>(&self, target: &mut Frame, shader: &Shader, draw_params: &DrawParameters<'_>, uniforms: &U) -> Result<(), DrawError> {
+		target.draw(&self.vertex_buffer.vertex_buffer, &self.vertex_buffer.indices, &shader.program, uniforms, draw_params)
 	}
 
 	/// Checks if vertices vector is empty
