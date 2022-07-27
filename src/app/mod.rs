@@ -23,6 +23,7 @@ use {
 			camera::Camera,
 			texture::Texture,
 			Vertex,
+			debug_visuals,
 		},
 		terrain::chunk::chunk_array::{
 			MeshlessChunkArray,
@@ -252,6 +253,11 @@ impl App {
 		
 		/* Rotating camera */
 		self.camera.update(&mut self.input_manager, self.timer.dt_as_f64());
+
+		/* Debug visuals switcher */
+		if self.input_manager.keyboard.just_pressed(KeyCode::F3) {
+			debug_visuals::switch_enable();
+		}
 
 		/* Input update */
 		self.input_manager.update(&self.graphics);		

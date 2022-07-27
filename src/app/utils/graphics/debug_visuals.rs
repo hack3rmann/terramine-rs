@@ -1,14 +1,13 @@
-use crate::app::utils::terrain::voxel::voxel_data::NOTHING_VOXEL_DATA;
-
-use super::mesh::Mesh;
-
 use {
 	crate::app::utils::{
 		math::prelude::*,
 		werror::prelude::*,
-		terrain::chunk::{MeshedChunk, CHUNK_SIZE, self},
+		terrain::{
+			chunk::{MeshedChunk, CHUNK_SIZE, self},
+			voxel::voxel_data::NOTHING_VOXEL_DATA,
+		},
 		graphics::{
-			mesh::UnindexedMesh,
+			mesh::{UnindexedMesh, Mesh},
 			shader::Shader,
 			vertex_buffer::VertexBuffer,
 		}
@@ -25,7 +24,10 @@ use {
 		DrawError,
 		implement_vertex,
 	},
-	std::marker::PhantomData,
+	std::{
+		marker::PhantomData,
+		sync::atomic::{AtomicBool, Ordering}
+	},
 };
 
 /// Adds debug visuals to type `T`.
@@ -40,6 +42,12 @@ pub struct DebugVisualsStatics<T> {
 	pub draw_params: &'static DrawParameters<'static>,
 
 	_phantom: PhantomData<T>
+}
+
+static ENABLED: AtomicBool = AtomicBool::new(false);
+
+pub fn switch_enable() {
+	ENABLED.store(!ENABLED.load(Ordering::Acquire), Ordering::Release);
 }
 
 #[repr(transparent)]
@@ -137,7 +145,7 @@ impl DebugVisualized<MeshedChunk> {
 			} else {
 				[0.3, 0.3, 0.3, 1.0]
 			};
-			
+
 			let vertices = [
 				Vertex { pos: lll, color },
 				Vertex { pos: lhl, color },
@@ -186,6 +194,8 @@ impl DebugVisualized<MeshedChunk> {
 	}
 
 	pub fn render_debug(&self, target: &mut Frame, uniforms: &impl Uniforms) -> Result<(), DrawError> {
-		self.mesh.render(target, chunk_data::get_unchecked().shader, chunk_data::get_unchecked().draw_params, uniforms)
+		if ENABLED.load(Ordering::Relaxed) {
+			self.mesh.render(target, chunk_data::get_unchecked().shader, chunk_data::get_unchecked().draw_params, uniforms)
+		} else { Ok(()) }
 	}
 }
