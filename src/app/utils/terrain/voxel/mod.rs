@@ -92,90 +92,132 @@ pub mod shape {
 	const RIGHT_LIGHT:	f32 = 0.7;
 
 	pub struct Cube<'c> {
-		data: &'c VoxelData
+		data: &'c VoxelData,
+		half_size: f32
 	}
 
 	impl<'c> Cube<'c> {
 		/// Constructs new cube maker with filled voxel data
-		pub fn new(data: &'c VoxelData) -> Self { Cube { data } }
+		pub fn new(data: &'c VoxelData) -> Self { Cube { data, half_size: 0.5 } }
+
+		/// Edit defaulted size.
+		#[allow(dead_code)]
+		pub fn size(mut self, new_size: f32) -> Self {
+			self.half_size = new_size * 0.5;
+			return self
+		}
 
 		/// Cube front face vertex array
 		pub fn front(&self, position: Int3, vertices: &mut Vec<Vertex>) {
 			/* UVs for front face */
 			let uv = UV::new(self.data.textures.front);
+			
+			/* Shortcuts */
+			let light = FRONT_LIGHT;
+			let (x, y, z) = (position.x() as f32, position.y() as f32, position.z() as f32);
 
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_hi ], light: FRONT_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_lo ], light: FRONT_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: FRONT_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_hi ], light: FRONT_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: FRONT_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_hi ], light: FRONT_LIGHT });
+			vertices.push(Vertex { position: [-self.half_size + x, -self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
+			vertices.push(Vertex { position: [-self.half_size + x,  self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_lo ], light });
+			vertices.push(Vertex { position: [-self.half_size + x,  self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_lo ], light });
+			vertices.push(Vertex { position: [-self.half_size + x, -self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
+			vertices.push(Vertex { position: [-self.half_size + x,  self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_lo ], light });
+			vertices.push(Vertex { position: [-self.half_size + x, -self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_hi ], light });
 		}
 
 		/// Cube back face vertex array
 		pub fn back(&self, position: Int3, vertices: &mut Vec<Vertex>) {
 			/* UVs for back face */
 			let uv = UV::new(self.data.textures.back);
+			
+			/* Shortcuts */
+			let light = BACK_LIGHT;
+			let (x, y, z) = (position.x() as f32, position.y() as f32, position.z() as f32);
 
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_hi ], light: BACK_LIGHT });
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_hi ], light: BACK_LIGHT });
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_lo ], light: BACK_LIGHT });
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_hi ], light: BACK_LIGHT });
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_lo ], light: BACK_LIGHT });
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: BACK_LIGHT });
+			vertices.push(Vertex { position: [ self.half_size + x, -self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_hi ], light });
+			vertices.push(Vertex { position: [ self.half_size + x, -self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
+			vertices.push(Vertex { position: [ self.half_size + x,  self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_lo ], light });
+			vertices.push(Vertex { position: [ self.half_size + x, -self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_hi ], light });
+			vertices.push(Vertex { position: [ self.half_size + x,  self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_lo ], light });
+			vertices.push(Vertex { position: [ self.half_size + x,  self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_lo ], light });
 		}
 
 		/// Cube top face vertex array
 		pub fn top(&self, position: Int3, vertices: &mut Vec<Vertex>) {
 			/* UVs for top face */
 			let uv = UV::new(self.data.textures.top);
+			
+			/* Shortcuts */
+			let light = TOP_LIGHT;
+			let (x, y, z) = (position.x() as f32, position.y() as f32, position.z() as f32);
 
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_hi ], light: TOP_LIGHT });
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_hi ], light: TOP_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: TOP_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: TOP_LIGHT });
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_hi ], light: TOP_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_lo ], light: TOP_LIGHT });
+			vertices.push(Vertex { position: [ self.half_size + x,  self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_hi ], light });
+			vertices.push(Vertex { position: [ self.half_size + x,  self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
+			vertices.push(Vertex { position: [-self.half_size + x,  self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_lo ], light });
+			vertices.push(Vertex { position: [-self.half_size + x,  self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_lo ], light });
+			vertices.push(Vertex { position: [ self.half_size + x,  self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
+			vertices.push(Vertex { position: [-self.half_size + x,  self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_lo ], light });
 		}
 
 		/// Cube bottom face vertex array
 		pub fn bottom(&self, position: Int3, vertices: &mut Vec<Vertex>) {
 			/* UVs for bottom face */
 			let uv = UV::new(self.data.textures.bottom);
+			
+			/* Shortcuts */
+			let light = BOTTOM_LIGHT;
+			let (x, y, z) = (position.x() as f32, position.y() as f32, position.z() as f32);
 
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: BOTTOM_LIGHT });
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_hi ], light: BOTTOM_LIGHT });
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_hi ], light: BOTTOM_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: BOTTOM_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_lo ], light: BOTTOM_LIGHT });
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_hi ], light: BOTTOM_LIGHT });
+			vertices.push(Vertex { position: [-self.half_size + x, -self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_lo ], light });
+			vertices.push(Vertex { position: [ self.half_size + x, -self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
+			vertices.push(Vertex { position: [ self.half_size + x, -self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_hi ], light });
+			vertices.push(Vertex { position: [-self.half_size + x, -self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_lo ], light });
+			vertices.push(Vertex { position: [-self.half_size + x, -self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_lo ], light });
+			vertices.push(Vertex { position: [ self.half_size + x, -self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
 		}
 
 		/// Cube left face vertex array
 		pub fn left(&self, position: Int3, vertices: &mut Vec<Vertex>) {
 			/* UVs for left face */
 			let uv = UV::new(self.data.textures.left);
+			
+			/* Shortcuts */
+			let light = LEFT_LIGHT;
+			let (x, y, z) = (position.x() as f32, position.y() as f32, position.z() as f32);
 
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: LEFT_LIGHT });
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_hi ], light: LEFT_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_hi ], light: LEFT_LIGHT });
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: LEFT_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_hi ], light: LEFT_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32, -0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_lo ], light: LEFT_LIGHT });
+			vertices.push(Vertex { position: [ self.half_size + x, -self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_lo ], light });
+			vertices.push(Vertex { position: [ self.half_size + x,  self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_hi ], light });
+			vertices.push(Vertex { position: [-self.half_size + x,  self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
+			vertices.push(Vertex { position: [ self.half_size + x, -self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_lo ], light });
+			vertices.push(Vertex { position: [-self.half_size + x,  self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
+			vertices.push(Vertex { position: [-self.half_size + x, -self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_lo ], light });
 		}
 
 		/// Cube right face vertex array
 		pub fn right(&self, position: Int3, vertices: &mut Vec<Vertex>) {
 			/* UVs for right face */
 			let uv = UV::new(self.data.textures.right);
+			
+			/* Shortcuts */
+			let light = RIGHT_LIGHT;
+			let (x, y, z) = (position.x() as f32, position.y() as f32, position.z() as f32);
 
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: RIGHT_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_hi ], light: RIGHT_LIGHT });
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_hi ], light: RIGHT_LIGHT });
-			vertices.push(Vertex { position: [ 0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_lo, uv.y_lo ], light: RIGHT_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32, -0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_lo ], light: RIGHT_LIGHT });
-			vertices.push(Vertex { position: [-0.5 + position.x() as f32,  0.5 + position.y() as f32,  0.5 + position.z() as f32 ], tex_coords: [ uv.x_hi, uv.y_hi ], light: RIGHT_LIGHT });
+			vertices.push(Vertex { position: [ self.half_size + x, -self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_lo ], light });
+			vertices.push(Vertex { position: [-self.half_size + x,  self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
+			vertices.push(Vertex { position: [ self.half_size + x,  self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_hi ], light });
+			vertices.push(Vertex { position: [ self.half_size + x, -self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_lo ], light });
+			vertices.push(Vertex { position: [-self.half_size + x, -self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_lo ], light });
+			vertices.push(Vertex { position: [-self.half_size + x,  self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
 		}
 
+		/// Cube all sides.
+		#[allow(dead_code)]
+		pub fn all(&self, position: Int3, vertices: &mut Vec<Vertex>) {
+			self.left(position, vertices);
+			self.right(position, vertices);
+			self.front(position, vertices);
+			self.back(position, vertices);
+			self.top(position, vertices);
+			self.bottom(position, vertices);
+		}
 	}
 }
