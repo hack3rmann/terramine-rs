@@ -92,6 +92,7 @@ pub mod chunk_data {
 		}
 	}
 
+	#[allow(dead_code)]
 	pub fn get_unchecked() -> DebugVisualsStatics<MeshedChunk> {
 		unsafe {
 			DebugVisualsStatics {
@@ -195,7 +196,7 @@ impl DebugVisualized<MeshedChunk> {
 
 	pub fn render_debug(&self, target: &mut Frame, uniforms: &impl Uniforms) -> Result<(), DrawError> {
 		if ENABLED.load(Ordering::Relaxed) {
-			self.mesh.render(target, chunk_data::get_unchecked().shader, chunk_data::get_unchecked().draw_params, uniforms)
+			self.mesh.render(target, self.static_data.shader, self.static_data.draw_params, uniforms)
 		} else { Ok(()) }
 	}
 }
