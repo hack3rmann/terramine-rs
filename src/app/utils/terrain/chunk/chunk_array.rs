@@ -269,7 +269,7 @@ impl MeshlessChunkArray {
 		let (width, height, depth) = (self.width, self.height, self.depth);
 		let chunks: Vec<_> = self.into_iter()
 			.zip(triangles.into_iter())
-			.map(|(chunk, triangles)| chunk.triangles_upgrade(graphics, triangles))
+			.map(|(chunk, triangles)| chunk.triangles_upgrade(graphics, &triangles))
 			.collect();
 
 		/* Chunk draw parameters */

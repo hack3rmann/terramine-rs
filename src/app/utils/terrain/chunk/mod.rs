@@ -234,7 +234,7 @@ impl MeshlessChunk {
 	}
 
 	/// Upgrades chunk to be meshed.
-	pub fn triangles_upgrade(self, graphics: &Graphics, triangles: Vec<Vertex>) -> MeshedChunk {
+	pub fn triangles_upgrade(self, graphics: &Graphics, triangles: &[Vertex]) -> MeshedChunk {
 		MeshedChunk::from_meshless_triangles(graphics, self, triangles)
 	}
 }
@@ -286,12 +286,12 @@ impl MeshedChunk {
 
 		MeshedChunk {
 			inner: meshless,
-			mesh: RefCell::new(Self::make_mesh(&graphics.display, triangles))
+			mesh: RefCell::new(Self::make_mesh(&graphics.display, &triangles))
 		}
 	}
 
 	/// Constructs mesh for meshless chunk.
-	pub fn from_meshless_triangles(graphics: &Graphics, meshless: MeshlessChunk, triangles: Vec<Vertex>) -> Self {
+	pub fn from_meshless_triangles(graphics: &Graphics, meshless: MeshlessChunk, triangles: &[Vertex]) -> Self {
 		MeshedChunk {
 			inner: meshless,
 			mesh: RefCell::new(Self::make_mesh(&graphics.display, triangles))
@@ -314,7 +314,7 @@ impl MeshedChunk {
 	}
 
 	/// Updates mesh.
-	pub fn make_mesh(display: &glium::Display, vertices: Vec<Vertex>) -> UnindexedMesh {
+	pub fn make_mesh(display: &glium::Display, vertices: &[Vertex]) -> UnindexedMesh {
 		/* Vertex buffer for chunks */
 		let vertex_buffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
 

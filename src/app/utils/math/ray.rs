@@ -40,7 +40,7 @@ impl Ray {
 		];
 		
 		/* Vertex buffer for chunks */
-		let vertex_buffer = VertexBuffer::no_indices(&graphics.display, vertices, PrimitiveType::TrianglesList);
+		let vertex_buffer = VertexBuffer::no_indices(&graphics.display, &vertices, PrimitiveType::TrianglesList);
 
 		Mesh::new(vertex_buffer)
 	}
