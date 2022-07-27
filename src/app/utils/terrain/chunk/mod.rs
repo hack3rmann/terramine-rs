@@ -242,7 +242,7 @@ impl MeshlessChunk {
 /// Chunk struct.
 pub struct MeshedChunk {
 	pub inner: MeshlessChunk,
-	pub mesh: RefCell<UnindexedMesh>
+	pub mesh: RefCell<UnindexedMesh<Vertex>>
 }
 
 /// Describes blocked chunks by environent or not. 
@@ -314,7 +314,7 @@ impl MeshedChunk {
 	}
 
 	/// Updates mesh.
-	pub fn make_mesh(display: &glium::Display, vertices: &[Vertex]) -> UnindexedMesh {
+	pub fn make_mesh(display: &glium::Display, vertices: &[Vertex]) -> UnindexedMesh<Vertex> {
 		/* Vertex buffer for chunks */
 		let vertex_buffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
 

@@ -1,3 +1,5 @@
+use crate::app::utils::terrain::voxel::voxel_data::NOTHING_VOXEL_DATA;
+
 use super::mesh::Mesh;
 
 use {
@@ -9,7 +11,6 @@ use {
 			mesh::UnindexedMesh,
 			shader::Shader,
 			vertex_buffer::VertexBuffer,
-			Vertex,
 		}
 	},
 	glium::{
@@ -22,14 +23,15 @@ use {
 		uniforms::Uniforms,
 		Frame,
 		DrawError,
+		implement_vertex,
 	},
 	std::marker::PhantomData,
 };
 
-/// Adds debug visuals to type `T`
+/// Adds debug visuals to type `T`.
 pub struct DebugVisualized<T> {
 	pub inner: T,
-	pub mesh: UnindexedMesh,
+	pub mesh: UnindexedMesh<Vertex>,
 	pub static_data: DebugVisualsStatics<T>,
 }
 
@@ -51,6 +53,14 @@ struct DrawParametersWrapper<'a>(DrawParameters<'a>);
 
 unsafe impl<'a> Send for DrawParametersWrapper<'a> { }
 unsafe impl<'a> Sync for DrawParametersWrapper<'a> { }
+
+#[derive(Clone, Copy, PartialEq)]
+pub struct Vertex {
+	pos: [f32; 3],
+	color: [f32; 4],
+}
+
+implement_vertex!(Vertex, pos, color);
 
 /**
  * Debug visuals for [`Chunk`]
@@ -88,13 +98,14 @@ pub mod chunk_data {
 		unsafe {
 			/* Check if uninitialyzed */
 			if let None = SHADER.as_ref() {
-				let shader = Shader::new("vertex_shader", "fragment_shader", display);
+				let shader = Shader::new("debug_lines", "debug_lines", display);
 				SHADER.replace(ShaderWrapper(shader));
 			}
 			if let None = DRAW_PARAMS.as_ref() {
 				let draw_params = DrawParameters {
+					polygon_mode: glium::PolygonMode::Line,
 					depth: Depth {
-						test: DepthTest::Overwrite,
+						test: DepthTest::IfLess,
 						write: true,
 						.. Default::default()
 					},
@@ -112,54 +123,59 @@ impl DebugVisualized<MeshedChunk> {
 		let mesh = {
 			const SIZE: f32 = CHUNK_SIZE as f32;
 			let pos = chunk::chunk_cords_to_min_world(chunk.inner.pos);
-			let lll = [ pos.x() as f32		 , pos.y() as f32		, pos.z() as f32 ];
-			let llh = [ pos.x() as f32		 , pos.y() as f32		, pos.z() as f32 + SIZE ];
-			let lhl = [ pos.x() as f32		 , pos.y() as f32 + SIZE, pos.z() as f32 ];
-			let lhh = [ pos.x() as f32		 , pos.y() as f32 + SIZE, pos.z() as f32 + SIZE ];
-			let hll = [ pos.x() as f32 + SIZE, pos.y() as f32		, pos.z() as f32 ];
-			let hlh = [ pos.x() as f32 + SIZE, pos.y() as f32		, pos.z() as f32 + SIZE ];
-			let hhl = [ pos.x() as f32 + SIZE, pos.y() as f32 + SIZE, pos.z() as f32 ];
-			let hhh = [ pos.x() as f32 + SIZE, pos.y() as f32 + SIZE, pos.z() as f32 + SIZE ];
+			let lll = [ -0.5 + pos.x() as f32		, -0.5 + pos.y() as f32		  , -0.5 + pos.z() as f32 ];
+			let llh = [ -0.5 + pos.x() as f32		, -0.5 + pos.y() as f32		  , -0.5 + pos.z() as f32 + SIZE ];
+			let lhl = [ -0.5 + pos.x() as f32		, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 ];
+			let lhh = [ -0.5 + pos.x() as f32		, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 + SIZE ];
+			let hll = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32		  , -0.5 + pos.z() as f32 ];
+			let hlh = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32		  , -0.5 + pos.z() as f32 + SIZE ];
+			let hhl = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 ];
+			let hhh = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 + SIZE ];
 
-			let tex_coords = [0.033, 0.001];
-			let vertices = vec![
-				Vertex { position: lll, tex_coords, light: 1.0 },
-				Vertex { position: lhl, tex_coords, light: 1.0 },
+			let color = if chunk.inner.voxels.iter().all(|&id| id == NOTHING_VOXEL_DATA.id) {
+				[0.5, 0.1, 0.1, 1.0]
+			} else {
+				[0.3, 0.3, 0.3, 1.0]
+			};
+			
+			let vertices = [
+				Vertex { pos: lll, color },
+				Vertex { pos: lhl, color },
 				
-				Vertex { position: llh, tex_coords, light: 1.0 },
-				Vertex { position: lhh, tex_coords, light: 1.0 },
+				Vertex { pos: llh, color },
+				Vertex { pos: lhh, color },
 				
-				Vertex { position: hlh, tex_coords, light: 1.0 },
-				Vertex { position: hhh, tex_coords, light: 1.0 },
+				Vertex { pos: hlh, color },
+				Vertex { pos: hhh, color },
 				
-				Vertex { position: hll, tex_coords, light: 1.0 },
-				Vertex { position: hhl, tex_coords, light: 1.0 },
+				Vertex { pos: hll, color },
+				Vertex { pos: hhl, color },
 				
 
-				Vertex { position: lll, tex_coords, light: 1.0 },
-				Vertex { position: hll, tex_coords, light: 1.0 },
+				Vertex { pos: lll, color },
+				Vertex { pos: hll, color },
 				
-				Vertex { position: lhl, tex_coords, light: 1.0 },
-				Vertex { position: hhl, tex_coords, light: 1.0 },
+				Vertex { pos: lhl, color },
+				Vertex { pos: hhl, color },
 				
-				Vertex { position: lhh, tex_coords, light: 1.0 },
-				Vertex { position: hhh, tex_coords, light: 1.0 },
+				Vertex { pos: lhh, color },
+				Vertex { pos: hhh, color },
 				
-				Vertex { position: llh, tex_coords, light: 1.0 },
-				Vertex { position: hlh, tex_coords, light: 1.0 },
+				Vertex { pos: llh, color },
+				Vertex { pos: hlh, color },
 				
 				
-				Vertex { position: lll, tex_coords, light: 1.0 },
-				Vertex { position: llh, tex_coords, light: 1.0 },
+				Vertex { pos: lll, color },
+				Vertex { pos: llh, color },
 				
-				Vertex { position: hll, tex_coords, light: 1.0 },
-				Vertex { position: hlh, tex_coords, light: 1.0 },
+				Vertex { pos: hll, color },
+				Vertex { pos: hlh, color },
 				
-				Vertex { position: hhl, tex_coords, light: 1.0 },
-				Vertex { position: hhh, tex_coords, light: 1.0 },
+				Vertex { pos: hhl, color },
+				Vertex { pos: hhh, color },
 				
-				Vertex { position: lhl, tex_coords, light: 1.0 },
-				Vertex { position: lhh, tex_coords, light: 1.0 },
+				Vertex { pos: lhl, color },
+				Vertex { pos: lhh, color },
 			];
 
 			let vbuffer = VertexBuffer::no_indices(display, &vertices, PrimitiveType::LinesList);

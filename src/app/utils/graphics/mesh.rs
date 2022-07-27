@@ -13,16 +13,16 @@ use {
 	},
 };
 
-pub type UnindexedMesh = Mesh<NoIndices>;
+pub type UnindexedMesh<Vertex> = Mesh<NoIndices, Vertex>;
 
 /// Handles vertex_buffer and shader.
-pub struct Mesh<Idx> {
-	vertex_buffer: VertexBuffer<Idx>,
+pub struct Mesh<Idx, Vertex: Copy> {
+	vertex_buffer: VertexBuffer<Idx, Vertex>,
 }
 
-impl<Idx> Mesh<Idx> {
+impl<Idx, Vertex: Copy> Mesh<Idx, Vertex> {
 	/// Constructs new mesh.
-	pub fn new(vertex_buffer: VertexBuffer<Idx>) -> Self {
+	pub fn new(vertex_buffer: VertexBuffer<Idx, Vertex>) -> Self {
 		Mesh { vertex_buffer }
 	}
 

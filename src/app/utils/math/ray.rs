@@ -26,10 +26,10 @@ impl Ray {
 		Ray { origin: start, direction: (end - start).normalyze() }
 	}
 
-	/// Gives temporary mesh. Good for debugging
+	/// Gives temporary mesh. Good for debugging.
 	#[allow(dead_code)]
 	#[cfg(not(feature = "release"))]
-	pub fn get_mesh(self, graphics: &Graphics) -> UnindexedMesh {
+	pub fn get_mesh(self, graphics: &Graphics) -> UnindexedMesh<Vertex> {
 		use glium::index::PrimitiveType;
 		
 		let far = (self.origin + self.direction) * 100.0;
