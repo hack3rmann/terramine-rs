@@ -40,8 +40,8 @@ use {
  */
 
 /// Predefined chunk values.
-const CHUNK_SIZE:	usize = 64;
-const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
+pub const CHUNK_SIZE:	usize = 64;
+pub const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 /// Type of voxel array. May be something different during progress.
 type VoxelArray = Vec<u16>;
@@ -241,8 +241,8 @@ impl MeshlessChunk {
 
 /// Chunk struct.
 pub struct MeshedChunk {
-	inner: MeshlessChunk,
-	mesh: RefCell<UnindexedMesh>
+	pub inner: MeshlessChunk,
+	pub mesh: RefCell<UnindexedMesh<Vertex>>
 }
 
 /// Describes blocked chunks by environent or not. 
@@ -314,7 +314,7 @@ impl MeshedChunk {
 	}
 
 	/// Updates mesh.
-	pub fn make_mesh(display: &glium::Display, vertices: &[Vertex]) -> UnindexedMesh {
+	pub fn make_mesh(display: &glium::Display, vertices: &[Vertex]) -> UnindexedMesh<Vertex> {
 		/* Vertex buffer for chunks */
 		let vertex_buffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
 

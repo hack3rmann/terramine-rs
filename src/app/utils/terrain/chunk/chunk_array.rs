@@ -3,7 +3,12 @@ use {
 		werror::prelude::*,
 		graphics::Vertex,
 		math::prelude::*,
-		graphics::{camera::Camera, Graphics, shader::Shader},
+		graphics::{
+			camera::Camera,
+			Graphics,
+			shader::Shader,
+			debug_visuals::*,
+		},
 		saves::*,
 		reinterpreter::{
 			ReinterpretAsBytes,
@@ -269,7 +274,7 @@ impl MeshlessChunkArray {
 		let (width, height, depth) = (self.width, self.height, self.depth);
 		let chunks: Vec<_> = self.into_iter()
 			.zip(triangles.into_iter())
-			.map(|(chunk, triangles)| chunk.triangles_upgrade(graphics, &triangles))
+			.map(|(chunk, triangles)| DebugVisualized::new(chunk.triangles_upgrade(graphics, &triangles), &graphics.display))
 			.collect();
 
 		/* Chunk draw parameters */
@@ -304,7 +309,7 @@ pub struct MeshedChunkArray<'a> {
 	pub height: usize,
 	pub depth: usize,
 
-	pub chunks: Vec<MeshedChunk>,
+	pub chunks: Vec<DebugVisualized<MeshedChunk>>,
 	pub shader: Shader,
 	pub draw_params: DrawParameters<'a>
 }
@@ -314,7 +319,8 @@ impl<'a> MeshedChunkArray<'a> {
 	pub fn render<U: Uniforms>(&mut self, target: &mut Frame, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
 		/* Iterating through array */
 		for chunk in self.chunks.iter_mut() {
-			chunk.render(target, &self.shader, uniforms, &self.draw_params, camera)?
+			chunk.inner.render(target, &self.shader, uniforms, &self.draw_params, camera)?;
+			chunk.render_debug(target, uniforms)?;
 		}
 		Ok(())
 	}
