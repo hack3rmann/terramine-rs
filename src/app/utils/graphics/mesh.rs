@@ -8,30 +8,35 @@ use {
 		Frame,
 		Surface,
 		DrawError,
-		uniforms::Uniforms
+		uniforms::Uniforms,
+		index::{NoIndices, IndicesSource}
 	},
 };
 
+pub type UnindexedMesh = Mesh<NoIndices>;
+
 /// Handles vertex_buffer and shader.
-pub struct Mesh<'dp> {
-	vertex_buffer: VertexBuffer,
-	shader: Shader,
-	draw_params: DrawParameters<'dp>
+pub struct Mesh<Idx> {
+	vertex_buffer: VertexBuffer<Idx>,
 }
 
-impl<'dp> Mesh<'dp> {
+impl<Idx> Mesh<Idx> {
 	/// Constructs new mesh.
-	pub fn new(vertex_buffer: VertexBuffer, shader: Shader, draw_params: DrawParameters<'dp>) -> Self {
-		Mesh { vertex_buffer, shader, draw_params }
+	pub fn new(vertex_buffer: VertexBuffer<Idx>) -> Self {
+		Mesh { vertex_buffer }
 	}
 
 	/// Renders mesh.
-	pub fn render<U: Uniforms>(&self, target: &mut Frame, uniforms: &U) -> Result<(), DrawError> {
-		target.draw(&self.vertex_buffer.vertex_buffer, &self.vertex_buffer.indices, &self.shader.program, uniforms, &self.draw_params)
+	pub fn render<'a, U>(&'a self, target: &mut Frame, shader: &Shader, draw_params: &DrawParameters<'_>, uniforms: &U) -> Result<(), DrawError>
+	where
+		U: Uniforms,
+		&'a Idx: Into<IndicesSource<'a>>,
+	{
+		target.draw(&self.vertex_buffer.inner, &self.vertex_buffer.indices, &shader.program, uniforms, draw_params)
 	}
 
 	/// Checks if vertices vector is empty
 	pub fn is_empty(&self) -> bool {
-		self.vertex_buffer.vertex_buffer.len() == 0
+		self.vertex_buffer.inner.len() == 0
 	}
 }

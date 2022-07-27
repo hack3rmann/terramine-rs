@@ -5,21 +5,32 @@
 use crate::app::{
 	utils::werror::prelude::*,
 	graphics::Vertex,
+	glium::{
+		index::{IndicesSource, PrimitiveType, NoIndices},
+		VertexBuffer as GVertexBuffer,
+		Display,
+	},
 };
 
 /// Vertex buffer help struct.
-pub struct VertexBuffer {
-	pub vertex_buffer: glium::VertexBuffer<Vertex>,
-	pub indices: glium::index::NoIndices
+pub struct VertexBuffer<Idx> {
+	pub inner: GVertexBuffer<Vertex>,
+	pub indices: Idx
 }
 
-impl VertexBuffer {
-	/// Constructs vertex buffer from vertices vector.
-	pub fn from_vertices(display: &glium::Display, vertices: Vec<Vertex>) -> Self {
+impl<'src, Idx: Into<IndicesSource<'src>>> VertexBuffer<Idx> {
+	/// Constructs [`VertexBuffer`] from vertex vector.
+	pub fn new(display: &Display, vertices: &[Vertex], indices: Idx) -> Self {
 		/* Define vertex buffer */
-		let vertex_buffer = glium::VertexBuffer::new(display, &vertices).wunwrap();
-		let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+		let vertex_buffer = GVertexBuffer::new(display, vertices).wunwrap();
 
-		VertexBuffer { vertex_buffer, indices }
+		VertexBuffer { inner: vertex_buffer, indices }
+	}
+}
+
+impl VertexBuffer<NoIndices> {
+	/// Constructs new [`VertexBuffer`] from vertices and [`PrimitiveType`].
+	pub fn no_indices(display: &Display, vertices: &[Vertex], primitive_type: PrimitiveType) -> Self {
+		Self::new(display, vertices, NoIndices(primitive_type))
 	}
 }
