@@ -272,7 +272,6 @@ impl App {
 				.movable(false)
 				.size_constraints([150.0, 100.0], [300.0, 200.0])
 				.always_auto_resize(true)
-				.focused(true)
 				.save_settings(false)
 				.build(&ui, || {
 					ui.text("How many?");
