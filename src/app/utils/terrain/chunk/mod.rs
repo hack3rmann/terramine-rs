@@ -26,7 +26,7 @@ use {
 		Frame,
 		index::PrimitiveType
 	},
-	std::{cell::RefCell, marker::PhantomData},
+	std::{cell::RefCell, marker::PhantomData, borrow::Cow},
 };
 
 /**
@@ -44,19 +44,20 @@ pub const CHUNK_SIZE:	usize = 64;
 pub const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 /// Type of voxel array. May be something different during progress.
-type VoxelArray = Vec<u16>;
+type VoxelArray = Vec<Id>;
 
-#[allow(dead_code)]
 pub enum FindOptions {
 	Border,
 	InChunkNothing,
 	InChunkSome(Voxel)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum ChunkFill {
 	Empty,
 	All(Id),
+
+	#[default]
 	Other,
 }
 
@@ -104,13 +105,14 @@ unsafe impl StaticSize for ChunkFill {
 	fn static_size() -> usize { u8::static_size() + Id::static_size() }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct AdditionalData {
 	pub fill: ChunkFill,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum Addition {
+	#[default]
 	NothingToKnow,
 	Know(AdditionalData),
 }
@@ -520,12 +522,22 @@ unsafe impl Reinterpret for MeshlessChunk { }
 
 unsafe impl ReinterpretAsBytes for MeshlessChunk {
 	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		let voxels = match self.additional_data {
+			Addition::Know(AdditionalData { fill: ChunkFill::Empty }) => {
+				Cow::Owned(vec![0; CHUNK_VOLUME])
+			},
+			Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) => {
+				Cow::Owned(vec![id; CHUNK_VOLUME])
+			},
+			_ => Cow::Borrowed(&self.voxels)
+		};
+
 		let mut bytes = Vec::with_capacity(Self::static_size());
 
-		bytes.append(&mut self.voxels.reinterpret_as_bytes());
+		bytes.append(&mut voxels.reinterpret_as_bytes());
 		bytes.append(&mut self.pos.reinterpret_as_bytes());
 
-		return bytes;
+		return bytes
 	}
 }
 
@@ -536,7 +548,7 @@ unsafe impl ReinterpretFromBytes for MeshlessChunk {
 		let voxels = VoxelArray::reinterpret_from_bytes(&source[.. voxel_array_size]);
 		let pos = Int3::reinterpret_from_bytes(&source[voxel_array_size .. voxel_array_size + Int3::static_size()]);
 
-		MeshlessChunk { voxels, pos, additional_data: Addition::NothingToKnow }
+		MeshlessChunk { voxels, pos, additional_data: Default::default() }
 	}
 }
 
