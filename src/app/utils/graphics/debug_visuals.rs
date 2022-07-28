@@ -3,8 +3,11 @@ use {
 		math::prelude::*,
 		werror::prelude::*,
 		terrain::{
-			chunk::{MeshedChunk, CHUNK_SIZE, self},
-			voxel::voxel_data::NOTHING_VOXEL_DATA,
+			chunk::{
+				self,
+				MeshedChunk,
+				CHUNK_SIZE,
+			},
 		},
 		graphics::{
 			mesh::{UnindexedMesh, Mesh},
@@ -142,8 +145,10 @@ impl DebugVisualized<MeshedChunk> {
 			let hhl = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 ];
 			let hhh = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 + SIZE ];
 
-			let color = if chunk.inner.voxels.iter().all(|&id| id == NOTHING_VOXEL_DATA.id) {
+			let color = if chunk.inner.is_empty() {
 				[0.5, 0.1, 0.1, 0.5]
+			} else if chunk.inner.is_filled() {
+				[0.1, 0.1, 0.5, 0.5]
 			} else {
 				[0.3, 0.3, 0.3, 0.5]
 			};

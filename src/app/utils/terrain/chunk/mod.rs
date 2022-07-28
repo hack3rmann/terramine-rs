@@ -144,6 +144,22 @@ impl MeshlessChunk {
 		MeshlessChunk { voxels, pos, additional_data: Addition::Know(data) }
 	}
 
+	/// Checks if chunk is empty by its data.
+	pub fn is_empty(&self) -> bool {
+		match self.additional_data {
+			Addition::Know(AdditionalData { fill: ChunkFill::Empty }) => true,
+			_ => false,
+		}
+	}
+
+	/// Checks if chunk is empty by its data.
+	pub fn is_filled(&self) -> bool {
+		match self.additional_data {
+			Addition::Know(AdditionalData { fill: ChunkFill::All(_) }) => true,
+			_ => false,
+		}
+	}
+
 	/// Creates trianlges Vec from Chunk and its environment.
 	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<Vertex> {
 		/* Empty-check */
