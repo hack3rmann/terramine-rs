@@ -10,6 +10,7 @@ use {
 			mesh::{UnindexedMesh, Mesh},
 			shader::Shader,
 			vertex_buffer::VertexBuffer,
+			camera::Camera,
 		}
 	},
 	glium::{
@@ -142,9 +143,9 @@ impl DebugVisualized<MeshedChunk> {
 			let hhh = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 + SIZE ];
 
 			let color = if chunk.inner.voxels.iter().all(|&id| id == NOTHING_VOXEL_DATA.id) {
-				[0.5, 0.1, 0.1, 1.0]
+				[0.5, 0.1, 0.1, 0.5]
 			} else {
-				[0.3, 0.3, 0.3, 1.0]
+				[0.3, 0.3, 0.3, 0.5]
 			};
 
 			let vertices = [
@@ -198,5 +199,11 @@ impl DebugVisualized<MeshedChunk> {
 		if ENABLED.load(Ordering::Relaxed) {
 			self.mesh.render(target, self.static_data.shader, self.static_data.draw_params, uniforms)
 		} else { Ok(()) }
+	}
+
+	pub fn render(&self, target: &mut Frame, shader: &Shader, uniforms: &impl Uniforms, draw_params: &DrawParameters, camera: &Camera) -> Result<(), DrawError> {
+		self.inner.render(target, shader, uniforms, draw_params, camera)?;
+		self.render_debug(target, uniforms)?;
+		Ok(())
 	}
 }

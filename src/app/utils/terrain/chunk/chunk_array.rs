@@ -319,8 +319,7 @@ impl<'a> MeshedChunkArray<'a> {
 	pub fn render<U: Uniforms>(&mut self, target: &mut Frame, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
 		/* Iterating through array */
 		for chunk in self.chunks.iter_mut() {
-			chunk.inner.render(target, &self.shader, uniforms, &self.draw_params, camera)?;
-			chunk.render_debug(target, uniforms)?;
+			chunk.render(target, &self.shader, uniforms, &self.draw_params, camera)?;
 		}
 		Ok(())
 	}
