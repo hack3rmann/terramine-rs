@@ -53,10 +53,33 @@ pub enum FindOptions {
 	InChunkSome(Voxel)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChunkFill {
+	Empty,
+	All(Id),
+	Other,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct AdditionalData {
+	pub fill: ChunkFill,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Addition {
+	NothingToKnow,
+	Know(AdditionalData),
+}
+
+impl AsRef<Self> for Addition {
+	fn as_ref(&self) -> &Self { self }
+}
+
 /// Chunk struct.
 pub struct MeshlessChunk {
 	pub voxels: VoxelArray,
 	pub pos: Int3,
+	pub additional_data: Addition,
 }
 
 impl MeshlessChunk {
@@ -65,33 +88,69 @@ impl MeshlessChunk {
 		/* Voxel array initialization */
 		let mut voxels = VoxelArray::with_capacity(CHUNK_VOLUME);
 
+		/* Additional data */
+		let mut data = AdditionalData { fill: ChunkFill::Empty };
+
 		/* Iterating in the chunk */
 		for x in 0..CHUNK_SIZE {
 		for y in 0..CHUNK_SIZE {
 		for z in 0..CHUNK_SIZE {
 			let global_pos = pos_in_chunk_to_world(Int3::new(x as i32, y as i32, z as i32), pos);
 
+			/* Update addidional chunk data */
+			let mut update_data = |id| {
+				match data.fill {
+					ChunkFill::Empty => {
+						/* Check for first iteration */
+						data.fill = if (x, y, z) != (0, 0, 0) {
+							ChunkFill::Other
+						} else {
+							ChunkFill::All(id)
+						}
+					},
+					ChunkFill::All(all_id) => {
+						if all_id != id {
+							data.fill = ChunkFill::Other;
+						}
+					}
+					ChunkFill::Other => (),
+				}
+			};
+
 			/* Kind of trees generation */
 			if generator::trees(global_pos) {
-				voxels.push(LOG_VOXEL_DATA.id);
+				let id = LOG_VOXEL_DATA.id;
+				update_data(id);
+				voxels.push(id);
 			}
 			
 			/* Sine-like floor */
 			else if generator::sine(global_pos) {
-				voxels.push(STONE_VOXEL_DATA.id);
+				let id = STONE_VOXEL_DATA.id;
+				update_data(id);
+				voxels.push(id);
 			}
 			
 			/* Air */
 			else {
-			 	voxels.push(NOTHING_VOXEL_DATA.id)
+				if let ChunkFill::All(_) = data.fill {
+					data.fill = ChunkFill::Other
+				}
+
+				voxels.push(NOTHING_VOXEL_DATA.id)
 			}
 		}}}
 		
-		MeshlessChunk { voxels, pos }
+		MeshlessChunk { voxels, pos, additional_data: Addition::Know(data) }
 	}
 
 	/// Creates trianlges Vec from Chunk and its environment.
 	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<Vertex> {
+		/* Empty-check */
+		if let Addition::Know(AdditionalData { fill: ChunkFill::Empty }) = self.additional_data.as_ref() {
+			return vec![]
+		}
+
 		/* Construct vertex array */
 		let mut vertices = Vec::<Vertex>::new();
 		for (i, &voxel_id) in self.voxels.iter().enumerate() {
@@ -371,7 +430,7 @@ unsafe impl ReinterpretFromBytes for MeshlessChunk {
 		let voxels = VoxelArray::reinterpret_from_bytes(&source[.. voxel_array_size]);
 		let pos = Int3::reinterpret_from_bytes(&source[voxel_array_size .. voxel_array_size + Int3::static_size()]);
 
-		MeshlessChunk { voxels, pos }
+		MeshlessChunk { voxels, pos, additional_data: Addition::NothingToKnow }
 	}
 }
 
