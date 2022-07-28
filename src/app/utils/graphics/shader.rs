@@ -20,11 +20,11 @@ impl Shader {
 	pub fn new(vertex_shader_name: &str, fragment_shader_name: &str, display: &glium::Display) -> Self {
 		/* File reading */
 		let vertex_shader_src = fs::read_to_string(
-			format!("src/shaders/{}-compiled.vert", vertex_shader_name)
+			format!("src/shaders/{}.vert", vertex_shader_name)
 		).wexpect("Can't read vertex shader file!");
 
 		let fragment_shader_src = fs::read_to_string(
-			format!("src/shaders/{}-compiled.frag", fragment_shader_name)
+			format!("src/shaders/{}.frag", fragment_shader_name)
 		).wexpect("Can't read fragment shader file!");
 
 		/* Construct the struct */
