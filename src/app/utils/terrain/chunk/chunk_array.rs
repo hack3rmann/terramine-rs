@@ -1,3 +1,5 @@
+use crate::app::utils::reinterpreter::StaticSize;
+
 use {
 	crate::app::utils::{
 		werror::prelude::*,
@@ -14,7 +16,6 @@ use {
 			ReinterpretAsBytes,
 			ReinterpretFromBytes,
 		},
-		terrain::voxel::voxel_data::NOTHING_VOXEL_DATA,
 		concurrency::{
 			loading::Loading,
 			promise::Promise,
@@ -24,6 +25,9 @@ use {
 		MeshedChunk,
 		MeshlessChunk,
 		ChunkEnvironment as ChunkEnv,
+		ChunkFill,
+		Addition,
+		AdditionalData,
 	},
 	glium::{
 		uniforms::Uniforms,
@@ -47,11 +51,6 @@ enum SaveType {
 
 impl Into<Offset> for SaveType {
 	fn into(self) -> Offset { self as Offset }
-}
-
-enum ChunkState {
-	Full,
-	Empty,
 }
 
 pub struct GeneratedChunkArray<'e>(MeshlessChunkArray, Vec<ChunkEnv<'e>>);
@@ -135,15 +134,22 @@ impl MeshlessChunkArray {
 					.write(&depth, Depth)
 					.pointer_array(volume, ChunkArray, |i| {
 						/* Write chunk */
-						let result = if chunks[i].voxels.iter().all(|&id| id == NOTHING_VOXEL_DATA.id) {
+						let result = if chunks[i].is_empty() {
 							/* Save only chunk position if it is empty */
-							let mut state = (ChunkState::Empty as u8).reinterpret_as_bytes();
+							let mut state = ChunkFill::Empty.reinterpret_as_bytes();
+							state.append(&mut chunks[i].pos.reinterpret_as_bytes());
+
+							state
+						} else if chunks[i].is_filled() {
+							/* Save only chunk position and one id */
+							let id = chunks[i].fill_id().wunwrap();
+							let mut state = ChunkFill::All(id).reinterpret_as_bytes();
 							state.append(&mut chunks[i].pos.reinterpret_as_bytes());
 
 							state
 						} else {
 							/* Save chunk fully */
-							let mut state = (ChunkState::Full as u8).reinterpret_as_bytes();
+							let mut state = ChunkFill::Other.reinterpret_as_bytes();
 							state.append(&mut chunks[i].reinterpret_as_bytes());
 
 							state
@@ -165,21 +171,30 @@ impl MeshlessChunkArray {
 
 				if (width, height, depth) == (save.read(Width), save.read(Height), save.read(Depth)) {
 					chunks = save.read_pointer_array(ChunkArray, |i, bytes| {
-						let elem;
-						if bytes[0] == ChunkState::Full  as u8 {
-							elem = MeshlessChunk::reinterpret_from_bytes(&bytes[1..])
-						} else
-						if bytes[0] == ChunkState::Empty as u8 {
-							elem = MeshlessChunk::new(Int3::reinterpret_from_bytes(&bytes[1..]))
-						}
-						else {
-							panic!("Unknown state ({})!", bytes[0])
-						}
+						let offset = ChunkFill::static_size();
+						let chunk_fill = ChunkFill::reinterpret_from_bytes(&bytes[0..offset]);
+
+						/* Read chunk from bytes */
+						let result = match chunk_fill {
+							ChunkFill::Empty => {
+								let pos = Int3::reinterpret_from_bytes(&bytes[offset..]);
+								MeshlessChunk::new_empty(pos)
+							},
+							ChunkFill::All(id) => {
+								let pos = Int3::reinterpret_from_bytes(&bytes[offset..]);
+								MeshlessChunk::new_filled(pos, id)
+							},
+							ChunkFill::Other => {
+								let mut chunk = MeshlessChunk::reinterpret_from_bytes(&bytes[offset..]);
+								chunk.additional_data = Addition::Know(AdditionalData { fill: ChunkFill::Other });
+								chunk
+							},
+						};
 
 						/* Calculate percent */
 						percenatge_tx.send(Loading::from_range("Reading from file", i, 0..volume)).wunwrap();
 
-						return elem
+						return result
 					});
 				} else {
 					generate_file()

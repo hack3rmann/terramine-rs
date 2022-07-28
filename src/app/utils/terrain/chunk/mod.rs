@@ -60,6 +60,50 @@ pub enum ChunkFill {
 	Other,
 }
 
+unsafe impl Reinterpret for ChunkFill { }
+
+unsafe impl ReinterpretAsBytes for ChunkFill {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		match self {
+			Self::Empty => vec![0; Self::static_size()],
+			Self::Other => {
+				let mut result = vec![0; Self::static_size()];
+				result[0] = 2;
+
+				return result
+			},
+			Self::All(id) => {
+				let mut result = vec![1];
+				result.append(&mut id.reinterpret_as_bytes());
+
+				return result
+			},
+		}
+	}
+}
+
+unsafe impl ReinterpretFromBytes for ChunkFill {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		match source[0] {
+			0 => Self::Empty,
+			1 => {
+				let id = Id::reinterpret_from_bytes(&source[1..]);
+				return Self::All(id)
+			},
+			2 => Self::Other,
+			_ => unreachable!("There's no ChunkFill variant that matches with {}!", source[0])
+		}
+	}
+}
+
+unsafe impl ReinterpretSize for ChunkFill {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for ChunkFill {
+	fn static_size() -> usize { u8::static_size() + Id::static_size() }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AdditionalData {
 	pub fill: ChunkFill,
@@ -148,6 +192,16 @@ impl MeshlessChunk {
 		MeshlessChunk { voxels, pos, additional_data: Addition::Know(data) }
 	}
 
+	/// Constructs new empty chunk.
+	pub fn new_empty(pos: Int3) -> Self {
+		Self { pos, voxels: vec![], additional_data: Addition::Know(AdditionalData { fill: ChunkFill::Empty }) }
+	}
+
+	/// Constructs new filled chunk.
+	pub fn new_filled(pos: Int3, id: Id) -> Self {
+		Self { pos, voxels: vec![id], additional_data: Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) }
+	}
+
 	/// Checks if chunk is empty by its data.
 	pub fn is_empty(&self) -> bool {
 		match self.additional_data {
@@ -162,6 +216,13 @@ impl MeshlessChunk {
 			Addition::Know(AdditionalData { fill: ChunkFill::All(_) }) => true,
 			_ => false,
 		}
+	}
+
+	/// Gives fill id if available
+	pub fn fill_id(&self) -> Option<Id> {
+		if let Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) = self.additional_data {
+			Some(id)
+		} else { None }
 	}
 
 	/// Creates trianlges Vec from Chunk and its environment.
