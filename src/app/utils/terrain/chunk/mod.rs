@@ -264,11 +264,6 @@ impl MeshlessChunk {
 
 	fn to_triangles_inner(&self, in_chunk_pos: Int3, id: Id, env: &ChunkEnvironment, vertices: &mut Vec<Vertex>) {
 		if id != NOTHING_VOXEL_DATA.id {
-			/*
-			* Safe because environment chunks lives as long as other chunks or that given chunk.
-			* And it also needs only at chunk generation stage.
-			*/
-
 			/* Cube vertices generator */
 			let cube = Cube::new(&VOXEL_DATA[id as usize]);
 
@@ -283,77 +278,29 @@ impl MeshlessChunk {
 				}
 			};
 
-			/* Top face check */
-			if check(self.get_voxel_or_none(Int3::new(position.x(), position.y() + 1, position.z()))) {
-				match env.top {
-					Some(chunk) => {
-						if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x(), position.y() + 1, position.z())) }) {
-							cube.top(position, vertices)
-						}
-					},
-					None => cube.top(position, vertices)
-				}
-			}
+			/* Mesh builder */
+			let build = |bias, env: Option<*const MeshlessChunk>| {
+				if check(self.get_voxel_or_none(position + bias)) {
+					match env {
+						Some(chunk) => {
+							// * SAFETY: Safe because environment chunks lives as long as other chunks or that given chunk.
+							// * And it also needs only at chunk generation stage.
+							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(position + bias) }) {
+								true
+							} else { false }
+						},
+						None => true
+					}
+				} else { false }
+			};
 
-			/* Bottom face check */
-			if check(self.get_voxel_or_none(Int3::new(position.x(), position.y() - 1, position.z()))) {
-				match env.bottom {
-					Some(chunk) => {
-						if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x(), position.y() - 1, position.z())) }) {
-							cube.bottom(position, vertices)
-						}
-					},
-					None => cube.bottom(position, vertices)
-				}
-			}
-			
-			/* Back face check */
-			if check(self.get_voxel_or_none(Int3::new(position.x() + 1, position.y(), position.z()))) {
-				match env.back {
-					Some(chunk) => {
-						if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x() + 1, position.y(), position.z())) }) {
-							cube.back(position, vertices)
-						}
-					},
-					None => cube.back(position, vertices)
-				}
-			}
-			
-			/* Front face check */
-			if check(self.get_voxel_or_none(Int3::new(position.x() - 1, position.y(), position.z()))) {
-				match env.front {
-					Some(chunk) => {
-						if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x() - 1, position.y(), position.z())) }) {
-							cube.front(position, vertices)
-						}
-					},
-					None => cube.front(position, vertices)
-				}
-			}
-			
-			/* Right face check */
-			if check(self.get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() + 1))) {
-				match env.right {
-					Some(chunk) => {
-						if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() + 1)) }) {
-							cube.right(position, vertices)
-						}
-					},
-					None => cube.right(position, vertices)
-				}
-			}
-			
-			/* Left face check */
-			if check(self.get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() - 1))) {
-				match env.left {
-					Some(chunk) => {
-						if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() - 1)) }) {
-							cube.left(position, vertices)
-						}
-					},
-					None => cube.left(position, vertices)
-				}
-			}
+			/* Build all sides separately */
+			if build(Int3::new( 1,  0,  0), env.back)   { cube.back  (position, vertices) };
+			if build(Int3::new(-1,  0,  0), env.front)  { cube.front (position, vertices) };
+			if build(Int3::new( 0,  1,  0), env.top)    { cube.top   (position, vertices) };
+			if build(Int3::new( 0, -1,  0), env.bottom) { cube.bottom(position, vertices) };
+			if build(Int3::new( 0,  0,  1), env.right)  { cube.right (position, vertices) };
+			if build(Int3::new( 0,  0, -1), env.left)   { cube.left  (position, vertices) };
 		}
 	}
 
