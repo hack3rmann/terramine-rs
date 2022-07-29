@@ -252,7 +252,7 @@ impl Default for Camera {
 			yaw: 0.0,
 			fov: Angle::from_degrees(60.0),
 			near: 0.5,
-			far: 1000.0,
+			far: 10000.0,
 			grabbes_cursor: false,
 			speed_factor: 10.0,
 			speed_falloff: 0.88,
