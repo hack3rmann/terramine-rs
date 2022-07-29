@@ -26,7 +26,7 @@ use {
 		Frame,
 		index::PrimitiveType
 	},
-	std::{cell::RefCell, marker::PhantomData},
+	std::{cell::RefCell, marker::PhantomData, borrow::Cow},
 };
 
 /**
@@ -44,19 +44,88 @@ pub const CHUNK_SIZE:	usize = 64;
 pub const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 /// Type of voxel array. May be something different during progress.
-type VoxelArray = Vec<u16>;
+type VoxelArray = Vec<Id>;
 
-#[allow(dead_code)]
 pub enum FindOptions {
 	Border,
 	InChunkNothing,
 	InChunkSome(Voxel)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ChunkFill {
+	Empty,
+	All(Id),
+
+	#[default]
+	Other,
+}
+
+unsafe impl Reinterpret for ChunkFill { }
+
+unsafe impl ReinterpretAsBytes for ChunkFill {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		match self {
+			Self::Empty => vec![0; Self::static_size()],
+			Self::Other => {
+				let mut result = vec![0; Self::static_size()];
+				result[0] = 2;
+
+				return result
+			},
+			Self::All(id) => {
+				let mut result = vec![1];
+				result.append(&mut id.reinterpret_as_bytes());
+
+				return result
+			},
+		}
+	}
+}
+
+unsafe impl ReinterpretFromBytes for ChunkFill {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		match source[0] {
+			0 => Self::Empty,
+			1 => {
+				let id = Id::reinterpret_from_bytes(&source[1..]);
+				return Self::All(id)
+			},
+			2 => Self::Other,
+			_ => unreachable!("There's no ChunkFill variant that matches with {}!", source[0])
+		}
+	}
+}
+
+unsafe impl ReinterpretSize for ChunkFill {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for ChunkFill {
+	fn static_size() -> usize { u8::static_size() + Id::static_size() }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct AdditionalData {
+	pub fill: ChunkFill,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub enum Addition {
+	#[default]
+	NothingToKnow,
+	Know(AdditionalData),
+}
+
+impl AsRef<Self> for Addition {
+	fn as_ref(&self) -> &Self { self }
+}
+
 /// Chunk struct.
 pub struct MeshlessChunk {
 	pub voxels: VoxelArray,
 	pub pos: Int3,
+	pub additional_data: Addition,
 }
 
 impl MeshlessChunk {
@@ -65,134 +134,174 @@ impl MeshlessChunk {
 		/* Voxel array initialization */
 		let mut voxels = VoxelArray::with_capacity(CHUNK_VOLUME);
 
+		/* Additional data */
+		let mut data = AdditionalData { fill: ChunkFill::Empty };
+
 		/* Iterating in the chunk */
 		for x in 0..CHUNK_SIZE {
 		for y in 0..CHUNK_SIZE {
 		for z in 0..CHUNK_SIZE {
 			let global_pos = pos_in_chunk_to_world(Int3::new(x as i32, y as i32, z as i32), pos);
 
+			/* Update addidional chunk data */
+			let mut update_data = |id| {
+				match data.fill {
+					ChunkFill::Empty => {
+						/* Check for first iteration */
+						data.fill = if (x, y, z) != (0, 0, 0) {
+							ChunkFill::Other
+						} else {
+							ChunkFill::All(id)
+						}
+					},
+					ChunkFill::All(all_id) => {
+						if all_id != id {
+							data.fill = ChunkFill::Other;
+						}
+					}
+					ChunkFill::Other => (),
+				}
+			};
+
 			/* Kind of trees generation */
 			if generator::trees(global_pos) {
-				voxels.push(LOG_VOXEL_DATA.id);
+				let id = LOG_VOXEL_DATA.id;
+				update_data(id);
+				voxels.push(id);
 			}
 			
 			/* Sine-like floor */
 			else if generator::sine(global_pos) {
-				voxels.push(STONE_VOXEL_DATA.id);
+				let id = STONE_VOXEL_DATA.id;
+				update_data(id);
+				voxels.push(id);
 			}
 			
 			/* Air */
 			else {
-			 	voxels.push(NOTHING_VOXEL_DATA.id)
+				if let ChunkFill::All(_) = data.fill {
+					data.fill = ChunkFill::Other
+				}
+
+				voxels.push(NOTHING_VOXEL_DATA.id)
 			}
 		}}}
+
+		/* Chunk is empty so array can be empty */
+		if let ChunkFill::Empty   = data.fill { voxels = vec![  ] }
+		if let ChunkFill::All(id) = data.fill { voxels = vec![id] }
 		
-		MeshlessChunk { voxels, pos }
+		MeshlessChunk { voxels, pos, additional_data: Addition::Know(data) }
+	}
+
+	/// Constructs new empty chunk.
+	pub fn new_empty(pos: Int3) -> Self {
+		Self { pos, voxels: vec![], additional_data: Addition::Know(AdditionalData { fill: ChunkFill::Empty }) }
+	}
+
+	/// Constructs new filled chunk.
+	pub fn new_filled(pos: Int3, id: Id) -> Self {
+		Self { pos, voxels: vec![id], additional_data: Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) }
+	}
+
+	/// Checks if chunk is empty by its data.
+	pub fn is_empty(&self) -> bool {
+		match self.additional_data {
+			Addition::Know(AdditionalData { fill: ChunkFill::Empty }) => true,
+			_ => false,
+		}
+	}
+
+	/// Checks if chunk is empty by its data.
+	pub fn is_filled(&self) -> bool {
+		match self.additional_data {
+			Addition::Know(AdditionalData { fill: ChunkFill::All(_) }) => true,
+			_ => false,
+		}
+	}
+
+	/// Gives fill id if available
+	pub fn fill_id(&self) -> Option<Id> {
+		if let Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) = self.additional_data {
+			Some(id)
+		} else { None }
 	}
 
 	/// Creates trianlges Vec from Chunk and its environment.
 	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<Vertex> {
-		/* Construct vertex array */
-		let mut vertices = Vec::<Vertex>::new();
-		for (i, &voxel_id) in self.voxels.iter().enumerate() {
-			if voxel_id != NOTHING_VOXEL_DATA.id {
-				/*
-				 * Safe because environment chunks lives as long as other chunks or that given chunk.
-				 * And it also needs only at chunk generation stage.
-				 */
-
-				/* Cube vertices generator */
-				let cube = Cube::new(&VOXEL_DATA[voxel_id as usize]);
-
-				/* Get position from index */
-				let position = pos_in_chunk_to_world(position_function(i), self.pos);
-
-				/* Draw checker */
-				let check = |input: Option<Voxel>| -> bool {
-					match input {
-						None => true,
-						Some(voxel) => voxel.data == NOTHING_VOXEL_DATA,
-					}
-				};
-
-				/* Top face check */
-				if check(self.get_voxel_or_none(Int3::new(position.x(), position.y() + 1, position.z()))) {
-					match env.top {
-						Some(chunk) => {
-							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x(), position.y() + 1, position.z())) }) {
-								cube.top(position, &mut vertices)
-							}
-						},
-						None => cube.top(position, &mut vertices)
-					}
+		match self.additional_data.as_ref() {
+			Addition::Know(AdditionalData { fill: ChunkFill::Empty }) => return vec![],
+			Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) => {
+				/* Cycle over all coordinates in chunk */
+				let mut vertices = vec![];
+				for pos in CubeBorder::new(CHUNK_SIZE as i32) {
+					self.to_triangles_inner(pos, *id, env, &mut vertices);
 				}
 
-				/* Bottom face check */
-				if check(self.get_voxel_or_none(Int3::new(position.x(), position.y() - 1, position.z()))) {
-					match env.bottom {
-						Some(chunk) => {
-							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x(), position.y() - 1, position.z())) }) {
-								cube.bottom(position, &mut vertices)
-							}
-						},
-						None => cube.bottom(position, &mut vertices)
-					}
+				/* Shrink vector */
+				vertices.shrink_to_fit();
+
+				return vertices
+			},
+			Addition::Know(AdditionalData { fill: ChunkFill::Other }) => {
+				/* Construct vertex array */
+				let mut vertices = vec![];
+				for (i, &voxel_id) in self.voxels.iter().enumerate() {
+					self.to_triangles_inner(position_function(i), voxel_id, env, &mut vertices);
 				}
-				
-				/* Back face check */
-				if check(self.get_voxel_or_none(Int3::new(position.x() + 1, position.y(), position.z()))) {
-					match env.back {
-						Some(chunk) => {
-							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x() + 1, position.y(), position.z())) }) {
-								cube.back(position, &mut vertices)
-							}
-						},
-						None => cube.back(position, &mut vertices)
-					}
-				}
-				
-				/* Front face check */
-				if check(self.get_voxel_or_none(Int3::new(position.x() - 1, position.y(), position.z()))) {
-					match env.front {
-						Some(chunk) => {
-							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x() - 1, position.y(), position.z())) }) {
-								cube.front(position, &mut vertices)
-							}
-						},
-						None => cube.front(position, &mut vertices)
-					}
-				}
-				
-				/* Right face check */
-				if check(self.get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() + 1))) {
-					match env.right {
-						Some(chunk) => {
-							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() + 1)) }) {
-								cube.right(position, &mut vertices)
-							}
-						},
-						None => cube.right(position, &mut vertices)
-					}
-				}
-				
-				/* Left face check */
-				if check(self.get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() - 1))) {
-					match env.left {
-						Some(chunk) => {
-							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(Int3::new(position.x(), position.y(), position.z() - 1)) }) {
-								cube.left(position, &mut vertices)
-							}
-						},
-						None => cube.left(position, &mut vertices)
-					}
-				}
-			}
+
+				/* Shrink vector */
+				vertices.shrink_to_fit();
+
+				return vertices
+			},
+			Addition::NothingToKnow => panic!(
+				"No needed information passed into mesh builder! {:?}",
+				Addition::NothingToKnow
+			),
 		}
+	}
 
-		/* Shrink vector */
-		vertices.shrink_to_fit();
+	fn to_triangles_inner(&self, in_chunk_pos: Int3, id: Id, env: &ChunkEnvironment, vertices: &mut Vec<Vertex>) {
+		if id != NOTHING_VOXEL_DATA.id {
+			/* Cube vertices generator */
+			let cube = Cube::new(&VOXEL_DATA[id as usize]);
 
-		return vertices
+			/* Get position from index */
+			let position = pos_in_chunk_to_world(in_chunk_pos, self.pos);
+
+			/* Draw checker */
+			let check = |input: Option<Voxel>| -> bool {
+				match input {
+					None => true,
+					Some(voxel) => voxel.data == NOTHING_VOXEL_DATA,
+				}
+			};
+
+			/* Mesh builder */
+			let build = |bias, env: Option<*const MeshlessChunk>| {
+				if check(self.get_voxel_or_none(position + bias)) {
+					match env {
+						Some(chunk) => {
+							// * SAFETY: Safe because environment chunks lives as long as other chunks or that given chunk.
+							// * And it also needs only at chunk generation stage.
+							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(position + bias) }) {
+								true
+							} else { false }
+						},
+						None => true
+					}
+				} else { false }
+			};
+
+			/* Build all sides separately */
+			if build(Int3::new( 1,  0,  0), env.back)   { cube.back  (position, vertices) };
+			if build(Int3::new(-1,  0,  0), env.front)  { cube.front (position, vertices) };
+			if build(Int3::new( 0,  1,  0), env.top)    { cube.top   (position, vertices) };
+			if build(Int3::new( 0, -1,  0), env.bottom) { cube.bottom(position, vertices) };
+			if build(Int3::new( 0,  0,  1), env.right)  { cube.right (position, vertices) };
+			if build(Int3::new( 0,  0, -1), env.left)   { cube.left  (position, vertices) };
+		}
 	}
 
 	/// Gives voxel by world coordinate.
@@ -203,9 +312,17 @@ impl MeshlessChunk {
 		if pos.x() < 0 || pos.x() >= CHUNK_SIZE as i32 || pos.y() < 0 || pos.y() >= CHUNK_SIZE as i32 || pos.z() < 0 || pos.z() >= CHUNK_SIZE as i32 {
 			FindOptions::Border
 		} else {
-			/* Sorts: [X -> Y -> Z] */
-			let index = index_function(pos);
-			FindOptions::InChunkSome(Voxel::new(global_pos, &VOXEL_DATA[self.voxels[index] as usize]))
+			match self.additional_data.as_ref() {
+				Addition::Know(AdditionalData { fill: ChunkFill::Empty }) =>
+					FindOptions::InChunkNothing,
+				Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) =>
+					FindOptions::InChunkSome(Voxel::new(global_pos, &VOXEL_DATA[*id as usize])),
+				_ => {
+					/* Sorts: [X -> Y -> Z] */
+					let index = index_function(pos);
+					FindOptions::InChunkSome(Voxel::new(global_pos, &VOXEL_DATA[self.voxels[index] as usize]))
+				}
+			}
 		}
 	}
 
@@ -306,11 +423,8 @@ impl MeshedChunk {
 
 		/* Check if vertex array is empty */
 		if !mesh.is_empty() && self.is_visible(camera) {
-			/* Iterating through array */
 			mesh.render(target, shader, draw_params, uniforms)
-		} else {
-			Ok(())
-		}
+		} else { Ok(()) }
 	}
 
 	/// Updates mesh.
@@ -355,12 +469,22 @@ unsafe impl Reinterpret for MeshlessChunk { }
 
 unsafe impl ReinterpretAsBytes for MeshlessChunk {
 	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		let voxels = match self.additional_data {
+			Addition::Know(AdditionalData { fill: ChunkFill::Empty }) => {
+				Cow::Owned(vec![0; CHUNK_VOLUME])
+			},
+			Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) => {
+				Cow::Owned(vec![id; CHUNK_VOLUME])
+			},
+			_ => Cow::Borrowed(&self.voxels)
+		};
+
 		let mut bytes = Vec::with_capacity(Self::static_size());
 
-		bytes.append(&mut self.voxels.reinterpret_as_bytes());
+		bytes.append(&mut voxels.reinterpret_as_bytes());
 		bytes.append(&mut self.pos.reinterpret_as_bytes());
 
-		return bytes;
+		return bytes
 	}
 }
 
@@ -371,7 +495,7 @@ unsafe impl ReinterpretFromBytes for MeshlessChunk {
 		let voxels = VoxelArray::reinterpret_from_bytes(&source[.. voxel_array_size]);
 		let pos = Int3::reinterpret_from_bytes(&source[voxel_array_size .. voxel_array_size + Int3::static_size()]);
 
-		MeshlessChunk { voxels, pos }
+		MeshlessChunk { voxels, pos, additional_data: Default::default() }
 	}
 }
 
@@ -400,6 +524,198 @@ mod reinterpret_test {
 }
 
 
+
+#[cfg(test)]
+mod border_test {
+	use super::*;
+
+	#[test]
+	fn test1() {
+		let border = CubeBorder::new(CHUNK_SIZE as i32);
+		const MAX: i32 = CHUNK_SIZE as i32 - 1;
+
+		for pos in border {
+			if  pos.x() == 0 || pos.x() == MAX ||
+				pos.y() == 0 || pos.y() == MAX ||
+				pos.z() == 0 || pos.z() == MAX
+			{ eprintln!("{:?}", pos) } else {
+				eprintln!("{:?}", pos);
+				panic!();
+			}
+			
+		}
+	}
+
+	#[test]
+	fn test2() {
+		let border = CubeBorder::new(CHUNK_SIZE as i32);
+		const MAX: i32 = CHUNK_SIZE as i32 - 1;
+
+		let works = (0..CHUNK_VOLUME)
+			.map(|i| position_function(i))
+			.filter(|pos|
+				pos.x() == 0 || pos.x() == MAX ||
+				pos.y() == 0 || pos.y() == MAX ||
+				pos.z() == 0 || pos.z() == MAX
+			);
+
+		for (b, w) in border.zip(works) {
+			assert_eq!(b, w)
+		}
+	}
+}
+
+/// Iterator over chunk border.
+#[derive(Clone, Debug)]
+pub struct CubeBorder {
+	prev: Int3,
+	size: i32,
+}
+
+impl CubeBorder {
+	fn new(size: i32) -> Self { Self { prev: Int3::all(-1), size } }
+}
+
+impl Iterator for CubeBorder {
+	type Item = Int3;
+	fn next(&mut self) -> Option<Self::Item> {
+		/* Maximun corrdinate value in border */
+		let max: i32 = self.size - 1;
+		let max_minus_one: i32 = max - 1;
+
+		/* Return if maximum reached */
+		if self.prev == Int3::new(max, max, max) {
+			return None
+		} else if self.prev == Int3::all(-1) {
+			let new = Int3::all(0);
+			self.prev = new;
+			return Some(new)
+		}
+
+		/* Previous x, y and z */
+		let (x, y, z) = (self.prev.x(), self.prev.y(), self.prev.z());
+
+		/* Returning local function */
+		let mut give = |pos| {
+			self.prev = pos;
+			return Some(pos)
+		};
+
+		/* If somewhere slicing cube (in 1 .. MAX - 1) */
+		if x >= 1 && x <= max_minus_one {
+			/* If position is slicing square */
+			if y >= 1 && y <= max_minus_one  {
+				if z == 0 { give(Int3::new(x, y, max)) }
+				else if z == max { give(Int3::new(x, y + 1, 0)) }
+				else { unreachable!(
+					"Invalid z position! Must be in 0 or {max}! But actual value is {y}.",
+					max = max,
+					y = y,
+				)}
+			}
+
+			/* If position is on flat bottom of square */
+			else if y == 0 {
+				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
+				else if z == max { give(Int3::new(x, y + 1, 0)) }
+				else { unreachable!(
+					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
+					size = CHUNK_SIZE,
+					z = z,
+				)}
+			}
+
+			/* If position is on flat top of square */
+			else if y == max {
+				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
+				else if z == max { give(Int3::new(x + 1, 0, 0)) }
+				else { unreachable!(
+					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
+					size = CHUNK_SIZE,
+					z = z,
+				)}
+			}
+
+			/* Other Ys are unreachable */
+			else { unreachable!(
+				"Invalid y position! Must be in 0..{size}! But actual value is {y}.",
+				size = CHUNK_SIZE,
+				y = y,
+			)}
+		}
+
+		/* If current position is bottom */
+		else if x == 0 {
+			/* Y is not maximum */
+			if y >= 0 && y <= max_minus_one {
+				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
+				else if z == max { give(Int3::new(x, y + 1, 0)) }
+				else { unreachable!(
+					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
+					size = CHUNK_SIZE,
+					z = z,
+				)}
+			}
+
+			/* Y is maximum */
+			else if y == max {
+				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
+				else if z == max { give(Int3::new(x + 1, 0, 0)) }
+				else { unreachable!(
+					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
+					size = CHUNK_SIZE,
+					z = z,
+				)}
+			}
+
+			/* Others Ys are unreachable */
+			else { unreachable!(
+				"Invalid y position! Must be in 0..{size}! But actual value is {y}.",
+				size = CHUNK_SIZE,
+				y = y,
+			)}
+		}
+
+		/* If currents position is top */
+		else if x == max {
+			/* Y is not maximum */
+			if y >= 0 && y <= max_minus_one {
+				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
+				else if z == max { give(Int3::new(x, y + 1, 0)) }
+				else { unreachable!(
+					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
+					size = CHUNK_SIZE,
+					z = z,
+				)}
+			}
+
+			/* Y is maximum */
+			else if y == max {
+				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
+				else if z == max { give(Int3::new(max, max, max)) }
+				else { unreachable!(
+					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
+					size = CHUNK_SIZE,
+					z = z,
+				)}
+			}
+
+			/* Others Ys are unreachable */
+			else { unreachable!(
+				"Invalid y position! Must be in 0..{size}! But actual value is {y}.",
+				size = CHUNK_SIZE,
+				y = y,
+			)}
+		}
+
+		/* Other values of X is unreachable... */
+		else { unreachable!(
+			"Invalid x position! Must be in 0..{size}! But actual value is {x}.",
+			size = CHUNK_SIZE,
+			x = x,
+		)}
+	}
+}
 
 /// Transforms world coordinates to chunk 
 #[allow(dead_code)]

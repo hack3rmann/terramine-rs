@@ -3,8 +3,11 @@ use {
 		math::prelude::*,
 		werror::prelude::*,
 		terrain::{
-			chunk::{MeshedChunk, CHUNK_SIZE, self},
-			voxel::voxel_data::NOTHING_VOXEL_DATA,
+			chunk::{
+				self,
+				MeshedChunk,
+				CHUNK_SIZE,
+			},
 		},
 		graphics::{
 			mesh::{UnindexedMesh, Mesh},
@@ -114,8 +117,9 @@ pub mod chunk_data {
 			if let None = DRAW_PARAMS.as_ref() {
 				let draw_params = DrawParameters {
 					polygon_mode: glium::PolygonMode::Line,
+					line_width: Some(2.0),
 					depth: Depth {
-						test: DepthTest::IfLess,
+						test: DepthTest::IfLessOrEqual,
 						write: true,
 						.. Default::default()
 					},
@@ -131,19 +135,22 @@ pub mod chunk_data {
 impl DebugVisualized<MeshedChunk> {
 	pub fn new(chunk: MeshedChunk, display: &Display) -> Self {
 		let mesh = {
-			const SIZE: f32 = CHUNK_SIZE as f32;
+			const BIAS: f32 = 0.001;
+			const SIZE: f32 = CHUNK_SIZE as f32 + BIAS;
 			let pos = chunk::chunk_cords_to_min_world(chunk.inner.pos);
-			let lll = [ -0.5 + pos.x() as f32		, -0.5 + pos.y() as f32		  , -0.5 + pos.z() as f32 ];
-			let llh = [ -0.5 + pos.x() as f32		, -0.5 + pos.y() as f32		  , -0.5 + pos.z() as f32 + SIZE ];
-			let lhl = [ -0.5 + pos.x() as f32		, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 ];
-			let lhh = [ -0.5 + pos.x() as f32		, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 + SIZE ];
-			let hll = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32		  , -0.5 + pos.z() as f32 ];
-			let hlh = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32		  , -0.5 + pos.z() as f32 + SIZE ];
-			let hhl = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 ];
+			let lll = [ -0.5 + pos.x() as f32 - BIAS, -0.5 + pos.y() as f32 - BIAS, -0.5 + pos.z() as f32 - BIAS ];
+			let llh = [ -0.5 + pos.x() as f32 - BIAS, -0.5 + pos.y() as f32 - BIAS, -0.5 + pos.z() as f32 + SIZE ];
+			let lhl = [ -0.5 + pos.x() as f32 - BIAS, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 - BIAS ];
+			let lhh = [ -0.5 + pos.x() as f32 - BIAS, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 + SIZE ];
+			let hll = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32 - BIAS, -0.5 + pos.z() as f32 - BIAS ];
+			let hlh = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32 - BIAS, -0.5 + pos.z() as f32 + SIZE ];
+			let hhl = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 - BIAS ];
 			let hhh = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 + SIZE ];
 
-			let color = if chunk.inner.voxels.iter().all(|&id| id == NOTHING_VOXEL_DATA.id) {
+			let color = if chunk.inner.is_empty() {
 				[0.5, 0.1, 0.1, 0.5]
+			} else if chunk.inner.is_filled() {
+				[0.1, 0.1, 0.5, 0.5]
 			} else {
 				[0.3, 0.3, 0.3, 0.5]
 			};

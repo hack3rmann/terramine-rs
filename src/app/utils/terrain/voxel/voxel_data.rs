@@ -1,10 +1,13 @@
 #![allow(dead_code)]
 
+/// IDs type.
+pub type Id = u16;
+
 /// Represents shared data for group of voxels
 #[derive(Debug, PartialEq)]
 pub struct VoxelData {
 	pub name: &'static str,
-	pub id: u16,
+	pub id: Id,
 
 	pub textures: TextureSides
 }
