@@ -174,6 +174,15 @@ impl App {
 				&ui, self.chunk_arr.is_some(), self.window_size.width as f32, self.window_size.height as f32,
 				&mut generate_chunks, unsafe { &mut SIZES }, unsafe { GENERATION_PERCENTAGE }
 			);
+			if unsafe { GENERATION_PERCENTAGE } == Loading::none() {
+				if self.input_manager.keyboard.just_pressed_combo(&[KeyCode::LControl, KeyCode::G]) {
+					generate_chunks = true;
+				}
+				if self.input_manager.keyboard.just_pressed_combo(&[KeyCode::LControl, KeyCode::H]) {
+					unsafe { SIZES = [16, 8, 16] };
+					generate_chunks = true;
+				}
+			}
 
 			/* Render UI */
 			self.graphics.imguiw.prepare_render(&ui, self.graphics.display.gl_window().window());

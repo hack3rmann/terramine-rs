@@ -51,7 +51,22 @@ impl Keyboard {
 		let is_pressed = self.inputs.contains_key(&key);
 		self.release(key);
 
-		return is_pressed;
+		return is_pressed
+	}
+
+	/// Checks combination is pressed.
+	#[allow(dead_code)]
+	pub fn is_pressed_combo(&self, keys: &[KeyCode]) -> bool {
+		keys.iter().all(|key| self.inputs.contains_key(key))
+	}
+
+	/// Checks combination just pressed.
+	#[allow(dead_code)]
+	pub fn just_pressed_combo(&mut self, keys: &[KeyCode]) -> bool {
+		if keys.iter().all(|key| self.inputs.contains_key(key)) {
+			keys.iter().for_each(|&key| self.release(key));
+			return true
+		} else { false }
 	}
 }
 
