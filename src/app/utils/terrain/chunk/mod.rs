@@ -232,9 +232,8 @@ impl MeshlessChunk {
 		match self.additional_data.as_ref() {
 			Addition::Know(AdditionalData { fill: ChunkFill::Empty }) => return vec![],
 			Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) => {
-				let mut vertices = vec![];
-
 				/* Cycle over all coordinates in chunk */
+				let mut vertices = vec![];
 				for x in 0 .. CHUNK_SIZE as i32 {
 				for y in 0 .. CHUNK_SIZE as i32 {
 				for z in 0 .. CHUNK_SIZE as i32 {
@@ -248,7 +247,7 @@ impl MeshlessChunk {
 			},
 			Addition::Know(AdditionalData { fill: ChunkFill::Other }) => {
 				/* Construct vertex array */
-				let mut vertices = Vec::<Vertex>::new();
+				let mut vertices = vec![];
 				for (i, &voxel_id) in self.voxels.iter().enumerate() {
 					self.to_triangles_inner(position_function(i), voxel_id, env, &mut vertices);
 				}
@@ -258,7 +257,10 @@ impl MeshlessChunk {
 
 				return vertices
 			},
-			Addition::NothingToKnow => vec![],
+			Addition::NothingToKnow => panic!(
+				"No needed information passed into mesh builder! {:?}",
+				Addition::NothingToKnow
+			),
 		}
 	}
 
