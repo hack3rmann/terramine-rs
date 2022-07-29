@@ -340,8 +340,15 @@ impl MeshlessChunk {
 		let lo = chunk_cords_to_min_world(self.pos);
 		let hi = lo + Int3::all(CHUNK_SIZE as i32);
 
+		/* Bias (voxel centration) */
+		const BIAS: f32 = 0.5;
+
+		/* To Float4 conversion with biases */
+		let lo = Float4::xyz0(lo.x() as f32 - BIAS, lo.y() as f32 - BIAS, lo.z() as f32 - BIAS);
+		let hi = Float4::xyz0(hi.x() as f32 - BIAS, hi.y() as f32 - BIAS, hi.z() as f32 - BIAS);
+
 		/* Frustum check */
-		camera.is_aabb_in_view(AABB::from_int3(lo, hi))
+		camera.is_aabb_in_view(AABB::from_float4(lo, hi))
 	}
 
 	/// Upgrades chunk to be meshed.

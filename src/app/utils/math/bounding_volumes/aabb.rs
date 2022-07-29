@@ -11,11 +11,11 @@ pub struct AABB {
 }
 
 impl AABB {
-	/// Constructs AABB from Float4 vectors
-	#[allow(dead_code)]
+	/// Constructs AABB from Float4 vectors.
 	pub fn from_float4(lo: Float4, hi: Float4) -> Self { AABB { lo, hi } }
 
-	/// Constructs AABB from Int3 vectors
+	/// Constructs AABB from Int3 vectors.
+	#[allow(dead_code)]
 	pub fn from_int3(lo: Int3, hi: Int3) -> Self {
 		AABB {
 			lo: Float4::xyz1(lo.x() as f32, lo.y() as f32, lo.z() as f32),
