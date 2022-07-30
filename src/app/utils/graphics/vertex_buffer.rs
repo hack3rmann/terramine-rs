@@ -2,8 +2,8 @@
  * Vertex buffer wrapper
  */
 
-use crate::app::{
-	utils::werror::prelude::*,
+use {
+	crate::app::utils::werror::prelude::*,
 	glium::{
 		index::{IndicesSource, PrimitiveType, NoIndices},
 		VertexBuffer as GVertexBuffer,

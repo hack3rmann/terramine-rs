@@ -2,6 +2,7 @@ pub mod chunk_array;
 
 use {
 	crate::app::utils::{
+		cfg,
 		werror::prelude::*,
 		math::prelude::*,
 		graphics::{
@@ -40,7 +41,7 @@ use {
  */
 
 /// Predefined chunk values.
-pub const CHUNK_SIZE:	usize = 64;
+pub const CHUNK_SIZE:	usize = cfg::terrain::CHUNK_SIZE;
 pub const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
 /// Type of voxel array. May be something different during progress.
@@ -341,7 +342,7 @@ impl MeshlessChunk {
 		let hi = lo + Int3::all(CHUNK_SIZE as i32);
 
 		/* Bias (voxel centration) */
-		const BIAS: f32 = 0.5;
+		const BIAS: f32 = cfg::terrain::VOXEL_SIZE * 0.5;
 
 		/* To Float4 conversion with biases */
 		let lo = Float4::xyz0(lo.x() as f32 - BIAS, lo.y() as f32 - BIAS, lo.z() as f32 - BIAS);

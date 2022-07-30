@@ -2,6 +2,7 @@ pub mod stack_heap;
 
 use {
 	crate::app::utils::{
+		cfg::save::META_FILE_NAME,
 		werror::prelude::*,
 		reinterpreter::{
 			ReinterpretAsBytes,
@@ -47,7 +48,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
 	/// Gives meta file path from given directory.
 	fn get_meta_path(path: &str) -> String {
-		format!("{path}/meta.off")
+		format!("{path}/{META_FILE_NAME}")
 	}
 
 	/// Creates heap-stack folder.
@@ -58,7 +59,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 		return self
 	}
 
-	/// Opens heap-stack folder. And reads all offsets from save `meta.off`.
+	/// Opens heap-stack folder. And reads all offsets from save [`META_FILE_NAME`].
 	pub fn open(mut self, path: &str) -> Self {
 		self.file = Some(StackHeap::new(path, &self.name));
 		self.offsets_save = Some(

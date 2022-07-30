@@ -2,17 +2,19 @@
  * Control section 
  */
 
+use crate::app::utils::cfg::texture::atlas as cfg_atlas;
+
 /// The size of one texture in pixels
-pub const TEXTURE_SIZE_P: usize = 8;
+pub const TEXTURE_SIZE_P: usize = cfg_atlas::ITEM_SIZE_IN_PIXELS;
 
 /// Padding to not hit neighbor textures
-pub const ATLAS_PADDING_P: usize = 4;
+pub const ATLAS_PADDING_P: usize = cfg_atlas::ITEM_PADDING_IN_PIXELS;
 
 /// The size of texture atlas row in textures
-pub const ATLAS_ROW_SIZE_T: usize = 32;
+pub const ATLAS_ROW_SIZE_T: usize = cfg_atlas::ITEMS_COUNT_IN_ROW;
 
 /// Bias to not hit neighbor textures
-pub const ATLAS_BIAS: f32 = 0.0;
+pub const ATLAS_BIAS: f32 = cfg_atlas::BIAS;
 
 /*
  * Auto constants section

@@ -17,3 +17,4 @@ pub mod saves;
 pub mod concurrency;
 pub mod runtime;
 pub mod werror;
+pub mod cfg;

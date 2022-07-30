@@ -1,5 +1,9 @@
 use {
-	crate::app::utils::{reinterpreter::*, werror::prelude::*},
+	crate::app::utils::{
+		cfg::save::{HEAP_FILE_EXTENTION, STACK_FILE_EXTENTION},
+		reinterpreter::*,
+		werror::prelude::*,
+	},
 	super::{Offset, Size},
 	std::{
 		fs::{File, OpenOptions},
@@ -46,8 +50,8 @@ impl StackHeap {
 		}
 		
 		Self {
-			stack: OpenOptions::new().write(true).read(true).create(true).open(format!("{path}/{name}.stk")).wunwrap(),
-			heap:  OpenOptions::new().write(true).read(true).create(true).open(format!("{path}/{name}.hp")).wunwrap(),
+			stack: OpenOptions::new().write(true).read(true).create(true).open(format!("{path}/{name}.{STACK_FILE_EXTENTION}")).wunwrap(),
+			heap:  OpenOptions::new().write(true).read(true).create(true).open(format!("{path}/{name}.{HEAP_FILE_EXTENTION}")).wunwrap(),
 			stack_ptr: 0,
 			eof: 0,
 			freed_space: HashSet::new(),

@@ -1,22 +1,9 @@
 pub mod utils;
 
 use {
-	/* Glium includes */
-	glium::{
-		glutin::{
-			event::{
-				Event,
-				WindowEvent,
-			},
-			event_loop::ControlFlow, dpi::PhysicalSize,
-		},
-		Surface,
-		uniform
-	},
-
 	/* Other files */
-	utils::{
-		*,
+	crate::app::utils::{
+		cfg,
 		user_io::{InputManager, KeyCode},
 		graphics::{
 			Graphics,
@@ -34,9 +21,21 @@ use {
 		concurrency::promise::Promise,
 		runtime::prelude::*,
 		werror::prelude::*,
+		concurrency::loading::Loading,
 	},
 
-	crate::app::utils::concurrency::loading::Loading,
+	/* Glium includes */
+	glium::{
+		glutin::{
+			event::{
+				Event,
+				WindowEvent,
+			},
+			event_loop::ControlFlow, dpi::PhysicalSize,
+		},
+		Surface,
+		uniform
+	},
 };
 
 /// Struct that handles everything.
@@ -155,7 +154,7 @@ impl App {
 	async fn redraw_requested(&mut self) {
 		/* Chunk generation flag */
 		let mut generate_chunks = false;
-		static mut SIZES: [i32; 3] = [7, 1, 7];
+		static mut SIZES: [i32; 3] = cfg::terrain::default::WORLD_SIZES_IN_CHUNKS;
 		static mut GENERATION_PERCENTAGE: Loading = Loading::none();
 
 		/* InGui draw data */
@@ -201,7 +200,7 @@ impl App {
 
 		/* Actual drawing */
 		let mut target = self.graphics.display.draw(); 
-		target.clear_all((0.01, 0.01, 0.01, 1.0), 1.0, 0); {
+		target.clear_all(cfg::shader::CLEAR_COLOR, cfg::shader::CLEAR_DEPTH, cfg::shader::CLEAR_STENCIL); {
 			if let Some(chunk_arr) = self.chunk_arr.as_mut() {
 				chunk_arr.render(&mut target, &uniforms, &self.camera.inner).wunwrap();
 			}

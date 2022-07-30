@@ -1,5 +1,6 @@
 use {
 	crate::app::utils::{
+		cfg,
 		werror::prelude::*,
 		math::prelude::*,
 		graphics::{
@@ -65,7 +66,7 @@ pub mod data {
 	pub fn construct_mesh(camera: &Camera, display: &Display) -> UnindexedMesh<Vertex> {
 		let color = [0.5; 4];
 		let rays = camera.get_frustum().courner_rays;
-		const LEN: f32 = 10000.0;
+		const LEN: f32 = cfg::camera::FRUSTUM_EDGE_LINE_LENGTH;
 		let vertices = [
 			Vertex { pos: [rays[0].origin.x(), rays[0].origin.y(), rays[0].origin.z()], color },
 			Vertex { pos: [

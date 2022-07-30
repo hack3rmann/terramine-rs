@@ -6,6 +6,11 @@ pub mod frustum;
 
 use {
 	crate::app::utils::{
+		cfg::{
+			self,
+			camera::default as cam_def,
+			window::default as window_def,
+		},
 		werror::prelude::*,
 		user_io::{InputManager, KeyCode},
 		math::prelude::*,
@@ -105,11 +110,11 @@ impl Camera {
 		self.yaw += yaw;
 
 		/* Vertical camera look boundaries */
-		let eps = 0.001;
+		const EPS: f64 = cfg::camera::VERTICAL_LOOK_EPS;
 		if self.pitch > std::f64::consts::FRAC_PI_2 {
-			self.pitch = std::f64::consts::FRAC_PI_2 - eps;
+			self.pitch = std::f64::consts::FRAC_PI_2 - EPS;
 		} else if self.pitch < -std::f64::consts::FRAC_PI_2 {
-			self.pitch = -std::f64::consts::FRAC_PI_2 + eps;
+			self.pitch = -std::f64::consts::FRAC_PI_2 + EPS;
 		}
 
 		self.set_rotation(self.roll, self.pitch, self.yaw);
@@ -250,13 +255,13 @@ impl Default for Camera {
 			roll: 0.0,
 			pitch: 0.0,
 			yaw: 0.0,
-			fov: Angle::from_degrees(60.0),
-			near: 0.5,
-			far: 10000.0,
+			fov: Angle::from_degrees(cam_def::FOV_IN_DEGREES),
+			near: cam_def::NEAR_PLANE,
+			far: cam_def::FAR_PLANE,
 			grabbes_cursor: false,
-			speed_factor: 10.0,
-			speed_falloff: 0.88,
-			aspect_ratio: 768.0 / 1024.0,
+			speed_factor: cam_def::SPEED,
+			speed_falloff: cam_def::SPEED_FALLOFF,
+			aspect_ratio: window_def::HEIGHT / window_def::WIDTH,
 			pos: Float4::xyz1(0.0, 0.0, -3.0),
 			speed: Float4::all(0.0),
 			up: Float4::xyz1(0.0, 1.0, 0.0),

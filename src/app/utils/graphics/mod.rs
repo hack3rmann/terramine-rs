@@ -6,7 +6,11 @@ pub mod mesh;
 pub mod debug_visuals;
 
 use {
-	crate::app::utils::werror::prelude::*,
+	crate::app::utils::{
+		cfg::window::default::HEIGHT as DEFAULT_HEIGHT,
+		cfg::window::default::WIDTH as DEFAULT_WIDTH,
+		werror::prelude::*,
+	},
 	super::window::Window,
 	shader::Shader,
 	vertex_buffer::VertexBuffer,
@@ -54,7 +58,7 @@ impl Graphics {
 		let event_loop = EventLoop::new();
 
 		/* Window creation */
-		let window = Window::from(&event_loop, 1024, 768).take_window();
+		let window = Window::from(&event_loop, DEFAULT_WIDTH as i32, DEFAULT_HEIGHT as i32).take_window();
 
 		/* Create ImGui context ant set settings file name. */
 		let mut imgui_context = imgui::Context::create();
@@ -67,7 +71,7 @@ impl Graphics {
 		/* Bad start size fix */
 		let dummy_event: Event<()> = Event::WindowEvent {
 			window_id: window.window().id(),
-			event: WindowEvent::Resized(dpi::PhysicalSize::new(1024, 768))
+			event: WindowEvent::Resized(dpi::PhysicalSize::new(DEFAULT_WIDTH as u32, DEFAULT_HEIGHT as u32))
 		};
 		winit_platform.handle_event(imgui_context.io_mut(), window.window(), &dummy_event);
 

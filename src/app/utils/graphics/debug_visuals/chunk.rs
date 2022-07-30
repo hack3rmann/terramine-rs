@@ -4,6 +4,7 @@
 
 use {
 	crate::app::utils::{
+		cfg,
 		math::prelude::*,
 		werror::prelude::*,
 		terrain::chunk::{
@@ -93,7 +94,7 @@ pub mod data {
 impl DebugVisualized<MeshedChunk> {
 	pub fn new_meshed_chunk(chunk: MeshedChunk, display: &Display) -> Self {
 		let mesh = {
-			const BIAS: f32 = 0.001;
+			const BIAS: f32 = cfg::topology::Z_FIGHTING_BIAS;
 			const SIZE: f32 = CHUNK_SIZE as f32 + BIAS;
 			let pos = chunk::chunk_cords_to_min_world(chunk.inner.pos);
 			let lll = [ -0.5 + pos.x() as f32 - BIAS, -0.5 + pos.y() as f32 - BIAS, -0.5 + pos.z() as f32 - BIAS ];

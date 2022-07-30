@@ -3,7 +3,10 @@
  */
 
 use {
-	crate::app::utils::werror::prelude::*,
+	crate::app::utils::{
+		cfg::shader::{DIRECTORY, VERTEX_FILE_EXTENTION, FRAGMENT_FILE_EXTENTION},
+		werror::prelude::*,
+	},
 	std::fs,
 };
 
@@ -16,15 +19,15 @@ pub struct Shader {
 
 impl Shader {
 	/// Returns new Shader object that contains shader source code from their path.
-	/// It adds "src/shaders/" before the name and ".glsl" after.
+	/// It adds [`DIRECTORY`] before the name and special extention (a.g. `.vert` for vertex) after.
 	pub fn new(vertex_shader_name: &str, fragment_shader_name: &str, display: &glium::Display) -> Self {
 		/* File reading */
 		let vertex_shader_src = fs::read_to_string(
-			format!("src/shaders/{}.vert", vertex_shader_name)
+			format!("{DIRECTORY}{}.{VERTEX_FILE_EXTENTION}", vertex_shader_name)
 		).wexpect("Can't read vertex shader file!");
 
 		let fragment_shader_src = fs::read_to_string(
-			format!("src/shaders/{}.frag", fragment_shader_name)
+			format!("{DIRECTORY}{}.{FRAGMENT_FILE_EXTENTION}", fragment_shader_name)
 		).wexpect("Can't read fragment shader file!");
 
 		/* Construct the struct */

@@ -4,6 +4,7 @@ pub mod generator;
 
 use {
 	crate::app::utils::{
+		cfg::{shader::voxel::light as cfg_light, self},
 		math::vector::*,
 		graphics::Vertex,
 		terrain::voxel::VoxelData,
@@ -84,12 +85,12 @@ mod tests {
 pub mod shape {
 	use super::{*, atlas::UV};
 
-	const FRONT_LIGHT:	f32 = 0.9;
-	const BACK_LIGHT:	f32 = 0.5;
-	const TOP_LIGHT:	f32 = 1.0;
-	const BOTTOM_LIGHT:	f32 = 0.3;
-	const LEFT_LIGHT:	f32 = 0.6;
-	const RIGHT_LIGHT:	f32 = 0.7;
+	const FRONT_LIGHT:	f32 = cfg_light::FRONT;
+	const BACK_LIGHT:	f32 = cfg_light::BACK;
+	const TOP_LIGHT:	f32 = cfg_light::TOP;
+	const BOTTOM_LIGHT:	f32 = cfg_light::BOTTOM;
+	const LEFT_LIGHT:	f32 = cfg_light::LEFT;
+	const RIGHT_LIGHT:	f32 = cfg_light::RIGHT;
 
 	pub struct Cube<'c> {
 		data: &'c VoxelData,
@@ -98,7 +99,7 @@ pub mod shape {
 
 	impl<'c> Cube<'c> {
 		/// Constructs new cube maker with filled voxel data
-		pub fn new(data: &'c VoxelData) -> Self { Cube { data, half_size: 0.5 } }
+		pub fn new(data: &'c VoxelData) -> Self { Cube { data, half_size: cfg::terrain::VOXEL_SIZE * 0.5 } }
 
 		/// Edit defaulted size.
 		#[allow(dead_code)]
