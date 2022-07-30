@@ -27,7 +27,10 @@ use {
 		Frame,
 		index::PrimitiveType
 	},
-	std::{cell::RefCell, marker::PhantomData, borrow::Cow},
+	std::{
+		cell::RefCell, marker::PhantomData,
+		borrow::Cow, num::NonZeroU32, fmt::Display
+	},
 };
 
 /**
@@ -69,7 +72,27 @@ pub enum ChunkDetails {
 
 	/// Low details with factor that represents how much chunk devided by 2.
 	/// It means that side of chunk is devided by 2^factor.
-	Low(u32),
+	Low(NonZeroU32),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ChunkDetailsError {
+	NoMoreDivisible { size: usize, level: u32 },
+	FirstDivisionFailed { level: u32 },
+	NotEnoughInformation,
+}
+
+impl Display for ChunkDetailsError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match *self {
+			Self::NoMoreDivisible { size, level } =>
+				write!(f, "Chunk can not be lowered: chunk size is {size}, but detail level is {level}!"),
+			Self::FirstDivisionFailed { level } =>
+				write!(f, "First division failed: chunk size is {CHUNK_SIZE}, but detail level is {level}!"),
+			Self::NotEnoughInformation =>
+				write!(f, "Not enougth information passed!"),
+		}
+	}
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -187,6 +210,50 @@ impl MeshlessChunk {
 		}
 	}
 
+	/// Lowers details of chunk to given value.
+	pub fn lower_detail(&mut self, level: u32) -> Result<(), ChunkDetailsError> {
+		/* Do nothing if level is zero */
+		if level == 0 { return Ok(()) }
+
+		//* SAFETY: this operation is safe until level is not zero.
+		//* In previous step level had been checked so it is not zero.
+		let level = unsafe { NonZeroU32::new_unchecked(level) };
+
+		match self.additional_data.as_ref() {
+			/* First division */
+			Addition::Know { details: ChunkDetails::Full, fill } => {
+				/* Check that chunk can be lowered */
+				if CHUNK_SIZE as u32 % 2_u32.pow(level.get()) != 0 {
+					return Err(ChunkDetailsError::FirstDivisionFailed { level: level.get() })
+				}
+
+				self.additional_data = Addition::Know { details: ChunkDetails::Low(level), fill: *fill };
+			},
+
+			/* Further more divisions */
+			Addition::Know { details: ChunkDetails::Low(old_level), fill } => {
+				/* Calculate old chunk size */
+				let old_size = CHUNK_SIZE / 2_usize.pow(old_level.get());
+
+				/* Check that chunk can be lowered */
+				if old_size as u32 % 2_u32.pow(level.get()) != 0 {
+					return Err(ChunkDetailsError::NoMoreDivisible { size: old_size, level: level.get() })
+				}
+
+				//* SAFETY: this operation is safe until level is not zero.
+				//* Given value is not zero because it is the sum of positive values.
+				let new_level = unsafe { NonZeroU32::new_unchecked(old_level.get() + level.get()) };
+
+				self.additional_data = Addition::Know { details: ChunkDetails::Low(new_level), fill: *fill };
+			}
+			
+			/* Nothing presented */
+			Addition::NothingToKnow => return Err(ChunkDetailsError::NotEnoughInformation),
+		}
+
+		return Ok(())
+	}
+
 	/// Checks if chunk is empty by its data.
 	pub fn is_empty(&self) -> bool {
 		match self.additional_data {
@@ -229,8 +296,8 @@ impl MeshlessChunk {
 			Addition::Know { fill: Some(ChunkFill::Standart), .. } => {
 				/* Construct vertex array */
 				let mut vertices = vec![];
-				for (i, &voxel_id) in self.voxels.iter().enumerate() {
-					self.to_triangles_inner(position_function(i), voxel_id, env, &mut vertices);
+				for (pos, id) in self.voxels.iter().enumerate().map(|(i, &id)| (position_function(i), id)) {
+					self.to_triangles_inner(pos, id, env, &mut vertices);
 				}
 
 				/* Shrink vector */
