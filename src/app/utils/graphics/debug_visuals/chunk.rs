@@ -1,21 +1,24 @@
+/**
+ * Debug visuals for [`Chunk`]
+ */
+
 use {
 	crate::app::utils::{
 		math::prelude::*,
 		werror::prelude::*,
-		terrain::{
-			chunk::{
-				self,
-				MeshedChunk,
-				CHUNK_SIZE,
-			},
+		terrain::chunk::{
+			self,
+			MeshedChunk,
+			CHUNK_SIZE,
 		},
 		graphics::{
-			mesh::{UnindexedMesh, Mesh},
+			mesh::Mesh,
 			shader::Shader,
 			vertex_buffer::VertexBuffer,
 			camera::Camera,
 		}
 	},
+	super::*,
 	glium::{
 		DrawParameters,
 		Display,
@@ -26,57 +29,12 @@ use {
 		uniforms::Uniforms,
 		Frame,
 		DrawError,
-		implement_vertex,
 	},
 	std::{
 		marker::PhantomData,
-		sync::atomic::{AtomicBool, Ordering}
+		sync::atomic::Ordering
 	},
 };
-
-/// Adds debug visuals to type `T`.
-pub struct DebugVisualized<T> {
-	pub inner: T,
-	pub mesh: UnindexedMesh<Vertex>,
-	pub static_data: DebugVisualsStatics<T>,
-}
-
-pub struct DebugVisualsStatics<T> {
-	pub shader: &'static Shader,
-	pub draw_params: &'static DrawParameters<'static>,
-
-	_phantom: PhantomData<T>
-}
-
-static ENABLED: AtomicBool = AtomicBool::new(false);
-
-pub fn switch_enable() {
-	ENABLED.store(!ENABLED.load(Ordering::Acquire), Ordering::Release);
-}
-
-#[repr(transparent)]
-struct ShaderWrapper(Shader);
-
-unsafe impl Send for ShaderWrapper { }
-unsafe impl Sync for ShaderWrapper { }
-
-#[repr(transparent)]
-struct DrawParametersWrapper<'a>(DrawParameters<'a>);
-
-unsafe impl<'a> Send for DrawParametersWrapper<'a> { }
-unsafe impl<'a> Sync for DrawParametersWrapper<'a> { }
-
-#[derive(Clone, Copy, PartialEq)]
-pub struct Vertex {
-	pos: [f32; 3],
-	color: [f32; 4],
-}
-
-implement_vertex!(Vertex, pos, color);
-
-/**
- * Debug visuals for [`Chunk`]
- */
 
 pub mod chunk_data {
 	use super::*;
