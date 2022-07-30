@@ -22,6 +22,7 @@ use {
 		ChunkEnvironment as ChunkEnv,
 		ChunkFill,
 		Addition,
+		ChunkDetails,
 	},
 	glium::{
 		uniforms::Uniforms,
@@ -143,7 +144,7 @@ impl MeshlessChunkArray {
 							state
 						} else {
 							/* Save chunk fully */
-							let mut state = ChunkFill::Other.reinterpret_as_bytes();
+							let mut state = ChunkFill::Standart.reinterpret_as_bytes();
 							state.append(&mut chunks[i].reinterpret_as_bytes());
 
 							state
@@ -178,9 +179,12 @@ impl MeshlessChunkArray {
 								let pos = Int3::reinterpret_from_bytes(&bytes[offset..]);
 								MeshlessChunk::new_filled(pos, id)
 							},
-							ChunkFill::Other => {
+							ChunkFill::Standart => {
 								let mut chunk = MeshlessChunk::reinterpret_from_bytes(&bytes[offset..]);
-								chunk.additional_data = Addition::Know { fill: Some(ChunkFill::Other) };
+								chunk.additional_data = Addition::Know {
+									fill: Some(ChunkFill::Standart),
+									details: ChunkDetails::Full
+								};
 								chunk
 							},
 						};

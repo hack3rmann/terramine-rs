@@ -48,73 +48,38 @@ pub const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 type VoxelArray = Vec<Id>;
 
 pub enum FindOptions {
-	Border,
+	WorldBorder,
 	InChunkNothing,
 	InChunkSome(Voxel)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum ChunkFill {
+	#[default]
+	Standart,
+
 	Empty,
 	All(Id),
+}
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum ChunkDetails {
 	#[default]
-	Other,
+	Full,
+
+	/// Low details with factor that represents how much chunk devided by 2.
+	/// It means that side of chunk is devided by 2^factor.
+	Low(u32),
 }
-
-unsafe impl Reinterpret for ChunkFill { }
-
-unsafe impl ReinterpretAsBytes for ChunkFill {
-	fn reinterpret_as_bytes(&self) -> Vec<u8> {
-		match self {
-			Self::Empty => vec![0; Self::static_size()],
-			Self::Other => {
-				let mut result = vec![0; Self::static_size()];
-				result[0] = 2;
-
-				return result
-			},
-			Self::All(id) => {
-				let mut result = vec![1];
-				result.append(&mut id.reinterpret_as_bytes());
-
-				return result
-			},
-		}
-	}
-}
-
-unsafe impl ReinterpretFromBytes for ChunkFill {
-	fn reinterpret_from_bytes(source: &[u8]) -> Self {
-		match source[0] {
-			0 => Self::Empty,
-			1 => {
-				let id = Id::reinterpret_from_bytes(&source[1..]);
-				return Self::All(id)
-			},
-			2 => Self::Other,
-			_ => unreachable!("There's no ChunkFill variant that matches with {}!", source[0])
-		}
-	}
-}
-
-unsafe impl ReinterpretSize for ChunkFill {
-	fn reinterpret_size(&self) -> usize { Self::static_size() }
-}
-
-unsafe impl StaticSize for ChunkFill {
-	fn static_size() -> usize { u8::static_size() + Id::static_size() }
-}
-
-
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum Addition {
 	#[default]
 	NothingToKnow,
-	
+
 	Know {
 		fill: Option<ChunkFill>,
+		details: ChunkDetails,
 	},
 }
 
@@ -150,17 +115,17 @@ impl MeshlessChunk {
 					ChunkFill::Empty => {
 						/* Check for first iteration */
 						fill = if (x, y, z) != (0, 0, 0) {
-							ChunkFill::Other
+							ChunkFill::Standart
 						} else {
 							ChunkFill::All(id)
 						}
 					},
 					ChunkFill::All(all_id) => {
 						if all_id != id {
-							fill = ChunkFill::Other;
+							fill = ChunkFill::Standart;
 						}
 					}
-					ChunkFill::Other => (),
+					ChunkFill::Standart => (),
 				}
 			};
 
@@ -181,7 +146,7 @@ impl MeshlessChunk {
 			/* Air */
 			else {
 				if let ChunkFill::All(_) = fill {
-					fill = ChunkFill::Other
+					fill = ChunkFill::Standart
 				}
 
 				voxels.push(NOTHING_VOXEL_DATA.id)
@@ -192,17 +157,34 @@ impl MeshlessChunk {
 		if let ChunkFill::Empty   = fill { voxels = vec![  ] }
 		if let ChunkFill::All(id) = fill { voxels = vec![id] }
 		
-		MeshlessChunk { voxels, pos, additional_data: Addition::Know { fill: Some(fill) } }
+		MeshlessChunk {
+			voxels, pos,
+			additional_data: Addition::Know {
+				fill: Some(fill), details: ChunkDetails::Full
+			}
+		}
 	}
 
 	/// Constructs new empty chunk.
 	pub fn new_empty(pos: Int3) -> Self {
-		Self { pos, voxels: vec![], additional_data: Addition::Know { fill: Some(ChunkFill::Empty) } }
+		Self {
+			pos, voxels: vec![],
+			additional_data: Addition::Know {
+				fill: Some(ChunkFill::Empty),
+				details: ChunkDetails::Full
+			}
+		}
 	}
 
 	/// Constructs new filled chunk.
 	pub fn new_filled(pos: Int3, id: Id) -> Self {
-		Self { pos, voxels: vec![id], additional_data: Addition::Know { fill: Some(ChunkFill::All(id)) } }
+		Self {
+			pos, voxels: vec![id],
+			additional_data: Addition::Know {
+				fill: Some(ChunkFill::All(id)),
+				details: ChunkDetails::Full
+			}
+		}
 	}
 
 	/// Checks if chunk is empty by its data.
@@ -244,7 +226,7 @@ impl MeshlessChunk {
 
 				return vertices
 			},
-			Addition::Know { fill: Some(ChunkFill::Other), .. } => {
+			Addition::Know { fill: Some(ChunkFill::Standart), .. } => {
 				/* Construct vertex array */
 				let mut vertices = vec![];
 				for (i, &voxel_id) in self.voxels.iter().enumerate() {
@@ -256,7 +238,7 @@ impl MeshlessChunk {
 
 				return vertices
 			},
-			Addition::NothingToKnow | Addition::Know { fill: None } => panic!(
+			Addition::NothingToKnow | Addition::Know { fill: None, .. } => panic!(
 				"No needed information passed into mesh builder! {:?}",
 				Addition::NothingToKnow
 			),
@@ -311,14 +293,14 @@ impl MeshlessChunk {
 		let pos = world_coords_to_in_some_chunk(global_pos, self.pos);
 		
 		if pos.x() < 0 || pos.x() >= CHUNK_SIZE as i32 || pos.y() < 0 || pos.y() >= CHUNK_SIZE as i32 || pos.z() < 0 || pos.z() >= CHUNK_SIZE as i32 {
-			FindOptions::Border
+			FindOptions::WorldBorder
 		} else {
 			match self.additional_data.as_ref() {
 				Addition::Know { fill: Some(ChunkFill::Empty), .. } =>
 					FindOptions::InChunkNothing,
 				Addition::Know { fill: Some(ChunkFill::All(id)), .. } =>
 					FindOptions::InChunkSome(Voxel::new(global_pos, &VOXEL_DATA[*id as usize])),
-				Addition::Know { fill: Some(ChunkFill::Other) } => {
+				Addition::Know { fill: Some(ChunkFill::Standart), .. } => {
 					/* Sorts: [X -> Y -> Z] */
 					let index = index_function(pos);
 					FindOptions::InChunkSome(Voxel::new(global_pos, &VOXEL_DATA[self.voxels[index] as usize]))
@@ -331,7 +313,7 @@ impl MeshlessChunk {
 	/// Gives voxel by world coordinate.
 	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<Voxel> {
 		match self.get_voxel_optional(pos) {
-			FindOptions::Border | FindOptions::InChunkNothing => None,
+			FindOptions::WorldBorder | FindOptions::InChunkNothing => None,
 			FindOptions::InChunkSome(chunk) => Some(chunk)
 		}
 	}
@@ -522,6 +504,50 @@ unsafe impl StaticSize for MeshlessChunk {
 	fn static_size() -> usize {
 		VoxelArray::static_size() + Int3::static_size() + 1
 	}
+}
+
+unsafe impl Reinterpret for ChunkFill { }
+
+unsafe impl ReinterpretAsBytes for ChunkFill {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		match self {
+			Self::Empty => vec![0; Self::static_size()],
+			Self::Standart => {
+				let mut result = vec![0; Self::static_size()];
+				result[0] = 2;
+
+				return result
+			},
+			Self::All(id) => {
+				let mut result = vec![1];
+				result.append(&mut id.reinterpret_as_bytes());
+
+				return result
+			},
+		}
+	}
+}
+
+unsafe impl ReinterpretFromBytes for ChunkFill {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		match source[0] {
+			0 => Self::Empty,
+			1 => {
+				let id = Id::reinterpret_from_bytes(&source[1..]);
+				return Self::All(id)
+			},
+			2 => Self::Standart,
+			_ => unreachable!("There's no ChunkFill variant that matches with {}!", source[0])
+		}
+	}
+}
+
+unsafe impl ReinterpretSize for ChunkFill {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for ChunkFill {
+	fn static_size() -> usize { u8::static_size() + Id::static_size() }
 }
 
 #[cfg(test)]
