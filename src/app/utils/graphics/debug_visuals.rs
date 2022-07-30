@@ -202,15 +202,15 @@ impl DebugVisualized<MeshedChunk> {
 		DebugVisualized { inner: chunk, mesh, static_data: chunk_data::get(display) }
 	}
 
-	pub fn render_debug(&self, target: &mut Frame, uniforms: &impl Uniforms) -> Result<(), DrawError> {
-		if ENABLED.load(Ordering::Relaxed) {
+	pub fn render_debug(&self, target: &mut Frame, uniforms: &impl Uniforms, camera: &Camera) -> Result<(), DrawError> {
+		if ENABLED.load(Ordering::Relaxed) && self.inner.is_visible(camera) {
 			self.mesh.render(target, self.static_data.shader, self.static_data.draw_params, uniforms)
 		} else { Ok(()) }
 	}
 
 	pub fn render(&self, target: &mut Frame, shader: &Shader, uniforms: &impl Uniforms, draw_params: &DrawParameters, camera: &Camera) -> Result<(), DrawError> {
 		self.inner.render(target, shader, uniforms, draw_params, camera)?;
-		self.render_debug(target, uniforms)?;
+		self.render_debug(target, uniforms, camera)?;
 		Ok(())
 	}
 }
