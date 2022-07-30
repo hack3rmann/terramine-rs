@@ -106,16 +106,16 @@ unsafe impl StaticSize for ChunkFill {
 	fn static_size() -> usize { u8::static_size() + Id::static_size() }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub struct AdditionalData {
-	pub fill: ChunkFill,
-}
+
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum Addition {
 	#[default]
 	NothingToKnow,
-	Know(AdditionalData),
+	
+	Know {
+		fill: Option<ChunkFill>,
+	},
 }
 
 impl AsRef<Self> for Addition {
@@ -136,7 +136,7 @@ impl MeshlessChunk {
 		let mut voxels = VoxelArray::with_capacity(CHUNK_VOLUME);
 
 		/* Additional data */
-		let mut data = AdditionalData { fill: ChunkFill::Empty };
+		let mut fill = ChunkFill::Empty;
 
 		/* Iterating in the chunk */
 		for x in 0..CHUNK_SIZE {
@@ -146,10 +146,10 @@ impl MeshlessChunk {
 
 			/* Update addidional chunk data */
 			let mut update_data = |id| {
-				match data.fill {
+				match fill {
 					ChunkFill::Empty => {
 						/* Check for first iteration */
-						data.fill = if (x, y, z) != (0, 0, 0) {
+						fill = if (x, y, z) != (0, 0, 0) {
 							ChunkFill::Other
 						} else {
 							ChunkFill::All(id)
@@ -157,7 +157,7 @@ impl MeshlessChunk {
 					},
 					ChunkFill::All(all_id) => {
 						if all_id != id {
-							data.fill = ChunkFill::Other;
+							fill = ChunkFill::Other;
 						}
 					}
 					ChunkFill::Other => (),
@@ -180,8 +180,8 @@ impl MeshlessChunk {
 			
 			/* Air */
 			else {
-				if let ChunkFill::All(_) = data.fill {
-					data.fill = ChunkFill::Other
+				if let ChunkFill::All(_) = fill {
+					fill = ChunkFill::Other
 				}
 
 				voxels.push(NOTHING_VOXEL_DATA.id)
@@ -189,26 +189,26 @@ impl MeshlessChunk {
 		}}}
 
 		/* Chunk is empty so array can be empty */
-		if let ChunkFill::Empty   = data.fill { voxels = vec![  ] }
-		if let ChunkFill::All(id) = data.fill { voxels = vec![id] }
+		if let ChunkFill::Empty   = fill { voxels = vec![  ] }
+		if let ChunkFill::All(id) = fill { voxels = vec![id] }
 		
-		MeshlessChunk { voxels, pos, additional_data: Addition::Know(data) }
+		MeshlessChunk { voxels, pos, additional_data: Addition::Know { fill: Some(fill) } }
 	}
 
 	/// Constructs new empty chunk.
 	pub fn new_empty(pos: Int3) -> Self {
-		Self { pos, voxels: vec![], additional_data: Addition::Know(AdditionalData { fill: ChunkFill::Empty }) }
+		Self { pos, voxels: vec![], additional_data: Addition::Know { fill: Some(ChunkFill::Empty) } }
 	}
 
 	/// Constructs new filled chunk.
 	pub fn new_filled(pos: Int3, id: Id) -> Self {
-		Self { pos, voxels: vec![id], additional_data: Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) }
+		Self { pos, voxels: vec![id], additional_data: Addition::Know { fill: Some(ChunkFill::All(id)) } }
 	}
 
 	/// Checks if chunk is empty by its data.
 	pub fn is_empty(&self) -> bool {
 		match self.additional_data {
-			Addition::Know(AdditionalData { fill: ChunkFill::Empty }) => true,
+			Addition::Know { fill: Some(ChunkFill::Empty), .. } => true,
 			_ => false,
 		}
 	}
@@ -216,14 +216,14 @@ impl MeshlessChunk {
 	/// Checks if chunk is empty by its data.
 	pub fn is_filled(&self) -> bool {
 		match self.additional_data {
-			Addition::Know(AdditionalData { fill: ChunkFill::All(_) }) => true,
+			Addition::Know { fill: Some(ChunkFill::All(_)), .. } => true,
 			_ => false,
 		}
 	}
 
 	/// Gives fill id if available
 	pub fn fill_id(&self) -> Option<Id> {
-		if let Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) = self.additional_data {
+		if let Addition::Know { fill: Some(ChunkFill::All(id)), .. } = self.additional_data {
 			Some(id)
 		} else { None }
 	}
@@ -231,8 +231,8 @@ impl MeshlessChunk {
 	/// Creates trianlges Vec from Chunk and its environment.
 	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<Vertex> {
 		match self.additional_data.as_ref() {
-			Addition::Know(AdditionalData { fill: ChunkFill::Empty }) => return vec![],
-			Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) => {
+			Addition::Know { fill: Some(ChunkFill::Empty), .. } => return vec![],
+			Addition::Know { fill: Some(ChunkFill::All(id)), .. } => {
 				/* Cycle over all coordinates in chunk */
 				let mut vertices = vec![];
 				for pos in CubeBorder::new(CHUNK_SIZE as i32) {
@@ -244,7 +244,7 @@ impl MeshlessChunk {
 
 				return vertices
 			},
-			Addition::Know(AdditionalData { fill: ChunkFill::Other }) => {
+			Addition::Know { fill: Some(ChunkFill::Other), .. } => {
 				/* Construct vertex array */
 				let mut vertices = vec![];
 				for (i, &voxel_id) in self.voxels.iter().enumerate() {
@@ -256,7 +256,7 @@ impl MeshlessChunk {
 
 				return vertices
 			},
-			Addition::NothingToKnow => panic!(
+			Addition::NothingToKnow | Addition::Know { fill: None } => panic!(
 				"No needed information passed into mesh builder! {:?}",
 				Addition::NothingToKnow
 			),
@@ -314,15 +314,16 @@ impl MeshlessChunk {
 			FindOptions::Border
 		} else {
 			match self.additional_data.as_ref() {
-				Addition::Know(AdditionalData { fill: ChunkFill::Empty }) =>
+				Addition::Know { fill: Some(ChunkFill::Empty), .. } =>
 					FindOptions::InChunkNothing,
-				Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) =>
+				Addition::Know { fill: Some(ChunkFill::All(id)), .. } =>
 					FindOptions::InChunkSome(Voxel::new(global_pos, &VOXEL_DATA[*id as usize])),
-				_ => {
+				Addition::Know { fill: Some(ChunkFill::Other) } => {
 					/* Sorts: [X -> Y -> Z] */
 					let index = index_function(pos);
 					FindOptions::InChunkSome(Voxel::new(global_pos, &VOXEL_DATA[self.voxels[index] as usize]))
-				}
+				},
+				_ => panic!("Unresolvable chunk Addition: {:?}", self.additional_data),
 			}
 		}
 	}
@@ -477,14 +478,20 @@ unsafe impl Reinterpret for MeshlessChunk { }
 
 unsafe impl ReinterpretAsBytes for MeshlessChunk {
 	fn reinterpret_as_bytes(&self) -> Vec<u8> {
-		let voxels = match self.additional_data {
-			Addition::Know(AdditionalData { fill: ChunkFill::Empty }) => {
+		let voxels = match self.additional_data.as_ref() {
+			Addition::Know { fill: Some(ChunkFill::Empty), .. } => {
 				Cow::Owned(vec![0; CHUNK_VOLUME])
 			},
-			Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) => {
-				Cow::Owned(vec![id; CHUNK_VOLUME])
+			Addition::Know { fill: Some(ChunkFill::All(id)), .. } => {
+				Cow::Owned(vec![*id; CHUNK_VOLUME])
 			},
-			_ => Cow::Borrowed(&self.voxels)
+			addition => {
+				assert_eq!(
+					self.voxels.len(), CHUNK_VOLUME,
+					"Unresolvable array! Addition is {:?}", addition
+				);
+				Cow::Borrowed(&self.voxels)
+			}
 		};
 
 		let mut bytes = Vec::with_capacity(Self::static_size());
