@@ -1,7 +1,7 @@
 use {
 	crate::app::utils::{
 		werror::prelude::*,
-		graphics::Vertex,
+		terrain::chunk::DetailedVertex,
 		math::prelude::*,
 		graphics::{
 			camera::Camera,
@@ -51,7 +51,7 @@ impl Into<Offset> for SaveType {
 pub struct GeneratedChunkArray<'e>(MeshlessChunkArray, Vec<ChunkEnv<'e>>);
 
 impl GeneratedChunkArray<'static> {
-	pub fn generate_mesh(self, percentage_tx: Sender<Loading>) -> (MeshlessChunkArray, Vec<Vec<Vertex>>) {
+	pub fn generate_mesh(self, percentage_tx: Sender<Loading>) -> (MeshlessChunkArray, Vec<Vec<DetailedVertex>>) {
 		let GeneratedChunkArray(chunk_array, chunk_env) = self;
 		let volume = chunk_array.width * chunk_array.height * chunk_array.depth;
 
@@ -90,7 +90,7 @@ pub struct MeshlessChunkArray {
 }
 
 impl MeshlessChunkArray {
-	pub fn generate(width: usize, height: usize, depth: usize) -> (Promise<(MeshlessChunkArray, Vec<Vec<Vertex>>)>, Promise<Loading>) {
+	pub fn generate(width: usize, height: usize, depth: usize) -> (Promise<(MeshlessChunkArray, Vec<Vec<DetailedVertex>>)>, Promise<Loading>) {
 		/* Create channels */
 		let (result_tx, result_rx) = std::sync::mpsc::channel();
 		let (percenatge_tx, percentage_rx) = std::sync::mpsc::channel();
@@ -283,7 +283,7 @@ impl MeshlessChunkArray {
 	}
 
 	/// Upgrades meshless chunk array to meshed.
-	pub fn upgrade<'dp, 'g>(self, graphics: &'g Graphics, triangles: Vec<Vec<Vertex>>) -> MeshedChunkArray<'dp> {
+	pub fn upgrade<'dp, 'g>(self, graphics: &'g Graphics, triangles: Vec<Vec<DetailedVertex>>) -> MeshedChunkArray<'dp> {
 		let (width, height, depth) = (self.width, self.height, self.depth);
 		let chunks: Vec<_> = self.into_iter()
 			.zip(triangles.into_iter())

@@ -8,7 +8,6 @@ use {
 		graphics::{
 			Graphics,
 			mesh::{Mesh, UnindexedMesh},
-			Vertex,
 			shader::Shader,
 			vertex_buffer::VertexBuffer,
 			camera::Camera,
@@ -25,13 +24,35 @@ use {
 		DrawError,
 		uniforms::Uniforms,
 		Frame,
-		index::PrimitiveType
+		index::PrimitiveType,
+		DrawParameters,
+		implement_vertex,
 	},
 	std::{
 		cell::RefCell, marker::PhantomData,
 		borrow::Cow, num::NonZeroU32, fmt::Display
 	},
 };
+
+/// Full-detailed vertex.
+#[derive(Copy, Clone)]
+pub struct DetailedVertex {
+	pub position: [f32; 3],
+	pub tex_coords: [f32; 2],
+	pub light: f32
+}
+
+/// Low-detailed vertex.
+#[derive(Copy, Clone)]
+pub struct LoweredVertex {
+	pub position: [f32; 3],
+	pub color: [f32; 4],
+	pub light: f32
+}
+
+/* Implement Vertex structs as glium intended */
+implement_vertex!(DetailedVertex, position, tex_coords, light);
+implement_vertex!(LoweredVertex, position, color, light);
 
 /**
  * Index cheatsheet!
@@ -278,7 +299,7 @@ impl MeshlessChunk {
 	}
 
 	/// Creates trianlges Vec from Chunk and its environment.
-	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<Vertex> {
+	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<DetailedVertex> {
 		match self.additional_data.as_ref() {
 			Addition::Know { fill: Some(ChunkFill::Empty), .. } => return vec![],
 			Addition::Know { fill: Some(ChunkFill::All(id)), .. } => {
@@ -312,7 +333,7 @@ impl MeshlessChunk {
 		}
 	}
 
-	fn to_triangles_inner(&self, in_chunk_pos: Int3, id: Id, env: &ChunkEnvironment, vertices: &mut Vec<Vertex>) {
+	fn to_triangles_inner(&self, in_chunk_pos: Int3, id: Id, env: &ChunkEnvironment, vertices: &mut Vec<DetailedVertex>) {
 		if id != NOTHING_VOXEL_DATA.id {
 			/* Cube vertices generator */
 			let cube = Cube::new(&VOXEL_DATA[id as usize]);
@@ -409,15 +430,9 @@ impl MeshlessChunk {
 	}
 
 	/// Upgrades chunk to be meshed.
-	pub fn triangles_upgrade(self, graphics: &Graphics, triangles: &[Vertex]) -> MeshedChunk {
+	pub fn triangles_upgrade(self, graphics: &Graphics, triangles: &[DetailedVertex]) -> MeshedChunk {
 		MeshedChunk::from_meshless_triangles(graphics, self, triangles)
 	}
-}
-
-/// Chunk struct.
-pub struct MeshedChunk {
-	pub inner: MeshlessChunk,
-	pub mesh: RefCell<UnindexedMesh<Vertex>>
 }
 
 /// Describes blocked chunks by environent or not. 
@@ -442,6 +457,35 @@ impl<'c> ChunkEnvironment<'c> {
 	}
 }
 
+pub enum ChunkMesh {
+	Detailed(RefCell<UnindexedMesh<DetailedVertex>>),
+	Lowered(RefCell<UnindexedMesh<LoweredVertex>>),
+}
+
+impl ChunkMesh {
+	/// Render mesh.
+	pub fn render(&self, target: &mut Frame, shader: &Shader, draw_params: &DrawParameters<'_>, uniforms: &impl Uniforms) -> Result<(), DrawError> {
+		match self {
+			Self::Detailed(mesh) => mesh.borrow().render(target, shader, draw_params, uniforms),
+			Self::Lowered(mesh)  => mesh.borrow().render(target, shader, draw_params, uniforms),
+		}
+	}
+
+	/// Checks if mesh is empty.
+	pub fn is_empty(&self) -> bool {
+		match self {
+			Self::Detailed(mesh) => mesh.borrow().is_empty(),
+			Self::Lowered(mesh)  => mesh.borrow().is_empty()
+		}
+	}
+}
+
+/// Chunk struct.
+pub struct MeshedChunk {
+	pub inner: MeshlessChunk,
+	pub mesh: ChunkMesh,
+}
+
 impl MeshedChunk {
 	/// Constructs new chunk in given position.
 	#[allow(dead_code)]
@@ -461,32 +505,29 @@ impl MeshedChunk {
 
 		MeshedChunk {
 			inner: meshless,
-			mesh: RefCell::new(Self::make_mesh(&graphics.display, &triangles))
+			mesh: ChunkMesh::Detailed(RefCell::new(Self::make_mesh(&graphics.display, &triangles)))
 		}
 	}
 
 	/// Constructs mesh for meshless chunk.
-	pub fn from_meshless_triangles(graphics: &Graphics, meshless: MeshlessChunk, triangles: &[Vertex]) -> Self {
+	pub fn from_meshless_triangles(graphics: &Graphics, meshless: MeshlessChunk, triangles: &[DetailedVertex]) -> Self {
 		MeshedChunk {
 			inner: meshless,
-			mesh: RefCell::new(Self::make_mesh(&graphics.display, triangles))
+			mesh: ChunkMesh::Detailed(RefCell::new(Self::make_mesh(&graphics.display, triangles)))
 		}
 	}
 
 	/// Renders chunk.
 	/// * Mesh should be constructed before this function call.
 	pub fn render<U: Uniforms>(&self, target: &mut Frame, shader: &Shader, uniforms: &U, draw_params: &glium::DrawParameters, camera: &Camera) -> Result<(), DrawError> {
-		/* Borrow mesh */
-		let mesh = self.mesh.borrow();
-
 		/* Check if vertex array is empty */
-		if !mesh.is_empty() && self.is_visible(camera) {
-			mesh.render(target, shader, draw_params, uniforms)
+		if !self.mesh.is_empty() && self.is_visible(camera) {
+			self.mesh.render(target, shader, draw_params, uniforms)
 		} else { Ok(()) }
 	}
 
 	/// Updates mesh.
-	pub fn make_mesh(display: &glium::Display, vertices: &[Vertex]) -> UnindexedMesh<Vertex> {
+	pub fn make_mesh(display: &glium::Display, vertices: &[DetailedVertex]) -> UnindexedMesh<DetailedVertex> {
 		/* Vertex buffer for chunks */
 		let vertex_buffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
 
@@ -495,7 +536,7 @@ impl MeshedChunk {
 
 	/// Creates trianlges Vec from Chunk and its environment.
 	#[allow(dead_code)]
-	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<Vertex> {
+	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<DetailedVertex> {
 		self.inner.to_triangles(env)
 	}
 

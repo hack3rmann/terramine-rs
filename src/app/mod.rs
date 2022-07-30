@@ -9,12 +9,14 @@ use {
 			Graphics,
 			camera::Camera,
 			texture::Texture,
-			Vertex,
 			debug_visuals::{self, DebugVisualized},
 		},
-		terrain::chunk::chunk_array::{
-			MeshlessChunkArray,
-			MeshedChunkArray,
+		terrain::chunk::{
+			chunk_array::{
+				MeshlessChunkArray,
+				MeshedChunkArray,
+			},
+			DetailedVertex
 		},
 		time::timer::Timer,
 		profiler,
@@ -214,7 +216,7 @@ impl App {
 		} target.finish().wunwrap();
 
 		/* Chunk reciever */
-		static mut CHUNKS_PROMISE: Option<Promise<(MeshlessChunkArray, Vec<Vec<Vertex>>)>> = None;
+		static mut CHUNKS_PROMISE: Option<Promise<(MeshlessChunkArray, Vec<Vec<DetailedVertex>>)>> = None;
 		static mut PERCENTAGE_PROMISE: Option<Promise<Loading>> = None;
 		if generate_chunks {
 			/* Dimensions shortcut */

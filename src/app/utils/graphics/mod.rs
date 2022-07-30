@@ -16,7 +16,6 @@ use {
 	vertex_buffer::VertexBuffer,
 	glium::{
 		self,
-		implement_vertex,
 		backend::Facade,
 		glutin::event_loop::EventLoop,
 		glutin::event::{
@@ -126,14 +125,3 @@ impl Graphics {
 		self.display.get_context()
 	}
 }
-
-/// Vertex help struct to OpenGL
-#[derive(Copy, Clone)]
-pub struct Vertex {
-	pub position: [f32; 3],
-	pub tex_coords: [f32; 2],
-	pub light: f32
-}
-
-/* Implement Vertex struct as main vertex struct in glium */
-implement_vertex!(Vertex, position, tex_coords, light);

@@ -3,11 +3,13 @@
 use super::prelude::*;
 
 #[cfg(not(feature = "release"))]
-use crate::app::utils::graphics::{
-	mesh::{Mesh, UnindexedMesh},
-	Graphics,
-	vertex_buffer::VertexBuffer,
-	Vertex,
+use crate::app::utils::{
+	graphics::{
+		mesh::{Mesh, UnindexedMesh},
+		Graphics,
+		vertex_buffer::VertexBuffer,
+	},
+	terrain::chunk::DetailedVertex,
 };
 
 /// Represents mathematical ray
@@ -29,14 +31,14 @@ impl Ray {
 	/// Gives temporary mesh. Good for debugging.
 	#[allow(dead_code)]
 	#[cfg(not(feature = "release"))]
-	pub fn get_mesh(self, graphics: &Graphics) -> UnindexedMesh<Vertex> {
+	pub fn get_mesh(self, graphics: &Graphics) -> UnindexedMesh<DetailedVertex> {
 		use glium::index::PrimitiveType;
 		
 		let far = (self.origin + self.direction) * 100.0;
 
 		let vertices = vec![
-			Vertex { position: [self.origin.x(), self.origin.y(), self.origin.z()], tex_coords: [0.0, 0.0], light: 1.0 },
-			Vertex { position: [        far.x(),         far.y(),         far.z()], tex_coords: [0.0, 0.0], light: 1.0 },
+			DetailedVertex { position: [self.origin.x(), self.origin.y(), self.origin.z()], tex_coords: [0.0, 0.0], light: 1.0 },
+			DetailedVertex { position: [        far.x(),         far.y(),         far.z()], tex_coords: [0.0, 0.0], light: 1.0 },
 		];
 		
 		/* Vertex buffer for chunks */
