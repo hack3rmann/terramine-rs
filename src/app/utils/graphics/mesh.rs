@@ -4,6 +4,8 @@ use {
 		Shader
 	},
 	glium::{
+		Vertex as TVertex,
+		Display,
 		DrawParameters,
 		Frame,
 		Surface,
@@ -38,5 +40,11 @@ impl<Idx, Vertex: Copy> Mesh<Idx, Vertex> {
 	/// Checks if vertices vector is empty
 	pub fn is_empty(&self) -> bool {
 		self.vertex_buffer.inner.len() == 0
+	}
+}
+
+impl <Vertex: Copy + TVertex> Mesh<NoIndices, Vertex> {
+	pub fn new_empty(display: &Display) -> Self {
+		Mesh { vertex_buffer: VertexBuffer::new_empty(display) }
 	}
 }

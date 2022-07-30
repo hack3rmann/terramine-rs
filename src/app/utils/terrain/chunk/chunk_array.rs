@@ -284,7 +284,7 @@ impl MeshlessChunkArray {
 		let (width, height, depth) = (self.width, self.height, self.depth);
 		let chunks: Vec<_> = self.into_iter()
 			.zip(triangles.into_iter())
-			.map(|(chunk, triangles)| DebugVisualized::new(chunk.triangles_upgrade(graphics, &triangles), &graphics.display))
+			.map(|(chunk, triangles)| DebugVisualized::new_meshed_chunk(chunk.triangles_upgrade(graphics, &triangles), &graphics.display))
 			.collect();
 
 		/* Chunk draw parameters */
@@ -329,7 +329,7 @@ impl<'a> MeshedChunkArray<'a> {
 	pub fn render<U: Uniforms>(&mut self, target: &mut Frame, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
 		/* Iterating through array */
 		for chunk in self.chunks.iter_mut() {
-			chunk.render(target, &self.shader, uniforms, &self.draw_params, camera)?;
+			chunk.render_meshed_chunks(target, &self.shader, uniforms, &self.draw_params, camera)?;
 		}
 		Ok(())
 	}

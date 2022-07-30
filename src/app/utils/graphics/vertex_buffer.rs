@@ -37,4 +37,11 @@ impl<Vertex: Copy + TVertex> VertexBuffer<NoIndices, Vertex> {
 	pub fn no_indices(display: &Display, vertices: &[Vertex], primitive_type: PrimitiveType) -> Self {
 		Self::new(display, vertices, NoIndices(primitive_type))
 	}
+
+	/// Constructs empty vertex buffer.
+	pub fn new_empty(display: &Display) -> Self {
+		/* Define vertex buffer */
+		let vertex_buffer = GVertexBuffer::new(display, &[]).wunwrap();
+		Self { inner: vertex_buffer, indices: NoIndices(PrimitiveType::Points) }
+	}
 }

@@ -1,4 +1,5 @@
 pub mod chunk;
+pub mod camera;
 
 use {
 	crate::app::utils::graphics::{

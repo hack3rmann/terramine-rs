@@ -23,7 +23,7 @@ use {
 			camera::Camera,
 			texture::Texture,
 			Vertex,
-			debug_visuals,
+			debug_visuals::{self, DebugVisualized},
 		},
 		terrain::chunk::chunk_array::{
 			MeshlessChunkArray,
@@ -44,7 +44,7 @@ pub struct App {
 	/* Important stuff */
 	input_manager: InputManager,
 	graphics: Graphics,
-	camera: Camera,
+	camera: DebugVisualized<Camera>,
 	timer: Timer,
 	window_size: PhysicalSize<u32>,
 
@@ -62,7 +62,7 @@ impl App {
 		let graphics = Graphics::initialize().wunwrap();
 	
 		/* Camera handle */
-		let camera = Camera::new().with_position(0.0, 0.0, 2.0);
+		let camera = DebugVisualized::new_camera(Camera::new().with_position(0.0, 0.0, 2.0), &graphics.display);
 	
 		/* Texture loading */
 		let texture = Texture::from("src/image/texture_atlas.png", &graphics.display).wunwrap();
@@ -103,7 +103,7 @@ impl App {
 					*control_flow = ControlFlow::Exit;
 				},
 				WindowEvent::Resized(new_size) => {
-					self.camera.aspect_ratio = new_size.height as f32 / new_size.width as f32;
+					self.camera.inner.aspect_ratio = new_size.height as f32 / new_size.width as f32;
 					self.window_size = new_size;
 				},
 				_ => (),
@@ -130,11 +130,11 @@ impl App {
 
 		/* Control camera by user input */
 		if self.input_manager.keyboard.just_pressed(KeyCode::T) {
-			if self.camera.grabbes_cursor {
-				self.camera.grabbes_cursor = false;
+			if self.camera.inner.grabbes_cursor {
+				self.camera.inner.grabbes_cursor = false;
 				self.input_manager.mouse.release_cursor(&self.graphics);
 			} else {
-				self.camera.grabbes_cursor = true;
+				self.camera.inner.grabbes_cursor = true;
 				self.input_manager.mouse.grab_cursor(&self.graphics);
 			}
 		}
@@ -164,7 +164,7 @@ impl App {
 			let ui = self.graphics.imguic.frame();
 
 			/* Camera window */
-			self.camera.spawn_control_window(&ui, &mut self.input_manager);
+			self.camera.inner.spawn_control_window(&ui, &mut self.input_manager);
 
 			/* Profiler window */
 			profiler::update_and_build_window(&ui, &self.timer, &self.input_manager);
@@ -195,16 +195,18 @@ impl App {
 			/* Texture uniform with filtering */
 			tex: self.texture.with_mips(),
 			time: self.timer.time(),
-			proj: self.camera.get_proj(),
-			view: self.camera.get_view()
+			proj: self.camera.inner.get_proj(),
+			view: self.camera.inner.get_view()
 		};
 
 		/* Actual drawing */
 		let mut target = self.graphics.display.draw(); 
 		target.clear_all((0.01, 0.01, 0.01, 1.0), 1.0, 0); {
 			if let Some(chunk_arr) = self.chunk_arr.as_mut() {
-				chunk_arr.render(&mut target, &uniforms, &self.camera).wunwrap();
+				chunk_arr.render(&mut target, &uniforms, &self.camera.inner).wunwrap();
 			}
+
+			self.camera.render_camera(&self.graphics.display, &mut target, &uniforms).wunwrap();
 
 			self.graphics.imguir
 				.render(&mut target, draw_data)
@@ -261,7 +263,7 @@ impl App {
 			.update_delta_time(self.timer.duration());
 		
 		/* Rotating camera */
-		self.camera.update(&mut self.input_manager, self.timer.dt_as_f64());
+		self.camera.inner.update(&mut self.input_manager, self.timer.dt_as_f64());
 
 		/* Debug visuals switcher */
 		if self.input_manager.keyboard.just_pressed(KeyCode::F3) {

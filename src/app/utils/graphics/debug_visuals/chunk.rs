@@ -36,7 +36,7 @@ use {
 	},
 };
 
-pub mod chunk_data {
+pub mod data {
 	use super::*;
 
 	static mut SHADER: Option<ShaderWrapper> = None;
@@ -91,7 +91,7 @@ pub mod chunk_data {
 }
 
 impl DebugVisualized<MeshedChunk> {
-	pub fn new(chunk: MeshedChunk, display: &Display) -> Self {
+	pub fn new_meshed_chunk(chunk: MeshedChunk, display: &Display) -> Self {
 		let mesh = {
 			const BIAS: f32 = 0.001;
 			const SIZE: f32 = CHUNK_SIZE as f32 + BIAS;
@@ -157,18 +157,18 @@ impl DebugVisualized<MeshedChunk> {
 			Mesh::new(vbuffer)
 		};
 		
-		DebugVisualized { inner: chunk, mesh, static_data: chunk_data::get(display) }
+		DebugVisualized { inner: chunk, mesh, static_data: data::get(display) }
 	}
 
-	pub fn render_debug(&self, target: &mut Frame, uniforms: &impl Uniforms, camera: &Camera) -> Result<(), DrawError> {
+	pub fn render_debug_meshed_chunks(&self, target: &mut Frame, uniforms: &impl Uniforms, camera: &Camera) -> Result<(), DrawError> {
 		if ENABLED.load(Ordering::Relaxed) && self.inner.is_visible(camera) {
 			self.mesh.render(target, self.static_data.shader, self.static_data.draw_params, uniforms)
 		} else { Ok(()) }
 	}
 
-	pub fn render(&self, target: &mut Frame, shader: &Shader, uniforms: &impl Uniforms, draw_params: &DrawParameters, camera: &Camera) -> Result<(), DrawError> {
+	pub fn render_meshed_chunks(&self, target: &mut Frame, shader: &Shader, uniforms: &impl Uniforms, draw_params: &DrawParameters, camera: &Camera) -> Result<(), DrawError> {
 		self.inner.render(target, shader, uniforms, draw_params, camera)?;
-		self.render_debug(target, uniforms, camera)?;
+		self.render_debug_meshed_chunks(target, uniforms, camera)?;
 		Ok(())
 	}
 }
