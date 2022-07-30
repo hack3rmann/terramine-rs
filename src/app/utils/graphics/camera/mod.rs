@@ -152,7 +152,8 @@ impl Camera {
 			self.speed / 2.0 + new_speed / 2.0
 		} else {
 			if self.speed.abs() > 0.1 {
-				self.speed * self.speed_falloff
+				const SPEED_FALLOFF_ADDITION: f32 = 1.0;
+				self.speed * self.speed_falloff.powf(dt as f32 + SPEED_FALLOFF_ADDITION)
 			} else {
 				Float4::all(0.0)
 			}
