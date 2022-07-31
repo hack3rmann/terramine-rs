@@ -300,23 +300,26 @@ impl MeshlessChunk {
 	}
 
 	/// Creates trianlges Vec from Chunk and its environment.
-	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<DetailedVertex> {
+	pub fn to_triangles(&self, env: &ChunkEnvironment) -> DetailedVertexVec {
 		match self.additional_data.as_ref() {
 			/* Empty chunk passed in */
-			Addition::Know { fill: Some(ChunkFill::Empty), .. } => return vec![],
+			Addition::Know { fill: Some(ChunkFill::Empty), details } => return match details {
+				ChunkDetails::Full => Full(vec![]),
+				ChunkDetails::Low(_) => Low(vec![]),
+			},
 
 			/* "Filled" chunk with full details passed in */
 			Addition::Know { fill: Some(ChunkFill::All(id)), details: ChunkDetails::Full } => {
 				/* Cycle over all coordinates in chunk */
 				let mut vertices = vec![];
 				for pos in CubeBorder::new(CHUNK_SIZE as i32) {
-					self.to_triangles_inner(pos, *id, env, &mut vertices);
+					self.to_triangles_inner(pos, *id, env, Full(&mut vertices));
 				}
 
 				/* Shrink vector */
 				vertices.shrink_to_fit();
 
-				return vertices
+				return Full(vertices)
 			},
 
 			/* Standart chunk with full details passed in */
@@ -324,13 +327,13 @@ impl MeshlessChunk {
 				/* Construct vertex array */
 				let mut vertices = vec![];
 				for (pos, id) in self.voxels.iter().enumerate().map(|(i, &id)| (position_function(i), id)) {
-					self.to_triangles_inner(pos, id, env, &mut vertices);
+					self.to_triangles_inner(pos, id, env, Full(&mut vertices));
 				}
 
 				/* Shrink vector */
 				vertices.shrink_to_fit();
 
-				return vertices
+				return Full(vertices)
 			},
 
 			/* Lowered details uniplemented */
@@ -344,45 +347,50 @@ impl MeshlessChunk {
 		}
 	}
 
-	fn to_triangles_inner(&self, in_chunk_pos: Int3, id: Id, env: &ChunkEnvironment, vertices: &mut Vec<DetailedVertex>) {
-		if id != NOTHING_VOXEL_DATA.id {
-			/* Cube vertices generator */
-			let cube = Cube::new(&VOXEL_DATA[id as usize]);
-
-			/* Get position from index */
-			let position = pos_in_chunk_to_world(in_chunk_pos, self.pos);
-
-			/* Draw checker */
-			let check = |input: Option<Voxel>| -> bool {
-				match input {
-					None => true,
-					Some(voxel) => voxel.data == NOTHING_VOXEL_DATA,
+	fn to_triangles_inner(&self, in_chunk_pos: Int3, id: Id, env: &ChunkEnvironment, vertices: DetailedVertexVecMut) {
+		match vertices {
+			Full(vertices) => {
+				if id != NOTHING_VOXEL_DATA.id {
+					/* Cube vertices generator */
+					let cube = Cube::new(&VOXEL_DATA[id as usize]);
+		
+					/* Get position from index */
+					let position = pos_in_chunk_to_world(in_chunk_pos, self.pos);
+		
+					/* Draw checker */
+					let check = |input: Option<Voxel>| -> bool {
+						match input {
+							None => true,
+							Some(voxel) => voxel.data == NOTHING_VOXEL_DATA,
+						}
+					};
+		
+					/* Mesh builder */
+					let build = |bias, env: Option<*const MeshlessChunk>| {
+						if check(self.get_voxel_or_none(position + bias)) {
+							match env {
+								Some(chunk) => {
+									// * SAFETY: Safe because environment chunks lives as long as other chunks or that given chunk.
+									// * And it also needs only at chunk generation stage.
+									if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(position + bias) }) {
+										true
+									} else { false }
+								},
+								None => true
+							}
+						} else { false }
+					};
+		
+					/* Build all sides separately */
+					if build(Int3::new( 1,  0,  0), env.back)   { cube.back  (position, vertices) };
+					if build(Int3::new(-1,  0,  0), env.front)  { cube.front (position, vertices) };
+					if build(Int3::new( 0,  1,  0), env.top)    { cube.top   (position, vertices) };
+					if build(Int3::new( 0, -1,  0), env.bottom) { cube.bottom(position, vertices) };
+					if build(Int3::new( 0,  0,  1), env.right)  { cube.right (position, vertices) };
+					if build(Int3::new( 0,  0, -1), env.left)   { cube.left  (position, vertices) };
 				}
-			};
-
-			/* Mesh builder */
-			let build = |bias, env: Option<*const MeshlessChunk>| {
-				if check(self.get_voxel_or_none(position + bias)) {
-					match env {
-						Some(chunk) => {
-							// * SAFETY: Safe because environment chunks lives as long as other chunks or that given chunk.
-							// * And it also needs only at chunk generation stage.
-							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(position + bias) }) {
-								true
-							} else { false }
-						},
-						None => true
-					}
-				} else { false }
-			};
-
-			/* Build all sides separately */
-			if build(Int3::new( 1,  0,  0), env.back)   { cube.back  (position, vertices) };
-			if build(Int3::new(-1,  0,  0), env.front)  { cube.front (position, vertices) };
-			if build(Int3::new( 0,  1,  0), env.top)    { cube.top   (position, vertices) };
-			if build(Int3::new( 0, -1,  0), env.bottom) { cube.bottom(position, vertices) };
-			if build(Int3::new( 0,  0,  1), env.right)  { cube.right (position, vertices) };
-			if build(Int3::new( 0,  0, -1), env.left)   { cube.left  (position, vertices) };
+			},
+			Low(_) => todo!("Lowered details implementation")
 		}
 	}
 
@@ -456,7 +464,7 @@ impl MeshlessChunk {
 	}
 
 	/// Upgrades chunk to be meshed.
-	pub fn triangles_upgrade(self, graphics: &Graphics, triangles: &[DetailedVertex]) -> MeshedChunk {
+	pub fn triangles_upgrade(self, graphics: &Graphics, triangles: DetailedVertexSlice) -> MeshedChunk {
 		MeshedChunk::from_meshless_triangles(graphics, self, triangles)
 	}
 }
@@ -488,6 +496,10 @@ pub enum Detailed<Full, Low> {
 	Full(Full),
 	Low(Low),
 }
+
+pub type DetailedVertexSlice<'v> = Detailed<&'v [DetailedVertex], &'v [LoweredVertex]>;
+pub type DetailedVertexVec = Detailed<Vec<DetailedVertex>, Vec<LoweredVertex>>;
+pub type DetailedVertexVecMut<'v> = Detailed<&'v mut Vec<DetailedVertex>, &'v mut Vec<LoweredVertex>>;
 
 pub struct ChunkMesh(Detailed<
 	RefCell<UnindexedMesh<DetailedVertex>>,
@@ -534,18 +546,22 @@ impl MeshedChunk {
 	pub fn from_meshless_envs(graphics: &Graphics, meshless: MeshlessChunk, env: &ChunkEnvironment) -> Self {
 		/* Create chunk */
 		let triangles = meshless.to_triangles(env);
+		let triangles = match &triangles {
+			Full(vec) => Full(&vec[..]),
+			Low(vec) => Low(&vec[..]),
+		};
 
 		MeshedChunk {
 			inner: meshless,
-			mesh: ChunkMesh(Full(RefCell::new(Self::make_mesh(&graphics.display, &triangles))))
+			mesh: Self::make_mesh(&graphics.display, triangles)
 		}
 	}
 
 	/// Constructs mesh for meshless chunk.
-	pub fn from_meshless_triangles(graphics: &Graphics, meshless: MeshlessChunk, triangles: &[DetailedVertex]) -> Self {
+	pub fn from_meshless_triangles(graphics: &Graphics, meshless: MeshlessChunk, triangles: Detailed<&[DetailedVertex], &[LoweredVertex]>) -> Self {
 		MeshedChunk {
 			inner: meshless,
-			mesh: ChunkMesh(Full(RefCell::new(Self::make_mesh(&graphics.display, triangles))))
+			mesh: Self::make_mesh(&graphics.display, triangles)
 		}
 	}
 
@@ -559,16 +575,27 @@ impl MeshedChunk {
 	}
 
 	/// Updates mesh.
-	pub fn make_mesh(display: &glium::Display, vertices: &[DetailedVertex]) -> UnindexedMesh<DetailedVertex> {
-		/* Vertex buffer for chunks */
-		let vertex_buffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
+	pub fn make_mesh(display: &glium::Display, vertices: Detailed<&[DetailedVertex], &[LoweredVertex]>) -> ChunkMesh {
+		match vertices {
+			Full(vertices) => {
+				/* Vertex buffer for chunks */
+				let vertex_buffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
 
-		Mesh::new(vertex_buffer)
+				ChunkMesh(Full(RefCell::new(Mesh::new(vertex_buffer))))
+			},
+			Low(vertices) => {
+				/* Vertex buffer for chunks */
+				let vertex_buffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
+
+				ChunkMesh(Low(RefCell::new(Mesh::new(vertex_buffer))))
+			}
+		}
+		
 	}
 
 	/// Creates trianlges Vec from Chunk and its environment.
 	#[allow(dead_code)]
-	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<DetailedVertex> {
+	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Detailed<Vec<DetailedVertex>, Vec<LoweredVertex>> {
 		self.inner.to_triangles(env)
 	}
 

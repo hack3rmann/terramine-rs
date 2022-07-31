@@ -1,7 +1,6 @@
 use {
 	crate::app::utils::{
 		werror::prelude::*,
-		terrain::chunk::DetailedVertex,
 		math::prelude::*,
 		graphics::{
 			camera::Camera,
@@ -23,6 +22,8 @@ use {
 		ChunkFill,
 		Addition,
 		ChunkDetails,
+		Detailed,
+		DetailedVertexVec,
 	},
 	glium::{
 		uniforms::Uniforms,
@@ -51,7 +52,7 @@ impl Into<Offset> for SaveType {
 pub struct GeneratedChunkArray<'e>(MeshlessChunkArray, Vec<ChunkEnv<'e>>);
 
 impl GeneratedChunkArray<'static> {
-	pub fn generate_mesh(self, percentage_tx: Sender<Loading>) -> (MeshlessChunkArray, Vec<Vec<DetailedVertex>>) {
+	pub fn generate_mesh(self, percentage_tx: Sender<Loading>) -> (MeshlessChunkArray, Vec<DetailedVertexVec>) {
 		let GeneratedChunkArray(chunk_array, chunk_env) = self;
 		let volume = chunk_array.width * chunk_array.height * chunk_array.depth;
 
@@ -90,7 +91,7 @@ pub struct MeshlessChunkArray {
 }
 
 impl MeshlessChunkArray {
-	pub fn generate(width: usize, height: usize, depth: usize) -> (Promise<(MeshlessChunkArray, Vec<Vec<DetailedVertex>>)>, Promise<Loading>) {
+	pub fn generate(width: usize, height: usize, depth: usize) -> (Promise<(MeshlessChunkArray, Vec<DetailedVertexVec>)>, Promise<Loading>) {
 		/* Create channels */
 		let (result_tx, result_rx) = std::sync::mpsc::channel();
 		let (percenatge_tx, percentage_rx) = std::sync::mpsc::channel();
@@ -283,11 +284,18 @@ impl MeshlessChunkArray {
 	}
 
 	/// Upgrades meshless chunk array to meshed.
-	pub fn upgrade<'dp, 'g>(self, graphics: &'g Graphics, triangles: Vec<Vec<DetailedVertex>>) -> MeshedChunkArray<'dp> {
+	pub fn upgrade<'g, 'dp>(self, graphics: &'g Graphics, triangles: Vec<DetailedVertexVec>) -> MeshedChunkArray<'dp> {
 		let (width, height, depth) = (self.width, self.height, self.depth);
 		let chunks: Vec<_> = self.into_iter()
 			.zip(triangles.into_iter())
-			.map(|(chunk, triangles)| DebugVisualized::new_meshed_chunk(chunk.triangles_upgrade(graphics, &triangles), &graphics.display))
+			.map(|(chunk, triangles)| {
+				let triangles = match &triangles {
+					Detailed::Full(vec) => Detailed::Full(&vec[..]),
+					Detailed::Low(vec) => Detailed::Low(&vec[..]),
+				};
+				let chunk = chunk.triangles_upgrade(graphics, triangles);
+				DebugVisualized::new_meshed_chunk(chunk, &graphics.display)
+			})
 			.collect();
 
 		/* Chunk draw parameters */

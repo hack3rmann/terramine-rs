@@ -16,7 +16,7 @@ use {
 				MeshlessChunkArray,
 				MeshedChunkArray,
 			},
-			DetailedVertex
+			DetailedVertexVec,
 		},
 		time::timer::Timer,
 		profiler,
@@ -216,7 +216,7 @@ impl App {
 		} target.finish().wunwrap();
 
 		/* Chunk reciever */
-		static mut CHUNKS_PROMISE: Option<Promise<(MeshlessChunkArray, Vec<Vec<DetailedVertex>>)>> = None;
+		static mut CHUNKS_PROMISE: Option<Promise<(MeshlessChunkArray, Vec<DetailedVertexVec>)>> = None;
 		static mut PERCENTAGE_PROMISE: Option<Promise<Loading>> = None;
 		if generate_chunks {
 			/* Dimensions shortcut */
