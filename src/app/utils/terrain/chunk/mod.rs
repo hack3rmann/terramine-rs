@@ -204,7 +204,7 @@ impl MeshlessChunk {
 		MeshlessChunk {
 			voxels, pos,
 			additional_data: Addition::Know {
-				fill: Some(fill), details: ChunkDetails::Full
+				fill: Some(fill), details: ChunkDetails::Full,
 			}
 		}
 	}
@@ -301,8 +301,11 @@ impl MeshlessChunk {
 	/// Creates trianlges Vec from Chunk and its environment.
 	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<DetailedVertex> {
 		match self.additional_data.as_ref() {
+			/* Empty chunk passed in */
 			Addition::Know { fill: Some(ChunkFill::Empty), .. } => return vec![],
-			Addition::Know { fill: Some(ChunkFill::All(id)), .. } => {
+
+			/* "Filled" chunk with full details passed in */
+			Addition::Know { fill: Some(ChunkFill::All(id)), details: ChunkDetails::Full } => {
 				/* Cycle over all coordinates in chunk */
 				let mut vertices = vec![];
 				for pos in CubeBorder::new(CHUNK_SIZE as i32) {
@@ -314,7 +317,9 @@ impl MeshlessChunk {
 
 				return vertices
 			},
-			Addition::Know { fill: Some(ChunkFill::Standart), .. } => {
+
+			/* Standart chunk with full details passed in */
+			Addition::Know { fill: Some(ChunkFill::Standart), details: ChunkDetails::Full } => {
 				/* Construct vertex array */
 				let mut vertices = vec![];
 				for (pos, id) in self.voxels.iter().enumerate().map(|(i, &id)| (position_function(i), id)) {
@@ -326,6 +331,11 @@ impl MeshlessChunk {
 
 				return vertices
 			},
+
+			/* Lowered details uniplemented */
+			Addition::Know { details: ChunkDetails::Low(_), .. } => todo!("Lowered details impementation"),
+
+			/* Not enough information */
 			Addition::NothingToKnow | Addition::Know { fill: None, .. } => panic!(
 				"No needed information passed into mesh builder! {:?}",
 				Addition::NothingToKnow
@@ -457,25 +467,31 @@ impl<'c> ChunkEnvironment<'c> {
 	}
 }
 
-pub enum ChunkMesh {
-	Detailed(RefCell<UnindexedMesh<DetailedVertex>>),
-	Lowered(RefCell<UnindexedMesh<LoweredVertex>>),
+use Detailed::*;
+pub enum Detailed<Full, Low> {
+	Full(Full),
+	Low(Low),
 }
+
+pub struct ChunkMesh(Detailed<
+	RefCell<UnindexedMesh<DetailedVertex>>,
+	RefCell<UnindexedMesh<LoweredVertex>>
+>);
 
 impl ChunkMesh {
 	/// Render mesh.
 	pub fn render(&self, target: &mut Frame, shader: &Shader, draw_params: &DrawParameters<'_>, uniforms: &impl Uniforms) -> Result<(), DrawError> {
-		match self {
-			Self::Detailed(mesh) => mesh.borrow().render(target, shader, draw_params, uniforms),
-			Self::Lowered(mesh)  => mesh.borrow().render(target, shader, draw_params, uniforms),
+		match &self.0 {
+			Full(mesh) => mesh.borrow().render(target, shader, draw_params, uniforms),
+			Low(mesh)  => mesh.borrow().render(target, shader, draw_params, uniforms),
 		}
 	}
 
 	/// Checks if mesh is empty.
 	pub fn is_empty(&self) -> bool {
-		match self {
-			Self::Detailed(mesh) => mesh.borrow().is_empty(),
-			Self::Lowered(mesh)  => mesh.borrow().is_empty()
+		match &self.0 {
+			Full(mesh) => mesh.borrow().is_empty(),
+			Low(mesh)  => mesh.borrow().is_empty()
 		}
 	}
 }
@@ -505,7 +521,7 @@ impl MeshedChunk {
 
 		MeshedChunk {
 			inner: meshless,
-			mesh: ChunkMesh::Detailed(RefCell::new(Self::make_mesh(&graphics.display, &triangles)))
+			mesh: ChunkMesh(Full(RefCell::new(Self::make_mesh(&graphics.display, &triangles))))
 		}
 	}
 
@@ -513,7 +529,7 @@ impl MeshedChunk {
 	pub fn from_meshless_triangles(graphics: &Graphics, meshless: MeshlessChunk, triangles: &[DetailedVertex]) -> Self {
 		MeshedChunk {
 			inner: meshless,
-			mesh: ChunkMesh::Detailed(RefCell::new(Self::make_mesh(&graphics.display, triangles)))
+			mesh: ChunkMesh(Full(RefCell::new(Self::make_mesh(&graphics.display, triangles))))
 		}
 	}
 
