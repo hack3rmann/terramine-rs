@@ -586,7 +586,7 @@ unsafe impl ReinterpretAsBytes for MeshlessChunk {
 	fn reinterpret_as_bytes(&self) -> Vec<u8> {
 		let voxels = match self.additional_data.as_ref() {
 			Addition::Know { fill: Some(ChunkFill::Empty), .. } => {
-				Cow::Owned(vec![0; CHUNK_VOLUME])
+				Cow::Owned(vec![NOTHING_VOXEL_DATA.id; CHUNK_VOLUME])
 			},
 			Addition::Know { fill: Some(ChunkFill::All(id)), .. } => {
 				Cow::Owned(vec![*id; CHUNK_VOLUME])
