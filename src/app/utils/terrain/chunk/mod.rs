@@ -74,7 +74,8 @@ type VoxelArray = Vec<Id>;
 pub enum FindOptions {
 	WorldBorder,
 	InChunkNothing,
-	InChunkSome(Voxel)
+	InChunkDetailed(Voxel),
+	InChunkLowered(Voxel),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -394,16 +395,31 @@ impl MeshlessChunk {
 			FindOptions::WorldBorder
 		} else {
 			match self.additional_data.as_ref() {
-				Addition::Know { fill: Some(ChunkFill::Empty), .. } =>
+				/* For empty chuncks */
+				Addition::Know { fill: Some(ChunkFill::Empty), .. } => 
 					FindOptions::InChunkNothing,
-				Addition::Know { fill: Some(ChunkFill::All(id)), .. } =>
-					FindOptions::InChunkSome(Voxel::new(global_pos, &VOXEL_DATA[*id as usize])),
-				Addition::Know { fill: Some(ChunkFill::Standart), .. } => {
-					/* Sorts: [X -> Y -> Z] */
-					let index = index_function(pos);
-					FindOptions::InChunkSome(Voxel::new(global_pos, &VOXEL_DATA[self.voxels[index] as usize]))
-				},
-				_ => panic!("Unresolvable chunk Addition: {:?}", self.additional_data),
+
+				/* For known-filled chunks */
+				Addition::Know { fill: Some(fill), details } => {
+					let voxel = match fill {
+						ChunkFill::Standart =>
+							Voxel::new(global_pos, &VOXEL_DATA[self.voxels[index_function(pos)] as usize]),
+						ChunkFill::All(id) =>
+							Voxel::new(global_pos, &VOXEL_DATA[*id as usize]),
+						ChunkFill::Empty =>
+							unreachable!("Empty branch checked in previous pattern!"),
+					};
+					match details {
+						ChunkDetails::Full => FindOptions::InChunkDetailed(voxel),
+						ChunkDetails::Low(_) => FindOptions::InChunkLowered(voxel),
+					}
+				}
+
+				/* No information */
+				Addition::NothingToKnow => panic!("Not enough information!"),
+
+				/* Other types */
+				addition => panic!("Unresolvable chunk Addition {:?}!", addition),
 			}
 		}
 	}
@@ -412,7 +428,7 @@ impl MeshlessChunk {
 	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<Voxel> {
 		match self.get_voxel_optional(pos) {
 			FindOptions::WorldBorder | FindOptions::InChunkNothing => None,
-			FindOptions::InChunkSome(chunk) => Some(chunk)
+			FindOptions::InChunkDetailed(chunk) | FindOptions::InChunkLowered(chunk) => Some(chunk)
 		}
 	}
 
