@@ -96,7 +96,7 @@ impl DebugVisualized<MeshedChunk> {
 		let mesh = {
 			const BIAS: f32 = cfg::topology::Z_FIGHTING_BIAS;
 			const SIZE: f32 = CHUNK_SIZE as f32 + BIAS;
-			let pos = chunk::chunk_cords_to_min_world(chunk.inner.pos);
+			let pos = chunk::chunk_cords_to_min_world_int3(chunk.inner.pos);
 			let lll = [ -0.5 + pos.x() as f32 - BIAS, -0.5 + pos.y() as f32 - BIAS, -0.5 + pos.z() as f32 - BIAS ];
 			let llh = [ -0.5 + pos.x() as f32 - BIAS, -0.5 + pos.y() as f32 - BIAS, -0.5 + pos.z() as f32 + SIZE ];
 			let lhl = [ -0.5 + pos.x() as f32 - BIAS, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 - BIAS ];

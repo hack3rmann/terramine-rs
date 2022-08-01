@@ -17,7 +17,7 @@ use {
 	super::voxel::{
 		Voxel,
 		LoweredVoxel,
-		shape::Cube,
+		shape::{CubeDetailed, CubeLowered},
 		voxel_data::*,
 		generator,
 	},
@@ -47,7 +47,7 @@ pub struct DetailedVertex {
 #[derive(Copy, Clone)]
 pub struct LoweredVertex {
 	pub position: [f32; 3],
-	pub color: [f32; 4],
+	pub color: [f32; 3],
 	pub light: f32
 }
 
@@ -153,7 +153,7 @@ impl MeshlessChunk {
 		for x in 0..CHUNK_SIZE {
 		for y in 0..CHUNK_SIZE {
 		for z in 0..CHUNK_SIZE {
-			let global_pos = pos_in_chunk_to_world(Int3::new(x as i32, y as i32, z as i32), pos);
+			let global_pos = pos_in_chunk_to_world_int3(Int3::new(x as i32, y as i32, z as i32), pos);
 
 			/* Update addidional chunk data */
 			let mut update_data = |id| {
@@ -236,7 +236,7 @@ impl MeshlessChunk {
 	/// Lowers details of chunk to given value.
 	pub fn lower_detail(&mut self, level: u32) -> Result<(), ChunkDetailsError> {
 		/* Do nothing if level is zero */
-		//* Also, this required by Safety argument below.
+		//* Also, this required by Safety arguments below.
 		if level == 0 { return Ok(()) }
 
 		//* Safety: this operation is safe until level is not zero.
@@ -339,24 +339,24 @@ impl MeshlessChunk {
 			},
 
 			/* Lowered details uniplemented */
-			Addition::Know { details: ChunkDetails::Low(lod), .. } => {
+			Addition::Know { details: ChunkDetails::Low(lod), fill: _ } => {
 
 				return todo!("LOD implementation")
 			},
 
 			/* Not enough information */
 			not_enough @ Addition::NothingToKnow | not_enough @ Addition::Know { fill: None, .. } =>
-				panic!("No needed information passed into mesh builder! {:?}", not_enough),
+				panic!("No needed information passed into mesh builder! {addition:?}", addition = not_enough),
 		}
 	}
 
 	fn to_triangles_inner_detailed(&self, in_chunk_pos: Int3, id: Id, env: &ChunkEnvironment, vertices: &mut Vec<DetailedVertex>) {
 		if id != NOTHING_VOXEL_DATA.id {
 			/* Cube vertices generator */
-			let cube = Cube::new(&VOXEL_DATA[id as usize]);
+			let cube = CubeDetailed::new(&VOXEL_DATA[id as usize]);
 
 			/* Get position from index */
-			let position = pos_in_chunk_to_world(in_chunk_pos, self.pos);
+			let position = pos_in_chunk_to_world_int3(in_chunk_pos, self.pos);
 
 			/* Draw checker */
 			let check = |input: Option<Voxel>| -> bool {
@@ -383,17 +383,17 @@ impl MeshlessChunk {
 			};
 
 			/* Build all sides separately */
-			if build(Int3::new( 1,  0,  0), env.back)   { cube.back  (position, vertices) };
-			if build(Int3::new(-1,  0,  0), env.front)  { cube.front (position, vertices) };
-			if build(Int3::new( 0,  1,  0), env.top)    { cube.top   (position, vertices) };
-			if build(Int3::new( 0, -1,  0), env.bottom) { cube.bottom(position, vertices) };
-			if build(Int3::new( 0,  0,  1), env.right)  { cube.right (position, vertices) };
-			if build(Int3::new( 0,  0, -1), env.left)   { cube.left  (position, vertices) };
+			if build(Int3::new( 1,  0,  0), env.back)   { cube.back_detailed  (position, vertices) };
+			if build(Int3::new(-1,  0,  0), env.front)  { cube.front_detailed (position, vertices) };
+			if build(Int3::new( 0,  1,  0), env.top)    { cube.top_detailed   (position, vertices) };
+			if build(Int3::new( 0, -1,  0), env.bottom) { cube.bottom_detailed(position, vertices) };
+			if build(Int3::new( 0,  0,  1), env.right)  { cube.right_detailed (position, vertices) };
+			if build(Int3::new( 0,  0, -1), env.left)   { cube.left_detailed  (position, vertices) };
 		}
 	}
 
-	fn to_triangles_inner_lowered(&self, in_chunk_pos: Int3, lod: NonZeroU32, env: &ChunkEnvironment, vertices: &mut Vec<LoweredVertex>) {
-		todo!("to_triangles_inner_lowered(..) implementaion")
+	fn to_triangles_inner_lowered(&self, global_pos: Float4, voxel_size: f32, lowered: &LoweredVoxel, env: &ChunkEnvironment, vertices: &mut Vec<LoweredVertex>) {
+		todo!("`to_triangles_inner_lowered(..)` implementation")
 	}
 
 	fn get_lowered_voxels(&self, lod: NonZeroU32) -> Result<Vec<LoweredVoxel>, String> {
@@ -433,20 +433,21 @@ impl MeshlessChunk {
 					/* Writes count shortcut */
 					let count = n_writes[low_i] as f32;
 
-					/* Color shortcut */
-					let [old_r, old_g, old_b] = &mut result[low_i].general_color;
-					let [new_r, new_g, new_b] = VOXEL_DATA[id as usize].avarage_color;
+					/* Air blocks are not in count */
+					if id != NOTHING_VOXEL_DATA.id {
+						/* Color shortcut */
+						let [old_r, old_g, old_b] = &mut result[low_i].general_color;
+						let [new_r, new_g, new_b] = VOXEL_DATA[id as usize].avarage_color;
 
-					/* Calculate new avarage color */
-					*old_r = (*old_r * count + new_r) / (count + 1.0);
-					*old_g = (*old_g * count + new_g) / (count + 1.0);
-					*old_b = (*old_b * count + new_b) / (count + 1.0);
+						/* Calculate new avarage color */
+						*old_r = (*old_r * count + new_r) / (count + 1.0);
+						*old_g = (*old_g * count + new_g) / (count + 1.0);
+						*old_b = (*old_b * count + new_b) / (count + 1.0);
 
-					/* Increment writes count */
-					n_writes[low_i] += 1;
+						/* Increment writes count */
+						n_writes[low_i] += 1;
+					}
 				}
-
-				debug_assert_eq!(n_writes, vec![new_size.pow(3); new_volume]);
 
 				return Ok(result)
 			},
@@ -506,7 +507,7 @@ impl MeshlessChunk {
 	/// Checks if chunk is in camera view.
 	pub fn is_visible(&self, camera: &Camera) -> bool {
 		/* AABB init */
-		let lo = chunk_cords_to_min_world(self.pos);
+		let lo = chunk_cords_to_min_world_int3(self.pos);
 		let hi = lo + Int3::all(CHUNK_SIZE as i32);
 
 		/* Bias (voxel centration) */
@@ -995,13 +996,23 @@ pub fn world_coords_to_chunk(pos: Int3) -> Int3 {
 }
 
 /// Transforms chunk coords to world
-pub fn chunk_cords_to_min_world(pos: Int3) -> Int3 {
+pub fn chunk_cords_to_min_world_int3(pos: Int3) -> Int3 {
 	pos * CHUNK_SIZE as i32
 }
 
+/// Transforms chunk coords to world
+pub fn chunk_cords_to_min_world_float4(pos: Float4) -> Float4 {
+	pos * CHUNK_SIZE as f32
+}
+
 /// Transforms in-chunk coords to world
-pub fn pos_in_chunk_to_world(in_chunk: Int3, chunk: Int3) -> Int3 {
-	chunk_cords_to_min_world(chunk) + in_chunk
+pub fn pos_in_chunk_to_world_int3(in_chunk: Int3, chunk: Int3) -> Int3 {
+	chunk_cords_to_min_world_int3(chunk) + in_chunk
+}
+
+/// Transforms in-chunk coords to world
+pub fn pos_in_chunk_to_world_float4(in_chunk: Float4, chunk: Float4) -> Float4 {
+	chunk_cords_to_min_world_float4(chunk) + in_chunk
 }
 
 /// Transforms world coordinates to chunk
@@ -1031,7 +1042,7 @@ pub fn world_coords_to_in_chunk(pos: Int3) -> Int3 {
 
 /// Transforms world coordinates to chunk 
 pub fn world_coords_to_in_some_chunk(pos: Int3, chunk: Int3) -> Int3 {
-	pos - chunk_cords_to_min_world(chunk)
+	pos - chunk_cords_to_min_world_int3(chunk)
 }
 
 /// Index function
