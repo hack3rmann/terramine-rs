@@ -279,7 +279,7 @@ impl std::ops::RemAssign for Int3 {
 
 impl std::ops::Rem for Int3 {
 	type Output = Int3;
-	fn rem(self, rhs: Self) -> Self::Output {
+	fn rem(mut self, rhs: Self) -> Self::Output {
 		self %= rhs;
 		return self
 	}
@@ -295,7 +295,7 @@ impl std::ops::RemAssign<i32> for Int3 {
 
 impl std::ops::Rem<i32> for Int3 {
 	type Output = Int3;
-	fn rem(self, rhs: i32) -> Self::Output {
+	fn rem(mut self, rhs: i32) -> Self::Output {
 		self %= rhs;
 		return self
 	}
