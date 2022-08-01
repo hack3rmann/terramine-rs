@@ -269,6 +269,38 @@ impl std::ops::DivAssign<i32> for Int3 {
 	}
 }
 
+impl std::ops::RemAssign for Int3 {
+	fn rem_assign(&mut self, rhs: Self) {
+		self.x %= rhs.x();
+		self.y %= rhs.y();
+		self.z %= rhs.z();
+	}
+}
+
+impl std::ops::Rem for Int3 {
+	type Output = Int3;
+	fn rem(self, rhs: Self) -> Self::Output {
+		self %= rhs;
+		return self
+	}
+}
+
+impl std::ops::RemAssign<i32> for Int3 {
+	fn rem_assign(&mut self, rhs: i32) {
+		self.x %= rhs;
+		self.y %= rhs;
+		self.z %= rhs;
+	}
+}
+
+impl std::ops::Rem<i32> for Int3 {
+	type Output = Int3;
+	fn rem(self, rhs: i32) -> Self::Output {
+		self %= rhs;
+		return self
+	}
+}
+
 /**
  * Swizzle section
  */
