@@ -65,6 +65,16 @@ impl Float4 {
 	pub fn abs(self) -> f32 {
 		XMVectorGetX(XMVector3Length(self.i_vec))
 	}
+
+	/// Represents [`Float4`] as an array.
+	pub fn as_array(self) -> [f32; 4] {
+		[self.x(), self.y(), self.z(), self.w()]
+	}
+
+	/// Represents [`Float4`] as a tuple.
+	pub fn as_tuple(self) -> (f32, f32, f32, f32) {
+		(self.x(), self.y(), self.z(), self.w())
+	}
 }
 
 #[allow(dead_code)]
@@ -74,9 +84,24 @@ impl Int3 {
 		Self::new(xyz, xyz, xyz)
 	}
 
+	/// Constructs zero vector.
+	pub fn zero() -> Self {
+		Self::all(0)
+	}
+
 	/// Constructs unit vector.
 	pub fn unit() -> Self {
 		Self::all(1)
+	}
+
+	/// Represents [`Int3`] as an array.
+	pub fn as_array(self) -> [i32; 3] {
+		[self.x(), self.y(), self.z()]
+	}
+
+	/// Represents [`Int3`] as a tuple.
+	pub fn as_tuple(self) -> (i32, i32, i32) {
+		(self.x(), self.y(), self.z())
 	}
 }
 
