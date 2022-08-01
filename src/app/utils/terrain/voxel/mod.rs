@@ -14,7 +14,7 @@ use {
 };
 
 /// Represents voxel.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Voxel {
 	pub data: &'static VoxelData,
 	pub position: Int3,
@@ -25,6 +25,12 @@ impl Voxel {
 	pub fn new(position: Int3, data: &'static VoxelData) -> Self {
 		Voxel { data, position }
 	}
+}
+
+/// Generalization of voxel details.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LoweredVoxel {
+	pub general_color: [f32; 3],
 }
 
 

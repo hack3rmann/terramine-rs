@@ -16,6 +16,7 @@ use {
 	},
 	super::voxel::{
 		Voxel,
+		LoweredVoxel,
 		shape::Cube,
 		voxel_data::*,
 		generator,
@@ -66,7 +67,7 @@ implement_vertex!(LoweredVertex, position, color, light);
 
 /// Predefined chunk values.
 pub const CHUNK_SIZE:	usize = cfg::terrain::CHUNK_SIZE;
-pub const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
+pub const CHUNK_VOLUME:	usize = CHUNK_SIZE.pow(3);
 
 /// Type of voxel array. May be something different during progress.
 type VoxelArray = Vec<Id>;
@@ -235,9 +236,10 @@ impl MeshlessChunk {
 	/// Lowers details of chunk to given value.
 	pub fn lower_detail(&mut self, level: u32) -> Result<(), ChunkDetailsError> {
 		/* Do nothing if level is zero */
+		//* Also, this required by Safety argument below.
 		if level == 0 { return Ok(()) }
 
-		//* SAFETY: this operation is safe until level is not zero.
+		//* Safety: this operation is safe until level is not zero.
 		//* In previous step level had been checked so it is not zero.
 		let level = unsafe { NonZeroU32::new_unchecked(level) };
 
@@ -262,7 +264,7 @@ impl MeshlessChunk {
 					return Err(ChunkDetailsError::NoMoreDivisible { size: old_size, level: level.get() })
 				}
 
-				//* SAFETY: this operation is safe until level is not zero.
+				//* Safety: this operation is safe until level is not zero.
 				//* Given value is not zero because it is the sum of positive values.
 				let new_level = unsafe { NonZeroU32::new_unchecked(old_level.get() + level.get()) };
 
@@ -313,7 +315,7 @@ impl MeshlessChunk {
 				/* Cycle over all coordinates in chunk */
 				let mut vertices = vec![];
 				for pos in CubeBorder::new(CHUNK_SIZE as i32) {
-					self.to_triangles_inner(pos, *id, env, Full(&mut vertices));
+					self.to_triangles_inner_detailed(pos, *id, env, &mut vertices);
 				}
 
 				/* Shrink vector */
@@ -327,7 +329,7 @@ impl MeshlessChunk {
 				/* Construct vertex array */
 				let mut vertices = vec![];
 				for (pos, id) in self.voxels.iter().enumerate().map(|(i, &id)| (position_function(i), id)) {
-					self.to_triangles_inner(pos, id, env, Full(&mut vertices));
+					self.to_triangles_inner_detailed(pos, id, env, &mut vertices);
 				}
 
 				/* Shrink vector */
@@ -337,60 +339,121 @@ impl MeshlessChunk {
 			},
 
 			/* Lowered details uniplemented */
-			Addition::Know { details: ChunkDetails::Low(_), .. } => todo!("Lowered details impementation"),
+			Addition::Know { details: ChunkDetails::Low(lod), .. } => {
+
+				return todo!("LOD implementation")
+			},
 
 			/* Not enough information */
-			Addition::NothingToKnow | Addition::Know { fill: None, .. } => panic!(
-				"No needed information passed into mesh builder! {:?}",
-				Addition::NothingToKnow
-			),
+			not_enough @ Addition::NothingToKnow | not_enough @ Addition::Know { fill: None, .. } =>
+				panic!("No needed information passed into mesh builder! {:?}", not_enough),
 		}
 	}
 
-	fn to_triangles_inner(&self, in_chunk_pos: Int3, id: Id, env: &ChunkEnvironment, vertices: DetailedVertexVecMut) {
-		match vertices {
-			Full(vertices) => {
-				if id != NOTHING_VOXEL_DATA.id {
-					/* Cube vertices generator */
-					let cube = Cube::new(&VOXEL_DATA[id as usize]);
-		
-					/* Get position from index */
-					let position = pos_in_chunk_to_world(in_chunk_pos, self.pos);
-		
-					/* Draw checker */
-					let check = |input: Option<Voxel>| -> bool {
-						match input {
-							None => true,
-							Some(voxel) => voxel.data == NOTHING_VOXEL_DATA,
-						}
-					};
-		
-					/* Mesh builder */
-					let build = |bias, env: Option<*const MeshlessChunk>| {
-						if check(self.get_voxel_or_none(position + bias)) {
-							match env {
-								Some(chunk) => {
-									// * SAFETY: Safe because environment chunks lives as long as other chunks or that given chunk.
-									// * And it also needs only at chunk generation stage.
-									if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(position + bias) }) {
-										true
-									} else { false }
-								},
-								None => true
-							}
-						} else { false }
-					};
-		
-					/* Build all sides separately */
-					if build(Int3::new( 1,  0,  0), env.back)   { cube.back  (position, vertices) };
-					if build(Int3::new(-1,  0,  0), env.front)  { cube.front (position, vertices) };
-					if build(Int3::new( 0,  1,  0), env.top)    { cube.top   (position, vertices) };
-					if build(Int3::new( 0, -1,  0), env.bottom) { cube.bottom(position, vertices) };
-					if build(Int3::new( 0,  0,  1), env.right)  { cube.right (position, vertices) };
-					if build(Int3::new( 0,  0, -1), env.left)   { cube.left  (position, vertices) };
+	fn to_triangles_inner_detailed(&self, in_chunk_pos: Int3, id: Id, env: &ChunkEnvironment, vertices: &mut Vec<DetailedVertex>) {
+		if id != NOTHING_VOXEL_DATA.id {
+			/* Cube vertices generator */
+			let cube = Cube::new(&VOXEL_DATA[id as usize]);
+
+			/* Get position from index */
+			let position = pos_in_chunk_to_world(in_chunk_pos, self.pos);
+
+			/* Draw checker */
+			let check = |input: Option<Voxel>| -> bool {
+				match input {
+					None => true,
+					Some(voxel) => voxel.data == NOTHING_VOXEL_DATA,
 				}
+			};
+
+			/* Mesh builder */
+			let build = |bias, env: Option<*const MeshlessChunk>| {
+				if check(self.get_voxel_or_none(position + bias)) {
+					match env {
+						Some(chunk) => {
+							// * Safety: Safe because environment chunks lives as long as other chunks or that given chunk.
+							// * And it also needs only at chunk generation stage.
+							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(position + bias) }) {
+								true
+							} else { false }
+						},
+						None => true
+					}
+				} else { false }
+			};
+
+			/* Build all sides separately */
+			if build(Int3::new( 1,  0,  0), env.back)   { cube.back  (position, vertices) };
+			if build(Int3::new(-1,  0,  0), env.front)  { cube.front (position, vertices) };
+			if build(Int3::new( 0,  1,  0), env.top)    { cube.top   (position, vertices) };
+			if build(Int3::new( 0, -1,  0), env.bottom) { cube.bottom(position, vertices) };
+			if build(Int3::new( 0,  0,  1), env.right)  { cube.right (position, vertices) };
+			if build(Int3::new( 0,  0, -1), env.left)   { cube.left  (position, vertices) };
+		}
+	}
+
+	fn to_triangles_inner_lowered(&self, in_chunk_pos: Int3, lod: NonZeroU32, env: &ChunkEnvironment, vertices: &mut Vec<LoweredVertex>) {
+		todo!("to_triangles_inner_lowered(..) implementaion")
+	}
+
+	fn get_lowered_voxels(&self, lod: NonZeroU32) -> Result<Vec<LoweredVoxel>, String> {
+		let factor = 2_usize.pow(lod.get());
+		let new_size = CHUNK_SIZE / factor;
+		let new_volume = CHUNK_VOLUME / factor.pow(3);
+		
+		match self.additional_data.as_ref() {
+			/* Chunk was empty */
+			Addition::Know { fill: Some(ChunkFill::Empty), details: _ } =>
+				return Ok(vec![]),
+
+			/* Chunk was filled with the save voxel */
+			Addition::Know { fill: Some(ChunkFill::All(id)), details: _ } => {
+				let voxel = LoweredVoxel { general_color: VOXEL_DATA[*id as usize].avarage_color };
+				return Ok(vec![voxel; new_volume])
 			},
-			Low(_) => todo!("Lowered details implementation")
+
+			/* Chunk was standart-filled */
+			Addition::Know { fill: Some(ChunkFill::Standart), details: _ } => {
+				let mut result = vec![LoweredVoxel { general_color: [0.0, 0.0, 0.0] }; new_volume];
+				let mut n_writes = vec![1; new_volume];
+
+				let size = new_size as i32;
+				let iter = (0..CHUNK_VOLUME).map(|i| {
+					let pos = position_function(i);
+					let id = VOXEL_DATA[i].id;
+					return (id, pos / size)
+				});
+				let low_index = |pos: Int3|
+					sdex::get_index(&[pos.x() as usize, pos.y() as usize, pos.z() as usize], &[new_size; 3]);
+
+				for (id, new_pos) in iter {
+					/* Lowered voxels index shortcut */
+					let low_i = low_index(new_pos);
+
+					/* Writes count shortcut */
+					let count = n_writes[low_i] as f32;
+
+					/* Color shortcut */
+					let [old_r, old_g, old_b] = &mut result[low_i].general_color;
+					let [new_r, new_g, new_b] = VOXEL_DATA[id as usize].avarage_color;
+
+					/* Calculate new avarage color */
+					*old_r = (*old_r * count + new_r) / (count + 1.0);
+					*old_g = (*old_g * count + new_g) / (count + 1.0);
+					*old_b = (*old_b * count + new_b) / (count + 1.0);
+
+					/* Increment writes count */
+					n_writes[low_i] += 1;
+				}
+
+				debug_assert_eq!(n_writes, vec![new_size.pow(3); new_volume]);
+
+				return Ok(result)
+			},
+
+			/* Not enough information */
+			not_enough @ Addition::Know { fill: None, details: _ } | not_enough @ Addition::NothingToKnow =>
+				return Err(format!("Not enough information! Addition was: {addition:?}", addition = not_enough)),
 		}
 	}
 

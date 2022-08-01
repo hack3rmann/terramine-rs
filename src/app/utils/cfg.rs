@@ -41,9 +41,9 @@ pub mod terrain {
 		use crate::app::utils::terrain::voxel::voxel_data::{VoxelData, TextureSides};
 
 		pub const VOXEL_DATA: [VoxelData; 3] = [
-			VoxelData { name: "Air",					id: 0, textures: TextureSides::all(0) },
-			VoxelData { name: "Log",					id: 1, textures: TextureSides::vertical(3, 1) },
-			VoxelData { name: "Stone",					id: 2, textures: TextureSides::all(2) },
+			VoxelData { name: "Air",					id: 0, avarage_color: [0.0, 0.0, 0.0], textures: TextureSides::all(0) },
+			VoxelData { name: "Log",					id: 1, avarage_color: [1.0, 0.0, 0.0], textures: TextureSides::vertical(3, 1) },
+			VoxelData { name: "Stone",					id: 2, avarage_color: [0.0, 1.0, 0.0], textures: TextureSides::all(2) },
 		];
 	}
 

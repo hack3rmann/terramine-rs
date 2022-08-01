@@ -11,7 +11,8 @@ pub struct VoxelData {
 	pub name: &'static str,
 	pub id: Id,
 
-	pub textures: TextureSides
+	pub textures: TextureSides,
+	pub avarage_color: [f32; 3],
 }
 
 /// Represents textured sides of the voxel.

@@ -220,8 +220,9 @@ impl App {
 		static mut PERCENTAGE_PROMISE: Option<Promise<Loading>> = None;
 		if generate_chunks {
 			/* Dimensions shortcut */
-			let (width, height, depth) = unsafe {
-				(SIZES[0] as usize, SIZES[1] as usize, SIZES[2] as usize)
+			let (width, height, depth) = {
+				let [width, height, depth] = unsafe { SIZES };
+				(width as usize, height as usize, depth as usize)
 			};
 
 			/* Get receivers */
