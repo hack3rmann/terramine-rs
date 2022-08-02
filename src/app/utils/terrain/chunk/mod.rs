@@ -203,7 +203,6 @@ impl MeshlessChunk {
 		if let ChunkFill::Empty   = fill { voxels = vec![  ] }
 		if let ChunkFill::All(id) = fill { voxels = vec![id] }
 		
-
 		// TODO: Remove this:
 		let mut chunk = MeshlessChunk {
 			voxels, pos,
@@ -335,7 +334,14 @@ impl MeshlessChunk {
 			Addition::Know { fill: Some(ChunkFill::Standart), details: ChunkDetails::Full } => {
 				/* Construct vertex array */
 				let mut vertices = vec![];
-				for (pos, id) in self.voxels.iter().enumerate().map(|(i, &id)| (position_function(i), id)) {
+
+				let iter = self.voxels.iter()
+					.enumerate()
+					.map(|(i, &id)|
+						return (position_function(i), id)
+					);
+
+				for (pos, id) in iter {
 					self.to_triangles_inner_detailed(pos, id, env, &mut vertices);
 				}
 
@@ -346,31 +352,45 @@ impl MeshlessChunk {
 			},
 
 			/* Lowered details uniplemented */
+			// TODO: Separate filled and standart chunk impl.
 			Addition::Know { details: ChunkDetails::Low(lod), fill: _ } => {
+				/* Resulting vertex array */
 				let mut vertices = vec![];
+
+				/* Array of low-res voxels */
 				let lowered = self.get_lowered_voxels(*lod).wunwrap();
+
+				/* Side length of low-res voxel in world units */
 				let voxel_size = 2_usize.pow(lod.get());
-				let chunk_cap = CHUNK_SIZE / voxel_size;
+
+				/* Side length of low-res chunk in low-res voxels */
+				let low_side_len = CHUNK_SIZE / voxel_size;
 
 				let iter = lowered.iter()
 					.enumerate()
 					.map(|(i, low)| {
-						// TODO: Generalize this:
-						let pos = general_position(i, chunk_cap, chunk_cap);
-						let mut pos = Float4::xyz0(pos.x() as f32, pos.y() as f32, pos.z() as f32);
-						pos += Float4::all(0.5);
+						use cfg::terrain::VOXEL_SIZE;
+
+						/* Find `position` in 'smaller chunk' */
+						let pos_low = general_position(i, low_side_len, low_side_len);
+						let mut pos = Float4::from(pos_low);
+
+						/* Then stretch it and center */
+						pos += Float4::all(VOXEL_SIZE * 0.5);
 						pos *= voxel_size as f32;
-						pos -= Float4::all(0.5);
+						pos -= Float4::all(VOXEL_SIZE * 0.5);
 
-						let self_pos = Float4::xyz0(self.pos.x() as f32, self.pos.y() as f32, self.pos.z() as f32);
+						/* Move to world coordinates */
+						let pos = pos_in_chunk_to_world_float4(pos, self.pos.into());
 
-						let pos = pos_in_chunk_to_world_float4(pos, self_pos);
-
-						return (pos, low)
+						/* Return lowered chunk position in world, 
+						|* position in lowered array and lowered chunk itself */
+						return (pos, pos_low, low)
 					});
 
-				for (pos, low) in iter {
-					self.to_triangles_inner_lowered(pos, voxel_size as f32, low, env, &mut vertices);
+				/* Goes for each low-res voxel and generates its mesh */
+				for (pos, pos_low, low) in iter {
+					self.to_triangles_inner_lowered(pos, pos_low, voxel_size as f32, low, env, &mut vertices);
 				}
 
 				return Low(vertices)
@@ -424,7 +444,10 @@ impl MeshlessChunk {
 		}
 	}
 
-	fn to_triangles_inner_lowered(&self, global_pos: Float4, voxel_size: f32, lowered: &LoweredVoxel, env: &ChunkEnvironment, vertices: &mut Vec<LoweredVertex>) {
+	fn to_triangles_inner_lowered(
+		&self, global_pos: Float4, low_pos: Int3, voxel_size: f32,
+		lowered: &LoweredVoxel, env: &ChunkEnvironment, vertices: &mut Vec<LoweredVertex>)
+	{
 		let cube = CubeLowered::new(voxel_size);
 
 		// TODO: Optimize this:
@@ -437,8 +460,13 @@ impl MeshlessChunk {
 	}
 
 	fn get_lowered_voxels(&self, lod: NonZeroU32) -> Result<Vec<LoweredVoxel>, String> {
+		/* Divide factor of chunk */
 		let factor = 2_usize.pow(lod.get());
+
+		/* Side length of low-res chunk in low-res voxels */
 		let new_size = CHUNK_SIZE / factor;
+
+		/* Volume of low-res voxels array in low-res voxels */
 		let new_volume = CHUNK_VOLUME / factor.pow(3);
 		
 		match self.additional_data.as_ref() {
@@ -454,15 +482,19 @@ impl MeshlessChunk {
 
 			/* Chunk was standart-filled */
 			Addition::Know { fill: Some(ChunkFill::Standart), details: _ } => {
+				/* Resulting array of loweres voxels */
 				let mut result = vec![LoweredVoxel::Transparent; new_volume];
+
+				/* Write count array each element of is the denominator of avarage count */
 				let mut n_writes = vec![0; new_volume];
 
-				let size = new_size as i32;
 				let iter = (0..CHUNK_VOLUME).map(|i| {
 					let pos = position_function(i);
 					let id = self.voxels[i];
 					return (id, pos / factor as i32)
 				});
+
+				/* Low-res array index function */
 				let low_index = |pos: Int3|
 					sdex::get_index(&[pos.x() as usize, pos.y() as usize, pos.z() as usize], &[new_size; 3]);
 
@@ -473,23 +505,30 @@ impl MeshlessChunk {
 					/* Writes count shortcut */
 					let count = n_writes[low_i] as f32;
 
-					/* Air blocks are not in count */
+					/* Air blocks are not in count.
+					|* Leaves empty voxels as [`LoweredVoxel::Transparent`] */
 					if id != NOTHING_VOXEL_DATA.id {
-						if let LoweredVoxel::Colored(color) = &mut result[low_i] {
-							/* Color shortcut */
-							let [old_r, old_g, old_b] = color;
-							let [new_r, new_g, new_b] = VOXEL_DATA[id as usize].avarage_color;
+						match &mut result[low_i] {
+							/* If voxel is already initialyzed with some color */
+							LoweredVoxel::Colored(color) => {
+								/* Color shortcut */
+								let [old_r, old_g, old_b] = color;
+								let [new_r, new_g, new_b] = VOXEL_DATA[id as usize].avarage_color;
 
-							/* Calculate new avarage color */
-							*old_r = (*old_r * count + new_r) / (count + 1.0);
-							*old_g = (*old_g * count + new_g) / (count + 1.0);
-							*old_b = (*old_b * count + new_b) / (count + 1.0);
+								/* Calculate new avarage color */
+								*old_r = (*old_r * count + new_r) / (count + 1.0);
+								*old_g = (*old_g * count + new_g) / (count + 1.0);
+								*old_b = (*old_b * count + new_b) / (count + 1.0);
 
-							/* Increment writes count */
-							n_writes[low_i] += 1;
-						} else {
-							result[low_i] = LoweredVoxel::Colored(VOXEL_DATA[id as usize].avarage_color);
-							n_writes[low_i] = 1;
+								/* Increment writes count */
+								n_writes[low_i] += 1;
+							},
+
+							/* If voxel going to be initialyzed */
+							LoweredVoxel::Transparent => {
+								result[low_i] = LoweredVoxel::Colored(VOXEL_DATA[id as usize].avarage_color);
+								n_writes[low_i] = 1;
+							}
 						}
 					}
 				}
@@ -552,15 +591,15 @@ impl MeshlessChunk {
 	/// Checks if chunk is in camera view.
 	pub fn is_visible(&self, camera: &Camera) -> bool {
 		/* AABB init */
-		let lo = chunk_cords_to_min_world_int3(self.pos);
-		let hi = lo + Int3::all(CHUNK_SIZE as i32);
+		let mut lo = Float4::from(chunk_cords_to_min_world_int3(self.pos));
+		let mut hi = lo + Int3::all(CHUNK_SIZE as i32).into();
 
 		/* Bias (voxel centration) */
 		const BIAS: f32 = cfg::terrain::VOXEL_SIZE * 0.5;
 
-		/* To Float4 conversion with biases */
-		let lo = Float4::xyz0(lo.x() as f32 - BIAS, lo.y() as f32 - BIAS, lo.z() as f32 - BIAS);
-		let hi = Float4::xyz0(hi.x() as f32 - BIAS, hi.y() as f32 - BIAS, hi.z() as f32 - BIAS);
+		/* Biasing */
+		lo -= Float4::all(BIAS);
+		hi -= Float4::all(BIAS);
 
 		/* Frustum check */
 		camera.is_aabb_in_view(AABB::from_float4(lo, hi))
@@ -578,9 +617,10 @@ impl MeshlessChunk {
 	}
 }
 
-/// Describes blocked chunks by environent or not. 
+/// Describes blocked chunks by environent or not.
 #[derive(Clone, Default)]
 pub struct ChunkEnvironment<'l> {
+	// TODO: Make them NonNull because of Option.
 	pub top:	Option<*const MeshlessChunk>,
 	pub bottom:	Option<*const MeshlessChunk>,
 	pub front:	Option<*const MeshlessChunk>,
@@ -590,8 +630,6 @@ pub struct ChunkEnvironment<'l> {
 
 	pub _phantom: PhantomData<&'l MeshlessChunk>
 }
-
-unsafe impl<'c> Send for ChunkEnvironment<'c> { }
 
 impl<'c> ChunkEnvironment<'c> {
 	/// Empty description.
