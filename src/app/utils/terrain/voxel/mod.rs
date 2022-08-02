@@ -119,7 +119,7 @@ pub mod shape {
 		}
 
 		/// Cube front face vertex array.
-		pub fn front_detailed(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+		pub fn front(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
 			/* UVs for front face */
 			let uv = UV::new(self.data.textures.front);
 			
@@ -136,7 +136,7 @@ pub mod shape {
 		}
 
 		/// Cube back face vertex array.
-		pub fn back_detailed(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+		pub fn back(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
 			/* UVs for back face */
 			let uv = UV::new(self.data.textures.back);
 			
@@ -153,7 +153,7 @@ pub mod shape {
 		}
 
 		/// Cube top face vertex array.
-		pub fn top_detailed(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+		pub fn top(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
 			/* UVs for top face */
 			let uv = UV::new(self.data.textures.top);
 			
@@ -170,7 +170,7 @@ pub mod shape {
 		}
 
 		/// Cube bottom face vertex array.
-		pub fn bottom_detailed(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+		pub fn bottom(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
 			/* UVs for bottom face */
 			let uv = UV::new(self.data.textures.bottom);
 			
@@ -187,7 +187,7 @@ pub mod shape {
 		}
 
 		/// Cube left face vertex array.
-		pub fn left_detailed(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+		pub fn left(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
 			/* UVs for left face */
 			let uv = UV::new(self.data.textures.left);
 			
@@ -204,7 +204,7 @@ pub mod shape {
 		}
 
 		/// Cube right face vertex array.
-		pub fn right_detailed(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+		pub fn right(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
 			/* UVs for right face */
 			let uv = UV::new(self.data.textures.right);
 			
@@ -222,13 +222,13 @@ pub mod shape {
 
 		/// Cube all sides.
 		#[allow(dead_code)]
-		pub fn all_detailed(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
-			self.left_detailed(position, vertices);
-			self.right_detailed(position, vertices);
-			self.front_detailed(position, vertices);
-			self.back_detailed(position, vertices);
-			self.top_detailed(position, vertices);
-			self.bottom_detailed(position, vertices);
+		pub fn all(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+			self.left(position, vertices);
+			self.right(position, vertices);
+			self.front(position, vertices);
+			self.back(position, vertices);
+			self.top(position, vertices);
+			self.bottom(position, vertices);
 		}
 	}
 
@@ -238,7 +238,7 @@ pub mod shape {
 		}
 
 		/// Cube front face vertex array.
-		pub fn front_lowered(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
+		pub fn front(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
 			/* Shortcuts */
 			let light = FRONT_LIGHT;
 			let (x, y, z, _) = position.as_tuple();
@@ -252,7 +252,7 @@ pub mod shape {
 		}
 
 		/// Cube back face vertex array.
-		pub fn back_lowered(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
+		pub fn back(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
 			/* Shortcuts */
 			let light = BACK_LIGHT;
 			let (x, y, z, _) = position.as_tuple();
@@ -266,7 +266,7 @@ pub mod shape {
 		}
 
 		/// Cube top face vertex array.
-		pub fn top_lowered(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
+		pub fn top(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
 			/* Shortcuts */
 			let light = TOP_LIGHT;
 			let (x, y, z, _) = position.as_tuple();
@@ -280,7 +280,7 @@ pub mod shape {
 		}
 
 		/// Cube bottom face vertex array.
-		pub fn bottom_lowered(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
+		pub fn bottom(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
 			/* Shortcuts */
 			let light = BOTTOM_LIGHT;
 			let (x, y, z, _) = position.as_tuple();
@@ -294,7 +294,7 @@ pub mod shape {
 		}
 
 		/// Cube left face vertex array.
-		pub fn left_lowered(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
+		pub fn left(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
 			/* Shortcuts */
 			let light = LEFT_LIGHT;
 			let (x, y, z, _) = position.as_tuple();
@@ -308,7 +308,7 @@ pub mod shape {
 		}
 
 		/// Cube right face vertex array.
-		pub fn right_lowered(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
+		pub fn right(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
 			/* Shortcuts */
 			let light = RIGHT_LIGHT;
 			let (x, y, z, _) = position.as_tuple();
@@ -323,12 +323,12 @@ pub mod shape {
 
 		/// Cube all sides.
 		#[allow(dead_code)]
-		pub fn all_lowered(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
-			self.left_lowered(position, color, vertices);
-			self.right_lowered(position, color, vertices);
-			self.front_lowered(position, color, vertices);
-			self.back_lowered(position, color, vertices);
-			self.top_lowered(position, color, vertices);
-			self.bottom_lowered(position, color, vertices);
+		pub fn all(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
+			self.left(position, color, vertices);
+			self.right(position, color, vertices);
+			self.front(position, color, vertices);
+			self.back(position, color, vertices);
+			self.top(position, color, vertices);
+			self.bottom(position, color, vertices);
 		}}
 }

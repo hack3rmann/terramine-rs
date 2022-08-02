@@ -340,8 +340,26 @@ impl MeshlessChunk {
 
 			/* Lowered details uniplemented */
 			Addition::Know { details: ChunkDetails::Low(lod), fill: _ } => {
+				let mut vertices = vec![];
+				let lowered = self.get_lowered_voxels(*lod).wunwrap();
+				let voxel_size = 2_usize.pow(lod.get());
+				let chunk_cap = CHUNK_SIZE / voxel_size;
 
-				return todo!("LOD implementation")
+				let iter = lowered.iter()
+					.enumerate()
+					.map(|(i, low)| {
+						let pos = general_position(i, chunk_cap, chunk_cap);
+						let (x, y, z) = pos_in_chunk_to_world_int3(pos, self.pos).as_tuple();
+						let pos = Float4::xyz0(x as f32, y as f32, z as f32);
+
+						return (pos, low)
+					});
+
+				for (pos, low) in iter {
+					self.to_triangles_inner_lowered(pos, voxel_size as f32, low, env, &mut vertices);
+				}
+
+				return Low(vertices)
 			},
 
 			/* Not enough information */
@@ -383,17 +401,19 @@ impl MeshlessChunk {
 			};
 
 			/* Build all sides separately */
-			if build(Int3::new( 1,  0,  0), env.back)   { cube.back_detailed  (position, vertices) };
-			if build(Int3::new(-1,  0,  0), env.front)  { cube.front_detailed (position, vertices) };
-			if build(Int3::new( 0,  1,  0), env.top)    { cube.top_detailed   (position, vertices) };
-			if build(Int3::new( 0, -1,  0), env.bottom) { cube.bottom_detailed(position, vertices) };
-			if build(Int3::new( 0,  0,  1), env.right)  { cube.right_detailed (position, vertices) };
-			if build(Int3::new( 0,  0, -1), env.left)   { cube.left_detailed  (position, vertices) };
+			if build(Int3::new( 1,  0,  0), env.back)   { cube.back  (position, vertices) };
+			if build(Int3::new(-1,  0,  0), env.front)  { cube.front (position, vertices) };
+			if build(Int3::new( 0,  1,  0), env.top)    { cube.top   (position, vertices) };
+			if build(Int3::new( 0, -1,  0), env.bottom) { cube.bottom(position, vertices) };
+			if build(Int3::new( 0,  0,  1), env.right)  { cube.right (position, vertices) };
+			if build(Int3::new( 0,  0, -1), env.left)   { cube.left  (position, vertices) };
 		}
 	}
 
 	fn to_triangles_inner_lowered(&self, global_pos: Float4, voxel_size: f32, lowered: &LoweredVoxel, env: &ChunkEnvironment, vertices: &mut Vec<LoweredVertex>) {
-		todo!("`to_triangles_inner_lowered(..)` implementation")
+		let cube = CubeLowered::new(voxel_size);
+
+		cube.all(global_pos, lowered.general_color, vertices);
 	}
 
 	fn get_lowered_voxels(&self, lod: NonZeroU32) -> Result<Vec<LoweredVoxel>, String> {
