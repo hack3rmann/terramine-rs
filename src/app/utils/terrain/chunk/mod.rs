@@ -73,10 +73,10 @@ pub const CHUNK_VOLUME:	usize = CHUNK_SIZE.pow(3);
 type VoxelArray = Vec<Id>;
 
 pub enum FindOptions {
-	WorldBorder,
+	OutOfBounds,
 	InChunkNothing,
 	InChunkDetailed(Voxel),
-	InChunkLowered(Voxel),
+	InChunkLowered(Voxel, NonZeroU32),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -212,7 +212,7 @@ impl MeshlessChunk {
 		};
 		let abs = Float4::from(pos).abs() as u32;
 		if abs >= 1 {
-			chunk.lower_detail(abs.min(5)).wunwrap();
+			chunk.lower_detail(abs.min((CHUNK_SIZE as f32).log2() as u32)).wunwrap();
 		}
 		return chunk
 	}
@@ -390,7 +390,7 @@ impl MeshlessChunk {
 
 				/* Goes for each low-res voxel and generates its mesh */
 				for (pos, pos_low, low) in iter {
-					self.to_triangles_inner_lowered(pos, pos_low, voxel_size as f32, low, env, &mut vertices);
+					self.to_triangles_inner_lowered(pos, pos_low, voxel_size, low, env, &mut vertices);
 				}
 
 				return Low(vertices)
@@ -422,14 +422,11 @@ impl MeshlessChunk {
 			let build = |bias, env: Option<*const MeshlessChunk>| {
 				if check(self.get_voxel_or_none(position + bias)) {
 					match env {
-						Some(chunk) => {
+						None => true,
+						Some(chunk) =>
 							// * Safety: Safe because environment chunks lives as long as other chunks or that given chunk.
 							// * And it also needs only at chunk generation stage.
-							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(position + bias) }) {
-								true
-							} else { false }
-						},
-						None => true
+							check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(position + bias) }),
 					}
 				} else { false }
 			};
@@ -445,17 +442,101 @@ impl MeshlessChunk {
 	}
 
 	fn to_triangles_inner_lowered(
-		&self, global_pos: Float4, low_pos: Int3, voxel_size: f32,
+		&self, build_pos: Float4, low_pos: Int3, voxel_size: usize,
 		lowered: &LoweredVoxel, env: &ChunkEnvironment, vertices: &mut Vec<LoweredVertex>)
 	{
-		let cube = CubeLowered::new(voxel_size);
+		/* Cube mesh builder */
+		let cube = CubeLowered::new(voxel_size as f32);
 
 		// TODO: Optimize this:
 
 		if let LoweredVoxel::Colored(color) = lowered {
-			cube.all(global_pos, *color, vertices);
-		} else {
-			//cube.all(global_pos, [0.0, 0.0, 1.0], vertices);
+			let size = voxel_size as i32;
+
+			let is_blocked = |pos: Int3, bias: Int3, env: Option<*const MeshlessChunk>| -> bool {
+				match self.get_voxel_optional(pos + bias) {
+					FindOptions::OutOfBounds => {
+						match env {
+							None => false,
+							Some(chunk) =>
+								// * Safety: Safe because environment chunks lives as long as other chunks or that given chunk.
+								// * And it also needs only at chunk generation stage.
+								match unsafe { chunk.as_ref().wunwrap().get_voxel_optional(pos + bias) } {
+									FindOptions::InChunkNothing => false,
+									FindOptions::OutOfBounds => unreachable!(),
+									FindOptions::InChunkDetailed(voxel) | FindOptions::InChunkLowered(voxel, _) =>
+										voxel.data != NOTHING_VOXEL_DATA,
+								},
+						}
+					},
+					FindOptions::InChunkNothing => false,
+					FindOptions::InChunkDetailed(voxel) | FindOptions::InChunkLowered(voxel, _) =>
+						voxel.data != NOTHING_VOXEL_DATA,
+				}
+			};
+
+			let is_border =
+				low_pos.x() == 0 || low_pos.x() == (CHUNK_SIZE / voxel_size) as i32 - 1 ||
+				low_pos.y() == 0 || low_pos.y() == (CHUNK_SIZE / voxel_size) as i32 - 1 ||
+				low_pos.z() == 0 || low_pos.z() == (CHUNK_SIZE / voxel_size) as i32 - 1;
+
+			if !is_border {
+				let mut back_free   = true;
+				let mut front_free  = true;
+				let mut top_free    = true;
+				let mut bottom_free = true;
+				let mut right_free  = true;
+				let mut left_free   = true;
+
+				for x in 0..size {
+				for y in 0..size {
+				for z in 0..size {
+					let high_pos = low_pos * size + Int3::new(x, y, z);
+					let world_pos = pos_in_chunk_to_world_int3(high_pos, self.pos);
+
+					if is_blocked(world_pos, Int3::new( size, 0, 0), env.back)   { back_free   = false }
+					if is_blocked(world_pos, Int3::new(-size, 0, 0), env.front)  { front_free  = false }
+					if is_blocked(world_pos, Int3::new(0,  size, 0), env.top)    { top_free    = false }
+					if is_blocked(world_pos, Int3::new(0, -size, 0), env.bottom) { bottom_free = false }
+					if is_blocked(world_pos, Int3::new(0, 0,  size), env.right)  { right_free  = false }
+					if is_blocked(world_pos, Int3::new(0, 0, -size), env.left)   { left_free   = false }
+				}}}
+
+				if back_free   { cube  .back(build_pos, *color, vertices) }
+				if front_free  { cube .front(build_pos, *color, vertices) }
+				if top_free    { cube   .top(build_pos, *color, vertices) }
+				if bottom_free { cube.bottom(build_pos, *color, vertices) }
+				if right_free  { cube .right(build_pos, *color, vertices) }
+				if left_free   { cube  .left(build_pos, *color, vertices) }
+			} else {
+				let mut back_free   = false;
+				let mut front_free  = false;
+				let mut top_free    = false;
+				let mut bottom_free = false;
+				let mut right_free  = false;
+				let mut left_free   = false;
+
+				for x in 0..size {
+				for y in 0..size {
+				for z in 0..size {
+					let high_pos = low_pos * size + Int3::new(x, y, z);
+					let world_pos = pos_in_chunk_to_world_int3(high_pos, self.pos);
+
+					if !is_blocked(world_pos, Int3::new( size, 0, 0), env.back)   { back_free   = true }
+					if !is_blocked(world_pos, Int3::new(-size, 0, 0), env.front)  { front_free  = true }
+					if !is_blocked(world_pos, Int3::new(0,  size, 0), env.top)    { top_free    = true }
+					if !is_blocked(world_pos, Int3::new(0, -size, 0), env.bottom) { bottom_free = true }
+					if !is_blocked(world_pos, Int3::new(0, 0,  size), env.right)  { right_free  = true }
+					if !is_blocked(world_pos, Int3::new(0, 0, -size), env.left)   { left_free   = true }
+				}}}
+
+				if back_free   { cube  .back(build_pos, *color, vertices) }
+				if front_free  { cube .front(build_pos, *color, vertices) }
+				if top_free    { cube   .top(build_pos, *color, vertices) }
+				if bottom_free { cube.bottom(build_pos, *color, vertices) }
+				if right_free  { cube .right(build_pos, *color, vertices) }
+				if left_free   { cube  .left(build_pos, *color, vertices) }
+			}
 		}
 	}
 
@@ -548,7 +629,7 @@ impl MeshlessChunk {
 		let pos = world_coords_to_in_some_chunk(global_pos, self.pos);
 		
 		if pos.x() < 0 || pos.x() >= CHUNK_SIZE as i32 || pos.y() < 0 || pos.y() >= CHUNK_SIZE as i32 || pos.z() < 0 || pos.z() >= CHUNK_SIZE as i32 {
-			FindOptions::WorldBorder
+			FindOptions::OutOfBounds
 		} else {
 			match self.additional_data.as_ref() {
 				/* For empty chuncks */
@@ -567,7 +648,7 @@ impl MeshlessChunk {
 					};
 					match details {
 						ChunkDetails::Full => FindOptions::InChunkDetailed(voxel),
-						ChunkDetails::Low(_) => FindOptions::InChunkLowered(voxel),
+						ChunkDetails::Low(lod) => FindOptions::InChunkLowered(voxel, *lod),
 					}
 				}
 
@@ -583,8 +664,8 @@ impl MeshlessChunk {
 	/// Gives voxel by world coordinate.
 	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<Voxel> {
 		match self.get_voxel_optional(pos) {
-			FindOptions::WorldBorder | FindOptions::InChunkNothing => None,
-			FindOptions::InChunkDetailed(chunk) | FindOptions::InChunkLowered(chunk) => Some(chunk)
+			FindOptions::OutOfBounds | FindOptions::InChunkNothing => None,
+			FindOptions::InChunkDetailed(chunk) | FindOptions::InChunkLowered(chunk, _) => Some(chunk)
 		}
 	}
 
