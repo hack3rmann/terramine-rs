@@ -161,7 +161,7 @@ impl MeshlessChunkArray {
 			};
 
 			/* File reader */
-			if std::path::Path::new(path).exists() {
+			if false /* TODO: std::path::Path::new(path).exists()*/ {
 				use SaveType::*;
 				let save = Save::new(name).open(path);
 
@@ -309,10 +309,11 @@ impl MeshlessChunkArray {
 			.. Default::default()
 		};
 		
-		/* Create shader */
-		let shader = Shader::new("vertex_shader", "fragment_shader", &graphics.display);
+		/* Create shaders */
+		let full_shader = Shader::new("full_detail", "full_detail", &graphics.display);
+		let low_shader = Shader::new("low_detail", "low_detail", &graphics.display);
 
-		MeshedChunkArray { width, height, depth, chunks, shader, draw_params }
+		MeshedChunkArray { width, height, depth, chunks, full_shader, low_shader, draw_params }
 	}
 }
 
@@ -331,7 +332,8 @@ pub struct MeshedChunkArray<'a> {
 	pub depth: usize,
 
 	pub chunks: Vec<DebugVisualized<MeshedChunk>>,
-	pub shader: Shader,
+	pub full_shader: Shader,
+	pub low_shader: Shader,
 	pub draw_params: DrawParameters<'a>
 }
 
@@ -340,7 +342,7 @@ impl<'a> MeshedChunkArray<'a> {
 	pub fn render<U: Uniforms>(&mut self, target: &mut Frame, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
 		/* Iterating through array */
 		for chunk in self.chunks.iter_mut() {
-			chunk.render_meshed_chunks(target, &self.shader, uniforms, &self.draw_params, camera)?;
+			chunk.render_meshed_chunks(target, &self.full_shader, &self.low_shader, uniforms, &self.draw_params, camera)?;
 		}
 		Ok(())
 	}

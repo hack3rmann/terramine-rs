@@ -127,6 +127,18 @@ impl Default for Float4 {
 	}
 }
 
+impl From<Int3> for Float4 {
+	fn from(p: Int3) -> Self {
+		Self::xyz0(p.x() as f32, p.y() as f32, p.z() as f32)
+	}
+}
+
+impl From<Float4> for Int3 {
+	fn from(p: Float4) -> Self {
+		Self::new(p.x() as i32, p.y() as i32, p.z() as i32)
+	}
+}
+
 impl PartialEq for Float4 {
 	fn eq(&self, other: &Self) -> bool {
 		self.x() == other.x() &&

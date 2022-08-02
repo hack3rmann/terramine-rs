@@ -203,12 +203,19 @@ impl MeshlessChunk {
 		if let ChunkFill::Empty   = fill { voxels = vec![  ] }
 		if let ChunkFill::All(id) = fill { voxels = vec![id] }
 		
-		MeshlessChunk {
+
+		// TODO: Remove this:
+		let mut chunk = MeshlessChunk {
 			voxels, pos,
 			additional_data: Addition::Know {
 				fill: Some(fill), details: ChunkDetails::Full,
 			}
+		};
+		let abs = Float4::from(pos).abs() as u32;
+		if abs >= 1 {
+			chunk.lower_detail(abs.min(5)).wunwrap();
 		}
+		return chunk
 	}
 
 	/// Constructs new empty chunk.
@@ -348,9 +355,16 @@ impl MeshlessChunk {
 				let iter = lowered.iter()
 					.enumerate()
 					.map(|(i, low)| {
+						// TODO: Generalize this:
 						let pos = general_position(i, chunk_cap, chunk_cap);
-						let (x, y, z) = pos_in_chunk_to_world_int3(pos, self.pos).as_tuple();
-						let pos = Float4::xyz0(x as f32, y as f32, z as f32);
+						let mut pos = Float4::xyz0(pos.x() as f32, pos.y() as f32, pos.z() as f32);
+						pos += Float4::all(0.5);
+						pos *= voxel_size as f32;
+						pos -= Float4::all(0.5);
+
+						let self_pos = Float4::xyz0(self.pos.x() as f32, self.pos.y() as f32, self.pos.z() as f32);
+
+						let pos = pos_in_chunk_to_world_float4(pos, self_pos);
 
 						return (pos, low)
 					});
@@ -413,7 +427,13 @@ impl MeshlessChunk {
 	fn to_triangles_inner_lowered(&self, global_pos: Float4, voxel_size: f32, lowered: &LoweredVoxel, env: &ChunkEnvironment, vertices: &mut Vec<LoweredVertex>) {
 		let cube = CubeLowered::new(voxel_size);
 
-		cube.all(global_pos, lowered.general_color, vertices);
+		// TODO: Optimize this:
+
+		if let LoweredVoxel::Colored(color) = lowered {
+			cube.all(global_pos, *color, vertices);
+		} else {
+			//cube.all(global_pos, [0.0, 0.0, 1.0], vertices);
+		}
 	}
 
 	fn get_lowered_voxels(&self, lod: NonZeroU32) -> Result<Vec<LoweredVoxel>, String> {
@@ -428,20 +448,20 @@ impl MeshlessChunk {
 
 			/* Chunk was filled with the save voxel */
 			Addition::Know { fill: Some(ChunkFill::All(id)), details: _ } => {
-				let voxel = LoweredVoxel { general_color: VOXEL_DATA[*id as usize].avarage_color };
+				let voxel = LoweredVoxel::Colored(VOXEL_DATA[*id as usize].avarage_color);
 				return Ok(vec![voxel; new_volume])
 			},
 
 			/* Chunk was standart-filled */
 			Addition::Know { fill: Some(ChunkFill::Standart), details: _ } => {
-				let mut result = vec![LoweredVoxel { general_color: [0.0, 0.0, 0.0] }; new_volume];
-				let mut n_writes = vec![1; new_volume];
+				let mut result = vec![LoweredVoxel::Transparent; new_volume];
+				let mut n_writes = vec![0; new_volume];
 
 				let size = new_size as i32;
 				let iter = (0..CHUNK_VOLUME).map(|i| {
 					let pos = position_function(i);
-					let id = VOXEL_DATA[i].id;
-					return (id, pos / size)
+					let id = self.voxels[i];
+					return (id, pos / factor as i32)
 				});
 				let low_index = |pos: Int3|
 					sdex::get_index(&[pos.x() as usize, pos.y() as usize, pos.z() as usize], &[new_size; 3]);
@@ -455,17 +475,22 @@ impl MeshlessChunk {
 
 					/* Air blocks are not in count */
 					if id != NOTHING_VOXEL_DATA.id {
-						/* Color shortcut */
-						let [old_r, old_g, old_b] = &mut result[low_i].general_color;
-						let [new_r, new_g, new_b] = VOXEL_DATA[id as usize].avarage_color;
+						if let LoweredVoxel::Colored(color) = &mut result[low_i] {
+							/* Color shortcut */
+							let [old_r, old_g, old_b] = color;
+							let [new_r, new_g, new_b] = VOXEL_DATA[id as usize].avarage_color;
 
-						/* Calculate new avarage color */
-						*old_r = (*old_r * count + new_r) / (count + 1.0);
-						*old_g = (*old_g * count + new_g) / (count + 1.0);
-						*old_b = (*old_b * count + new_b) / (count + 1.0);
+							/* Calculate new avarage color */
+							*old_r = (*old_r * count + new_r) / (count + 1.0);
+							*old_g = (*old_g * count + new_g) / (count + 1.0);
+							*old_b = (*old_b * count + new_b) / (count + 1.0);
 
-						/* Increment writes count */
-						n_writes[low_i] += 1;
+							/* Increment writes count */
+							n_writes[low_i] += 1;
+						} else {
+							result[low_i] = LoweredVoxel::Colored(VOXEL_DATA[id as usize].avarage_color);
+							n_writes[low_i] = 1;
+						}
 					}
 				}
 
@@ -583,7 +608,6 @@ pub enum Detailed<Full, Low> {
 
 pub type DetailedVertexSlice<'v> = Detailed<&'v [DetailedVertex], &'v [LoweredVertex]>;
 pub type DetailedVertexVec = Detailed<Vec<DetailedVertex>, Vec<LoweredVertex>>;
-pub type DetailedVertexVecMut<'v> = Detailed<&'v mut Vec<DetailedVertex>, &'v mut Vec<LoweredVertex>>;
 
 pub struct ChunkMesh(Detailed<
 	RefCell<UnindexedMesh<DetailedVertex>>,
@@ -592,10 +616,10 @@ pub struct ChunkMesh(Detailed<
 
 impl ChunkMesh {
 	/// Render mesh.
-	pub fn render(&self, target: &mut Frame, shader: &Shader, draw_params: &DrawParameters<'_>, uniforms: &impl Uniforms) -> Result<(), DrawError> {
+	pub fn render(&self, target: &mut Frame, full_shader: &Shader, low_shader: &Shader, draw_params: &DrawParameters<'_>, uniforms: &impl Uniforms) -> Result<(), DrawError> {
 		match &self.0 {
-			Full(mesh) => mesh.borrow().render(target, shader, draw_params, uniforms),
-			Low(mesh)  => mesh.borrow().render(target, shader, draw_params, uniforms),
+			Full(mesh) => mesh.borrow().render(target, full_shader, draw_params, uniforms),
+			Low(mesh)  => mesh.borrow().render(target, low_shader,  draw_params, uniforms),
 		}
 	}
 
@@ -651,10 +675,10 @@ impl MeshedChunk {
 
 	/// Renders chunk.
 	/// * Mesh should be constructed before this function call.
-	pub fn render<U: Uniforms>(&self, target: &mut Frame, shader: &Shader, uniforms: &U, draw_params: &glium::DrawParameters, camera: &Camera) -> Result<(), DrawError> {
+	pub fn render<U: Uniforms>(&self, target: &mut Frame, full_shader: &Shader, low_shader: &Shader, uniforms: &U, draw_params: &glium::DrawParameters, camera: &Camera) -> Result<(), DrawError> {
 		/* Check if vertex array is empty */
 		if !self.mesh.is_empty() && self.is_visible(camera) {
-			self.mesh.render(target, shader, draw_params, uniforms)
+			self.mesh.render(target, full_shader, low_shader, draw_params, uniforms)
 		} else { Ok(()) }
 	}
 

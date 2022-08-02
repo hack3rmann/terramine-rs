@@ -167,8 +167,8 @@ impl DebugVisualized<MeshedChunk> {
 		} else { Ok(()) }
 	}
 
-	pub fn render_meshed_chunks(&self, target: &mut Frame, shader: &Shader, uniforms: &impl Uniforms, draw_params: &DrawParameters, camera: &Camera) -> Result<(), DrawError> {
-		self.inner.render(target, shader, uniforms, draw_params, camera)?;
+	pub fn render_meshed_chunks(&self, target: &mut Frame, full_shader: &Shader, low_shader: &Shader, uniforms: &impl Uniforms, draw_params: &DrawParameters, camera: &Camera) -> Result<(), DrawError> {
+		self.inner.render(target, full_shader, low_shader, uniforms, draw_params, camera)?;
 		self.render_debug_meshed_chunks(target, uniforms, camera)?;
 		Ok(())
 	}

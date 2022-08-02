@@ -29,8 +29,9 @@ impl Voxel {
 
 /// Generalization of voxel details.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct LoweredVoxel {
-	pub general_color: [f32; 3],
+pub enum LoweredVoxel {
+	Transparent,
+	Colored([f32; 3]),
 }
 
 
