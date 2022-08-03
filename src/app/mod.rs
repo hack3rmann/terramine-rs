@@ -75,7 +75,10 @@ impl App {
 			texture,
 			timer: Timer::new(),
 			input_manager: InputManager::new(),
-			window_size: PhysicalSize::new(1024, 768)
+			window_size: PhysicalSize::new(
+				cfg::window::default::WIDTH  as u32,
+				cfg::window::default::HEIGHT as u32,
+			),
 		}
 	}
 
