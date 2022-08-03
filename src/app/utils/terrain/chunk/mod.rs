@@ -1,4 +1,5 @@
 pub mod chunk_array;
+pub mod iterator;
 
 use {
 	crate::app::utils::{
@@ -33,6 +34,7 @@ use {
 		cell::RefCell, marker::PhantomData,
 		borrow::Cow, num::NonZeroU32, fmt::Display
 	},
+	iterator::{CubeBorder, SpaceIter},
 };
 
 /// Full-detailed vertex.
@@ -150,17 +152,15 @@ impl MeshlessChunk {
 		let mut fill = ChunkFill::Empty;
 
 		/* Iterating in the chunk */
-		for x in 0..CHUNK_SIZE {
-		for y in 0..CHUNK_SIZE {
-		for z in 0..CHUNK_SIZE {
-			let global_pos = pos_in_chunk_to_world_int3(Int3::new(x as i32, y as i32, z as i32), pos);
+		for curr in SpaceIter::new(Int3::zero() .. Int3::all(CHUNK_SIZE as i32)) {
+			let global_pos = pos_in_chunk_to_world_int3(curr, pos);
 
 			/* Update addidional chunk data */
 			let mut update_data = |id| {
 				match fill {
 					ChunkFill::Empty => {
 						/* Check for first iteration */
-						fill = if (x, y, z) != (0, 0, 0) {
+						fill = if curr != Int3::zero() {
 							ChunkFill::Standart
 						} else {
 							ChunkFill::All(id)
@@ -197,7 +197,7 @@ impl MeshlessChunk {
 
 				voxels.push(NOTHING_VOXEL_DATA.id)
 			}
-		}}}
+		}
 
 		/* Chunk is empty so array can be empty */
 		if let ChunkFill::Empty   = fill { voxels = vec![  ] }
@@ -394,6 +394,16 @@ impl MeshlessChunk {
 				}
 
 				return Low(vertices)
+			},
+
+			/* Lowered details uniplemented */
+			// TODO: Separate filled and standart chunk impl.
+			Addition::Know { details: ChunkDetails::Low(lod), fill: _ } => {
+				let mut vertices = vec![];
+
+				todo!("Rework low-res");
+
+				return Full(vertices)
 			},
 
 			/* Not enough information */
@@ -735,7 +745,10 @@ pub struct ChunkMesh(Detailed<
 
 impl ChunkMesh {
 	/// Render mesh.
-	pub fn render(&self, target: &mut Frame, full_shader: &Shader, low_shader: &Shader, draw_params: &DrawParameters<'_>, uniforms: &impl Uniforms) -> Result<(), DrawError> {
+	pub fn render(
+		&self, target: &mut Frame, full_shader: &Shader, low_shader: &Shader,
+		draw_params: &DrawParameters<'_>, uniforms: &impl Uniforms) -> Result<(), DrawError>
+	{
 		match &self.0 {
 			Full(mesh) => mesh.borrow().render(target, full_shader, draw_params, uniforms),
 			Low(mesh)  => mesh.borrow().render(target, low_shader,  draw_params, uniforms),
@@ -794,7 +807,10 @@ impl MeshedChunk {
 
 	/// Renders chunk.
 	/// * Mesh should be constructed before this function call.
-	pub fn render<U: Uniforms>(&self, target: &mut Frame, full_shader: &Shader, low_shader: &Shader, uniforms: &U, draw_params: &glium::DrawParameters, camera: &Camera) -> Result<(), DrawError> {
+	pub fn render<U: Uniforms>(
+		&self, target: &mut Frame, full_shader: &Shader, low_shader: &Shader,
+		uniforms: &U, draw_params: &glium::DrawParameters, camera: &Camera) -> Result<(), DrawError>
+	{
 		/* Check if vertex array is empty */
 		if !self.mesh.is_empty() && self.is_visible(camera) {
 			self.mesh.render(target, full_shader, low_shader, draw_params, uniforms)
@@ -997,158 +1013,6 @@ mod border_test {
 		for (b, w) in border.zip(works) {
 			assert_eq!(b, w)
 		}
-	}
-}
-
-/// Iterator over chunk border.
-#[derive(Clone, Debug)]
-pub struct CubeBorder {
-	prev: Int3,
-	size: i32,
-}
-
-impl CubeBorder {
-	fn new(size: i32) -> Self { Self { prev: Int3::all(-1), size } }
-}
-
-impl Iterator for CubeBorder {
-	type Item = Int3;
-	fn next(&mut self) -> Option<Self::Item> {
-		/* Maximun corrdinate value in border */
-		let max: i32 = self.size - 1;
-		let max_minus_one: i32 = max - 1;
-
-		/* Return if maximum reached */
-		if self.prev == Int3::new(max, max, max) {
-			return None
-		} else if self.prev == Int3::all(-1) {
-			let new = Int3::all(0);
-			self.prev = new;
-			return Some(new)
-		}
-
-		/* Previous x, y and z */
-		let (x, y, z) = (self.prev.x(), self.prev.y(), self.prev.z());
-
-		/* Returning local function */
-		let mut give = |pos| {
-			self.prev = pos;
-			return Some(pos)
-		};
-
-		/* If somewhere slicing cube (in 1 .. MAX - 1) */
-		if x >= 1 && x <= max_minus_one {
-			/* If position is slicing square */
-			if y >= 1 && y <= max_minus_one  {
-				if z == 0 { give(Int3::new(x, y, max)) }
-				else if z == max { give(Int3::new(x, y + 1, 0)) }
-				else { unreachable!(
-					"Invalid z position! Must be in 0 or {max}! But actual value is {y}.",
-					max = max,
-					y = y,
-				)}
-			}
-
-			/* If position is on flat bottom of square */
-			else if y == 0 {
-				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-				else if z == max { give(Int3::new(x, y + 1, 0)) }
-				else { unreachable!(
-					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-					size = CHUNK_SIZE,
-					z = z,
-				)}
-			}
-
-			/* If position is on flat top of square */
-			else if y == max {
-				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-				else if z == max { give(Int3::new(x + 1, 0, 0)) }
-				else { unreachable!(
-					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-					size = CHUNK_SIZE,
-					z = z,
-				)}
-			}
-
-			/* Other Ys are unreachable */
-			else { unreachable!(
-				"Invalid y position! Must be in 0..{size}! But actual value is {y}.",
-				size = CHUNK_SIZE,
-				y = y,
-			)}
-		}
-
-		/* If current position is bottom */
-		else if x == 0 {
-			/* Y is not maximum */
-			if y >= 0 && y <= max_minus_one {
-				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-				else if z == max { give(Int3::new(x, y + 1, 0)) }
-				else { unreachable!(
-					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-					size = CHUNK_SIZE,
-					z = z,
-				)}
-			}
-
-			/* Y is maximum */
-			else if y == max {
-				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-				else if z == max { give(Int3::new(x + 1, 0, 0)) }
-				else { unreachable!(
-					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-					size = CHUNK_SIZE,
-					z = z,
-				)}
-			}
-
-			/* Others Ys are unreachable */
-			else { unreachable!(
-				"Invalid y position! Must be in 0..{size}! But actual value is {y}.",
-				size = CHUNK_SIZE,
-				y = y,
-			)}
-		}
-
-		/* If currents position is top */
-		else if x == max {
-			/* Y is not maximum */
-			if y >= 0 && y <= max_minus_one {
-				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-				else if z == max { give(Int3::new(x, y + 1, 0)) }
-				else { unreachable!(
-					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-					size = CHUNK_SIZE,
-					z = z,
-				)}
-			}
-
-			/* Y is maximum */
-			else if y == max {
-				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-				else if z == max { give(Int3::new(max, max, max)) }
-				else { unreachable!(
-					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-					size = CHUNK_SIZE,
-					z = z,
-				)}
-			}
-
-			/* Others Ys are unreachable */
-			else { unreachable!(
-				"Invalid y position! Must be in 0..{size}! But actual value is {y}.",
-				size = CHUNK_SIZE,
-				y = y,
-			)}
-		}
-
-		/* Other values of X is unreachable... */
-		else { unreachable!(
-			"Invalid x position! Must be in 0..{size}! But actual value is {x}.",
-			size = CHUNK_SIZE,
-			x = x,
-		)}
 	}
 }
 
