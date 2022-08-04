@@ -7,6 +7,34 @@ use {
 };
 
 /// Iterator over chunk border.
+/// 
+/// # Example:
+/// ```
+/// use crate::app::utils::terrain::chunk::{
+/// 	position_function,
+/// 	iterator::CubeBorder,
+/// };
+/// 
+/// fn test2() {
+/// 	/* [`CubeBorder`] iterator */
+/// 	let border = CubeBorder::new(16);
+/// 
+/// 	const MAX: i32 = 16 - 1;
+/// 	let classic_iter = (0 .. 16_i32.pow(3))
+/// 		.map(|i| position_function(i))
+/// 		.filter(|pos|
+/// 			/* Check 'bordered' condition */
+/// 			pos.x() == 0 || pos.x() == MAX ||
+/// 			pos.y() == 0 || pos.y() == MAX ||
+/// 			pos.z() == 0 || pos.z() == MAX
+/// 		);
+/// 
+/// 	/* Walk over both together */
+/// 	for (b, w) in border.zip(classic_iter) {
+/// 		assert_eq!(b, w)
+/// 	}
+/// }
+/// ```
 #[derive(Clone, Debug)]
 pub struct CubeBorder {
 	prev: Int3,
@@ -159,6 +187,35 @@ impl Iterator for CubeBorder {
 	}
 }
 
+/// Full equivalent of 3-fold cycle.
+/// 
+/// # Example:
+/// 
+/// ```
+/// use crate::app::utils::{
+/// 	math::Int3,
+/// 	terrain::chunk::iterator::SpaceIter,
+/// };
+/// 
+/// fn test() {
+/// 	let mut res1 = vec![];
+/// 	let mut res2 = vec![];
+/// 
+/// 	/* [`SpaceIter`] equivalent */
+/// 	for pos in SpaceIter::new(Int3::zero() .. Int3::all(16)) {
+/// 		res1.push(pos)
+/// 	}
+/// 
+/// 	/* Classic 3-fold cycle */
+/// 	for x in 0..16 {
+/// 	for y in 0..16 {
+/// 	for z in 0..16 {
+/// 		res2.push(Int3::new(x, y, z))
+/// 	}}}
+/// 
+/// 	assert_eq!(res1, res2);
+/// }
+/// ```
 pub struct SpaceIter {
 	curr: Int3,
 
@@ -271,5 +328,48 @@ mod tests {
 		}}}
 
 		assert_eq!(res1, res2);
+	}
+}
+
+
+#[cfg(test)]
+mod border_test {
+	use {
+		crate::app::utils::terrain::chunk::{CHUNK_SIZE, CHUNK_VOLUME, position_function},
+		super::*,
+	};
+
+	#[test]
+	fn test1() {
+		let border = CubeBorder::new(CHUNK_SIZE as i32);
+		const MAX: i32 = CHUNK_SIZE as i32 - 1;
+
+		for pos in border {
+			eprintln!("{:?}", pos);
+
+			assert!(
+				pos.x() == 0 || pos.x() == MAX ||
+				pos.y() == 0 || pos.y() == MAX ||
+				pos.z() == 0 || pos.z() == MAX
+			);
+		}
+	}
+
+	#[test]
+	fn test2() {
+		let border = CubeBorder::new(CHUNK_SIZE as i32);
+		const MAX: i32 = CHUNK_SIZE as i32 - 1;
+
+		let works = (0..CHUNK_VOLUME)
+			.map(|i| position_function(i))
+			.filter(|pos|
+				pos.x() == 0 || pos.x() == MAX ||
+				pos.y() == 0 || pos.y() == MAX ||
+				pos.z() == 0 || pos.z() == MAX
+			);
+
+		for (b, w) in border.zip(works) {
+			assert_eq!(b, w)
+		}
 	}
 }

@@ -35,6 +35,7 @@ pub mod terrain {
 	/// Must be a power of 2 due to be halfed in process of lowering details.
 	pub const CHUNK_SIZE: usize = 64;
 
+	/// FIXME: add support for non-unit voxel sizes.
 	pub const VOXEL_SIZE: f32   = 1.0;
 
 	pub mod voxel_types {

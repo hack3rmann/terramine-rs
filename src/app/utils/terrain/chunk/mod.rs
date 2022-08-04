@@ -859,6 +859,7 @@ impl MeshedChunk {
 	}
 }
 
+/// FIXME: turn into free function to prevent from conflicts, because [`VoxelArray`] = [`Vec<u16>`].
 unsafe impl StaticSize for VoxelArray {
 	fn static_size() -> usize {
 		CHUNK_VOLUME * u16::static_size()
@@ -974,46 +975,6 @@ mod reinterpret_test {
 }
 
 
-
-#[cfg(test)]
-mod border_test {
-	use super::*;
-
-	#[test]
-	fn test1() {
-		let border = CubeBorder::new(CHUNK_SIZE as i32);
-		const MAX: i32 = CHUNK_SIZE as i32 - 1;
-
-		for pos in border {
-			if  pos.x() == 0 || pos.x() == MAX ||
-				pos.y() == 0 || pos.y() == MAX ||
-				pos.z() == 0 || pos.z() == MAX
-			{ eprintln!("{:?}", pos) } else {
-				eprintln!("{:?}", pos);
-				panic!();
-			}
-			
-		}
-	}
-
-	#[test]
-	fn test2() {
-		let border = CubeBorder::new(CHUNK_SIZE as i32);
-		const MAX: i32 = CHUNK_SIZE as i32 - 1;
-
-		let works = (0..CHUNK_VOLUME)
-			.map(|i| position_function(i))
-			.filter(|pos|
-				pos.x() == 0 || pos.x() == MAX ||
-				pos.y() == 0 || pos.y() == MAX ||
-				pos.z() == 0 || pos.z() == MAX
-			);
-
-		for (b, w) in border.zip(works) {
-			assert_eq!(b, w)
-		}
-	}
-}
 
 /// Transforms world coordinates to chunk 
 #[allow(dead_code)]
