@@ -203,7 +203,7 @@ impl MeshlessChunk {
 		if let ChunkFill::Empty   = fill { voxels = vec![  ] }
 		if let ChunkFill::All(id) = fill { voxels = vec![id] }
 		
-		// TODO: Remove this:
+		// FIXME: Remove this:
 		let mut chunk = MeshlessChunk {
 			voxels, pos,
 			additional_data: Addition::Know {
@@ -498,10 +498,8 @@ impl MeshlessChunk {
 				let mut right_free  = true;
 				let mut left_free   = true;
 
-				for x in 0..size {
-				for y in 0..size {
-				for z in 0..size {
-					let high_pos = low_pos * size + Int3::new(x, y, z);
+				for curr in SpaceIter::new(Int3::zero() .. Int3::all(size)) {
+					let high_pos = low_pos * size + curr;
 					let world_pos = pos_in_chunk_to_world_int3(high_pos, self.pos);
 
 					if is_blocked(world_pos, Int3::new( size, 0, 0), env.back)   { back_free   = false }
@@ -510,7 +508,7 @@ impl MeshlessChunk {
 					if is_blocked(world_pos, Int3::new(0, -size, 0), env.bottom) { bottom_free = false }
 					if is_blocked(world_pos, Int3::new(0, 0,  size), env.right)  { right_free  = false }
 					if is_blocked(world_pos, Int3::new(0, 0, -size), env.left)   { left_free   = false }
-				}}}
+				}
 
 				if back_free   { cube  .back(build_pos, *color, vertices) }
 				if front_free  { cube .front(build_pos, *color, vertices) }
@@ -526,10 +524,8 @@ impl MeshlessChunk {
 				let mut right_free  = false;
 				let mut left_free   = false;
 
-				for x in 0..size {
-				for y in 0..size {
-				for z in 0..size {
-					let high_pos = low_pos * size + Int3::new(x, y, z);
+				for curr in SpaceIter::new(Int3::zero() .. Int3::all(size)) {
+					let high_pos = low_pos * size + curr;
 					let world_pos = pos_in_chunk_to_world_int3(high_pos, self.pos);
 
 					if !is_blocked(world_pos, Int3::new( size, 0, 0), env.back)   { back_free   = true }
@@ -538,7 +534,7 @@ impl MeshlessChunk {
 					if !is_blocked(world_pos, Int3::new(0, -size, 0), env.bottom) { bottom_free = true }
 					if !is_blocked(world_pos, Int3::new(0, 0,  size), env.right)  { right_free  = true }
 					if !is_blocked(world_pos, Int3::new(0, 0, -size), env.left)   { left_free   = true }
-				}}}
+				}
 
 				if back_free   { cube  .back(build_pos, *color, vertices) }
 				if front_free  { cube .front(build_pos, *color, vertices) }

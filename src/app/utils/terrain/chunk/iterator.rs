@@ -196,3 +196,80 @@ impl Iterator for SpaceIter {
 		return Some(result)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn zero_start_simple() {
+		let mut res1 = vec![];
+		let mut res2 = vec![];
+
+		for pos in SpaceIter::new(Int3::zero() .. Int3::all(5)) {
+			res1.push(pos)
+		}
+
+		for x in 0..5 {
+		for y in 0..5 {
+		for z in 0..5 {
+			res2.push(Int3::new(x, y, z))
+		}}}
+
+		assert_eq!(res1, res2);
+	}
+
+	#[test]
+	fn zero_start_hard() {
+		let mut res1 = vec![];
+		let mut res2 = vec![];
+
+		for pos in SpaceIter::new(Int3::zero() .. Int3::new(16, 4, 9)) {
+			res1.push(pos)
+		}
+
+		for x in 0..16 {
+		for y in 0..4 {
+		for z in 0..9 {
+			res2.push(Int3::new(x, y, z))
+		}}}
+
+		assert_eq!(res1, res2);
+	}
+
+	#[test]
+	fn simple_start_simple() {
+		let mut res1 = vec![];
+		let mut res2 = vec![];
+
+		for pos in SpaceIter::new(Int3::all(-5) .. Int3::all(5)) {
+			res1.push(pos)
+		}
+
+		for x in -5..5 {
+		for y in -5..5 {
+		for z in -5..5 {
+			res2.push(Int3::new(x, y, z))
+		}}}
+
+		assert_eq!(res1, res2);
+	}
+
+	#[test]
+	fn hard_start_hard() {
+		let mut res1 = vec![];
+		let mut res2 = vec![];
+
+		for pos in SpaceIter::new(Int3::new(-8, 2, -10) .. Int3::new(9, 5, -5)) {
+			res1.push(pos)
+		}
+
+		for x in -8..9 {
+		for y in 2..5 {
+		for z in -10..-5 {
+			res2.push(Int3::new(x, y, z))
+		}}}
+
+		assert_eq!(res1, res2);
+	}
+}

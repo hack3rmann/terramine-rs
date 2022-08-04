@@ -24,6 +24,7 @@ use {
 		ChunkDetails,
 		Detailed,
 		DetailedVertexVec,
+		iterator::SpaceIter,
 	},
 	glium::{
 		uniforms::Uniforms,
@@ -110,16 +111,15 @@ impl MeshlessChunkArray {
 			let mut generate_file = || {
 				/* Generate chunks */
 				chunks = Vec::with_capacity(volume);
-				for x in 0..width {
-				for y in 0..height {
-				for z in 0..depth {
-					let pos = Int3::new(x as i32, y as i32, z as i32) - Int3::new(width as i32, height as i32, depth as i32) / 2;
+				let size = Int3::new(width as i32, height as i32, depth as i32);
+				for pos in SpaceIter::new(-size/2 .. size - size/2) {
 					chunks.push(MeshlessChunk::new(pos));
 
 					/* Calculating percentage */
-					let idx = sdex::get_index(&[x, y, z], &[width, height, depth]);
+					// TODO: Write Usize3::from(Int3) to handle this:
+					let idx = sdex::get_index(&[pos.x() as usize, pos.y() as usize, pos.z() as usize], &[width, height, depth]);
 					percenatge_tx.send(Loading::from_range("Chunk generation", idx, 0..volume)).wunwrap();
-				}}}
+				}
 
 				/* Save */
 				use SaveType::*;
@@ -161,7 +161,7 @@ impl MeshlessChunkArray {
 			};
 
 			/* File reader */
-			if false /* TODO: std::path::Path::new(path).exists()*/ {
+			if false /* FIXME: std::path::Path::new(path).exists()*/ {
 				use SaveType::*;
 				let save = Save::new(name).open(path);
 
@@ -222,51 +222,53 @@ impl MeshlessChunkArray {
 		let volume = width * height * depth;
 		let mut env = vec![ChunkEnv::none(); volume];
 
-		for x in 0..width {
-		for y in 0..height {
-		for z in 0..depth {
+		// TODO: Write `Usize3` vector to handle this:
+		for pos in SpaceIter::new(Int3::zero() .. Int3::new(width as i32, height as i32, depth as i32)) {
 			/* Local index function */
-			let index = |x, y, z| sdex::get_index(&[x, y, z], &[width, height, depth]);
+			let index = |bias| {
+				let (x, y, z) = (pos + bias).as_tuple();
+				sdex::get_index(&[x as usize, y as usize, z as usize], &[width, height, depth])
+			};
 
 			/* Reference to current environment variable */
-			let env = &mut env[index(x, y, z)];
-
-			/* For `front` side */
-			if x as isize - 1 >= 0 {
-				env.front	= Some(&chunks[index(x - 1, y, z)]);
-			}
+			let env = &mut env[index(Int3::zero())];
 
 			/* For `back` side */
-			if x + 1 < width {
-				env.back	= Some(&chunks[index(x + 1, y, z)]);
+			if pos.x() + 1 < width as i32 {
+				env.back	= Some(&chunks[index(Int3::new( 1,  0,  0))]);
 			}
 
-			/* For `bottom` side */
-			if y as isize - 1 >= 0 {
-				env.bottom	= Some(&chunks[index(x, y - 1, z)]);
+			/* For `front` side */
+			if pos.x() - 1 >= 0 {
+				env.front	= Some(&chunks[index(Int3::new(-1,  0,  0))]);
 			}
 		
 			/* For `top` side */
-			if y + 1 < height {
-				env.top		= Some(&chunks[index(x, y + 1, z)]);
+			if pos.y() + 1 < height as i32 {
+				env.top		= Some(&chunks[index(Int3::new( 0,  1,  0))]);
 			}
 
-			/* For `left` side */
-			if z as isize - 1 >= 0 {
-				env.left	= Some(&chunks[index(x, y, z - 1)]);
+			/* For `bottom` side */
+			if pos.y() - 1 >= 0 {
+				env.bottom	= Some(&chunks[index(Int3::new( 0, -1,  0))]);
 			}
 
 			/* For `right` side */
-			if z + 1 < depth {
-				env.right	= Some(&chunks[index(x, y, z + 1)]);
+			if pos.z() + 1 < depth as i32 {
+				env.right	= Some(&chunks[index(Int3::new( 0,  0,  1))]);
+			}
+
+			/* For `left` side */
+			if pos.z() - 1 >= 0 {
+				env.left	= Some(&chunks[index(Int3::new( 0,  0, -1))]);
 			}
 
 			/* Calculate percentage */
 			if let Some(tx) = &percentage_tx {
-				let i = index(x, y, z);
+				let i = index(Int3::zero());
 				tx.send(Loading::from_range("Calculating environment", i, 0..volume)).wunwrap();
 			}
-		}}}
+		}
 
 		return env;
 	}
