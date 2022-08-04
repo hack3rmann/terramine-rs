@@ -117,7 +117,12 @@ impl MeshlessChunkArray {
 
 					/* Calculating percentage */
 					// TODO: Write Usize3::from(Int3) to handle this:
-					let idx = sdex::get_index(&[pos.x() as usize, pos.y() as usize, pos.z() as usize], &[width, height, depth]);
+					let coords = {
+						let res = pos + size / 2;
+						let (x, y, z) = res.as_tuple();
+						[x as usize, y as usize, z as usize]
+					};
+					let idx = sdex::get_index(&coords, &[width, height, depth]);
 					percenatge_tx.send(Loading::from_range("Chunk generation", idx, 0..volume)).wunwrap();
 				}
 

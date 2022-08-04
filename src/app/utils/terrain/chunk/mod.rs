@@ -634,7 +634,10 @@ impl MeshlessChunk {
 		/* Transform to local */
 		let pos = world_coords_to_in_some_chunk(global_pos, self.pos);
 		
-		if pos.x() < 0 || pos.x() >= CHUNK_SIZE as i32 || pos.y() < 0 || pos.y() >= CHUNK_SIZE as i32 || pos.z() < 0 || pos.z() >= CHUNK_SIZE as i32 {
+		if pos.x() < 0 || pos.x() >= CHUNK_SIZE as i32 ||
+		   pos.y() < 0 || pos.y() >= CHUNK_SIZE as i32 ||
+		   pos.z() < 0 || pos.z() >= CHUNK_SIZE as i32
+		{
 			FindOptions::OutOfBounds
 		} else {
 			match self.additional_data.as_ref() {
