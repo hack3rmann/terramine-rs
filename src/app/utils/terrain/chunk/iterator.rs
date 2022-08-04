@@ -4,6 +4,7 @@ use {
 	crate::app::utils::{
 		math::prelude::*,
 	},
+	std::ops::Range,
 };
 
 /// Iterator over chunk border.
@@ -224,7 +225,7 @@ pub struct SpaceIter {
 }
 
 impl SpaceIter {
-	pub fn new(range: std::ops::Range<Int3>) -> Self {
+	pub fn new(range: Range<Int3>) -> Self {
 		Self { curr: range.start, min: range.start, max: range.end - Int3::unit() }
 	}
 }
@@ -251,6 +252,44 @@ impl Iterator for SpaceIter {
 		}
 
 		return Some(result)
+	}
+}
+
+struct ChunkSplitten {
+	curr_outer: Int3,
+	curr_inner: Int3,
+
+	outer_min: Int3,
+	outer_max: Int3,
+
+	inner_min: Int3,
+	inner_max: Int3,
+}
+
+impl ChunkSplitten {
+	/// Creates new Iterator from outer range and side length of outer in chunk count.
+	pub fn new(range: Range<Int3>, side_length: i32) -> Self {
+		Self {
+			curr_outer: range.start,
+			curr_inner: Int3::zero(),
+
+			outer_min: range.start,
+			outer_max: range.end - Int3::unit(),
+
+			inner_min: Int3::zero(),
+			inner_max: (range.end - range.start) / side_length - Int3::unit(),
+		}
+	}
+
+	pub fn start_zero(outer_max: Int3, side_length: i32) -> Self {
+		Self::new(Int3::zero() .. outer_max, side_length)
+	}
+}
+
+impl Iterator for ChunkSplitten {
+	type Item = (Int3, Int3);
+	fn next(&mut self) -> Option<Self::Item> {
+		todo!("The `next()` implementation")
 	}
 }
 
