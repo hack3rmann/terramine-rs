@@ -281,7 +281,7 @@ impl Iterator for SpaceIter {
 ///		}
 /// }
 /// ```
-struct ChunkSplitten {
+pub struct ChunkSplitten {
 	inner: SpaceIter,
 	outer: SpaceIter,
 	current: Option<Int3>,
@@ -311,7 +311,7 @@ impl ChunkSplitten {
 
 impl Iterator for ChunkSplitten {
 	// Types for outer and inner positions.
-	type Item = (Int3, Int3);
+	type Item = (Int3, Int3, Int3);
 	fn next(&mut self) -> Option<Self::Item> {
 		let inner = self.inner.next().unwrap_or_else(|| {
 			self.current = self.outer.next();
@@ -322,7 +322,7 @@ impl Iterator for ChunkSplitten {
 		
 		let outer = self.current?;
 
-		return Some((outer * self.chunk_size + inner, inner))
+		return Some((outer * self.chunk_size + inner, inner, outer))
 	}
 }
 
@@ -464,35 +464,34 @@ mod splitten_tests {
 		let split = ChunkSplitten::new(Int3::all(16), Int3::all(2));
 		let space: Vec<_> = SpaceIter::new(Int3::zero() .. Int3::all(16)).collect();
 
-		for (entire, _) in split {
+		for (entire, _, _) in split {
 			assert!(space.contains(&entire));
 		}
 	}
 
 	#[test]
 	fn split_contains_space() {
-		let (split, _): (Vec<_>, Vec<_>) = ChunkSplitten::new(Int3::all(16), Int3::all(2)).unzip();
+		let entire: Vec<_> = ChunkSplitten::new(Int3::all(16), Int3::all(2)).map(|(e, _, _)| e).collect();
 		let space = SpaceIter::new(Int3::zero() .. Int3::all(16));
 
 		for pos in space {
-			assert!(split.contains(&pos));
+			assert!(entire.contains(&pos));
 		}
 	}
 
 	#[test]
 	fn length() {
-		let (entire, inner): (Vec<_>, Vec<_>) = ChunkSplitten::new(Int3::all(32), Int3::all(4)).unzip();
+		let all: Vec<_> = ChunkSplitten::new(Int3::all(32), Int3::all(4)).collect();
 		let space: Vec<_> = SpaceIter::new(Int3::zero() .. Int3::all(32)).collect();
 
-		assert_eq!(entire.len(), inner.len());
-		assert_eq!(entire.len(), space.len());
+		assert_eq!(all.len(), space.len());
 	}
 
 	#[test]
 	fn print() {
 		let split = ChunkSplitten::new(Int3::all(6), Int3::all(2));
 
-		for (entire, inner) in split {
+		for (entire, inner, _) in split {
 			eprintln!("{:?} in {:?}", inner, entire);
 		}
 	}
@@ -502,7 +501,7 @@ mod splitten_tests {
 		let split = ChunkSplitten::new(Int3::all(4), Int3::all(2));
 		let mut set = std::collections::HashSet::new();
 
-		for (entire, inner) in split {
+		for (entire, inner, _) in split {
 			assert!(
 				set.insert(entire),
 				"Values are: {:?} in {:?}",
