@@ -13,7 +13,7 @@ pub struct Float4 {
 }
 
 /// Represents 3D 32-bit int vector.
-#[derive(Clone, Copy, Default, PartialEq, Debug)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash, Debug)]
 pub struct Int3 {
 	x: i32,
 	y: i32,
@@ -115,7 +115,7 @@ impl NewVec4<f32> for Float4 {
 }
 
 impl NewVec3<i32> for Int3 {
-	/// Constructs vector from 3 integers
+	/// Constructs vector from 3 integers.
 	fn new(x: i32, y: i32, z: i32) -> Self {
 		Int3 { x, y, z }
 	}
@@ -247,10 +247,24 @@ impl std::ops::Mul<f32> for Float4 {
 	}
 }
 
+impl std::ops::Mul for Float4 {
+	type Output = Self;
+	fn mul(self, p: Self) -> Self {
+		Self::new(self.x() * p.x(), self.y() * p.y(), self.z() * p.z(), self.w() * p.w())
+	}
+}
+
 impl std::ops::Mul<i32> for Int3 {
 	type Output = Self;
 	fn mul(self, k: i32) -> Self {
 		Self::new(self.x * k , self.y * k, self.z * k)
+	}
+}
+
+impl std::ops::Mul for Int3 {
+	type Output = Self;
+	fn mul(self, p: Self) -> Self {
+		Self::new(self.x * p.x, self.y * p.y, self.z * p.z)
 	}
 }
 
@@ -263,11 +277,28 @@ impl std::ops::MulAssign<f32> for Float4 {
 	}
 }
 
+impl std::ops::MulAssign for Float4 {
+	fn mul_assign(&mut self, p: Self) {
+		self.set_x(self.x() * p.x());
+		self.set_y(self.y() * p.y());
+		self.set_z(self.z() * p.z());
+		self.set_w(self.w() * p.w());
+	}
+}
+
 impl std::ops::MulAssign<i32> for Int3 {
 	fn mul_assign(&mut self, k: i32) {
 		self.x *= k;
 		self.y *= k;
 		self.z *= k;
+	}
+}
+
+impl std::ops::MulAssign for Int3 {
+	fn mul_assign(&mut self, p: Self) {
+		self.x *= p.x;
+		self.y *= p.y;
+		self.z *= p.z;
 	}
 }
 
@@ -279,11 +310,25 @@ impl std::ops::Div<f32> for Float4 {
 	}
 }
 
+impl std::ops::Div for Float4 {
+	type Output = Self;
+	fn div(self, k: Self) -> Self {
+		Self::new(self.x() / k.x(), self.y() / k.y(), self.z() / k.z(), self.w() / k.w())
+	}
+}
+
 impl std::ops::Div<i32> for Int3 {
 	type Output = Self;
 	fn div(self, k: i32) -> Self {
 		assert_ne!(k, 0, "Cannot divide by 0!");
 		Self::new(self.x / k, self.y / k, self.z / k)
+	}
+}
+
+impl std::ops::Div for Int3 {
+	type Output = Self;
+	fn div(self, k: Self) -> Self {
+		Self::new(self.x / k.x, self.y / k.x, self.z / k.x)
 	}
 }
 
@@ -297,12 +342,29 @@ impl std::ops::DivAssign<f32> for Float4 {
 	}
 }
 
+impl std::ops::DivAssign for Float4 {
+	fn div_assign(&mut self, k: Self) {
+		self.set_x(self.x() / k.x());
+		self.set_y(self.y() / k.y());
+		self.set_z(self.z() / k.z());
+		self.set_w(self.w() / k.w());
+	}
+}
+
 impl std::ops::DivAssign<i32> for Int3 {
 	fn div_assign(&mut self, k: i32) {
 		assert_ne!(k, 0, "Cannot divide by 0!");
 		self.x /= k;
 		self.y /= k;
 		self.z /= k;
+	}
+}
+
+impl std::ops::DivAssign for Int3 {
+	fn div_assign(&mut self, k: Self) {
+		self.x /= k.x;
+		self.y /= k.y;
+		self.z /= k.z;
 	}
 }
 

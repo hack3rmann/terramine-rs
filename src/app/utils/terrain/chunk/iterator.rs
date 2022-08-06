@@ -3,6 +3,7 @@
 use {
 	crate::app::utils::{
 		math::prelude::*,
+		werror::prelude::*,
 	},
 	std::ops::Range,
 };
@@ -217,6 +218,7 @@ impl Iterator for CubeBorder {
 /// 	assert_eq!(res1, res2);
 /// }
 /// ```
+#[derive(Clone, Debug)]
 pub struct SpaceIter {
 	curr: Int3,
 
@@ -255,46 +257,77 @@ impl Iterator for SpaceIter {
 	}
 }
 
+/// Walks around 3D array in very specific way.
+/// It breaks standart 3-fold cycle into chunks
+/// and walks in them like usual 3-fold cycle.
+/// 
+/// It is in some way relative to 3-fold cycle in 3-fold cycle...
+/// 
+/// # Example:
+/// ```
+/// use crate::app::utils::{
+/// 	math::prelude::*,
+/// 	terrain::chunk::iterator::{
+/// 		ChunkSplitten, SpaceIter
+/// 	},
+/// };
+/// 
+/// fn example() {
+/// 	let split = ChunkSplitten::new(Int3::all(16), Int3::all(2));
+///		let space: Vec<_> = SpaceIter::new(Int3::zero() .. Int3::all(16)).collect();
+///
+///		for (entire, _) in split {
+///			assert!(space.contains(&entire));
+///		}
+/// }
+/// ```
 struct ChunkSplitten {
-	curr_outer: Int3,
-	curr_inner: Int3,
+	inner: SpaceIter,
+	outer: SpaceIter,
+	current: Option<Int3>,
 
-	outer_min: Int3,
-	outer_max: Int3,
-
-	inner_min: Int3,
-	inner_max: Int3,
+	chunk_size: Int3,
 }
 
 impl ChunkSplitten {
-	/// Creates new Iterator from outer range and side length of outer in chunk count.
-	pub fn new(range: Range<Int3>, side_length: i32) -> Self {
+	/// Creates new [`ChunkSplitten`] from [`Int3`] of sizes of
+	/// entire data and [`Int3`] of chunk sizes in elements of entire data structure.
+	/// 
+	/// # Panic
+	/// If entire chunk size is not divisible into smaller chunk size.
+	pub fn new(entire: Int3, chunk_size: Int3) -> Self {
+		/* Check that entire chunk are divisible into smaller ones */
+		assert_eq!(entire % chunk_size, Int3::zero());
+
+		let mut outer = SpaceIter::new(Int3::zero() .. entire / chunk_size);
+		let current = outer.next().wunwrap();
+
 		Self {
-			curr_outer: range.start,
-			curr_inner: Int3::zero(),
-
-			outer_min: range.start,
-			outer_max: range.end - Int3::unit(),
-
-			inner_min: Int3::zero(),
-			inner_max: (range.end - range.start) / side_length - Int3::unit(),
+			inner: SpaceIter::new(Int3::zero() .. chunk_size),
+			outer, current: Some(current), chunk_size,
 		}
-	}
-
-	pub fn start_zero(outer_max: Int3, side_length: i32) -> Self {
-		Self::new(Int3::zero() .. outer_max, side_length)
 	}
 }
 
 impl Iterator for ChunkSplitten {
+	// Types for outer and inner positions.
 	type Item = (Int3, Int3);
 	fn next(&mut self) -> Option<Self::Item> {
-		todo!("The `next()` implementation")
+		let inner = self.inner.next().unwrap_or_else(|| {
+			self.current = self.outer.next();
+			self.inner = SpaceIter::new(Int3::zero() .. self.chunk_size);
+
+			return self.inner.next().wunwrap()
+		});
+		
+		let outer = self.current?;
+
+		return Some((outer * self.chunk_size + inner, inner))
 	}
 }
 
 #[cfg(test)]
-mod tests {
+mod space_iter_tests {
 	use super::*;
 
 	#[test]
@@ -368,8 +401,17 @@ mod tests {
 
 		assert_eq!(res1, res2);
 	}
-}
 
+	#[test]
+	fn uniqueness() {
+		let iter = SpaceIter::new(Int3::new(-8, 2, -10) .. Int3::new(9, 5, -5));
+		let mut map = std::collections::HashSet::new();
+
+		for pos in iter {
+			assert!(map.insert(pos));
+		}
+	}
+}
 
 #[cfg(test)]
 mod border_test {
@@ -409,6 +451,63 @@ mod border_test {
 
 		for (b, w) in border.zip(works) {
 			assert_eq!(b, w)
+		}
+	}
+}
+
+#[cfg(test)]
+mod splitten_tests {
+	use super::*;
+
+	#[test]
+	fn space_contains_split() {
+		let split = ChunkSplitten::new(Int3::all(16), Int3::all(2));
+		let space: Vec<_> = SpaceIter::new(Int3::zero() .. Int3::all(16)).collect();
+
+		for (entire, _) in split {
+			assert!(space.contains(&entire));
+		}
+	}
+
+	#[test]
+	fn split_contains_space() {
+		let (split, _): (Vec<_>, Vec<_>) = ChunkSplitten::new(Int3::all(16), Int3::all(2)).unzip();
+		let space = SpaceIter::new(Int3::zero() .. Int3::all(16));
+
+		for pos in space {
+			assert!(split.contains(&pos));
+		}
+	}
+
+	#[test]
+	fn length() {
+		let (entire, inner): (Vec<_>, Vec<_>) = ChunkSplitten::new(Int3::all(32), Int3::all(4)).unzip();
+		let space: Vec<_> = SpaceIter::new(Int3::zero() .. Int3::all(32)).collect();
+
+		assert_eq!(entire.len(), inner.len());
+		assert_eq!(entire.len(), space.len());
+	}
+
+	#[test]
+	fn print() {
+		let split = ChunkSplitten::new(Int3::all(6), Int3::all(2));
+
+		for (entire, inner) in split {
+			eprintln!("{:?} in {:?}", inner, entire);
+		}
+	}
+
+	#[test]
+	fn uniqueness() {
+		let split = ChunkSplitten::new(Int3::all(4), Int3::all(2));
+		let mut set = std::collections::HashSet::new();
+
+		for (entire, inner) in split {
+			assert!(
+				set.insert(entire),
+				"Values are: {:?} in {:?}",
+				inner, entire
+			);
 		}
 	}
 }
