@@ -1,4 +1,4 @@
-/**
+/*
  * Keyboard IO handler
  */
 
@@ -151,6 +151,7 @@ impl Mouse {
 			graphics.display.gl_window().window().set_cursor_position(
 				glium::glutin::dpi::PhysicalPosition::new(wsize.width / 2, wsize.height / 2)
 			).wunwrap();
+			
 			self.x = (wsize.width  / 2) as f64;
 			self.y = (wsize.height / 2) as f64;
 		}
@@ -167,7 +168,9 @@ impl Mouse {
 			let x = unsafe { (*pt).x as f64 };
 			let y = unsafe { (*pt).y as f64 };
 			Ok((x, y))
-		} else {
+		}
+		
+		else {
 			/* `GetCursorPos()` returned `false` for some reason */
 			Err("Can't get cursor position!")
 		}
@@ -231,24 +234,29 @@ impl InputManager {
 	 				}
 	 				_ => ()
 	 			},
+
 	 			/* Mouse buttons match. */
 	 			WindowEvent::MouseInput { button, state, .. } => match state {
 	 				/* If button is pressed then press it on virtual mouse, if not then release it. */
 	 				ElementState::Pressed => {
 	 					self.mouse.press(*button);
 	 				},
+
 	 				ElementState::Released => {
 	 					self.mouse.release(*button);
 	 				}
 	 			},
+
 	 			/* Cursor entered the window event. */
 	 			WindowEvent::CursorEntered { .. } => {
 	 				self.mouse.on_window = true;
 	 			},
+
 	 			/* Cursor left the window. */
 	 			WindowEvent::CursorLeft { .. } => {
 	 				self.mouse.on_window = false;
 	 			},
+
 				WindowEvent::Focused(focused) => {
 					/* If window has unfocused then release cursor. */
 					if *focused {
@@ -258,7 +266,9 @@ impl InputManager {
 								unsafe { CURSOR_REGRABBED = false };
 							}
 						}
-					} else {
+					}
+					
+					else {
 						if self.mouse.is_grabbed {
 							self.mouse.release_cursor(graphics);
 							unsafe { CURSOR_REGRABBED = true };

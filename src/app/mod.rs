@@ -106,21 +106,27 @@ impl App {
 				WindowEvent::CloseRequested => {
 					*control_flow = ControlFlow::Exit;
 				},
+
 				WindowEvent::Resized(new_size) => {
 					self.camera.inner.aspect_ratio = new_size.height as f32 / new_size.width as f32;
 					self.window_size = new_size;
 				},
+
 				_ => (),
 			},
+
 			Event::MainEventsCleared => {
 				self.main_events_cleared(control_flow).await;
 			},
+
 			Event::RedrawRequested(_) => {
 				self.redraw_requested().await;
 			},
+
 			Event::NewEvents(_) => {
 				self.new_events().await;
 			},
+
 			_ => ()
 		}
 	}
@@ -137,7 +143,9 @@ impl App {
 			if self.camera.inner.grabbes_cursor {
 				self.camera.inner.grabbes_cursor = false;
 				self.input_manager.mouse.release_cursor(&self.graphics);
-			} else {
+			}
+			
+			else {
 				self.camera.inner.grabbes_cursor = true;
 				self.input_manager.mouse.grab_cursor(&self.graphics);
 			}
@@ -182,6 +190,7 @@ impl App {
 				if self.input_manager.keyboard.just_pressed_combo(&[KeyCode::LControl, KeyCode::G]) {
 					generate_chunks = true;
 				}
+
 				if self.input_manager.keyboard.just_pressed_combo(&[KeyCode::LControl, KeyCode::H]) {
 					unsafe { SIZES = [16, 8, 16] };
 					generate_chunks = true;

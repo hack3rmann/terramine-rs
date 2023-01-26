@@ -67,7 +67,7 @@ pub mod shader {
 	pub const VERTEX_FILE_EXTENTION:   &str = "vert";
 	pub const FRAGMENT_FILE_EXTENTION: &str = "frag";
 	pub const CLEAR_COLOR: (f32, f32, f32, f32) = (0.01, 0.01, 0.01, 1.0);
-	pub const CLEAR_DEPTH: f32 = 1.0;
+	pub const CLEAR_DEPTH:   f32 = 1.0;
 	pub const CLEAR_STENCIL: i32 = 0;
 
 	pub mod voxel {

@@ -230,6 +230,23 @@ impl SpaceIter {
 	pub fn new(range: Range<Int3>) -> Self {
 		Self { curr: range.start, min: range.start, max: range.end - Int3::unit() }
 	}
+
+	pub fn new_cubed(range: Range<i32>) -> Self {
+		Self {
+			curr: Int3::all(range.start),
+			min: Int3::all(range.start),
+			max: Int3::all(range.end - 1)
+		}
+	}
+
+	#[allow(dead_code)]
+	pub fn zeroed(end: Int3) -> Self {
+		Self::new(Int3::zero() .. end)
+	}
+
+	pub fn zeroed_cubed(end: i32) -> Self {
+		Self::new_cubed(0 .. end)
+	}
 }
 
 impl Iterator for SpaceIter {
@@ -295,6 +312,7 @@ impl ChunkSplitten {
 	/// 
 	/// # Panic
 	/// If entire chunk size is not divisible into smaller chunk size.
+	#[allow(dead_code)] 
 	pub fn new(entire: Int3, chunk_size: Int3) -> Self {
 		/* Check that entire chunk are divisible into smaller ones */
 		assert_eq!(entire % chunk_size, Int3::zero());
@@ -324,6 +342,69 @@ impl Iterator for ChunkSplitten {
 
 		return Some((outer * self.chunk_size + inner, inner, outer))
 	}
+}
+
+pub struct Sides<T> {
+	pub inner: [T; 6],
+}
+
+#[allow(dead_code)]
+impl<T> Sides<T> {
+	pub fn new(sides: [T; 6]) -> Self {
+		Self { inner: sides }
+	}
+
+	pub fn all(side: T) -> Self where T: Copy {
+		Self::new([side; 6])
+	}
+
+	pub fn independent(back: T, front: T, top: T, bottom: T, right: T, left: T) -> Self {
+		Self::new([back, front, top, bottom, right, left])
+	}
+
+	pub fn as_array(&self) -> [T; 6] where T: Clone {
+		self.inner.clone()
+	}
+
+	pub fn back_mut(&mut self)   -> &mut T { &mut self.inner[0] }
+	pub fn front_mut(&mut self)  -> &mut T { &mut self.inner[1] }
+	pub fn top_mut(&mut self)    -> &mut T { &mut self.inner[2] }
+	pub fn bottom_mut(&mut self) -> &mut T { &mut self.inner[3] }
+	pub fn right_mut(&mut self)  -> &mut T { &mut self.inner[4] }
+	pub fn left_mut(&mut self)   -> &mut T { &mut self.inner[5] }
+
+	pub fn back_ref(&self)   -> &T { &self.inner[0] }
+	pub fn front_ref(&self)  -> &T { &self.inner[1] }
+	pub fn top_ref(&self)    -> &T { &self.inner[2] }
+	pub fn bottom_ref(&self) -> &T { &self.inner[3] }
+	pub fn right_ref(&self)  -> &T { &self.inner[4] }
+	pub fn left_ref(&self)   -> &T { &self.inner[5] }
+
+	pub fn back(&self)   -> T where T: Clone { self.inner[0].clone() }
+	pub fn front(&self)  -> T where T: Clone { self.inner[1].clone() }
+	pub fn top(&self)    -> T where T: Clone { self.inner[2].clone() }
+	pub fn bottom(&self) -> T where T: Clone { self.inner[3].clone() }
+	pub fn right(&self)  -> T where T: Clone { self.inner[4].clone() }
+	pub fn left(&self)   -> T where T: Clone { self.inner[5].clone() }
+}
+
+impl<T> std::ops::Index<usize> for Sides<T> {
+	type Output = T;
+	fn index(&self, index: usize) -> &Self::Output {
+		&self.inner[index]
+	}
+}
+
+impl<T> std::ops::IndexMut<usize> for Sides<T> {
+	fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+		&mut self.inner[index]
+	}
+}
+
+pub fn is_bordered(pos: Int3, bounds: Range<Int3>) -> bool {
+	pos.x() == bounds.start.x() || pos.x() == bounds.end.x() - 1 ||
+	pos.y() == bounds.start.y() || pos.y() == bounds.end.y() - 1 ||
+	pos.z() == bounds.start.z() || pos.z() == bounds.end.z() - 1
 }
 
 #[cfg(test)]
@@ -416,14 +497,14 @@ mod space_iter_tests {
 #[cfg(test)]
 mod border_test {
 	use {
-		crate::app::utils::terrain::chunk::{CHUNK_SIZE, CHUNK_VOLUME, position_function},
+		crate::app::utils::terrain::chunk::{MeshlessChunk as Chunk, position_function},
 		super::*,
 	};
 
 	#[test]
 	fn test1() {
-		let border = CubeBorder::new(CHUNK_SIZE as i32);
-		const MAX: i32 = CHUNK_SIZE as i32 - 1;
+		let border = CubeBorder::new(Chunk::SIZE as i32);
+		const MAX: i32 = Chunk::SIZE as i32 - 1;
 
 		for pos in border {
 			eprintln!("{:?}", pos);
@@ -438,10 +519,10 @@ mod border_test {
 
 	#[test]
 	fn test2() {
-		let border = CubeBorder::new(CHUNK_SIZE as i32);
-		const MAX: i32 = CHUNK_SIZE as i32 - 1;
+		let border = CubeBorder::new(Chunk::SIZE as i32);
+		const MAX: i32 = Chunk::SIZE as i32 - 1;
 
-		let works = (0..CHUNK_VOLUME)
+		let works = (0..Chunk::VOLUME)
 			.map(|i| position_function(i))
 			.filter(|pos|
 				pos.x() == 0 || pos.x() == MAX ||

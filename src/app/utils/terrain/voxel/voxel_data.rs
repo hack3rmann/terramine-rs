@@ -52,6 +52,6 @@ impl TextureSides {
 
 pub const VOXEL_DATA: &[VoxelData] = &CFG_VOXEL_DATA;
 
-pub const NOTHING_VOXEL_DATA:		&VoxelData = &VOXEL_DATA[0];
+pub const AIR_VOXEL_DATA:    		&VoxelData = &VOXEL_DATA[0];
 pub const LOG_VOXEL_DATA:			&VoxelData = &VOXEL_DATA[1];
 pub const STONE_VOXEL_DATA:			&VoxelData = &VOXEL_DATA[2];
