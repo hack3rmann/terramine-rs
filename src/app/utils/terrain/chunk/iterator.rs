@@ -401,6 +401,7 @@ impl<T> std::ops::IndexMut<usize> for Sides<T> {
 	}
 }
 
+#[allow(dead_code)]
 pub fn is_bordered(pos: Int3, bounds: Range<Int3>) -> bool {
 	pos.x() == bounds.start.x() || pos.x() == bounds.end.x() - 1 ||
 	pos.y() == bounds.start.y() || pos.y() == bounds.end.y() - 1 ||

@@ -34,7 +34,7 @@ use {
 		cell::RefCell, marker::PhantomData,
 		borrow::Cow, num::NonZeroU32, fmt::Display
 	},
-	iterator::{CubeBorder, SpaceIter, Sides},
+	iterator::{CubeBorder, SpaceIter},
 };
 
 /// Full-detailed vertex.
@@ -345,110 +345,7 @@ impl MeshlessChunk {
 		return Full(vertices)
 	}
 
-	pub fn make_lowered_detail_vertices_filled(&self, env: &ChunkEnvironment, lod: NonZeroU32) -> DetailedVertexVec {
-		let mut vertices = vec![];
-		let lod_size = 2_usize.pow(lod.get()) as i32;
-		let outer_size = Self::SIZE as i32 / lod_size;
-
-		/* Go for all sub-chunks in this chunk */
-		for outer in SpaceIter::zeroed_cubed(outer_size) {
-			let mut avarage_voxel = LoweredVoxel::Transparent;
-			let mut avarage_count: usize = 0;
-			
-			let outer_bordered = iterator::is_bordered(outer, Int3::zero()..Int3::all(outer_size));
-			let mut blocked = Sides::all(outer_bordered);
-
-			/* Go for all voxels in lod-subchunks */
-			for inner in SpaceIter::zeroed_cubed(lod_size) {
-				let (pos, ref new_color, id) = {
-					let pos = outer * lod_size + inner;
-					let world = pos_in_chunk_to_world_int3(pos, self.pos);
-					let i  = pos_to_idx(pos);
-					let id = self.voxel_ids[i];
-
-					(world, VOXEL_DATA[id as usize].avarage_color, id)
-				};
-
-				/* Poses for different sides */
-				let back_pos   = pos - Int3::new(-1,  0,  0);
-				let front_pos  = pos - Int3::new( 1,  0,  0);
-				let top_pos    = pos - Int3::new( 0, -1,  0);
-				let bottom_pos = pos - Int3::new( 0, -1,  0);
-				let right_pos  = pos - Int3::new( 0,  0, -1);
-				let left_pos   = pos - Int3::new( 0,  0, -1);
-
-				/* Compute color of low-res voxel */
-				match avarage_voxel {
-					/* For first color */
-					LoweredVoxel::Transparent if id != AIR_VOXEL_DATA.id => {
-						avarage_voxel = LoweredVoxel::Colored(*new_color);
-						avarage_count = 1;
-					},
-
-					/* If no color had been and no more given */
-					LoweredVoxel::Transparent => continue,
-
-					/* For next color */
-					LoweredVoxel::Colored(ref mut color) => {
-						/* Add new color */
-						let [r, g, b] = color;
-						*r += new_color[0];
-						*g += new_color[1];
-						*b += new_color[2];
-
-						/* Increment counter */
-						avarage_count += 1;
-					},
-				}
-
-				/* Compute bloking of sides */
-				//?! For back
-				match self.get_voxel_optional(back_pos) {
-					/* Inside-chunk case. Nothing to do with the border. */
-					FindOptions::InChunkNothing if !outer_bordered => {
-						*blocked.back_mut() = false;
-					},
-
-					// TODO: Other checks.
-
-					_ => todo!()
-				}
-			}
-
-			/* Divide voxel color by level count */
-			if let LoweredVoxel::Colored(ref mut color) = avarage_voxel {
-				let [r, g, b] = color;
-				*r /= avarage_count as f32;
-				*g /= avarage_count as f32;
-				*b /= avarage_count as f32;
-			}
-			
-			/* Cube sampler */
-			let cube = CubeLowered::new(lod_size as f32);
-
-			/* Calculate center position of low-res cube */
-			let pos = {
-				let entire_min = outer * lod_size;
-				let world = pos_in_chunk_to_world_int3(entire_min, self.pos);
-
-				Float4::from(world) + Float4::all(0.5 * cfg::terrain::VOXEL_SIZE)
-			};
-
-			/* Add vertices if side is not blocked */
-			if let LoweredVoxel::Colored(color) = avarage_voxel {
-				if !blocked.back()   { cube.back  (pos, color, &mut vertices) }
-				if !blocked.front()  { cube.front (pos, color, &mut vertices) }
-				if !blocked.top()    { cube.top   (pos, color, &mut vertices) }
-				if !blocked.bottom() { cube.bottom(pos, color, &mut vertices) }
-				if !blocked.right()  { cube.right (pos, color, &mut vertices) }
-				if !blocked.left()   { cube.left  (pos, color, &mut vertices) }
-			}
-		}
-
-		return Low(vertices)
-	}
-
-	pub fn make_lowered_detail_vertices_standart(&self, env: &ChunkEnvironment, lod: NonZeroU32) -> DetailedVertexVec {
+	pub fn make_lowered_detail_vertices(&self, env: &ChunkEnvironment, lod: NonZeroU32) -> DetailedVertexVec {
 		/* Resulting vertex array */
 		let mut vertices = vec![];
 		
@@ -510,17 +407,8 @@ impl MeshlessChunk {
 				self.make_full_detailed_vertices_standart(env),
 
 			/* Lowered details uniplemented */
-			// TODO: Separate filled and standart chunk impl.
 			Addition::Know { details: ChunkDetails::Low(lod), fill: _ } =>
-				self.make_lowered_detail_vertices_standart(env, *lod),
-
-			/* Lowered details uniplemented */
-			// TODO: Separate filled and standart chunk impl.
-			Addition::Know { details: ChunkDetails::Low(lod), fill: Some(ChunkFill::Standart) } =>
-				self.make_lowered_detail_vertices_filled(env, *lod),
-
-			Addition::Know { details: ChunkDetails::Low(lod), fill: Some(ChunkFill::All(id)) } =>
-				return todo!("Filled low-res impl"),
+				self.make_lowered_detail_vertices(env, *lod),
 
 			/* Not enough information */
 			not_enough @ Addition::NothingToKnow | not_enough @ Addition::Know { fill: None, .. } =>
@@ -631,103 +519,6 @@ impl MeshlessChunk {
 		if !self.is_blocked_with_lod(low_pos, Int3::new( 0, -1,  0), lod, env.bottom) { cube_mesher.bottom(build_pos, voxel_color, vertices); }
 		if !self.is_blocked_with_lod(low_pos, Int3::new( 0,  0,  1), lod, env.right)  { cube_mesher .right(build_pos, voxel_color, vertices); }
 		if !self.is_blocked_with_lod(low_pos, Int3::new( 0,  0, -1), lod, env.left)   { cube_mesher  .left(build_pos, voxel_color, vertices); }
-	}
-
-	#[deprecated]
-	fn to_triangles_inner_lowered_deprecated(
-		&self, build_pos: Float4, low_pos: Int3, voxel_size: usize,
-		lowered: &LoweredVoxel, env: &ChunkEnvironment, vertices: &mut Vec<LoweredVertex>
-	) {
-		/* Cube mesh builder */
-		let cube = CubeLowered::new(voxel_size as f32);
-
-		// TODO: Optimize this:
-
-		if let LoweredVoxel::Colored(color) = lowered {
-			let size = voxel_size as i32;
-
-			let is_blocked = |pos: Int3, bias: Int3, env: Option<*const MeshlessChunk>| -> bool {
-				match self.get_voxel_optional(pos + bias) {
-					FindOptions::OutOfBounds => {
-						match env {
-							None => false,
-							Some(chunk) => {
-								// * Safety: Safe because environment chunks lives as long as other chunks or that given chunk.
-								// * And it also needs only at chunk generation stage.
-								match unsafe { chunk.as_ref().wunwrap().get_voxel_optional(pos + bias) } {
-									FindOptions::InChunkNothing => false,
-									FindOptions::OutOfBounds => unreachable!(),
-									FindOptions::InChunkDetailed(voxel) | FindOptions::InChunkLowered(voxel, _) =>
-										voxel.data != AIR_VOXEL_DATA,
-								}
-							},
-						}
-					},
-					FindOptions::InChunkNothing => false,
-					FindOptions::InChunkDetailed(voxel) | FindOptions::InChunkLowered(voxel, _) =>
-						voxel.data != AIR_VOXEL_DATA,
-				}
-			};
-
-			let is_border =
-				low_pos.x() == 0 || low_pos.x() == (Self::SIZE / voxel_size) as i32 - 1 ||
-				low_pos.y() == 0 || low_pos.y() == (Self::SIZE / voxel_size) as i32 - 1 ||
-				low_pos.z() == 0 || low_pos.z() == (Self::SIZE / voxel_size) as i32 - 1;
-
-			if !is_border {
-				let mut back_free   = true;
-				let mut front_free  = true;
-				let mut top_free    = true;
-				let mut bottom_free = true;
-				let mut right_free  = true;
-				let mut left_free   = true;
-
-				for curr in SpaceIter::new(Int3::zero()..Int3::all(size)) {
-					let high_pos = low_pos * size + curr;
-					let world_pos = pos_in_chunk_to_world_int3(high_pos, self.pos);
-
-					if is_blocked(world_pos, Int3::new( size, 0, 0), env.back)   { back_free   = false }
-					if is_blocked(world_pos, Int3::new(-size, 0, 0), env.front)  { front_free  = false }
-					if is_blocked(world_pos, Int3::new(0,  size, 0), env.top)    { top_free    = false }
-					if is_blocked(world_pos, Int3::new(0, -size, 0), env.bottom) { bottom_free = false }
-					if is_blocked(world_pos, Int3::new(0, 0,  size), env.right)  { right_free  = false }
-					if is_blocked(world_pos, Int3::new(0, 0, -size), env.left)   { left_free   = false }
-				}
-
-				if back_free   { cube  .back(build_pos, *color, vertices) }
-				if front_free  { cube .front(build_pos, *color, vertices) }
-				if top_free    { cube   .top(build_pos, *color, vertices) }
-				if bottom_free { cube.bottom(build_pos, *color, vertices) }
-				if right_free  { cube .right(build_pos, *color, vertices) }
-				if left_free   { cube  .left(build_pos, *color, vertices) }
-			} else {
-				let mut back_free   = false;
-				let mut front_free  = false;
-				let mut top_free    = false;
-				let mut bottom_free = false;
-				let mut right_free  = false;
-				let mut left_free   = false;
-
-				for curr in SpaceIter::new(Int3::zero()..Int3::all(size)) {
-					let high_pos = low_pos * size + curr;
-					let world_pos = pos_in_chunk_to_world_int3(high_pos, self.pos);
-
-					if !is_blocked(world_pos, Int3::new( size, 0, 0), env.back)   { back_free   = true }
-					if !is_blocked(world_pos, Int3::new(-size, 0, 0), env.front)  { front_free  = true }
-					if !is_blocked(world_pos, Int3::new(0,  size, 0), env.top)    { top_free    = true }
-					if !is_blocked(world_pos, Int3::new(0, -size, 0), env.bottom) { bottom_free = true }
-					if !is_blocked(world_pos, Int3::new(0, 0,  size), env.right)  { right_free  = true }
-					if !is_blocked(world_pos, Int3::new(0, 0, -size), env.left)   { left_free   = true }
-				}
-
-				if back_free   { cube  .back(build_pos, *color, vertices) }
-				if front_free  { cube .front(build_pos, *color, vertices) }
-				if top_free    { cube   .top(build_pos, *color, vertices) }
-				if bottom_free { cube.bottom(build_pos, *color, vertices) }
-				if right_free  { cube .right(build_pos, *color, vertices) }
-				if left_free   { cube  .left(build_pos, *color, vertices) }
-			}
-		}
 	}
 
 	fn get_lowered_voxels(&self, lod: NonZeroU32) -> Result<Vec<LoweredVoxel>, String> {
