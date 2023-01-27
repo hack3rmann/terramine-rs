@@ -70,13 +70,6 @@ implement_vertex!(LoweredVertex, position, color, light);
 /// Type of voxel array. May be something different during progress.
 type VoxelArray = Vec<Id>;
 
-pub enum FindOptions {
-	OutOfBounds,
-	InChunkNothing,
-	InChunkDetailed(Voxel),
-	InChunkLowered(Voxel, NonZeroU32),
-}
-
 pub enum ChunkOptional<Item> {
 	OutsideChunk,
 	Item(Item, u32),
@@ -605,48 +598,6 @@ impl MeshlessChunk {
 	}
 
 	/// Gives voxel by world coordinate.
-	pub fn get_voxel_optional(&self, global_pos: Int3) -> FindOptions {
-		/* Transform to local */
-		let pos = world_coords_to_in_some_chunk(global_pos, self.pos);
-		
-		if pos.x() < 0 || pos.x() >= Self::SIZE as i32 ||
-		   pos.y() < 0 || pos.y() >= Self::SIZE as i32 ||
-		   pos.z() < 0 || pos.z() >= Self::SIZE as i32
-		{ return FindOptions::OutOfBounds }
-		
-		match self.additional_data.as_ref() {
-			/* For empty chunks */
-			Addition::Know { fill: Some(ChunkFill::Empty), .. } => 
-				FindOptions::InChunkNothing,
-
-			/* For known-filled chunks */
-			Addition::Know { fill: Some(fill), details } => {
-				let voxel = match fill {
-					ChunkFill::Standart =>
-						Voxel::new(global_pos, &VOXEL_DATA[self.voxel_ids[pos_to_idx(pos)] as usize]),
-						
-					ChunkFill::All(id) =>
-						Voxel::new(global_pos, &VOXEL_DATA[*id as usize]),
-
-					ChunkFill::Empty =>
-						unreachable!("Empty branch checked in previous pattern"),
-				};
-
-				match details {
-					ChunkDetails::Full => FindOptions::InChunkDetailed(voxel),
-					ChunkDetails::Low(lod) => FindOptions::InChunkLowered(voxel, *lod),
-				}
-			}
-
-			/* No information */
-			Addition::NothingToKnow => panic!("Not enough information!"),
-
-			/* Other types */
-			addition => panic!("Unresolvable chunk Addition {:?}!", addition),
-		}
-	}
-
-	/// Gives voxel by world coordinate.
 	pub fn get_voxel(&self, global_pos: Int3) -> ChunkOptional<Voxel> {
 		/* Transform to local */
 		let pos = world_coords_to_in_some_chunk(global_pos, self.pos);
@@ -699,9 +650,9 @@ impl MeshlessChunk {
 
 	/// Gives voxel by world coordinate.
 	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<Voxel> {
-		match self.get_voxel_optional(pos) {
-			FindOptions::OutOfBounds | FindOptions::InChunkNothing => None,
-			FindOptions::InChunkDetailed(chunk) | FindOptions::InChunkLowered(chunk, _) => Some(chunk)
+		match self.get_voxel(pos) {
+			ChunkOptional::Item(voxel, _) => Some(voxel),
+			ChunkOptional::OutsideChunk => None,
 		}
 	}
 
@@ -734,7 +685,7 @@ impl MeshlessChunk {
 	}
 
 	/// Gives position iterator that gives position for all voxels in chunk.
-	/// Internally, calls [`SpaceIter`]`::zeroed_cubed(CHUNK_SIZE as i32)`.
+	/// Internally, calls [`SpaceIter::zeroed_cubed(CHUNK_SIZE as i32)`].
 	pub fn pos_iter() -> SpaceIter {
 		SpaceIter::zeroed_cubed(Self::SIZE as i32)
 	}
@@ -843,10 +794,13 @@ impl MeshedChunk {
 		&self, target: &mut Frame, full_shader: &Shader, low_shader: &Shader,
 		uniforms: &U, draw_params: &glium::DrawParameters, camera: &Camera) -> Result<(), DrawError>
 	{
-		/* Check if vertex array is empty */
-		if !self.mesh.is_empty() && self.is_visible(camera) {
-			self.mesh.render(target, full_shader, low_shader, draw_params, uniforms)
-		} else { Ok(()) }
+		if self.mesh.is_empty() || !self.is_visible(camera) {
+			return Ok(());
+		}
+
+		else {
+			return self.mesh.render(target, full_shader, low_shader, draw_params, uniforms)
+		}
 	}
 
 	/// Updates mesh.
@@ -858,6 +812,7 @@ impl MeshedChunk {
 
 				ChunkMesh(Full(RefCell::new(Mesh::new(vertex_buffer))))
 			},
+
 			Low(vertices) => {
 				/* Vertex buffer for chunks */
 				let vertex_buffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
@@ -876,8 +831,8 @@ impl MeshedChunk {
 
 	/// Gives voxel by world coordinate.
 	#[allow(dead_code)]
-	pub fn get_voxel_optional(&self, global_pos: Int3) -> FindOptions {
-		self.inner.get_voxel_optional(global_pos)
+	pub fn get_voxel_optional(&self, global_pos: Int3) -> ChunkOptional<Voxel> {
+		self.inner.get_voxel(global_pos)
 	}
 
 	/// Gives voxel by world coordinate.
