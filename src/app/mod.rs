@@ -1,3 +1,5 @@
+use crate::app::utils::terrain::chunk::ChunkEnvironment;
+
 pub mod utils;
 
 use {
@@ -166,6 +168,7 @@ impl App {
 	/// Prepares the frame.
 	async fn redraw_requested(&mut self) {
 		/* Chunk generation flag */
+		// FIXME:
 		let mut generate_chunks = false;
 		static mut SIZES: [i32; 3] = cfg::terrain::default::WORLD_SIZES_IN_CHUNKS;
 		static mut GENERATION_PERCENTAGE: Loading = Loading::none();
@@ -228,6 +231,7 @@ impl App {
 		} target.finish().wunwrap();
 
 		/* Chunk reciever */
+		// FIXME:
 		static mut CHUNKS_PROMISE: Option<Promise<(MeshlessChunkArray, Vec<DetailedVertexVec>)>> = None;
 		static mut PERCENTAGE_PROMISE: Option<Promise<Loading>> = None;
 		if generate_chunks {
@@ -263,7 +267,19 @@ impl App {
 		/* Receive percentage */
 		if let Some(promise) = unsafe { PERCENTAGE_PROMISE.as_ref() } {
 			if let Some(percent) = promise.iter().last() {
-				unsafe { GENERATION_PERCENTAGE = percent } 
+				unsafe { GENERATION_PERCENTAGE = percent }
+			}
+		}
+
+		// FIXME:
+		unsafe {
+			static mut TEMP: bool = false;
+			if self.input_manager.keyboard.just_pressed(KeyCode::R) { TEMP = !TEMP; }
+			if let Some(ref mut chunk_array) = self.chunk_arr {
+				if !TEMP {
+					chunk_array.update_chunks_details(&self.graphics.display, &self.camera.inner, &ChunkEnvironment::none());
+					//TEMP = true;
+				}
 			}
 		}
 	}

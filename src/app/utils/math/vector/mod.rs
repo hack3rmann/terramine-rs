@@ -61,7 +61,7 @@ impl Float4 {
 		}
 	}
 
-	/// Gives absolute value of vector
+	/// Gives length value of vector
 	pub fn abs(self) -> f32 {
 		XMVectorGetX(XMVector3Length(self.i_vec))
 	}

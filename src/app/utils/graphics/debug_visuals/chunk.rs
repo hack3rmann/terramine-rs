@@ -1,3 +1,5 @@
+use crate::app::utils::terrain::chunk::ChunkEnvironment;
+
 /**
  * Debug visuals for [`Chunk`]
  */
@@ -96,7 +98,7 @@ impl DebugVisualized<MeshedChunk> {
 		let mesh = {
 			const BIAS: f32 = cfg::topology::Z_FIGHTING_BIAS;
 			const SIZE: f32 = Chunk::SIZE as f32 + BIAS;
-			let pos = chunk::chunk_cords_to_min_world_int3(chunk.inner.pos);
+			let pos = chunk::chunk_coords_to_min_world_int3(chunk.inner.pos);
 			let lll = [ -0.5 + pos.x() as f32 - BIAS, -0.5 + pos.y() as f32 - BIAS, -0.5 + pos.z() as f32 - BIAS ];
 			let llh = [ -0.5 + pos.x() as f32 - BIAS, -0.5 + pos.y() as f32 - BIAS, -0.5 + pos.z() as f32 + SIZE ];
 			let lhl = [ -0.5 + pos.x() as f32 - BIAS, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 - BIAS ];
@@ -171,5 +173,9 @@ impl DebugVisualized<MeshedChunk> {
 		self.inner.render(target, full_shader, low_shader, uniforms, draw_params, camera)?;
 		self.render_debug_meshed_chunks(target, uniforms, camera)?;
 		Ok(())
+	}
+
+	pub fn update_details(&mut self, display: &Display, camera: &Camera, env: &ChunkEnvironment) {
+		self.inner.update_details(display, camera, env);
 	}
 }

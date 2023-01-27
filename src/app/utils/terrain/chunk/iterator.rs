@@ -498,7 +498,7 @@ mod space_iter_tests {
 #[cfg(test)]
 mod border_test {
 	use {
-		crate::app::utils::terrain::chunk::{MeshlessChunk as Chunk, position_function},
+		crate::app::utils::terrain::chunk::{MeshlessChunk as Chunk, idx_to_pos},
 		super::*,
 	};
 
@@ -524,7 +524,7 @@ mod border_test {
 		const MAX: i32 = Chunk::SIZE as i32 - 1;
 
 		let works = (0..Chunk::VOLUME)
-			.map(|i| position_function(i))
+			.map(|i| idx_to_pos(i))
 			.filter(|pos|
 				pos.x() == 0 || pos.x() == MAX ||
 				pos.y() == 0 || pos.y() == MAX ||
