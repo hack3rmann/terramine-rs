@@ -92,127 +92,145 @@ pub struct MeshlessChunkArray {
 }
 
 impl MeshlessChunkArray {
+	fn save_chunks(
+		file_name: &str, save_path: &str, width: usize, height: usize, depth: usize,
+		chunks: &Vec<MeshlessChunk>, percentage_tx: &Sender<Loading>
+	) {
+		let volume = width * height * depth;
+
+		use SaveType::*;
+		Save::new(file_name)
+			.create(save_path)
+			.write(&width,  Width)
+			.write(&height, Height)
+			.write(&depth,  Depth)
+			.pointer_array(volume, ChunkArray, |i| {
+				/* Write chunk */
+				let result = if chunks[i].is_empty() {
+					/* Save only chunk position if it is empty */
+					let mut state = ChunkFill::Empty.reinterpret_as_bytes();
+					state.append(&mut chunks[i].pos.reinterpret_as_bytes());
+
+					state
+				} else if chunks[i].is_filled() {
+					/* Save only chunk position and one id */
+					let id = chunks[i].fill_id().wunwrap();
+					let mut state = ChunkFill::All(id).reinterpret_as_bytes();
+					state.append(&mut chunks[i].pos.reinterpret_as_bytes());
+
+					state
+				} else {
+					/* Save chunk fully */
+					let mut state = ChunkFill::Standart.reinterpret_as_bytes();
+					state.append(&mut chunks[i].reinterpret_as_bytes());
+
+					state
+				};
+
+				/* Calculate percentage */
+				percentage_tx.send(Loading::from_range("Saving to file", i, 0..volume)).wunwrap();
+
+				/* Return chunk */
+				return result
+			})
+			.save().wunwrap();
+	}
+
+	fn generate_file(
+		file_name: &str, save_path: &str, percentage_tx: &Sender<Loading>,
+		chunks: &mut Vec<MeshlessChunk>, width: usize, height: usize, depth: usize
+	) {
+		let volume = width * height * depth;
+
+		/* Generate chunks */
+		*chunks = Vec::with_capacity(volume);
+		let size = Int3::new(width as i32, height as i32, depth as i32);
+		for pos in SpaceIter::new(-size/2 .. size - size/2) {
+			chunks.push(MeshlessChunk::new(pos));
+
+			/* Calculating percentage */
+			// TODO: Write Usize3::from(Int3) to handle this:
+			let coords = {
+				let res = pos + size / 2;
+				let (x, y, z) = res.as_tuple();
+				[x as usize, y as usize, z as usize]
+			};
+			let idx = sdex::get_index(&coords, &[width, height, depth]);
+			percentage_tx.send(Loading::from_range("Chunk generation", idx, 0..volume)).wunwrap();
+		}
+
+		/* Save */
+		Self::save_chunks(file_name, save_path, width, height, depth, &chunks, &percentage_tx);
+	}
+
+	fn load_chunks(file_name: &str, save_path: &str, width: usize, height: usize, depth: usize, percentage_tx: &Sender<Loading>) -> Vec<MeshlessChunk> {
+		let volume = width * height * depth;
+		let mut chunks = vec![];
+
+		use SaveType::*;
+		let save = Save::new(file_name).open(save_path);
+
+		if !std::path::Path::new(save_path).exists() || (width, height, depth) != (save.read(Width), save.read(Height), save.read(Depth)) {
+			Self::generate_file(file_name, save_path, percentage_tx, &mut chunks, width, height, depth);
+			return chunks;
+		}
+
+		chunks = save.read_pointer_array(ChunkArray, |i, bytes| {
+			let offset = ChunkFill::static_size();
+			let chunk_fill = ChunkFill::reinterpret_from_bytes(&bytes[0..offset]);
+
+			/* Read chunk from bytes */
+			let result = match chunk_fill {
+				ChunkFill::Empty => {
+					let pos = Int3::reinterpret_from_bytes(&bytes[offset..]);
+
+					MeshlessChunk::new_empty(pos)
+				},
+
+				ChunkFill::All(id) => {
+					let pos = Int3::reinterpret_from_bytes(&bytes[offset..]);
+					
+					MeshlessChunk::new_filled(pos, id)
+				},
+
+				ChunkFill::Standart => {
+					let mut chunk = MeshlessChunk::reinterpret_from_bytes(&bytes[offset..]);
+					chunk.additional_data = Addition::Know {
+						fill: Some(ChunkFill::Standart),
+						details: ChunkDetails::Full
+					};
+
+					chunk
+				},
+			};
+
+			/* Calculate percent */
+			percentage_tx.send(Loading::from_range("Reading from file", i, 0..volume)).wunwrap();
+
+			return result;
+		});
+
+		return chunks
+	}
+
 	pub fn generate(width: usize, height: usize, depth: usize) -> (Promise<(MeshlessChunkArray, Vec<DetailedVertexVec>)>, Promise<Loading>) {
 		/* Create channels */
 		let (result_tx, result_rx) = std::sync::mpsc::channel();
-		let (percenatge_tx, percentage_rx) = std::sync::mpsc::channel();
+		let (percentage_tx, percentage_rx) = std::sync::mpsc::channel();
 
 		std::thread::spawn(move || {
-			/* Amount of voxels in chunks */
-			let volume = width * height * depth;
-
-			/* Initialize vector */
-			let mut chunks = vec![];
-
 			/* Name of world file */
-			let (path, name) = ("src/world", "world");
+			let (save_path, file_name) = ("src/world", "world");
 
-			/* File generator */
-			let mut generate_file = || {
-				/* Generate chunks */
-				chunks = Vec::with_capacity(volume);
-				let size = Int3::new(width as i32, height as i32, depth as i32);
-				for pos in SpaceIter::new(-size/2 .. size - size/2) {
-					chunks.push(MeshlessChunk::new(pos));
-
-					/* Calculating percentage */
-					// TODO: Write Usize3::from(Int3) to handle this:
-					let coords = {
-						let res = pos + size / 2;
-						let (x, y, z) = res.as_tuple();
-						[x as usize, y as usize, z as usize]
-					};
-					let idx = sdex::get_index(&coords, &[width, height, depth]);
-					percenatge_tx.send(Loading::from_range("Chunk generation", idx, 0..volume)).wunwrap();
-				}
-
-				/* Save */
-				use SaveType::*;
-				Save::new(name)
-					.create(path)
-					.write(&width, Width)
-					.write(&height, Height)
-					.write(&depth, Depth)
-					.pointer_array(volume, ChunkArray, |i| {
-						/* Write chunk */
-						let result = if chunks[i].is_empty() {
-							/* Save only chunk position if it is empty */
-							let mut state = ChunkFill::Empty.reinterpret_as_bytes();
-							state.append(&mut chunks[i].pos.reinterpret_as_bytes());
-
-							state
-						} else if chunks[i].is_filled() {
-							/* Save only chunk position and one id */
-							let id = chunks[i].fill_id().wunwrap();
-							let mut state = ChunkFill::All(id).reinterpret_as_bytes();
-							state.append(&mut chunks[i].pos.reinterpret_as_bytes());
-
-							state
-						} else {
-							/* Save chunk fully */
-							let mut state = ChunkFill::Standart.reinterpret_as_bytes();
-							state.append(&mut chunks[i].reinterpret_as_bytes());
-
-							state
-						};
-
-						/* Calculate percentage */
-						percenatge_tx.send(Loading::from_range("Saving to file", i, 0..volume)).wunwrap();
-
-						/* Return chunk */
-						return result
-					})
-					.save().wunwrap();
-			};
-
-			/* File reader */
-			if false /* FIXME: std::path::Path::new(path).exists()*/ {
-				use SaveType::*;
-				let save = Save::new(name).open(path);
-
-				if (width, height, depth) == (save.read(Width), save.read(Height), save.read(Depth)) {
-					chunks = save.read_pointer_array(ChunkArray, |i, bytes| {
-						let offset = ChunkFill::static_size();
-						let chunk_fill = ChunkFill::reinterpret_from_bytes(&bytes[0..offset]);
-
-						/* Read chunk from bytes */
-						let result = match chunk_fill {
-							ChunkFill::Empty => {
-								let pos = Int3::reinterpret_from_bytes(&bytes[offset..]);
-								MeshlessChunk::new_empty(pos)
-							},
-							ChunkFill::All(id) => {
-								let pos = Int3::reinterpret_from_bytes(&bytes[offset..]);
-								MeshlessChunk::new_filled(pos, id)
-							},
-							ChunkFill::Standart => {
-								let mut chunk = MeshlessChunk::reinterpret_from_bytes(&bytes[offset..]);
-								chunk.additional_data = Addition::Know {
-									fill: Some(ChunkFill::Standart),
-									details: ChunkDetails::Full
-								};
-								chunk
-							},
-						};
-
-						/* Calculate percent */
-						percenatge_tx.send(Loading::from_range("Reading from file", i, 0..volume)).wunwrap();
-
-						return result
-					});
-				} else {
-					generate_file()
-				}
-			} else {
-				generate_file()
-			}
+			/* Load chunks */
+			let chunks = Self::load_chunks(file_name, save_path, width, height, depth, &percentage_tx);
 
 			/* Make environments with references to chunk array */
-			let env = Self::make_environment(&chunks, width, height, depth, Some(percenatge_tx.clone()));
+			let env = Self::make_environment(&chunks, width, height, depth, Some(percentage_tx.clone()));
 
 			/* Create generated data */
 			let array = MeshlessChunkArray { width, height, depth, chunks };
-			let result = GeneratedChunkArray(array, env).generate_mesh(percenatge_tx);
+			let result = GeneratedChunkArray(array, env).generate_mesh(percentage_tx);
 
 			/* Send */
 			result_tx.send(result).wunwrap();
