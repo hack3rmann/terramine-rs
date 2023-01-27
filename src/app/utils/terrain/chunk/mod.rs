@@ -885,13 +885,17 @@ impl MeshedChunk {
         self.inner.is_visible(camera)
     }
 
-    /// Updates LOD of this chunk.
-    pub fn update_details(&mut self, display: &glium::Display, camera: &Camera, env: &ChunkEnvironment) {
+    pub fn update_details_data(&mut self, camera: &Camera) -> bool {
+        // TODO: check nearby chunks to update their meshes
+
         let new_lod = self.calculate_desired_lod(camera);
-        if self.inner.get_lod() == new_lod { return }
+        if self.inner.get_lod() == new_lod { return false }
 
         self.inner.set_lod_data(new_lod).unwrap();
+        return true
+    }
 
+    pub fn refresh_mesh(&mut self, display: &glium::Display, env: &ChunkEnvironment) {
         let vertices = self.inner.to_triangles(env);
         self.mesh = Self::make_mesh_owned(display, vertices);
     }

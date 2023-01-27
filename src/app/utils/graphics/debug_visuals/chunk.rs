@@ -175,7 +175,11 @@ impl DebugVisualized<MeshedChunk> {
 		Ok(())
 	}
 
-	pub fn update_details(&mut self, display: &Display, camera: &Camera, env: &ChunkEnvironment) {
-		self.inner.update_details(display, camera, env);
+	pub fn update_details_data(&mut self, camera: &Camera) -> bool {
+		self.inner.update_details_data(camera)
+	}
+
+	pub fn refresh_mesh(&mut self, display: &Display, env: &ChunkEnvironment) {
+		self.inner.refresh_mesh(display, env)
 	}
 }

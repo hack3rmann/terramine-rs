@@ -372,8 +372,64 @@ impl<'a> MeshedChunkArray<'a> {
         Ok(())
     }
 
-    pub fn update_chunks_details(&mut self, display: &glium::Display, camera: &Camera, env: &ChunkEnv) {
+    pub fn get_environment<'env>(&self, chunk_pos: Int3) -> ChunkEnv<'env> {
+        let chunk_array_size = Int3::new(self.width as i32, self.height as i32, self.depth as i32);
+        let shifted_pos = chunk_pos + chunk_array_size / 2;
+
+        let side_to_idx = |side: Int3| -> usize {
+            let (x, y, z) = (shifted_pos + side).as_tuple();
+            sdex::get_index(&[x as usize, y as usize, z as usize], &[self.width, self.height, self.depth])
+        };
+
+        let mut env = ChunkEnv::none();
+
+        /* For `back` side */
+        if shifted_pos.x() + 1 < self.width as i32 {
+            env.back	= Some(&self.chunks[side_to_idx(Int3::new( 1,  0,  0))].inner.inner);
+        }
+
+        /* For `front` side */
+        if shifted_pos.x() - 1 >= 0 {
+            env.front	= Some(&self.chunks[side_to_idx(Int3::new(-1,  0,  0))].inner.inner);
+        }
+    
+        /* For `top` side */
+        if shifted_pos.y() + 1 < self.height as i32 {
+            env.top		= Some(&self.chunks[side_to_idx(Int3::new( 0,  1,  0))].inner.inner);
+        }
+
+        /* For `bottom` side */
+        if shifted_pos.y() - 1 >= 0 {
+            env.bottom	= Some(&self.chunks[side_to_idx(Int3::new( 0, -1,  0))].inner.inner);
+        }
+
+        /* For `right` side */
+        if shifted_pos.z() + 1 < self.depth as i32 {
+            env.right	= Some(&self.chunks[side_to_idx(Int3::new( 0,  0,  1))].inner.inner);
+        }
+
+        /* For `left` side */
+        if shifted_pos.z() - 1 >= 0 {
+            env.left	= Some(&self.chunks[side_to_idx(Int3::new( 0,  0, -1))].inner.inner);
+        }
+
+        return env
+    }
+
+    pub fn update_chunks_details(&mut self, display: &glium::Display, camera: &Camera) {
+        let updates: Vec<_> = self.chunks.iter_mut()
+            .map(|chunk| chunk.update_details_data(camera) )
+            .collect();
+
+        let envs: Vec<_> = self.chunks.iter()
+            .map(|chunk| self.get_environment(chunk.inner.inner.pos))
+            .collect();
+            
         self.chunks.iter_mut()
-            .for_each(|chunk| chunk.update_details(display, camera, env));
+            .zip(envs.into_iter())
+            .zip(updates.into_iter())
+            .for_each(|((chunk, env), is_same)|
+                if is_same { chunk.refresh_mesh(display, &env) }
+            );
     }
 }

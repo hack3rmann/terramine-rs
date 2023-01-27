@@ -1,5 +1,3 @@
-use crate::app::utils::terrain::chunk::ChunkEnvironment;
-
 pub mod utils;
 
 use {
@@ -277,7 +275,7 @@ impl App {
 			if self.input_manager.keyboard.just_pressed(KeyCode::R) { TEMP = !TEMP; }
 			if let Some(ref mut chunk_array) = self.chunk_arr {
 				if !TEMP {
-					chunk_array.update_chunks_details(&self.graphics.display, &self.camera.inner, &ChunkEnvironment::none());
+					chunk_array.update_chunks_details(&self.graphics.display, &self.camera.inner);
 					//TEMP = true;
 				}
 			}
