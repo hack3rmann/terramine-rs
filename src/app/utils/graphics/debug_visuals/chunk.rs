@@ -7,7 +7,6 @@ use crate::app::utils::terrain::chunk::ChunkEnvironment;
 use {
 	crate::app::utils::{
 		cfg,
-		math::prelude::*,
 		werror::prelude::*,
 		terrain::chunk::{
 			self,
@@ -164,15 +163,22 @@ impl DebugVisualized<MeshedChunk> {
 	}
 
 	pub fn render_debug_meshed_chunks(&self, target: &mut Frame, uniforms: &impl Uniforms, camera: &Camera) -> Result<(), DrawError> {
-		if ENABLED.load(Ordering::Relaxed) && self.inner.is_visible(camera) {
-			self.mesh.render(target, self.static_data.shader, self.static_data.draw_params, uniforms)
-		} else { Ok(()) }
+		match ENABLED.load(Ordering::Relaxed) && self.inner.is_visible(camera) {
+			true => self.mesh.render(target, self.static_data.shader, self.static_data.draw_params, uniforms),
+			false => Ok(()),
+		}
 	}
 
 	pub fn render_meshed_chunks(&self, target: &mut Frame, full_shader: &Shader, low_shader: &Shader, uniforms: &impl Uniforms, draw_params: &DrawParameters, camera: &Camera) -> Result<(), DrawError> {
 		self.inner.render(target, full_shader, low_shader, uniforms, draw_params, camera)?;
 		self.render_debug_meshed_chunks(target, uniforms, camera)?;
 		Ok(())
+	}
+
+	#[allow(dead_code)]
+	pub fn update_details(&mut self, display: &Display, env: &ChunkEnvironment, camera: &Camera) {
+		if !self.update_details_data(camera) { return }
+		self.refresh_mesh(display, env)
 	}
 
 	pub fn update_details_data(&mut self, camera: &Camera) -> bool {

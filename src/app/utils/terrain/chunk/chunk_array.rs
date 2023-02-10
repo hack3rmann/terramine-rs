@@ -1,7 +1,8 @@
+use crate::app::profiler::prelude::*;
 use {
     crate::app::utils::{
         werror::prelude::*,
-        math::prelude::*,
+        //math::prelude::*,
         graphics::{
             camera::Camera,
             Graphics,
@@ -26,6 +27,7 @@ use {
         DetailedVertexVec,
         iterator::SpaceIter,
     },
+    math_linear::{prelude::*, veci},
     glium::{
         uniforms::Uniforms,
         DrawError,
@@ -144,7 +146,7 @@ impl MeshlessChunkArray {
 
         /* Generate chunks */
         *chunks = Vec::with_capacity(volume);
-        let size = Int3::new(width as i32, height as i32, depth as i32);
+        let size = veci!(width, height, depth);
         for pos in SpaceIter::new(-size/2 .. size - size/2) {
             chunks.push(MeshlessChunk::new(pos));
 
@@ -416,20 +418,23 @@ impl<'a> MeshedChunkArray<'a> {
         return env
     }
 
-    pub fn update_chunks_details(&mut self, display: &glium::Display, camera: &Camera) {
-        let updates: Vec<_> = self.chunks.iter_mut()
-            .map(|chunk| chunk.update_details_data(camera) )
-            .collect();
-
-        let envs: Vec<_> = self.chunks.iter()
+    /// Note: works kinda performantly.
+    #[profile]
+    fn make_envs<'e>(&self) -> Vec<ChunkEnv<'e>> {
+        self.chunks.iter()
             .map(|chunk| self.get_environment(chunk.inner.inner.pos))
-            .collect();
-            
+            .collect()
+    }
+
+    #[profile]
+    pub fn update_chunks_details(&mut self, display: &glium::Display, camera: &Camera) {
+        let envs = self.make_envs();
+        
         self.chunks.iter_mut()
             .zip(envs.into_iter())
-            .zip(updates.into_iter())
-            .for_each(|((chunk, env), is_same)|
-                if is_same { chunk.refresh_mesh(display, &env) }
+            .for_each(|(chunk, env)|
+                chunk.update_details(display, &env, camera)
             );
     }
 }
+

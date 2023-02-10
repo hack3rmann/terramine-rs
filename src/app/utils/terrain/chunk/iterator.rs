@@ -2,9 +2,9 @@
 
 use {
 	crate::app::utils::{
-		math::prelude::*,
 		werror::prelude::*,
 	},
+	math_linear::prelude::*,
 	std::ops::Range,
 };
 
@@ -56,7 +56,7 @@ impl Iterator for CubeBorder {
 		let max_minus_one: i32 = max - 1;
 
 		/* Return if maximum reached */
-		if self.prev == Int3::new(max, max, max) {
+		if self.prev == Int3::all(max) {
 			return None
 		} else if self.prev == Int3::all(Self::INITIAL_STATE) {
 			let new = Int3::all(0);
@@ -65,7 +65,7 @@ impl Iterator for CubeBorder {
 		}
 
 		/* Previous x, y and z */
-		let (x, y, z) = (self.prev.x(), self.prev.y(), self.prev.z());
+		let (x, y, z) = self.prev.as_tuple();
 
 		/* Returning local function */
 		let mut give = |pos| {
@@ -228,7 +228,7 @@ pub struct SpaceIter {
 
 impl SpaceIter {
 	pub fn new(range: Range<Int3>) -> Self {
-		Self { curr: range.start, min: range.start, max: range.end - Int3::unit() }
+		Self { curr: range.start, min: range.start, max: range.end - Int3::ones() }
 	}
 
 	pub fn new_cubed(range: Range<i32>) -> Self {
@@ -254,17 +254,17 @@ impl Iterator for SpaceIter {
 	fn next(&mut self) -> Option<Self::Item> {
 		let result = self.curr;
 
-		if self.curr.z() < self.max.z() {
+		if self.curr.z < self.max.z {
 			self.curr += Int3::new(0, 0, 1);
 		} else {
-			if self.curr.y() < self.max.y() {
-				self.curr = Int3::new(self.curr.x(), self.curr.y() + 1, self.min.z());
+			if self.curr.y < self.max.y {
+				self.curr = Int3::new(self.curr.x, self.curr.y + 1, self.min.z);
 			} else {
 				if self.curr.x() < self.max.x() {
 					self.curr = Int3::new(self.curr.x() + 1, self.min.y(), self.min.z());
 				} else if self.curr == self.max {
-					self.curr = self.max + Int3::unit();
-				} else if self.curr == self.max + Int3::unit() {
+					self.curr = self.max + Int3::ones();
+				} else if self.curr == self.max + Int3::ones() {
 					return None
 				}
 			}
@@ -410,7 +410,7 @@ pub fn is_bordered(pos: Int3, bounds: Range<Int3>) -> bool {
 
 #[cfg(test)]
 mod space_iter_tests {
-	use super::*;
+	use {super::*, math_linear::veci};
 
 	#[test]
 	fn zero_start_simple() {
@@ -486,7 +486,7 @@ mod space_iter_tests {
 
 	#[test]
 	fn uniqueness() {
-		let iter = SpaceIter::new(Int3::new(-8, 2, -10) .. Int3::new(9, 5, -5));
+		let iter = SpaceIter::new(veci!(-8, 2, -10) .. veci!(9, 5, -5));
 		let mut map = std::collections::HashSet::new();
 
 		for pos in iter {
@@ -526,9 +526,9 @@ mod border_test {
 		let works = (0..Chunk::VOLUME)
 			.map(|i| idx_to_pos(i))
 			.filter(|pos|
-				pos.x() == 0 || pos.x() == MAX ||
-				pos.y() == 0 || pos.y() == MAX ||
-				pos.z() == 0 || pos.z() == MAX
+				pos.x == 0 || pos.x == MAX ||
+				pos.y == 0 || pos.y == MAX ||
+				pos.z == 0 || pos.z == MAX
 			);
 
 		for (b, w) in border.zip(works) {

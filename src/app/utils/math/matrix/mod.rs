@@ -87,8 +87,8 @@ impl Matrix4x4 {
 		)
 	}
 
-	/// Gives utit matrix.
-	pub fn unit() -> Self {
+	/// Gives identity matrix.
+	pub fn identity() -> Self {
 		Self::set_diagonal(1.0)
 	}
 
@@ -161,7 +161,7 @@ impl Matrix4x4 {
 
 impl Default for Matrix4x4 {
 	fn default() -> Self {
-		Self::unit()
+		Self::identity()
 	}
 }
 

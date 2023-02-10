@@ -508,6 +508,110 @@ unsafe impl<T: StaticSize> StaticSize for Option<T> {
 
 
 
+use math_linear::prelude::{Int3, Float4, Float3};
+
+unsafe impl Reinterpret for Int3 { }
+
+unsafe impl ReinterpretAsBytes for Int3 {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		let mut out = Vec::with_capacity(Self::static_size());
+
+		out.append(&mut self.x().reinterpret_as_bytes());
+		out.append(&mut self.y().reinterpret_as_bytes());
+		out.append(&mut self.z().reinterpret_as_bytes());
+
+		return out;
+	}
+}
+
+unsafe impl ReinterpretFromBytes for Int3 {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		let x = i32::reinterpret_from_bytes(&source[0..4]);
+		let y = i32::reinterpret_from_bytes(&source[4..8]);
+		let z = i32::reinterpret_from_bytes(&source[8..12]);
+
+		Self::new(x, y, z)
+	}
+}
+
+unsafe impl ReinterpretSize for Int3 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for Int3 {
+	fn static_size() -> usize { 12 }
+}
+
+
+
+unsafe impl Reinterpret for Float3 { }
+
+unsafe impl ReinterpretAsBytes for Float3 {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		let mut out = Vec::with_capacity(Self::static_size());
+
+		out.append(&mut self.x.reinterpret_as_bytes());
+		out.append(&mut self.y.reinterpret_as_bytes());
+		out.append(&mut self.z.reinterpret_as_bytes());
+
+		return out;
+	}
+}
+
+unsafe impl ReinterpretFromBytes for Float3 {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		let x = f32::reinterpret_from_bytes(&source[0..4]);
+		let y = f32::reinterpret_from_bytes(&source[4..8]);
+		let z = f32::reinterpret_from_bytes(&source[8..12]);
+
+		Self::new(x, y, z)
+	}
+}
+
+unsafe impl ReinterpretSize for Float3 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for Float3 {
+	fn static_size() -> usize { 12 }
+}
+
+
+
+unsafe impl Reinterpret for Float4 { }
+
+unsafe impl ReinterpretAsBytes for Float4 {
+	fn reinterpret_as_bytes(&self) -> Vec<u8> {
+		let mut out = Vec::with_capacity(Self::static_size());
+
+		out.append(&mut self.x().reinterpret_as_bytes());
+		out.append(&mut self.y().reinterpret_as_bytes());
+		out.append(&mut self.z().reinterpret_as_bytes());
+		out.append(&mut self.w().reinterpret_as_bytes());
+
+		return out;
+	}
+}
+
+unsafe impl ReinterpretFromBytes for Float4 {
+	fn reinterpret_from_bytes(source: &[u8]) -> Self {
+		let x = f32::reinterpret_from_bytes(&source[0..4]);
+		let y = f32::reinterpret_from_bytes(&source[4..8]);
+		let z = f32::reinterpret_from_bytes(&source[8..12]);
+		let w = f32::reinterpret_from_bytes(&source[12..16]);
+
+		Self::new(x, y, z, w)
+	}
+}
+
+unsafe impl ReinterpretSize for Float4 {
+	fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for Float4 {
+	fn static_size() -> usize { 16 }
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

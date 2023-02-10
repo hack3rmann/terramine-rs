@@ -2,7 +2,6 @@ use {
 	crate::app::utils::{
 		cfg,
 		werror::prelude::*,
-		math::prelude::*,
 		graphics::{
 			camera::Camera,
 			vertex_buffer::VertexBuffer,

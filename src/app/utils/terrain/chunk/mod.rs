@@ -5,7 +5,7 @@ use {
     crate::app::utils::{
         cfg,
         werror::prelude::*,
-        math::prelude::*,
+        //math::prelude::*,
         graphics::{
             Graphics,
             mesh::{Mesh, UnindexedMesh},
@@ -22,6 +22,7 @@ use {
         voxel_data::*,
         generator,
     },
+    math_linear::{prelude::*, veci},
     glium::{
         DrawError,
         uniforms::Uniforms,
@@ -213,7 +214,7 @@ impl MeshlessChunk {
                 fill: Some(fill), details: ChunkDetails::Full,
             }
         };
-        let abs = Float4::from(pos).abs() as Lod;
+        let abs = Float3::from(pos).len().round() as Lod;
         if abs >= 1 {
             chunk.lower_detail(abs.min((Self::SIZE as f32).log2() as Lod)).wunwrap();
         }
@@ -386,15 +387,15 @@ impl MeshlessChunk {
 
                 /* Find `position` in 'smaller chunk' */
                 let pos_low = general_position(i, low_side_len, low_side_len);
-                let mut pos = Float4::from(pos_low);
+                let mut pos = vec3::from(pos_low);
 
                 /* Then stretch it and center */
-                pos += Float4::all(VOXEL_SIZE * 0.5);
+                pos += vec3::all(VOXEL_SIZE * 0.5);
                 pos *= voxel_size as f32;
-                pos -= Float4::all(VOXEL_SIZE * 0.5);
+                pos -= vec3::all(VOXEL_SIZE * 0.5);
 
                 /* Move to world coordinates */
-                let pos = pos_in_chunk_to_world_float4(pos, self.pos.into());
+                let pos = pos_in_chunk_to_world_float3(pos, self.pos.into());
 
                 /* Return lowered chunk position in world, 
                 |* position in lowered array and lowered chunk itself */
@@ -465,12 +466,12 @@ impl MeshlessChunk {
         let cube = CubeDetailed::new(&VOXEL_DATA[id as usize]);
         
         /* Build all sides separately */
-        if build(Int3::new( 1,  0,  0), env.back)   { cube.back  (position, vertices) };
-        if build(Int3::new(-1,  0,  0), env.front)  { cube.front (position, vertices) };
-        if build(Int3::new( 0,  1,  0), env.top)    { cube.top   (position, vertices) };
-        if build(Int3::new( 0, -1,  0), env.bottom) { cube.bottom(position, vertices) };
-        if build(Int3::new( 0,  0,  1), env.right)  { cube.right (position, vertices) };
-        if build(Int3::new( 0,  0, -1), env.left)   { cube.left  (position, vertices) };
+        if build(veci!( 1,  0,  0), env.back)   { cube.back  (position, vertices) };
+        if build(veci!(-1,  0,  0), env.front)  { cube.front (position, vertices) };
+        if build(veci!( 0,  1,  0), env.top)    { cube.top   (position, vertices) };
+        if build(veci!( 0, -1,  0), env.bottom) { cube.bottom(position, vertices) };
+        if build(veci!( 0,  0,  1), env.right)  { cube.right (position, vertices) };
+        if build(veci!( 0,  0, -1), env.left)   { cube.left  (position, vertices) };
     }
 
     fn is_blocked_with_lod(&self, low_pos: Int3, side: Int3, lod: NonZeroU32, neighbor: Option<*const MeshlessChunk>) -> bool {
@@ -520,7 +521,7 @@ impl MeshlessChunk {
     }
 
     fn to_triangles_inner_lowered(
-        &self, build_pos: Float4, low_pos: Int3, lod: NonZeroU32,
+        &self, build_pos: vec3, low_pos: Int3, lod: NonZeroU32,
         low_voxel: &LoweredVoxel, env: &ChunkEnvironment, vertices: &mut Vec<LoweredVertex>
     ) {
         let voxel_color = match low_voxel {
@@ -531,12 +532,12 @@ impl MeshlessChunk {
         let voxel_size_f32 = cfg::terrain::VOXEL_SIZE * 2_usize.pow(lod.get()) as f32;
         let cube_mesher = CubeLowered::new(voxel_size_f32);
 
-        if !self.is_blocked_with_lod(low_pos, Int3::new( 1,  0,  0), lod, env.back)   { cube_mesher  .back(build_pos, voxel_color, vertices); }
-        if !self.is_blocked_with_lod(low_pos, Int3::new(-1,  0,  0), lod, env.front)  { cube_mesher .front(build_pos, voxel_color, vertices); }
-        if !self.is_blocked_with_lod(low_pos, Int3::new( 0,  1,  0), lod, env.top)    { cube_mesher   .top(build_pos, voxel_color, vertices); }
-        if !self.is_blocked_with_lod(low_pos, Int3::new( 0, -1,  0), lod, env.bottom) { cube_mesher.bottom(build_pos, voxel_color, vertices); }
-        if !self.is_blocked_with_lod(low_pos, Int3::new( 0,  0,  1), lod, env.right)  { cube_mesher .right(build_pos, voxel_color, vertices); }
-        if !self.is_blocked_with_lod(low_pos, Int3::new( 0,  0, -1), lod, env.left)   { cube_mesher  .left(build_pos, voxel_color, vertices); }
+        if !self.is_blocked_with_lod(low_pos, veci!( 1,  0,  0), lod, env.back)   { cube_mesher  .back(build_pos, voxel_color, vertices); }
+        if !self.is_blocked_with_lod(low_pos, veci!(-1,  0,  0), lod, env.front)  { cube_mesher .front(build_pos, voxel_color, vertices); }
+        if !self.is_blocked_with_lod(low_pos, veci!( 0,  1,  0), lod, env.top)    { cube_mesher   .top(build_pos, voxel_color, vertices); }
+        if !self.is_blocked_with_lod(low_pos, veci!( 0, -1,  0), lod, env.bottom) { cube_mesher.bottom(build_pos, voxel_color, vertices); }
+        if !self.is_blocked_with_lod(low_pos, veci!( 0,  0,  1), lod, env.right)  { cube_mesher .right(build_pos, voxel_color, vertices); }
+        if !self.is_blocked_with_lod(low_pos, veci!( 0,  0, -1), lod, env.left)   { cube_mesher  .left(build_pos, voxel_color, vertices); }
     }
 
     fn get_lowered_voxels(&self, lod: NonZeroU32) -> Result<Vec<LoweredVoxel>, String> {
@@ -627,9 +628,9 @@ impl MeshlessChunk {
         /* Transform to local */
         let pos = world_coords_to_in_some_chunk(global_pos, self.pos);
         
-        if pos.x() < 0 || pos.x() >= Self::SIZE as i32 ||
-           pos.y() < 0 || pos.y() >= Self::SIZE as i32 ||
-           pos.z() < 0 || pos.z() >= Self::SIZE as i32
+        if pos.x < 0 || pos.x >= Self::SIZE as i32 ||
+           pos.y < 0 || pos.y >= Self::SIZE as i32 ||
+           pos.z < 0 || pos.z >= Self::SIZE as i32
         { return ChunkOptional::OutsideChunk }
         
         match self.additional_data.as_ref() {
@@ -684,18 +685,18 @@ impl MeshlessChunk {
     /// Checks if chunk is in camera view.
     pub fn is_visible(&self, camera: &Camera) -> bool {
         /* AABB init */
-        let mut lo = Float4::from(chunk_coords_to_min_world_int3(self.pos));
-        let mut hi = lo + Int3::all(Self::SIZE as i32).into();
+        let mut lo = vec3::from(chunk_coords_to_min_world_int3(self.pos));
+        let mut hi = lo + vec3::all(Self::SIZE as f32);
 
         /* Bias (voxel centration) */
         const BIAS: f32 = cfg::terrain::VOXEL_SIZE * 0.5;
 
         /* Biasing */
-        lo -= Float4::all(BIAS);
-        hi -= Float4::all(BIAS);
+        lo -= vec3::all(BIAS);
+        hi -= vec3::all(BIAS);
 
         /* Frustum check */
-        camera.is_aabb_in_view(AABB::from_float4(lo, hi))
+        camera.is_aabb_in_view(AABB::from_float3(lo, hi))
     }
 
     /// Upgrades chunk to be meshed.
@@ -904,10 +905,12 @@ impl MeshedChunk {
     fn calculate_desired_lod(&self, camera: &Camera) -> Lod {
         let max_lod: Lod = (MeshlessChunk::SIZE as f32).log2().floor() as Lod;
 
-        let chunk_pos = Float4::from(chunk_coords_to_min_world_int3(
-            self.inner.pos
-        ) + Int3::all(MeshlessChunk::SIZE as i32) / 2);
-        let distance = (chunk_pos - camera.pos).abs();
+        let chunk_pos = vec3::from(
+            chunk_coords_to_min_world_int3(self.inner.pos) +
+            Int3::all(MeshlessChunk::SIZE as i32) / 2
+        );
+
+        let distance = (chunk_pos - camera.pos).len();
 
         const DIST_MULTIPLIER: f32 = 0.006;
         let lod = (distance * DIST_MULTIPLIER).floor() as Lod;
@@ -1045,7 +1048,7 @@ pub fn chunk_coords_to_min_world_int3(pos: Int3) -> Int3 {
 }
 
 /// Transforms chunk coords to world.
-pub fn chunk_coords_to_min_world_float4(pos: Float4) -> Float4 {
+pub fn chunk_coords_to_min_world_float3(pos: Float3) -> Float3 {
     pos * MeshlessChunk::SIZE as f32
 }
 
@@ -1055,8 +1058,8 @@ pub fn pos_in_chunk_to_world_int3(in_chunk: Int3, chunk: Int3) -> Int3 {
 }
 
 /// Transforms in-chunk coords to world.
-pub fn pos_in_chunk_to_world_float4(in_chunk: Float4, chunk: Float4) -> Float4 {
-    chunk_coords_to_min_world_float4(chunk) + in_chunk
+pub fn pos_in_chunk_to_world_float3(in_chunk: Float3, chunk: Float3) -> Float3 {
+    chunk_coords_to_min_world_float3(chunk) + in_chunk
 }
 
 /// Transforms world coordinates to chunk.
@@ -1073,7 +1076,8 @@ pub fn world_coords_to_in_some_chunk(pos: Int3, chunk: Int3) -> Int3 {
 
 /// Index function.
 pub fn pos_to_idx(pos: Int3) -> usize {
-    sdex::get_index(&[pos.x() as usize, pos.y() as usize, pos.z() as usize], &[MeshlessChunk::SIZE; 3])
+    //sdex::get_index(&[pos.x() as usize, pos.y() as usize, pos.z() as usize], &[MeshlessChunk::SIZE; 3])
+    sdex::get_index(&USize3::from(pos).as_array(), &[MeshlessChunk::SIZE; 3])
 }
 
 /// Position function.
@@ -1089,5 +1093,6 @@ pub fn general_position(i: usize, height: usize, depth: usize) -> Int3 {
     let y = xy % height;
     let x = xy / height;
 
-    Int3::new(x as i32, y as i32, z as i32)
+    //Int3::new(x as i32, y as i32, z as i32)
+    veci!(x, y, z)
 }

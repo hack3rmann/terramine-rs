@@ -5,12 +5,12 @@ pub mod generator;
 use {
 	crate::app::utils::{
 		cfg::{shader::voxel::light as cfg_light, self},
-		math::vector::*,
 		terrain::chunk::{DetailedVertex, LoweredVertex},
 		terrain::voxel::VoxelData,
 		reinterpreter::*,
 	},
 	voxel_data::*,
+	math_linear::prelude::*,
 };
 
 /// Represents voxel.
@@ -126,7 +126,7 @@ pub mod shape {
 			
 			/* Shortcuts */
 			let light = FRONT_LIGHT;
-			let (x, y, z) = (position.x() as f32, position.y() as f32, position.z() as f32);
+			let (x, y, z) = vec3::from(position).as_tuple();
 
 			vertices.push(DetailedVertex { position: [-self.half_size + x, -self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
 			vertices.push(DetailedVertex { position: [-self.half_size + x,  self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_lo ], light });
@@ -143,7 +143,7 @@ pub mod shape {
 			
 			/* Shortcuts */
 			let light = BACK_LIGHT;
-			let (x, y, z) = (position.x() as f32, position.y() as f32, position.z() as f32);
+			let (x, y, z) = vec3::from(position).as_tuple();
 
 			vertices.push(DetailedVertex { position: [ self.half_size + x, -self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_hi ], light });
 			vertices.push(DetailedVertex { position: [ self.half_size + x, -self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
@@ -160,7 +160,7 @@ pub mod shape {
 			
 			/* Shortcuts */
 			let light = TOP_LIGHT;
-			let (x, y, z) = (position.x() as f32, position.y() as f32, position.z() as f32);
+			let (x, y, z) = vec3::from(position).as_tuple();
 
 			vertices.push(DetailedVertex { position: [ self.half_size + x,  self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_hi ], light });
 			vertices.push(DetailedVertex { position: [ self.half_size + x,  self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
@@ -177,7 +177,7 @@ pub mod shape {
 			
 			/* Shortcuts */
 			let light = BOTTOM_LIGHT;
-			let (x, y, z) = (position.x() as f32, position.y() as f32, position.z() as f32);
+			let (x, y, z) = vec3::from(position).as_tuple();
 
 			vertices.push(DetailedVertex { position: [-self.half_size + x, -self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_lo ], light });
 			vertices.push(DetailedVertex { position: [ self.half_size + x, -self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
@@ -194,7 +194,7 @@ pub mod shape {
 			
 			/* Shortcuts */
 			let light = LEFT_LIGHT;
-			let (x, y, z) = (position.x() as f32, position.y() as f32, position.z() as f32);
+			let (x, y, z) = vec3::from(position).as_tuple();
 
 			vertices.push(DetailedVertex { position: [ self.half_size + x, -self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_lo ], light });
 			vertices.push(DetailedVertex { position: [ self.half_size + x,  self.half_size + y, -self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_hi ], light });
@@ -211,7 +211,7 @@ pub mod shape {
 			
 			/* Shortcuts */
 			let light = RIGHT_LIGHT;
-			let (x, y, z) = (position.x() as f32, position.y() as f32, position.z() as f32);
+			let (x, y, z) = vec3::from(position).as_tuple();
 
 			vertices.push(DetailedVertex { position: [ self.half_size + x, -self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_lo, uv.y_lo ], light });
 			vertices.push(DetailedVertex { position: [-self.half_size + x,  self.half_size + y,  self.half_size + z ], tex_coords: [ uv.x_hi, uv.y_hi ], light });
@@ -239,10 +239,10 @@ pub mod shape {
 		}
 
 		/// Cube front face vertex array.
-		pub fn front(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
+		pub fn front(&self, position: vec3, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
 			/* Shortcuts */
 			let light = FRONT_LIGHT;
-			let (x, y, z, _) = position.as_tuple();
+			let (x, y, z) = position.as_tuple();
 
 			vertices.push(LoweredVertex { position: [-self.half_size + x, -self.half_size + y, -self.half_size + z ], color, light });
 			vertices.push(LoweredVertex { position: [-self.half_size + x,  self.half_size + y, -self.half_size + z ], color, light });
@@ -253,10 +253,10 @@ pub mod shape {
 		}
 
 		/// Cube back face vertex array.
-		pub fn back(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
+		pub fn back(&self, position: vec3, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
 			/* Shortcuts */
 			let light = BACK_LIGHT;
-			let (x, y, z, _) = position.as_tuple();
+			let (x, y, z) = position.as_tuple();
 
 			vertices.push(LoweredVertex { position: [ self.half_size + x, -self.half_size + y, -self.half_size + z ], color, light });
 			vertices.push(LoweredVertex { position: [ self.half_size + x, -self.half_size + y,  self.half_size + z ], color, light });
@@ -267,10 +267,10 @@ pub mod shape {
 		}
 
 		/// Cube top face vertex array.
-		pub fn top(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
+		pub fn top(&self, position: vec3, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
 			/* Shortcuts */
 			let light = TOP_LIGHT;
-			let (x, y, z, _) = position.as_tuple();
+			let (x, y, z) = position.as_tuple();
 
 			vertices.push(LoweredVertex { position: [ self.half_size + x,  self.half_size + y, -self.half_size + z ], color, light });
 			vertices.push(LoweredVertex { position: [ self.half_size + x,  self.half_size + y,  self.half_size + z ], color, light });
@@ -281,10 +281,10 @@ pub mod shape {
 		}
 
 		/// Cube bottom face vertex array.
-		pub fn bottom(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
+		pub fn bottom(&self, position: vec3, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
 			/* Shortcuts */
 			let light = BOTTOM_LIGHT;
-			let (x, y, z, _) = position.as_tuple();
+			let (x, y, z) = position.as_tuple();
 
 			vertices.push(LoweredVertex { position: [-self.half_size + x, -self.half_size + y, -self.half_size + z ], color, light });
 			vertices.push(LoweredVertex { position: [ self.half_size + x, -self.half_size + y,  self.half_size + z ], color, light });
@@ -295,10 +295,10 @@ pub mod shape {
 		}
 
 		/// Cube left face vertex array.
-		pub fn left(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
+		pub fn left(&self, position: vec3, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
 			/* Shortcuts */
 			let light = LEFT_LIGHT;
-			let (x, y, z, _) = position.as_tuple();
+			let (x, y, z) = position.as_tuple();
 
 			vertices.push(LoweredVertex { position: [ self.half_size + x, -self.half_size + y, -self.half_size + z ], color, light });
 			vertices.push(LoweredVertex { position: [ self.half_size + x,  self.half_size + y, -self.half_size + z ], color, light });
@@ -309,10 +309,10 @@ pub mod shape {
 		}
 
 		/// Cube right face vertex array.
-		pub fn right(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
+		pub fn right(&self, position: vec3, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
 			/* Shortcuts */
 			let light = RIGHT_LIGHT;
-			let (x, y, z, _) = position.as_tuple();
+			let (x, y, z) = position.as_tuple();
 
 			vertices.push(LoweredVertex { position: [ self.half_size + x, -self.half_size + y,  self.half_size + z ], color, light });
 			vertices.push(LoweredVertex { position: [-self.half_size + x,  self.half_size + y,  self.half_size + z ], color, light });
@@ -324,7 +324,7 @@ pub mod shape {
 
 		/// Cube all sides.
 		#[allow(dead_code)]
-		pub fn all(&self, position: Float4, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
+		pub fn all(&self, position: vec3, color: [f32; 3], vertices: &mut Vec<LoweredVertex>) {
 			self.left(position, color, vertices);
 			self.right(position, color, vertices);
 			self.front(position, color, vertices);
