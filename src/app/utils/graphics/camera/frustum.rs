@@ -47,53 +47,53 @@ impl Frustum {
         Frustum { near, far, left, right, top, bottom, courner_rays }
     }
 
-	/// Frustum check
-	pub fn is_aabb_in_frustum(&self, aabb: AABB) -> bool {
-		/* Frirst pass
-		 * 1) Checks if camera position is in AABB
-		 * 2) Checks if center of chunk is in frustum
-		 * Very cheap operation */
-		if aabb.is_containing(self.courner_rays[0].origin) { return true; }
-		if self.is_in_frustum(aabb.center()) { return true; }
+    /// Frustum check
+    pub fn is_aabb_in_frustum(&self, aabb: AABB) -> bool {
+        /* Frirst pass
+         * 1) Checks if camera position is in AABB
+         * 2) Checks if center of chunk is in frustum
+         * Very cheap operation */
+        if aabb.is_containing(self.courner_rays[0].origin) { return true; }
+        if self.is_in_frustum(aabb.center()) { return true; }
 
-		/* Second pass
-		 * Checks every vertex of AABB is behind the frustum
-		 ? 8 times more expensive than previous */
+        /* Second pass
+         * Checks every vertex of AABB is behind the frustum
+         ? 8 times more expensive than previous */
 
-		let vertex_set = aabb.as_vertex_array();
+        let vertex_set = aabb.as_vertex_array();
 
-		let mut result = false;
-		for vertex in vertex_set {
-			if self.near.is_in_positive_side(vertex) {
-				result = true;
-				break;
-			}
-		}
-		if !result { return result }
+        let mut result = false;
+        for vertex in vertex_set {
+            if self.near.is_in_positive_side(vertex) {
+                result = true;
+                break;
+            }
+        }
+        if !result { return result }
 
-		/* Third pass
-		 * Checks every vertex of AABB is in frustum
-		 ? 6 times more expensive than previous */
+        /* Third pass
+         * Checks every vertex of AABB is in frustum
+         ? 6 times more expensive than previous */
 
-		for vertex in vertex_set {
-			if self.is_in_frustum(vertex) {
-				return true;
-			}
-		}
+        for vertex in vertex_set {
+            if self.is_in_frustum(vertex) {
+                return true;
+            }
+        }
 
-		/* Fourth pass
-		 * Checks if someone of 4 frustum corner rays intersects AABB
-		 ? Kinda cheap operation */
-		
-		for ray in self.courner_rays {
-			if aabb.is_intersected_by_ray(ray) {
-				return true;
-			}
-		}
+        /* Fourth pass
+         * Checks if someone of 4 frustum corner rays intersects AABB
+         ? Kinda cheap operation */
+        
+        for ray in self.courner_rays {
+            if aabb.is_intersected_by_ray(ray) {
+                return true;
+            }
+        }
 
-		/* All passed */
-		return false;
-	}
+        /* All passed */
+        return false;
+    }
 
     /// Checks if given vector is in frustum
     pub fn is_in_frustum(&self, vec: vec3) -> bool {
