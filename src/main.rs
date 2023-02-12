@@ -1,5 +1,9 @@
 #![cfg_attr(feature = "release", windows_subsystem = "windows")]
 
+#[allow(unused_imports)]
+#[macro_use(vecf, veci, vecu, vecs)]
+pub extern crate math_linear;
+
 mod app;
 
 use app::App;

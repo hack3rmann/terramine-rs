@@ -2,7 +2,6 @@ use crate::app::profiler::prelude::*;
 use {
     crate::app::utils::{
         werror::prelude::*,
-        //math::prelude::*,
         graphics::{
             camera::Camera,
             Graphics,
@@ -27,7 +26,7 @@ use {
         DetailedVertexVec,
         iterator::SpaceIter,
     },
-    math_linear::{prelude::*, veci},
+    math_linear::prelude::*,
     glium::{
         uniforms::Uniforms,
         DrawError,
@@ -151,12 +150,7 @@ impl MeshlessChunkArray {
             chunks.push(MeshlessChunk::new(pos));
 
             /* Calculating percentage */
-            // TODO: Write Usize3::from(Int3) to handle this:
-            let coords = {
-                let res = pos + size / 2;
-                let (x, y, z) = res.as_tuple();
-                [x as usize, y as usize, z as usize]
-            };
+            let coords = USize3::from(pos + size / 2).as_array();
             let idx = sdex::get_index(&coords, &[width, height, depth]);
             percentage_tx.send(Loading::from_range("Chunk generation", idx, 0..volume)).wunwrap();
         }
@@ -243,16 +237,18 @@ impl MeshlessChunkArray {
     }
 
     /// Creates environment for ChunkArray.
-    fn make_environment<'v, 'c>(chunks: &'v Vec<MeshlessChunk>, width: usize, height: usize, depth: usize, percentage_tx: Option<Sender<Loading>>) -> Vec<ChunkEnv<'c>> {
+    fn make_environment<'v, 'c>(
+        chunks: &'v Vec<MeshlessChunk>,
+        width: usize, height: usize, depth: usize,
+        percentage_tx: Option<Sender<Loading>>
+    ) -> Vec<ChunkEnv<'c>> {
         let volume = width * height * depth;
         let mut env = vec![ChunkEnv::none(); volume];
 
-        // TODO: Write `Usize3` vector to handle this:
-        for pos in SpaceIter::new(Int3::zero() .. Int3::new(width as i32, height as i32, depth as i32)) {
+        for pos in SpaceIter::new(Int3::zero() .. veci!(width, height, depth)) {
             /* Local index function */
             let index = |bias| {
-                let (x, y, z) = (pos + bias).as_tuple();
-                sdex::get_index(&[x as usize, y as usize, z as usize], &[width, height, depth])
+                sdex::get_index(&USize3::from(pos + bias).as_array(), &[width, height, depth])
             };
 
             /* Reference to current environment variable */
@@ -260,32 +256,32 @@ impl MeshlessChunkArray {
 
             /* For `back` side */
             if pos.x() + 1 < width as i32 {
-                env.back	= Some(&chunks[index(Int3::new( 1,  0,  0))]);
+                env.back	= Some(&chunks[index(veci!( 1,  0,  0))]);
             }
 
             /* For `front` side */
             if pos.x() - 1 >= 0 {
-                env.front	= Some(&chunks[index(Int3::new(-1,  0,  0))]);
+                env.front	= Some(&chunks[index(veci!(-1,  0,  0))]);
             }
         
             /* For `top` side */
             if pos.y() + 1 < height as i32 {
-                env.top		= Some(&chunks[index(Int3::new( 0,  1,  0))]);
+                env.top		= Some(&chunks[index(veci!( 0,  1,  0))]);
             }
 
             /* For `bottom` side */
             if pos.y() - 1 >= 0 {
-                env.bottom	= Some(&chunks[index(Int3::new( 0, -1,  0))]);
+                env.bottom	= Some(&chunks[index(veci!( 0, -1,  0))]);
             }
 
             /* For `right` side */
             if pos.z() + 1 < depth as i32 {
-                env.right	= Some(&chunks[index(Int3::new( 0,  0,  1))]);
+                env.right	= Some(&chunks[index(veci!( 0,  0,  1))]);
             }
 
             /* For `left` side */
             if pos.z() - 1 >= 0 {
-                env.left	= Some(&chunks[index(Int3::new( 0,  0, -1))]);
+                env.left	= Some(&chunks[index(veci!( 0,  0, -1))]);
             }
 
             /* Calculate percentage */
@@ -311,7 +307,7 @@ impl MeshlessChunkArray {
     }
 
     /// Upgrades meshless chunk array to meshed.
-    pub fn upgrade<'g, 'dp>(self, graphics: &'g Graphics, triangles: Vec<DetailedVertexVec>) -> MeshedChunkArray<'dp> {
+    pub fn to_meshed<'g, 'dp>(self, graphics: &'g Graphics, triangles: Vec<DetailedVertexVec>) -> MeshedChunkArray<'dp> {
         let (width, height, depth) = (self.width, self.height, self.depth);
         let chunks: Vec<_> = self.into_iter()
             .zip(triangles.into_iter())
@@ -353,7 +349,7 @@ impl IntoIterator for MeshlessChunkArray {
     }
 }
 
-pub struct MeshedChunkArray<'a> {
+pub struct MeshedChunkArray<'s> {
     pub width:  usize,
     pub height: usize,
     pub depth:  usize,
@@ -361,20 +357,26 @@ pub struct MeshedChunkArray<'a> {
     pub chunks:      Vec<DebugVisualized<MeshedChunk>>,
     pub full_shader: Shader,
     pub low_shader:  Shader,
-    pub draw_params: DrawParameters<'a>
+    pub draw_params: DrawParameters<'s>
 }
 
-impl<'a> MeshedChunkArray<'a> {
+impl<'s> MeshedChunkArray<'s> {
     /// Renders chunks.
-    pub fn render<U: Uniforms>(&mut self, target: &mut Frame, uniforms: &U, camera: &Camera) -> Result<(), DrawError> {
+    pub fn render<U: Uniforms>(
+        &mut self, target: &mut Frame,
+        uniforms: &U, camera: &Camera
+    ) -> Result<(), DrawError> {
         /* Iterating through array */
         for chunk in self.chunks.iter_mut() {
-            chunk.render_meshed_chunks(target, &self.full_shader, &self.low_shader, uniforms, &self.draw_params, camera)?;
+            chunk.render_meshed_chunks(
+                target, &self.full_shader, &self.low_shader,
+                uniforms, &self.draw_params, camera
+            )?;
         }
         Ok(())
     }
 
-    pub fn get_environment<'env>(&self, chunk_pos: Int3) -> ChunkEnv<'env> {
+    pub fn get_environment(&self, chunk_pos: Int3) -> ChunkEnv<'s> {
         let chunk_array_size = Int3::new(self.width as i32, self.height as i32, self.depth as i32);
         let shifted_pos = chunk_pos + chunk_array_size / 2;
 
@@ -420,7 +422,7 @@ impl<'a> MeshedChunkArray<'a> {
 
     /// Note: works kinda performantly.
     #[profile]
-    fn make_envs<'e>(&self) -> Vec<ChunkEnv<'e>> {
+    fn make_envs(&self) -> Vec<ChunkEnv<'s>> {
         self.chunks.iter()
             .map(|chunk| self.get_environment(chunk.inner.inner.pos))
             .collect()

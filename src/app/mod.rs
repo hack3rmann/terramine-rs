@@ -254,7 +254,7 @@ impl App {
 				/* Apply meshes to chunks */
 				let array = {
 					let (array, meshes) = array;
-					array.upgrade(&self.graphics, meshes)
+					array.to_meshed(&self.graphics, meshes)
 				};
 
 				/* Move result */

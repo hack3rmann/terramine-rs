@@ -14,7 +14,7 @@ use {
         werror::prelude::*,
         user_io::{InputManager, KeyCode},
     },
-    math_linear::{prelude::*, vecf},
+    math_linear::prelude::*,
     frustum::Frustum,
 };
 
@@ -110,11 +110,12 @@ impl Camera {
         self.yaw += yaw;
 
         /* Vertical camera look boundaries */
+        use std::f64::consts::FRAC_PI_2;
         const EPS: f64 = cfg::camera::VERTICAL_LOOK_EPS;
-        if self.pitch > std::f64::consts::FRAC_PI_2 {
-            self.pitch = std::f64::consts::FRAC_PI_2 - EPS;
-        } else if self.pitch < -std::f64::consts::FRAC_PI_2 {
-            self.pitch = -std::f64::consts::FRAC_PI_2 + EPS;
+        if self.pitch > FRAC_PI_2 {
+            self.pitch = FRAC_PI_2 - EPS;
+        } else if self.pitch < -FRAC_PI_2 {
+            self.pitch = -FRAC_PI_2 + EPS;
         }
 
         self.set_rotation(self.roll, self.pitch, self.yaw);
