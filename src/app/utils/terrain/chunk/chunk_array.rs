@@ -36,7 +36,7 @@ use {
         DepthTest,
         BackfaceCullingMode,
     },
-    std::sync::mpsc::Sender,
+    std::{sync::mpsc::Sender, ptr::NonNull},
 };
 
 #[derive(Clone, Copy)]
@@ -256,32 +256,32 @@ impl MeshlessChunkArray {
 
             /* For `back` side */
             if pos.x() + 1 < width as i32 {
-                env.back	= Some(&chunks[index(veci!( 1,  0,  0))]);
+                env.back = Some(NonNull::from(&chunks[index(veci!(1, 0, 0))]));
             }
 
             /* For `front` side */
             if pos.x() - 1 >= 0 {
-                env.front	= Some(&chunks[index(veci!(-1,  0,  0))]);
+                env.front = Some(NonNull::from(&chunks[index(veci!(-1, 0, 0))]));
             }
         
             /* For `top` side */
             if pos.y() + 1 < height as i32 {
-                env.top		= Some(&chunks[index(veci!( 0,  1,  0))]);
+                env.top = Some(NonNull::from(&chunks[index(veci!(0, 1, 0))]));
             }
 
             /* For `bottom` side */
             if pos.y() - 1 >= 0 {
-                env.bottom	= Some(&chunks[index(veci!( 0, -1,  0))]);
+                env.bottom = Some(NonNull::from(&chunks[index(veci!(0, -1, 0))]));
             }
 
             /* For `right` side */
             if pos.z() + 1 < depth as i32 {
-                env.right	= Some(&chunks[index(veci!( 0,  0,  1))]);
+                env.right = Some(NonNull::from(&chunks[index(veci!(0, 0, 1))]));
             }
 
             /* For `left` side */
             if pos.z() - 1 >= 0 {
-                env.left	= Some(&chunks[index(veci!( 0,  0, -1))]);
+                env.left = Some(NonNull::from(&chunks[index(veci!(0, 0, -1))]));
             }
 
             /* Calculate percentage */
@@ -389,32 +389,32 @@ impl<'s> MeshedChunkArray<'s> {
 
         /* For `back` side */
         if shifted_pos.x() + 1 < self.width as i32 {
-            env.back	= Some(&self.chunks[side_to_idx(Int3::new( 1,  0,  0))].inner.inner);
+            env.back = Some(NonNull::from(&self.chunks[side_to_idx(veci!(1, 0, 0))].inner.inner));
         }
 
         /* For `front` side */
         if shifted_pos.x() - 1 >= 0 {
-            env.front	= Some(&self.chunks[side_to_idx(Int3::new(-1,  0,  0))].inner.inner);
+            env.front = Some(NonNull::from(&self.chunks[side_to_idx(veci!(-1, 0, 0))].inner.inner));
         }
     
         /* For `top` side */
         if shifted_pos.y() + 1 < self.height as i32 {
-            env.top		= Some(&self.chunks[side_to_idx(Int3::new( 0,  1,  0))].inner.inner);
+            env.top	 = Some(NonNull::from(&self.chunks[side_to_idx(veci!(0, 1, 0))].inner.inner));
         }
 
         /* For `bottom` side */
         if shifted_pos.y() - 1 >= 0 {
-            env.bottom	= Some(&self.chunks[side_to_idx(Int3::new( 0, -1,  0))].inner.inner);
+            env.bottom = Some(NonNull::from(&self.chunks[side_to_idx(veci!(0, -1, 0))].inner.inner));
         }
 
         /* For `right` side */
         if shifted_pos.z() + 1 < self.depth as i32 {
-            env.right	= Some(&self.chunks[side_to_idx(Int3::new( 0,  0,  1))].inner.inner);
+            env.right = Some(NonNull::from(&self.chunks[side_to_idx(veci!(0, 0, 1))].inner.inner));
         }
 
         /* For `left` side */
         if shifted_pos.z() - 1 >= 0 {
-            env.left	= Some(&self.chunks[side_to_idx(Int3::new( 0,  0, -1))].inner.inner);
+            env.left = Some(NonNull::from(&self.chunks[side_to_idx(veci!(0, 0, -1))].inner.inner));
         }
 
         return env
@@ -429,13 +429,13 @@ impl<'s> MeshedChunkArray<'s> {
     }
 
     #[profile]
-    pub fn update_chunks_details(&mut self, display: &glium::Display, camera: &Camera) {
+    pub fn update_chunks_details(&mut self, display: &glium::Display, camera_pos: vec3) {
         let envs = self.make_envs();
         
         self.chunks.iter_mut()
             .zip(envs.into_iter())
             .for_each(|(chunk, env)|
-                chunk.update_details(display, &env, camera)
+                chunk.update_details(display, &env, camera_pos)
             );
     }
 }

@@ -5,7 +5,6 @@ use {
     crate::app::utils::{
         cfg,
         werror::prelude::*,
-        //math::prelude::*,
         graphics::{
             Graphics,
             mesh::{Mesh, UnindexedMesh},
@@ -32,6 +31,7 @@ use {
         implement_vertex,
     },
     std::{
+        ptr::NonNull,
         cell::RefCell, marker::PhantomData,
         borrow::Cow, num::NonZeroU32, fmt::Display
     },
@@ -344,7 +344,7 @@ impl MeshlessChunk {
         /* Shrink vector */
         vertices.shrink_to_fit();
 
-        return Full(vertices)
+        return Detailed::Full(vertices)
     }
 
     pub fn make_full_detailed_vertices_standart(&self, env: &ChunkEnvironment) -> DetailedVertexVec {
@@ -361,7 +361,7 @@ impl MeshlessChunk {
         /* Shrink vector */
         vertices.shrink_to_fit();
 
-        return Full(vertices)
+        return Detailed::Full(vertices)
     }
 
     pub fn make_lowered_detail_vertices(&self, env: &ChunkEnvironment, lod: NonZeroU32) -> DetailedVertexVec {
@@ -402,7 +402,7 @@ impl MeshlessChunk {
                 self.to_triangles_inner_lowered(pos, pos_low, lod, low, env, &mut vertices)
             );
 
-        return Low(vertices)
+        return Detailed::Low(vertices)
     }
 
     /// Creates trianlges Vec from Chunk and its environment.
@@ -410,8 +410,8 @@ impl MeshlessChunk {
         match self.additional_data.as_ref() {
             /* Empty chunk passed in */
             Addition::Know { fill: Some(ChunkFill::Empty), details } => return match details {
-                ChunkDetails::Full => Full(vec![]),
-                ChunkDetails::Low(_) => Low(vec![]),
+                ChunkDetails::Full => Detailed::Full(vec![]),
+                ChunkDetails::Low(_) => Detailed::Low(vec![]),
             },
 
             /* "Filled" chunk with full details passed in */
@@ -447,7 +447,7 @@ impl MeshlessChunk {
         };
         
         /* Mesh builder */
-        let build = |bias, env: Option<*const MeshlessChunk>| {
+        let build = |bias, env: Option<NonNull<MeshlessChunk>>| {
             if !is_drawable(self.get_voxel_or_none(position + bias)) { return false }
 
             match env {
@@ -455,7 +455,7 @@ impl MeshlessChunk {
                 Some(chunk) => {
                     //* Safety: Safe because environment chunks lives as long as other chunks or that given chunk.
                     //* And it also needs only at chunk generation stage.
-                    is_drawable(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(position + bias) })
+                    is_drawable(unsafe { chunk.as_ref().get_voxel_or_none(position + bias) })
                 }
             }
         };
@@ -472,7 +472,7 @@ impl MeshlessChunk {
         if build(veci!( 0,  0, -1), env.left)   { cube.left  (position, vertices) };
     }
 
-    fn is_blocked_with_lod(&self, low_pos: Int3, side: Int3, lod: NonZeroU32, neighbor: Option<*const MeshlessChunk>) -> bool {
+    fn is_blocked_with_lod(&self, low_pos: Int3, side: Int3, lod: NonZeroU32, neighbor: Option<NonNull<MeshlessChunk>>) -> bool {
         let voxel_size = 2_usize.pow(lod.get()) as i32;
         let neighbor_min_pos = (low_pos + side) * voxel_size;
         let neighbor_max_pos = (low_pos + side) * voxel_size + Int3::all(voxel_size);
@@ -486,7 +486,7 @@ impl MeshlessChunk {
                     None => 0,
 
                     // TODO: add safety argument.
-                    Some(chunk) => match unsafe { chunk.as_ref() }.unwrap().get_voxel(neighbor_min_world_pos) {
+                    Some(chunk) => match unsafe { chunk.as_ref() }.get_voxel(neighbor_min_world_pos) {
                         ChunkOptional::Item(_, lod) => lod,
                         ChunkOptional::OutsideChunk => 0,
                     },
@@ -501,7 +501,7 @@ impl MeshlessChunk {
 
                 ChunkOptional::OutsideChunk => match neighbor {
                     None => false,
-                    Some(chunk) => match unsafe { chunk.as_ref() }.unwrap().get_voxel(pos) {
+                    Some(chunk) => match unsafe { chunk.as_ref() }.get_voxel(pos) {
                         ChunkOptional::Item(voxel, _) => voxel.data != AIR_VOXEL_DATA,
                         ChunkOptional::OutsideChunk => false,
                     },
@@ -712,7 +712,7 @@ impl MeshlessChunk {
     }
 
     /// Gives position iterator that gives position for all voxels in chunk.
-    /// Internally, calls [`SpaceIter::zeroed_cubed(CHUNK_SIZE as i32)`].
+    /// Internally, calls `SpaceIter::zeroed_cubed(CHUNK_SIZE as i32)`.
     pub fn pos_iter() -> SpaceIter {
         SpaceIter::zeroed_cubed(Self::SIZE as i32)
     }
@@ -741,29 +741,30 @@ impl MeshlessChunk {
 
 /// Describes blocked chunks by environent or not.
 #[derive(Clone, Default)]
-pub struct ChunkEnvironment<'l> {
-    // TODO: Make them NonNull because of Option.
-    pub top:	Option<*const MeshlessChunk>,
-    pub bottom:	Option<*const MeshlessChunk>,
-    pub front:	Option<*const MeshlessChunk>,
-    pub back:	Option<*const MeshlessChunk>,
-    pub left:	Option<*const MeshlessChunk>,
-    pub right:	Option<*const MeshlessChunk>,
+pub struct ChunkEnvironment<'s> {
+    pub top:	Option<NonNull<MeshlessChunk>>,
+    pub bottom:	Option<NonNull<MeshlessChunk>>,
+    pub front:	Option<NonNull<MeshlessChunk>>,
+    pub back:	Option<NonNull<MeshlessChunk>>,
+    pub left:	Option<NonNull<MeshlessChunk>>,
+    pub right:	Option<NonNull<MeshlessChunk>>,
 
-    pub _phantom: PhantomData<&'l MeshlessChunk>
+    pub _phantom: PhantomData<&'s MeshlessChunk>
 }
 
 impl<'c> ChunkEnvironment<'c> {
     /// Empty description.
     pub fn none() -> Self {
-        ChunkEnvironment { top: None, bottom: None, front: None, back: None, left: None, right: None, _phantom: PhantomData }
+        ChunkEnvironment {
+            top: None, bottom: None, front: None, back: None,
+            left: None, right: None, _phantom: PhantomData
+        }
     }
 }
 
-use Detailed::*;
-pub enum Detailed<Full, Low> {
-    Full(Full),
-    Low(Low),
+pub enum Detailed<FullType, LowType> {
+    Full(FullType),
+    Low(LowType),
 }
 
 pub type DetailedVertexSlice<'v> = Detailed<&'v [DetailedVertex], &'v [LoweredVertex]>;
@@ -781,16 +782,16 @@ impl ChunkMesh {
         draw_params: &DrawParameters<'_>, uniforms: &impl Uniforms) -> Result<(), DrawError>
     {
         match &self.0 {
-            Full(mesh) => mesh.borrow().render(target, full_shader, draw_params, uniforms),
-            Low(mesh)  => mesh.borrow().render(target, low_shader,  draw_params, uniforms),
+            Detailed::Full(mesh) => mesh.borrow().render(target, full_shader, draw_params, uniforms),
+            Detailed::Low(mesh)  => mesh.borrow().render(target, low_shader,  draw_params, uniforms),
         }
     }
 
     /// Checks if mesh is empty.
     pub fn is_empty(&self) -> bool {
         match &self.0 {
-            Full(mesh) => mesh.borrow().is_empty(),
-            Low(mesh)  => mesh.borrow().is_empty()
+            Detailed::Full(mesh) => mesh.borrow().is_empty(),
+            Detailed::Low(mesh)  => mesh.borrow().is_empty()
         }
     }
 }
@@ -818,8 +819,8 @@ impl MeshedChunk {
         /* Create chunk */
         let triangles = meshless.to_triangles(env);
         let triangles = match &triangles {
-            Full(vec) => Full(&vec[..]),
-            Low(vec) => Low(&vec[..]),
+            Detailed::Full(vec) => Detailed::Full(&vec[..]),
+            Detailed::Low(vec) => Detailed::Low(&vec[..]),
         };
 
         MeshedChunk {
@@ -851,26 +852,26 @@ impl MeshedChunk {
 
     pub fn make_mesh(display: &glium::Display, vertices: Detailed<&[DetailedVertex], &[LoweredVertex]>) -> ChunkMesh {
         match vertices {
-            Full(vertices) => {
+            Detailed::Full(vertices) => {
                 /* Vertex buffer for chunks */
                 let vertex_buffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
 
-                ChunkMesh(Full(RefCell::new(Mesh::new(vertex_buffer))))
+                ChunkMesh(Detailed::Full(RefCell::new(Mesh::new(vertex_buffer))))
             },
 
-            Low(vertices) => {
+            Detailed::Low(vertices) => {
                 /* Vertex buffer for chunks */
                 let vertex_buffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
 
-                ChunkMesh(Low(RefCell::new(Mesh::new(vertex_buffer))))
+                ChunkMesh(Detailed::Low(RefCell::new(Mesh::new(vertex_buffer))))
             }
         }
     }
 
     pub fn make_mesh_owned(display: &glium::Display, vertices: Detailed<Vec<DetailedVertex>, Vec<LoweredVertex>>) -> ChunkMesh {
         match vertices {
-            Full(vertices) => Self::make_mesh(display, Full(&vertices)),
-            Low(vertices)  => Self::make_mesh(display, Low(&vertices)),
+            Detailed::Full(vertices) => Self::make_mesh(display, Detailed::Full(&vertices)),
+            Detailed::Low(vertices)  => Self::make_mesh(display, Detailed::Low(&vertices)),
         }
     }
 
@@ -897,13 +898,13 @@ impl MeshedChunk {
         self.inner.is_visible(camera)
     }
 
-    pub fn update_details_data(&mut self, camera: &Camera) -> bool {
+    pub fn update_details_data(&mut self, camera_pos: vec3) -> bool {
         // TODO: check nearby chunks to update their meshes
 
-        let new_lod = self.calculate_desired_lod(camera);
-        if self.inner.get_lod() == new_lod { return false }
+        let new_lod = self.calculate_desired_lod(camera_pos);
+        //if self.inner.get_lod() == new_lod { return false }
 
-        self.inner.set_lod_data(new_lod).unwrap();
+        self.inner.set_lod_data(new_lod).expect("Can't set LOD data in .update_details_data(..)!");
         return true
     }
 
@@ -913,7 +914,7 @@ impl MeshedChunk {
     }
 
     /// Calculates best-fit LOD value.
-    fn calculate_desired_lod(&self, camera: &Camera) -> Lod {
+    fn calculate_desired_lod(&self, camera_pos: vec3) -> Lod {
         let max_lod: Lod = (MeshlessChunk::SIZE as f32).log2().floor() as Lod;
 
         let chunk_pos = vec3::from(
@@ -921,7 +922,7 @@ impl MeshedChunk {
             Int3::all(MeshlessChunk::SIZE as i32) / 2
         );
 
-        let distance = (chunk_pos - camera.pos).len();
+        let distance = (chunk_pos - camera_pos).len();
 
         const DIST_MULTIPLIER: f32 = 0.006;
         let lod = (distance * DIST_MULTIPLIER).floor() as Lod;

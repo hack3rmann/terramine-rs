@@ -279,7 +279,7 @@ impl App {
 
             if let Some(ref mut chunk_array) = self.chunk_arr {
                 if !TEMP {
-                    chunk_array.update_chunks_details(&self.graphics.display, &self.camera.inner);
+                    chunk_array.update_chunks_details(&self.graphics.display, self.camera.inner.pos);
                     //TEMP = true;
                 }
             }
@@ -307,33 +307,36 @@ impl App {
     }
 
     /// Spawns chunk generation window.
-    pub fn spawn_chunk_generation_window(ui: &imgui::Ui, inited: bool, width: f32, height: f32, generate_chunks: &mut bool, sizes: &mut [i32; 3], gen_percent: Loading) {
-        if !inited {
-            imgui::Window::new("Chunk generator")
-                .position_pivot([0.5, 0.5])
-                .position([width * 0.5, height as f32 * 0.5], imgui::Condition::Always)
-                .movable(false)
-                .size_constraints([150.0, 100.0], [300.0, 200.0])
-                .always_auto_resize(true)
-                .save_settings(false)
-                .build(&ui, || {
-                    ui.text("How many?");
-                    ui.input_int3("Sizes", sizes)
-                        .auto_select_all(true)
-                        .enter_returns_true(true)
-                        .build();
-                    *generate_chunks = ui.button("Generate");
+    pub fn spawn_chunk_generation_window(
+        ui: &imgui::Ui, inited: bool, width: f32, height: f32,
+        generate_chunks: &mut bool, sizes: &mut [i32; 3], gen_percent: Loading
+    ) {
+        if inited { return }
 
-                    if gen_percent != Loading::none() {
-                        imgui::ProgressBar::new(gen_percent.percent as f32)
-                            .overlay_text(format!(
-                                "{state} ({percent:.1}%)",
-                                percent = gen_percent.percent * 100.0,
-                                state = gen_percent.state
-                            ))
-                            .build(&ui);
-                    }
-                });
-        }
+        imgui::Window::new("Chunk generator")
+            .position_pivot([0.5, 0.5])
+            .position([width * 0.5, height * 0.5], imgui::Condition::Always)
+            .movable(false)
+            .size_constraints([150.0, 100.0], [300.0, 200.0])
+            .always_auto_resize(true)
+            .save_settings(false)
+            .build(&ui, || {
+                ui.text("How many?");
+                ui.input_int3("Sizes", sizes)
+                    .auto_select_all(true)
+                    .enter_returns_true(true)
+                    .build();
+                *generate_chunks = ui.button("Generate");
+
+                if gen_percent != Loading::none() {
+                    imgui::ProgressBar::new(gen_percent.percent as f32)
+                        .overlay_text(format!(
+                            "{state} ({percent:.1}%)",
+                            percent = gen_percent.percent * 100.0,
+                            state = gen_percent.state
+                        ))
+                        .build(&ui);
+                }
+            });
     }
 }

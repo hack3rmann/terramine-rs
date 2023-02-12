@@ -1,4 +1,7 @@
-use crate::app::utils::terrain::chunk::ChunkEnvironment;
+use {
+    crate::app::utils::terrain::chunk::ChunkEnvironment,
+    math_linear::prelude::*,
+};
 
 /**
  * Debug visuals for [`Chunk`]
@@ -176,13 +179,13 @@ impl DebugVisualized<MeshedChunk> {
     }
 
     #[allow(dead_code)]
-    pub fn update_details(&mut self, display: &Display, env: &ChunkEnvironment, camera: &Camera) {
-        if !self.update_details_data(camera) { return }
+    pub fn update_details(&mut self, display: &Display, env: &ChunkEnvironment, camera_pos: vec3) {
+        if !self.update_details_data(camera_pos) { return }
         self.refresh_mesh(display, env)
     }
 
-    pub fn update_details_data(&mut self, camera: &Camera) -> bool {
-        self.inner.update_details_data(camera)
+    pub fn update_details_data(&mut self, camera_pos: vec3) -> bool {
+        self.inner.update_details_data(camera_pos)
     }
 
     pub fn refresh_mesh(&mut self, display: &Display, env: &ChunkEnvironment) {
