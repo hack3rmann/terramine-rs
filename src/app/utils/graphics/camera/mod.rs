@@ -223,7 +223,7 @@ impl Camera {
         let mut camera_window = imgui::Window::new("Camera");
 
         /* Move and resize if pressed I key */
-        if !input.keyboard.is_pressed(KeyCode::I) {
+        if !input.keyboard.is_pressed(cfg::key_bindings::ENABLE_DRAG_AND_RESIZE_WINDOWS) {
             camera_window = camera_window
                 .resizable(false)
                 .movable(false)

@@ -22,7 +22,7 @@ use {
         voxel_data::*,
         generator,
     },
-    math_linear::{prelude::*, veci},
+    math_linear::prelude::*,
     glium::{
         DrawError,
         uniforms::Uniforms,
@@ -41,16 +41,16 @@ use {
 /// Full-detailed vertex.
 #[derive(Copy, Clone)]
 pub struct DetailedVertex {
-    pub position: [f32; 3],
-    pub tex_coords: [f32; 2],
+    pub position: (f32, f32, f32),
+    pub tex_coords: (f32, f32),
     pub light: f32
 }
 
 /// Low-detailed vertex.
 #[derive(Copy, Clone)]
 pub struct LoweredVertex {
-    pub position: [f32; 3],
-    pub color: [f32; 3],
+    pub position: (f32, f32, f32),
+    pub color: (f32, f32, f32),
     pub light: f32
 }
 
@@ -157,7 +157,7 @@ impl MeshlessChunk {
 
         /* Iterating in the chunk */
         for curr in Self::pos_iter() {
-            let global_pos = pos_in_chunk_to_world_int3(curr, pos);
+            let global_pos = Self::local_to_global_pos(pos, curr);
 
             /* Update addidional chunk data */
             let mut update_data = |id| {
@@ -298,17 +298,14 @@ impl MeshlessChunk {
         match self.additional_data.as_mut() {
             Addition::NothingToKnow =>
                 return Err(ChunkDetailsError::NotEnoughInformation),
-
-            Addition::Know { ref mut details, .. } if lod != 0 => {
+            
+            Addition::Know { ref mut details, .. } => if lod == 0 {
+                *details = ChunkDetails::Full;
+            } else {
                 // * Safety: creating non-zero u32 is safe here 'cause zero is already checked.
                 let lod_non_zero = unsafe { NonZeroU32::new_unchecked(lod) };
                 *details = ChunkDetails::Low(lod_non_zero);
             }
-
-            Addition::Know { ref mut details, .. } if lod == 0 =>
-                *details = ChunkDetails::Full,
-
-            _ => unreachable!("All patterns matched"),
         }
 
         return Ok(())
@@ -451,15 +448,16 @@ impl MeshlessChunk {
         
         /* Mesh builder */
         let build = |bias, env: Option<*const MeshlessChunk>| {
-            if is_drawable(self.get_voxel_or_none(position + bias)) {
-                match env {
-                    None => true,
-                    Some(chunk) =>
+            if !is_drawable(self.get_voxel_or_none(position + bias)) { return false }
+
+            match env {
+                None => true,
+                Some(chunk) => {
                     //* Safety: Safe because environment chunks lives as long as other chunks or that given chunk.
                     //* And it also needs only at chunk generation stage.
-                    is_drawable(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(position + bias) }),
+                    is_drawable(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(position + bias) })
                 }
-            } else { false }
+            }
         };
 
         /* Cube vertices generator */
@@ -498,10 +496,11 @@ impl MeshlessChunk {
 
         let small_blocked = |pos: Int3| -> bool {
             match self.get_voxel(pos) {
-                ChunkOptional::Item(voxel, _) => voxel.data != AIR_VOXEL_DATA,
+                ChunkOptional::Item(voxel, _) =>
+                    voxel.data != AIR_VOXEL_DATA,
+
                 ChunkOptional::OutsideChunk => match neighbor {
                     None => false,
-
                     Some(chunk) => match unsafe { chunk.as_ref() }.unwrap().get_voxel(pos) {
                         ChunkOptional::Item(voxel, _) => voxel.data != AIR_VOXEL_DATA,
                         ChunkOptional::OutsideChunk => false,
@@ -511,7 +510,7 @@ impl MeshlessChunk {
         };
         
         let mut pos_iter = SpaceIter::new(neighbor_min_pos..neighbor_max_pos)
-            .map(|pos| pos_in_chunk_to_world_int3(pos, self.pos));
+            .map(|pos| Self::local_to_global_pos(self.pos, pos));
 
         if lod.get() <= neighbor_lod {
             pos_iter.any(small_blocked)
@@ -593,13 +592,10 @@ impl MeshlessChunk {
                             /* If voxel is already initialyzed with some color */
                             LoweredVoxel::Colored(color) => {
                                 /* Color shortcut */
-                                let [old_r, old_g, old_b] = color;
-                                let [new_r, new_g, new_b] = VOXEL_DATA[id as usize].avarage_color;
+                                let new_color = VOXEL_DATA[id as usize].avarage_color;
 
                                 /* Calculate new avarage color */
-                                *old_r = (*old_r * count + new_r) / (count + 1.0);
-                                *old_g = (*old_g * count + new_g) / (count + 1.0);
-                                *old_b = (*old_b * count + new_b) / (count + 1.0);
+                                *color = (*color * count + new_color) / (count + 1.0);
 
                                 /* Increment writes count */
                                 n_writes[low_i] += 1;
@@ -618,8 +614,13 @@ impl MeshlessChunk {
             },
 
             /* Not enough information */
-            not_enough @ Addition::Know { fill: None, details: _ } | not_enough @ Addition::NothingToKnow =>
-                return Err(format!("Not enough information! Addition was: {addition:?}", addition = not_enough)),
+            not_enough @ Addition::Know { fill: None, details: _ } |
+            not_enough @ Addition::NothingToKnow => {
+                return Err(format!(
+                    "Not enough information! Addition was: {addition:?}",
+                    addition = not_enough
+                ))
+            }
         }
     }
 
@@ -685,7 +686,7 @@ impl MeshlessChunk {
     /// Checks if chunk is in camera view.
     pub fn is_visible(&self, camera: &Camera) -> bool {
         /* AABB init */
-        let mut lo = vec3::from(chunk_coords_to_min_world_int3(self.pos));
+        let mut lo = vec3::from(Self::chunk_to_global_pos(self.pos));
         let mut hi = lo + vec3::all(Self::SIZE as f32);
 
         /* Bias (voxel centration) */
@@ -714,6 +715,16 @@ impl MeshlessChunk {
     /// Internally, calls [`SpaceIter::zeroed_cubed(CHUNK_SIZE as i32)`].
     pub fn pos_iter() -> SpaceIter {
         SpaceIter::zeroed_cubed(Self::SIZE as i32)
+    }
+
+    /// Computes global position from relative to chunk position.
+    pub fn local_to_global_pos(chunk_absolute_pos: Int3, relative_voxel_pos: Int3) -> Int3 {
+        pos_in_chunk_to_world_int3(relative_voxel_pos, chunk_absolute_pos)
+    }
+
+    /// Calculates chunk position relative to world from chunks position.
+    pub fn chunk_to_global_pos(chunk_pos: Int3) -> Int3 {
+        chunk_coords_to_min_world_int3(chunk_pos)
     }
 
     /// Gives LOD.
@@ -906,7 +917,7 @@ impl MeshedChunk {
         let max_lod: Lod = (MeshlessChunk::SIZE as f32).log2().floor() as Lod;
 
         let chunk_pos = vec3::from(
-            chunk_coords_to_min_world_int3(self.inner.pos) +
+            MeshlessChunk::chunk_to_global_pos(self.inner.pos) +
             Int3::all(MeshlessChunk::SIZE as i32) / 2
         );
 
@@ -1076,7 +1087,6 @@ pub fn world_coords_to_in_some_chunk(pos: Int3, chunk: Int3) -> Int3 {
 
 /// Index function.
 pub fn pos_to_idx(pos: Int3) -> usize {
-    //sdex::get_index(&[pos.x() as usize, pos.y() as usize, pos.z() as usize], &[MeshlessChunk::SIZE; 3])
     sdex::get_index(&USize3::from(pos).as_array(), &[MeshlessChunk::SIZE; 3])
 }
 
@@ -1093,6 +1103,5 @@ pub fn general_position(i: usize, height: usize, depth: usize) -> Int3 {
     let y = xy % height;
     let x = xy / height;
 
-    //Int3::new(x as i32, y as i32, z as i32)
     veci!(x, y, z)
 }

@@ -134,12 +134,12 @@ impl App {
     /// Main events cleared.
     async fn main_events_cleared(&mut self, control_flow: &mut ControlFlow) {
         /* Close window is `escape` pressed */
-        if self.input_manager.keyboard.just_pressed(KeyCode::Escape) {
+        if self.input_manager.keyboard.just_pressed(cfg::key_bindings::APP_EXIT) {
             *control_flow = ControlFlow::Exit;
         }
 
         /* Control camera by user input */
-        if self.input_manager.keyboard.just_pressed(KeyCode::T) {
+        if self.input_manager.keyboard.just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
             if self.camera.inner.grabbes_cursor {
                 self.camera.inner.grabbes_cursor = false;
                 self.input_manager.mouse.release_cursor(&self.graphics);
@@ -168,7 +168,7 @@ impl App {
         /* Chunk generation flag */
         // FIXME:
         let mut generate_chunks = false;
-        static mut SIZES: [i32; 3] = cfg::terrain::default::WORLD_SIZES_IN_CHUNKS;
+        static mut SIZES: [i32; 3] = cfg::terrain::default::WORLD_SIZES_IN_CHUNKS.as_array();
         static mut GENERATION_PERCENTAGE: Loading = Loading::none();
 
         /* InGui draw data */
@@ -216,7 +216,7 @@ impl App {
         /* Actual drawing */
         let mut target = self.graphics.display.draw(); 
         target.clear_all(cfg::shader::CLEAR_COLOR, cfg::shader::CLEAR_DEPTH, cfg::shader::CLEAR_STENCIL); {
-            if let Some(chunk_arr) = self.chunk_arr.as_mut() {
+            if let Some(ref mut chunk_arr) = self.chunk_arr {
                 chunk_arr.render(&mut target, &uniforms, &self.camera.inner).wunwrap();
             }
 
@@ -272,7 +272,11 @@ impl App {
         // FIXME:
         unsafe {
             static mut TEMP: bool = false;
-            if self.input_manager.keyboard.just_pressed(KeyCode::R) { TEMP = !TEMP; }
+
+            if self.input_manager.keyboard.just_pressed(cfg::key_bindings::LOD_REFRESHER_SWITCH) {
+                TEMP = !TEMP;
+            }
+
             if let Some(ref mut chunk_array) = self.chunk_arr {
                 if !TEMP {
                     chunk_array.update_chunks_details(&self.graphics.display, &self.camera.inner);
@@ -294,7 +298,7 @@ impl App {
         self.camera.inner.update(&mut self.input_manager, self.timer.dt_as_f64());
 
         /* Debug visuals switcher */
-        if self.input_manager.keyboard.just_pressed(KeyCode::F3) {
+        if self.input_manager.keyboard.just_pressed(cfg::key_bindings::DEBUG_VISUALS_SWITCH) {
             debug_visuals::switch_enable();
         }
 

@@ -39,17 +39,21 @@ pub mod terrain {
     pub const VOXEL_SIZE: f32   = 1.0;
 
     pub mod voxel_types {
-        use crate::app::utils::terrain::voxel::voxel_data::{VoxelData, TextureSides};
+        use {
+            crate::app::utils::terrain::voxel::voxel_data::{VoxelData, TextureSides},
+            math_linear::prelude::Color,
+        };
 
         pub const VOXEL_DATA: [VoxelData; 3] = [
-            VoxelData { name: "Air",					id: 0, avarage_color: [0.00, 0.00, 0.00], textures: TextureSides::all(0) },
-            VoxelData { name: "Log",					id: 1, avarage_color: [0.15, 0.10, 0.05], textures: TextureSides::vertical(3, 1) },
-            VoxelData { name: "Stone",					id: 2, avarage_color: [0.20, 0.20, 0.20], textures: TextureSides::all(2) },
+            VoxelData { name: "Air",    id: 0, avarage_color: Color::new(0.00, 0.00, 0.00), textures: TextureSides::all(0) },
+            VoxelData { name: "Log",    id: 1, avarage_color: Color::new(0.15, 0.10, 0.05), textures: TextureSides::vertical(3, 1) },
+            VoxelData { name: "Stone",  id: 2, avarage_color: Color::new(0.20, 0.20, 0.20), textures: TextureSides::all(2) },
         ];
     }
 
     pub mod default {
-        pub const WORLD_SIZES_IN_CHUNKS: [i32; 3] = [7, 1, 7];
+        use math_linear::prelude::Int3;
+        pub const WORLD_SIZES_IN_CHUNKS: Int3 = veci!(7, 1, 7);
     }
 }
 
@@ -80,4 +84,14 @@ pub mod shader {
             pub const RIGHT:  f32 = 0.7;
         }
     }
+}
+
+pub mod key_bindings {
+    use crate::app::utils::user_io::KeyCode as Key;
+
+    pub const DEBUG_VISUALS_SWITCH:           Key = Key::F3;
+    pub const APP_EXIT:                       Key = Key::Escape;
+    pub const MOUSE_CAPTURE:                  Key = Key::T;
+    pub const LOD_REFRESHER_SWITCH:           Key = Key::R;
+    pub const ENABLE_DRAG_AND_RESIZE_WINDOWS: Key = Key::I;
 }

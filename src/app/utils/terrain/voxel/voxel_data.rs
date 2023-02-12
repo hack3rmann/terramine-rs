@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 
-use crate::app::utils::cfg::terrain::voxel_types::VOXEL_DATA as CFG_VOXEL_DATA;
+use {
+    crate::app::utils::cfg::terrain::voxel_types::VOXEL_DATA as CFG_VOXEL_DATA,
+    math_linear::prelude::*,
+};
 
 /// IDs type.
 pub type Id = u16;
@@ -12,7 +15,7 @@ pub struct VoxelData {
     pub id: Id,
 
     pub textures: TextureSides,
-    pub avarage_color: [f32; 3],
+    pub avarage_color: Color,
 }
 
 /// Represents textured sides of the voxel.
