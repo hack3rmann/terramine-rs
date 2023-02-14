@@ -269,19 +269,9 @@ impl App {
             }
         }
 
-        // FIXME:
-        unsafe {
-            static mut TEMP: bool = false;
-
+        if let Some(ref mut chunk_array) = self.chunk_arr {
             if self.input_manager.keyboard.just_pressed(cfg::key_bindings::LOD_REFRESHER_SWITCH) {
-                TEMP = !TEMP;
-            }
-
-            if let Some(ref mut chunk_array) = self.chunk_arr {
-                if !TEMP {
-                    chunk_array.update_chunks_details(&self.graphics.display, self.camera.inner.pos);
-                    //TEMP = true;
-                }
+                chunk_array.update_chunks_details(&self.graphics.display, self.camera.inner.pos);
             }
         }
     }

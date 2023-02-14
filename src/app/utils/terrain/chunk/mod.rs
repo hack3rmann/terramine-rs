@@ -58,6 +58,230 @@ pub struct LoweredVertex {
 implement_vertex!(DetailedVertex, position, tex_coords, light);
 implement_vertex!(LoweredVertex, position, color, light);
 
+pub struct Chunk {
+    pos: Int3,
+    voxel_ids: Vec<Id>,
+    meta_info: MetaInfo,
+    detailed_mesh: Option<UnindexedMesh<DetailedVertex>>,
+    low_meshes: Vec<Option<UnindexedMesh<LoweredVertex>>>,
+}
+
+impl Chunk {
+    pub const SIZE:   usize = cfg::terrain::CHUNK_SIZE;
+    pub const VOLUME: usize = Self::SIZE.pow(3);
+
+    pub fn new(chunk_pos: Int3) -> Self {
+        let voxel_ids = Self::global_pos_iter(chunk_pos)
+            .map(|pos| {
+                if generator::trees(pos) {
+                    LOG_VOXEL_DATA.id
+                } else if generator::sine(pos) {
+                    STONE_VOXEL_DATA.id
+                } else {
+                    AIR_VOXEL_DATA.id
+                }
+            })
+            .collect();
+
+        Self {
+            pos: chunk_pos,
+            voxel_ids,
+            meta_info: Default::default(),
+            detailed_mesh: None,
+            low_meshes: vec![None],
+        }.optimized()
+    }
+
+    /// Gives iterator over all id-vectors in chunk (or relative to chunk voxel positions).
+    pub fn local_pos_iter() -> SpaceIter {
+        SpaceIter::new(Int3::zero()..Int3::all(Self::SIZE as i32))
+    }
+
+    /// Gives iterator over all id-vectors in chunk (or relative to chunk voxel positions).
+    pub fn global_pos_iter(chunk_pos: Int3) -> impl Iterator<Item = Int3> {
+        Self::local_pos_iter()
+            .map(move |pos| Self::local_to_global_pos(chunk_pos, pos))
+    }
+
+    /// Applies storage optimizations to voxel array.
+    pub fn optimized(mut self) -> Self {
+        /* All-same pass */
+        let sample_id = self.voxel_ids[0];
+        if self.voxel_ids.iter().all(|&voxel_id| voxel_id == sample_id) {
+            self.voxel_ids = vec![sample_id];
+            self.meta_info.fill_type = FillType::AllSame(sample_id);
+        }
+
+        return self
+    }
+
+    /// Computes global position from relative to chunk position.
+    pub fn local_to_global_pos(chunk_absolute_pos: Int3, relative_voxel_pos: Int3) -> Int3 {
+        pos_in_chunk_to_world_int3(relative_voxel_pos, chunk_absolute_pos)
+    }
+
+    /// Computes local (relative to chunk) position from global position.
+    pub fn global_to_local_pos(chunk_absolute_pos: Int3, global_voxel_pos: Int3) -> Int3 {
+        world_coords_to_in_some_chunk(global_voxel_pos, chunk_absolute_pos)
+    }
+
+    /// Checks if chunk is empty.
+    pub fn is_empty(&self) -> bool {
+        match self.meta_info.fill_type {
+            FillType::AllSame(id) if id == AIR_VOXEL_DATA.id => true,
+            _ => false,
+        }
+    }
+
+    /// Gives [`Some()`] with fill id or returns [`None`]
+    pub fn fill_id(&self) -> Option<Id> {
+        match self.meta_info.fill_type {
+            FillType::AllSame(id) => Some(id),
+            _ => None,
+        }
+    }
+
+    /// Checks if chunk is filled with same voxel id.
+    pub fn is_same_filled(&self) -> bool {
+        self.fill_id().is_some()
+    }
+
+    /// Makes vertices for *detailed* mesh from voxel array.
+    pub fn make_vertices_detailed(&self, chunk_adj: &ChunkAdj) -> Vec<DetailedVertex> {
+        let mut vertices = Vec::with_capacity(Self::VOLUME / 2);
+        for voxel_relative_pos in Self::local_pos_iter() {
+            let voxel = self.get_voxel_local(voxel_relative_pos);
+
+            add_vertices_detailed_inner(
+                self, voxel_relative_pos, voxel.data.id,
+                chunk_adj, &mut vertices,
+            );
+        }
+
+        return vertices;
+        
+        fn add_vertices_detailed_inner(
+            chunk: &Chunk, voxel_relative_pos: Int3, id: Id,
+            chunk_adj: &ChunkAdj, vertices: &mut Vec<DetailedVertex>
+        ) {
+            if id == AIR_VOXEL_DATA.id { return }
+            
+            /* Get position from index */
+            let global_pos = Chunk::local_to_global_pos(chunk.pos, voxel_relative_pos);
+            
+            /* Draw checker */
+            let is_drawable = |input: ChunkOption<Voxel>| -> bool {
+                match input {
+                    ChunkOption::OutsideChunk => false,
+                    ChunkOption::Item(voxel) => voxel.data != AIR_VOXEL_DATA,
+                }
+            };
+            
+            /* Mesh builder */
+            let is_build_needed = |bias, adj: Option<NonNull<Chunk>>| -> bool {
+                if is_drawable(chunk.get_voxel_global(global_pos + bias)) { return false }
+
+                match adj {
+                    None => true,
+                    Some(chunk) => {
+                        //* Safety: Safe because environment chunks lives as 
+                        //* long as other chunks or that given chunk.
+                        //* And it also needs only at chunk generation stage.
+                        !is_drawable(unsafe { chunk.as_ref().get_voxel_global(global_pos + bias) })
+                    }
+                }
+            };
+
+            /* Cube vertices generator */
+            let cube = CubeDetailed::new(&VOXEL_DATA[id as usize]);
+            
+            /* Build all sides separately */
+            if is_build_needed(veci!( 1,  0,  0), chunk_adj.back())   { cube.back  (global_pos, vertices) };
+            if is_build_needed(veci!(-1,  0,  0), chunk_adj.front())  { cube.front (global_pos, vertices) };
+            if is_build_needed(veci!( 0,  1,  0), chunk_adj.top())    { cube.top   (global_pos, vertices) };
+            if is_build_needed(veci!( 0, -1,  0), chunk_adj.bottom()) { cube.bottom(global_pos, vertices) };
+            if is_build_needed(veci!( 0,  0,  1), chunk_adj.right())  { cube.right (global_pos, vertices) };
+            if is_build_needed(veci!( 0,  0, -1), chunk_adj.left())   { cube.left  (global_pos, vertices) };
+        }
+    }
+
+    /// Makes vertices for *low detail* mesh from voxel array.
+    pub fn make_vertices_low(&self, lod: Lod) -> Vec<LoweredVertex> {
+        assert!(lod > 0, "There separate function for LOD = 0! Use .make_vertices_detailed() instead!");
+        todo!()
+    }
+
+    /// Givex voxel from global position.
+    pub fn get_voxel_global(&self, global_pos: Int3) -> ChunkOption<Voxel> {
+        let local_pos = Self::global_to_local_pos(self.pos, global_pos);
+
+        if local_pos.x < 0 || local_pos.x >= Self::SIZE as i32 ||
+           local_pos.y < 0 || local_pos.y >= Self::SIZE as i32 ||
+           local_pos.z < 0 || local_pos.z >= Self::SIZE as i32
+        { return ChunkOption::OutsideChunk }
+
+        ChunkOption::Item(self.get_voxel_local(local_pos))
+    }
+
+    /// Gives voxel from local position (relative to chunk).
+    pub fn get_voxel_local(&self, local_pos: Int3) -> Voxel {
+        let global_pos = Self::local_to_global_pos(self.pos, local_pos);
+        match self.meta_info.fill_type {
+            FillType::Default => Voxel::new(
+                global_pos,
+                &VOXEL_DATA[self.voxel_ids[Self::voxel_pos_to_idx(local_pos)] as usize]
+            ),
+            FillType::AllSame(id) =>
+                Voxel::new(global_pos, &VOXEL_DATA[id as usize]),
+        }
+    }
+
+    /// Gives index in voxel array by it's 3D-index (or relative to chunk position)
+    pub fn voxel_pos_to_idx(pos: Int3) -> usize {
+        sdex::get_index(&USize3::from(pos).as_array(), &[Self::SIZE; 3])
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MetaInfo {
+    pub fill_type: FillType,
+    pub active_lod: Lod,
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub enum FillType {
+    #[default]
+    Default,
+    AllSame(Id),
+}
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum ChunkOption<T> {
+    OutsideChunk,
+    Item(T),
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ChunkAdj<'s> {
+    /// Adjacent chunks in order: `top -> bottom -> front
+    /// -> back -> left -> right`.
+    pub sides: [Option<NonNull<Chunk>>; 6],
+    pub _phantom: PhantomData<&'s Chunk>,
+}
+
+impl ChunkAdj<'_> {
+    pub fn none() -> Self {
+        Self { sides: [None; 6], _phantom: PhantomData }
+    }
+
+    pub fn top(&self)    -> Option<NonNull<Chunk>> { self.sides[0] }
+    pub fn bottom(&self) -> Option<NonNull<Chunk>> { self.sides[1] }
+    pub fn front(&self)  -> Option<NonNull<Chunk>> { self.sides[2] }
+    pub fn back(&self)   -> Option<NonNull<Chunk>> { self.sides[3] }
+    pub fn left(&self)   -> Option<NonNull<Chunk>> { self.sides[4] }
+    pub fn right(&self)  -> Option<NonNull<Chunk>> { self.sides[5] }
+}
+
 /**
  * Index cheatsheet!
  * 
@@ -72,7 +296,7 @@ implement_vertex!(LoweredVertex, position, color, light);
 type VoxelArray = Vec<Id>;
 type Lod = u32;
 
-pub enum ChunkOptional<Item> {
+pub enum OldChunkOptional<Item> {
     OutsideChunk,
     Item(Item, Lod),
 }
@@ -480,15 +704,15 @@ impl MeshlessChunk {
         let neighbor_lod = {
             let neighbor_min_world_pos = pos_in_chunk_to_world_int3(neighbor_min_pos, self.pos);
             match self.get_voxel(neighbor_min_world_pos) {
-                ChunkOptional::Item(_, lod) => lod,
-                ChunkOptional::OutsideChunk => match neighbor {
+                OldChunkOptional::Item(_, lod) => lod,
+                OldChunkOptional::OutsideChunk => match neighbor {
                     /* No voxel found means no LOD */
                     None => 0,
 
                     // TODO: add safety argument.
                     Some(chunk) => match unsafe { chunk.as_ref() }.get_voxel(neighbor_min_world_pos) {
-                        ChunkOptional::Item(_, lod) => lod,
-                        ChunkOptional::OutsideChunk => 0,
+                        OldChunkOptional::Item(_, lod) => lod,
+                        OldChunkOptional::OutsideChunk => 0,
                     },
                 },
             }
@@ -496,14 +720,14 @@ impl MeshlessChunk {
 
         let small_blocked = |pos: Int3| -> bool {
             match self.get_voxel(pos) {
-                ChunkOptional::Item(voxel, _) =>
+                OldChunkOptional::Item(voxel, _) =>
                     voxel.data != AIR_VOXEL_DATA,
 
-                ChunkOptional::OutsideChunk => match neighbor {
+                OldChunkOptional::OutsideChunk => match neighbor {
                     None => false,
                     Some(chunk) => match unsafe { chunk.as_ref() }.get_voxel(pos) {
-                        ChunkOptional::Item(voxel, _) => voxel.data != AIR_VOXEL_DATA,
-                        ChunkOptional::OutsideChunk => false,
+                        OldChunkOptional::Item(voxel, _) => voxel.data != AIR_VOXEL_DATA,
+                        OldChunkOptional::OutsideChunk => false,
                     },
                 }
             }
@@ -576,7 +800,7 @@ impl MeshlessChunk {
 
                 /* Low-res array index function */
                 let low_index = |pos: Int3|
-                    sdex::get_index(&[pos.x() as usize, pos.y() as usize, pos.z() as usize], &[new_size; 3]);
+                    sdex::get_index(&USize3::from(pos).as_array(), &[new_size; 3]);
 
                 for (id, new_pos) in iter {
                     /* Lowered voxels index shortcut */
@@ -625,14 +849,14 @@ impl MeshlessChunk {
     }
 
     /// Gives voxel by world coordinate.
-    pub fn get_voxel(&self, global_pos: Int3) -> ChunkOptional<Voxel> {
+    pub fn get_voxel(&self, global_pos: Int3) -> OldChunkOptional<Voxel> {
         /* Transform to local */
-        let pos = world_coords_to_in_some_chunk(global_pos, self.pos);
+        let pos = Self::global_to_local_pos(self.pos, global_pos);
         
         if pos.x < 0 || pos.x >= Self::SIZE as i32 ||
            pos.y < 0 || pos.y >= Self::SIZE as i32 ||
            pos.z < 0 || pos.z >= Self::SIZE as i32
-        { return ChunkOptional::OutsideChunk }
+        { return OldChunkOptional::OutsideChunk }
         
         match self.additional_data.as_ref() {
             /* For empty chunks */
@@ -643,7 +867,7 @@ impl MeshlessChunk {
                     ChunkDetails::Full     => 0,
                 };
 
-                return ChunkOptional::Item(voxel, lod)
+                return OldChunkOptional::Item(voxel, lod)
             }
 
             /* For known-filled chunks */
@@ -664,7 +888,7 @@ impl MeshlessChunk {
                     ChunkDetails::Low(lod) => lod.get(),
                 };
 
-                return ChunkOptional::Item(voxel, lod)
+                return OldChunkOptional::Item(voxel, lod)
             }
 
             /* No information */
@@ -678,8 +902,8 @@ impl MeshlessChunk {
     /// Gives voxel by world coordinate.
     pub fn get_voxel_or_none(&self, pos: Int3) -> Option<Voxel> {
         match self.get_voxel(pos) {
-            ChunkOptional::Item(voxel, _) => Some(voxel),
-            ChunkOptional::OutsideChunk => None,
+            OldChunkOptional::Item(voxel, _) => Some(voxel),
+            OldChunkOptional::OutsideChunk => None,
         }
     }
 
@@ -702,7 +926,7 @@ impl MeshlessChunk {
 
     /// Upgrades chunk to be meshed.
     #[allow(dead_code)]
-    pub fn envs_upgrade(self, graphics: &Graphics, env: &ChunkEnvironment) -> MeshedChunk {
+    pub fn to_meshed_by_envs(self, graphics: &Graphics, env: &ChunkEnvironment) -> MeshedChunk {
         MeshedChunk::from_meshless_envs(graphics, self, env)
     }
 
@@ -720,6 +944,11 @@ impl MeshlessChunk {
     /// Computes global position from relative to chunk position.
     pub fn local_to_global_pos(chunk_absolute_pos: Int3, relative_voxel_pos: Int3) -> Int3 {
         pos_in_chunk_to_world_int3(relative_voxel_pos, chunk_absolute_pos)
+    }
+
+    /// Computes local (relative to chunk) position from global position.
+    pub fn global_to_local_pos(chunk_absolute_pos: Int3, global_voxel_pos: Int3) -> Int3 {
+        world_coords_to_in_some_chunk(global_voxel_pos, chunk_absolute_pos)
     }
 
     /// Calculates chunk position relative to world from chunks position.
@@ -740,7 +969,7 @@ impl MeshlessChunk {
 }
 
 /// Describes blocked chunks by environent or not.
-#[derive(Clone, Default)]
+#[derive(Clone, Copy, Default, Debug)]
 pub struct ChunkEnvironment<'s> {
     pub top:	Option<NonNull<MeshlessChunk>>,
     pub bottom:	Option<NonNull<MeshlessChunk>>,
@@ -752,12 +981,41 @@ pub struct ChunkEnvironment<'s> {
     pub _phantom: PhantomData<&'s MeshlessChunk>
 }
 
-impl<'c> ChunkEnvironment<'c> {
+impl<'s> ChunkEnvironment<'s> {
     /// Empty description.
     pub fn none() -> Self {
         ChunkEnvironment {
             top: None, bottom: None, front: None, back: None,
             left: None, right: None, _phantom: PhantomData
+        }
+    }
+}
+
+impl<'s> IntoIterator for ChunkEnvironment<'s> {
+    type Item = Option<NonNull<MeshlessChunk>>;
+    type IntoIter = EnvironmentIterator<'s>;
+    fn into_iter(self) -> Self::IntoIter {
+        EnvironmentIterator { env: self, side_idx: 0 }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EnvironmentIterator<'s> {
+    env: ChunkEnvironment<'s>,
+    side_idx: usize,
+}
+
+impl<'s> Iterator for EnvironmentIterator<'s> {
+    type Item = Option<NonNull<MeshlessChunk>>;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.side_idx {
+            0 => { self.side_idx += 1; Some(self.env.top) },
+            1 => { self.side_idx += 1; Some(self.env.bottom) },
+            2 => { self.side_idx += 1; Some(self.env.front) },
+            3 => { self.side_idx += 1; Some(self.env.back) },
+            4 => { self.side_idx += 1; Some(self.env.left) },
+            5 => { self.side_idx += 1; Some(self.env.right) },
+            _ => None,
         }
     }
 }
@@ -839,15 +1097,14 @@ impl MeshedChunk {
 
     /// Renders chunk.
     /// * Mesh should be constructed before this function call.
-    pub fn render<U: Uniforms>(
-        &self, target: &mut Frame, full_shader: &Shader, low_shader: &Shader,
-        uniforms: &U, draw_params: &glium::DrawParameters, camera: &Camera) -> Result<(), DrawError>
+    pub fn render(
+        &self, target: &mut Frame, full_shader: &Shader, low_shader: &Shader, uniforms: &impl Uniforms,
+        draw_params: &glium::DrawParameters, camera: &Camera) -> Result<(), DrawError>
     {
-        if self.mesh.is_empty() || !self.is_visible(camera) {
-            return Ok(());
+        match self.mesh.is_empty() || !self.is_visible(camera) {
+            true => Ok(()),
+            false => self.mesh.render(target, full_shader, low_shader, draw_params, uniforms),
         }
-
-        return self.mesh.render(target, full_shader, low_shader, draw_params, uniforms)
     }
 
     pub fn make_mesh(display: &glium::Display, vertices: Detailed<&[DetailedVertex], &[LoweredVertex]>) -> ChunkMesh {
@@ -883,7 +1140,7 @@ impl MeshedChunk {
 
     /// Gives voxel by world coordinate.
     #[allow(dead_code)]
-    pub fn get_voxel_optional(&self, global_pos: Int3) -> ChunkOptional<Voxel> {
+    pub fn get_voxel_optional(&self, global_pos: Int3) -> OldChunkOptional<Voxel> {
         self.inner.get_voxel(global_pos)
     }
 
@@ -898,14 +1155,28 @@ impl MeshedChunk {
         self.inner.is_visible(camera)
     }
 
-    pub fn update_details_data(&mut self, camera_pos: vec3) -> bool {
-        // TODO: check nearby chunks to update their meshes
+    pub fn is_update_needed(&self, env: ChunkEnvironment, camera_pos: vec3) -> bool {
+        let all_chunk_same = env.into_iter()
+            .map(|mb_chunk_ptr| {
+                let chunk = match mb_chunk_ptr {
+                    Some(chunk_ptr) => unsafe { chunk_ptr.as_ref() },
+                    None => return true,
+                };
 
-        let new_lod = self.calculate_desired_lod(camera_pos);
-        //if self.inner.get_lod() == new_lod { return false }
+                let new_lod = Self::calculate_desired_lod(chunk.pos, camera_pos);
 
-        self.inner.set_lod_data(new_lod).expect("Can't set LOD data in .update_details_data(..)!");
-        return true
+                chunk.get_lod() == new_lod
+            })
+            .all(|is_same| is_same);
+
+        let new_lod = Self::calculate_desired_lod(self.inner.pos, camera_pos);
+        self.inner.get_lod() != new_lod || !all_chunk_same
+    }
+
+    pub fn update_details_data(&mut self, camera_pos: vec3) {
+        let new_lod = Self::calculate_desired_lod(self.inner.pos, camera_pos);
+        self.inner.set_lod_data(new_lod)
+            .expect("Can't set LOD data in .update_details_data(..)!");
     }
 
     pub fn refresh_mesh(&mut self, display: &glium::Display, env: &ChunkEnvironment) {
@@ -914,11 +1185,11 @@ impl MeshedChunk {
     }
 
     /// Calculates best-fit LOD value.
-    fn calculate_desired_lod(&self, camera_pos: vec3) -> Lod {
+    fn calculate_desired_lod(chunk_pos: Int3, camera_pos: vec3) -> Lod {
         let max_lod: Lod = (MeshlessChunk::SIZE as f32).log2().floor() as Lod;
 
         let chunk_pos = vec3::from(
-            MeshlessChunk::chunk_to_global_pos(self.inner.pos) +
+            MeshlessChunk::chunk_to_global_pos(chunk_pos) +
             Int3::all(MeshlessChunk::SIZE as i32) / 2
         );
 
@@ -971,8 +1242,10 @@ unsafe impl ReinterpretFromBytes for MeshlessChunk {
     fn reinterpret_from_bytes(source: &[u8]) -> Self {
         let voxel_array_size: usize = VoxelArray::static_size();
 
-        let voxels = VoxelArray::reinterpret_from_bytes(&source[.. voxel_array_size]);
-        let pos = Int3::reinterpret_from_bytes(&source[voxel_array_size .. voxel_array_size + Int3::static_size()]);
+        let voxels = VoxelArray::reinterpret_from_bytes(&source[..voxel_array_size]);
+        let pos = Int3::reinterpret_from_bytes(
+            &source[voxel_array_size .. voxel_array_size + Int3::static_size()]
+        );
 
         MeshlessChunk { voxel_ids: voxels, pos, additional_data: Default::default() }
     }

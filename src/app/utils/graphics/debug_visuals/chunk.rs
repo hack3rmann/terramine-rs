@@ -178,13 +178,12 @@ impl DebugVisualized<MeshedChunk> {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    pub fn update_details(&mut self, display: &Display, env: &ChunkEnvironment, camera_pos: vec3) {
-        if !self.update_details_data(camera_pos) { return }
-        self.refresh_mesh(display, env)
+    pub fn update_details(&mut self, display: &Display, env: ChunkEnvironment, camera_pos: vec3) {
+        self.update_details_data(camera_pos);
+        self.refresh_mesh(display, &env)
     }
 
-    pub fn update_details_data(&mut self, camera_pos: vec3) -> bool {
+    pub fn update_details_data(&mut self, camera_pos: vec3) {
         self.inner.update_details_data(camera_pos)
     }
 

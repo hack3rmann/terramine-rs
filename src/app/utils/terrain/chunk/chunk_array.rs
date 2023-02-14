@@ -95,7 +95,7 @@ pub struct MeshlessChunkArray {
 impl MeshlessChunkArray {
     fn save_chunks(
         file_name: &str, save_path: &str, width: usize, height: usize, depth: usize,
-        chunks: &Vec<MeshlessChunk>, percentage_tx: &Sender<Loading>
+        chunks: &[MeshlessChunk], percentage_tx: &Sender<Loading>
     ) {
         let volume = width * height * depth;
 
@@ -166,7 +166,9 @@ impl MeshlessChunkArray {
         use SaveType::*;
         let save = Save::new(file_name).open(save_path);
 
-        if !std::path::Path::new(save_path).exists() || (width, height, depth) != (save.read(Width), save.read(Height), save.read(Depth)) {
+        if !std::path::Path::new(save_path).exists() ||
+           (width, height, depth) != (save.read(Width), save.read(Height), save.read(Depth))
+        {
             Self::generate_file(file_name, save_path, percentage_tx, &mut chunks, width, height, depth);
             return chunks;
         }
@@ -296,14 +298,21 @@ impl MeshlessChunkArray {
 
     /// Gives an iterator over chunks.
     #[allow(dead_code)]
-    pub fn iter(&self) -> impl Iterator<Item = &MeshlessChunk> {
+    pub fn iter<'c, 's: 'c>(&'s self) -> impl Iterator<Item = (&'s MeshlessChunk, ChunkEnv<'c>)> {
         self.chunks.iter()
+            .map(move |chunk| (chunk, self.get_environment(chunk.pos)))
     }
 
     /// Gives an iterator over chunks.
     #[allow(dead_code)]
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut MeshlessChunk> {
+    pub fn iter_mut<'c, 's: 'c>(&'s mut self) -> impl Iterator<Item = (&'s mut MeshlessChunk, ChunkEnv<'c>)> {
+        // FIXME: avoid allocation.
+        let envs: Vec<_> = self.chunks.iter()
+            .map(|chunk| self.get_environment(chunk.pos))
+            .collect();
+
         self.chunks.iter_mut()
+            .zip(envs.into_iter())
     }
 
     /// Upgrades meshless chunk array to meshed.
@@ -338,6 +347,64 @@ impl MeshlessChunkArray {
 
         MeshedChunkArray { width, height, depth, chunks, full_shader, low_shader, draw_params }
     }
+
+    pub fn get_environment<'c>(&self, chunk_pos: Int3) -> ChunkEnv<'c> {
+        let chunk_array_size = veci!(self.width, self.height, self.depth);
+        let shifted_pos = chunk_pos + chunk_array_size / 2;
+
+        let side_to_idx = |side: Int3| -> usize {
+            let (x, y, z) = (shifted_pos + side).as_tuple();
+            sdex::get_index(&[x as usize, y as usize, z as usize], &[self.width, self.height, self.depth])
+        };
+
+        let mut env = ChunkEnv::none();
+
+        /* For `back` side */
+        if shifted_pos.x() + 1 < self.width as i32 {
+            env.back = Some(NonNull::from(&self.chunks[side_to_idx(veci!(1, 0, 0))]));
+        }
+
+        /* For `front` side */
+        if shifted_pos.x() - 1 >= 0 {
+            env.front = Some(NonNull::from(&self.chunks[side_to_idx(veci!(-1, 0, 0))]));
+        }
+    
+        /* For `top` side */
+        if shifted_pos.y() + 1 < self.height as i32 {
+            env.top	 = Some(NonNull::from(&self.chunks[side_to_idx(veci!(0, 1, 0))]));
+        }
+
+        /* For `bottom` side */
+        if shifted_pos.y() - 1 >= 0 {
+            env.bottom = Some(NonNull::from(&self.chunks[side_to_idx(veci!(0, -1, 0))]));
+        }
+
+        /* For `right` side */
+        if shifted_pos.z() + 1 < self.depth as i32 {
+            env.right = Some(NonNull::from(&self.chunks[side_to_idx(veci!(0, 0, 1))]));
+        }
+
+        /* For `left` side */
+        if shifted_pos.z() - 1 >= 0 {
+            env.left = Some(NonNull::from(&self.chunks[side_to_idx(veci!(0, 0, -1))]));
+        }
+
+        return env
+    }
+
+    /// Converts chunk position to index in chunk array.
+    #[allow(dead_code)]
+    pub fn pos_to_idx(&self, pos: Int3) -> usize {
+        let sizes = vecs!(self.width, self.height, self.depth);
+        let shifted = USize3::from(pos + Int3::from(sizes / 2));
+        sdex::get_index(&shifted.as_array(), &sizes.as_array())
+    }
+
+    /// Converts index in chunk array into it's position.
+    #[allow(dead_code)]
+    pub fn idx_to_pos(&self, idx: usize) -> Int3 {
+        self.chunks[idx].pos
+    }
 }
 
 impl IntoIterator for MeshlessChunkArray {
@@ -361,6 +428,31 @@ pub struct MeshedChunkArray<'s> {
 }
 
 impl<'s> MeshedChunkArray<'s> {
+    /// Gives an iterator over chunks.
+    #[allow(dead_code)]
+    pub fn iter_mut<'m>(&'m mut self) -> impl Iterator<Item = (&'m mut MeshedChunk, ChunkEnv<'s>)> {
+        // FIXME: avoid allocation.
+        let envs: Vec<_> = self.chunks.iter()
+            .map(|chunk| self.get_environment(chunk.inner.inner.pos))
+            .collect();
+
+        self.chunks.iter_mut()
+            .map(|debug_meshed_chunk| &mut debug_meshed_chunk.inner)
+            .zip(envs.into_iter())
+    }
+
+    /// Converts chunk position to index in chunk array.
+    pub fn pos_to_idx(sizes: USize3, pos: Int3) -> usize {
+        let shifted = USize3::from(pos + Int3::from(sizes / 2));
+        sdex::get_index(&shifted.as_array(), &sizes.as_array())
+    }
+
+    /// Converts index in chunk array into it's position.
+    #[allow(dead_code)]
+    pub fn idx_to_pos(&self, idx: usize) -> Int3 {
+        self.chunks[idx].inner.inner.pos
+    }
+
     /// Renders chunks.
     pub fn render<U: Uniforms>(
         &mut self, target: &mut Frame,
@@ -421,7 +513,7 @@ impl<'s> MeshedChunkArray<'s> {
     }
 
     /// Note: works kinda performantly.
-    #[profile]
+    #[allow(dead_code)]
     fn make_envs(&self) -> Vec<ChunkEnv<'s>> {
         self.chunks.iter()
             .map(|chunk| self.get_environment(chunk.inner.inner.pos))
@@ -430,13 +522,29 @@ impl<'s> MeshedChunkArray<'s> {
 
     #[profile]
     pub fn update_chunks_details(&mut self, display: &glium::Display, camera_pos: vec3) {
-        let envs = self.make_envs();
-        
-        self.chunks.iter_mut()
-            .zip(envs.into_iter())
-            .for_each(|(chunk, env)|
-                chunk.update_details(display, &env, camera_pos)
-            );
+        let sizes = vecs!(self.width, self.height, self.depth);
+        let volume = sizes.x * sizes.y * sizes.z;
+        let mut needs_update = vec![false; volume];
+
+        for (chunk, env) in self.iter_mut() {
+            if chunk.is_update_needed(env.clone(), camera_pos) {
+                needs_update[Self::pos_to_idx(sizes, chunk.inner.pos)] = true;
+                for adj_ptr in env.into_iter().filter_map(|x| x) {
+                    // TODO: add safety argument or make struct that no more needs unsafe blocks.
+                    let pos = unsafe { adj_ptr.as_ref().pos };
+                    needs_update[Self::pos_to_idx(sizes, pos)] = true;
+                }
+            }
+        }
+
+        let chunks_to_be_updated = self.iter_mut();
+            //.zip(needs_update.into_iter())
+            //.filter_map(|(tuple, update_needed)| update_needed.then(|| tuple));
+
+        for (chunk, env) in chunks_to_be_updated {
+            chunk.update_details_data(camera_pos);
+            chunk.refresh_mesh(display, &env);
+        }
     }
 }
 

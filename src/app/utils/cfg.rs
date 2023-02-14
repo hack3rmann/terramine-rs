@@ -1,4 +1,4 @@
-//! The place where all significant constants placed.
+//! The place where all significant constants are placed.
 
 pub mod save {
     pub const META_FILE_NAME: &str = "meta.off";
