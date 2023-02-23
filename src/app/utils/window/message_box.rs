@@ -15,7 +15,7 @@ use {
     std::ffi::CString,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MessageBox {
     title: CString,
     body:  CString,
@@ -90,7 +90,7 @@ pub mod result {
     pub type Result = SResult<MessageBoxResult, u32>;
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Flags {
     pub button: u32,
     pub icon: u32,
@@ -176,6 +176,7 @@ pub mod flags {
     }
 }
 
+#[derive(Debug)]
 pub enum MessageBoxResult {
     Error = 0,
     Ok = 1,

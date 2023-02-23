@@ -26,7 +26,8 @@ pub use profiler_target_macro::profiler_target;
 pub type ID = u64;
 pub type DataSummary<'s> = Vec<(&'s String, usize, f64, f64)>;
 
-/// Represents profiler target
+/// Represents profiler target.
+#[derive(Debug)]
 pub struct Profile {
     pub target_name: String,
     pub measures: Vec<f64>,
@@ -39,7 +40,8 @@ impl Profile {
     }
 }
 
-/// Represents a time measure with drop-stop
+/// Represents a time measure with drop-stop.
+#[derive(Debug)]
 pub struct Measure {
     pub value: f64,
     pub now: Instant,
@@ -59,7 +61,8 @@ impl Drop for Measure {
     }
 }
 
-/// Handles all profiles
+/// Handles all profiles.
+#[derive(Debug)]
 pub struct Profiler {
     pub profiles: Option<HashMap<ID, Profile>>,
 }

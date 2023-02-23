@@ -21,7 +21,7 @@ use {
 };
 
 /// Keyboard handler.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Keyboard {
     pub inputs: HashMap<KeyCode, ElementState>
 }
@@ -70,7 +70,7 @@ impl Keyboard {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Mouse {
     pub inputs: HashMap<MouseButton, ElementState>,
     pub dx: f64,
@@ -200,7 +200,7 @@ impl Mouse {
 }
 
 /// Contains both input types: `keyboard` and `mouse`.
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct InputManager {
     pub keyboard: Keyboard,
     pub mouse: Mouse

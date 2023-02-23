@@ -12,7 +12,7 @@ use {
             debug_visuals::{self, DebugVisualized},
         },
         terrain::chunk::{
-            chunk_array::{
+            chunk_array_old::{
                 MeshlessChunkArray,
                 MeshedChunkArray,
             },
@@ -41,6 +41,7 @@ use {
 };
 
 /// Struct that handles everything.
+#[derive(Debug)]
 pub struct App {
     /* Important stuff */
     input_manager: InputManager,
@@ -152,7 +153,8 @@ impl App {
         }
 
         /* Display FPS */
-        self.graphics.display.gl_window().window().set_title(format!("Terramine: {0:.0} FPS", self.timer.fps()).as_str());
+        self.graphics.display.gl_window().window()
+            .set_title(&format!("Terramine: {0:.0} FPS", self.timer.fps()));
 
         /* Update ImGui stuff */
         self.graphics.imguiw
@@ -160,7 +162,8 @@ impl App {
             .wunwrap();
 
         /* Moves to `RedrawRequested` stage */
-        self.graphics.display.gl_window().window().request_redraw();
+        self.graphics.display.gl_window().window()
+            .request_redraw();
     }
 
     /// Prepares the frame.
@@ -206,7 +209,6 @@ impl App {
 
         /* Uniforms set */
         let uniforms = uniform! {
-            /* Texture uniform with filtering */
             tex: self.texture.with_mips(),
             time: self.timer.time(),
             proj: self.camera.inner.get_proj(),
@@ -222,7 +224,7 @@ impl App {
 
             self.camera.render_camera(&self.graphics.display, &mut target, &uniforms).wunwrap();
 
-            self.graphics.imguir
+            self.graphics.imguir.0
                 .render(&mut target, draw_data)
                 .wexpect("Error rendering imgui");
 

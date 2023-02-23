@@ -18,7 +18,7 @@ pub struct ShError(pub String);
 
 pub type ShResult<T> = Result<T, ShError>;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Alloc {
     pub(self) stack_offset: Offset,
     pub(self) heap_offset: Offset,
@@ -32,6 +32,7 @@ impl Alloc {
     pub fn get_size(self) -> Offset { self.size }
 }
 
+#[derive(Debug)]
 pub struct StackHeap {
     pub stack: File,
     pub stack_ptr: Offset,

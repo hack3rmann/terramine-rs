@@ -33,6 +33,7 @@ use {
 };
 
 /// Struct that handles graphics.
+#[derive(Debug)]
 pub struct Graphics {
     /* Gluim main struct */
     pub display:	glium::Display,
@@ -43,8 +44,9 @@ pub struct Graphics {
     /* ImGui stuff */
     pub imguic:		imgui::Context,
     pub imguiw:		imgui_winit_support::WinitPlatform,
-    pub imguir:		imgui_glium_renderer::Renderer,
+    pub imguir:		ImguiRendererWrapper,
 }
+
 
 impl Graphics {
     /// Graphics initialize function. Can be called once.
@@ -89,7 +91,7 @@ impl Graphics {
             Graphics {
                 display,
                 imguic: imgui_context,
-                imguir: imgui_renderer,
+                imguir: ImguiRendererWrapper(imgui_renderer),
                 imguiw: winit_platform,
                 event_loop: Some(event_loop),
             }
@@ -123,5 +125,13 @@ impl Graphics {
     #[allow(dead_code)]
     pub fn get_context(&self) -> &std::rc::Rc<glium::backend::Context> {
         self.display.get_context()
+    }
+}
+
+pub struct ImguiRendererWrapper(pub imgui_glium_renderer::Renderer);
+
+impl std::fmt::Debug for ImguiRendererWrapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "imgui_glium_renderer::Renderer {{...}}")
     }
 }

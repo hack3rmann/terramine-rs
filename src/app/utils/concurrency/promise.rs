@@ -1,6 +1,6 @@
 use std::sync::mpsc::{Receiver, RecvError, TryRecvError, TryIter};
 
-
+#[derive(Debug)]
 pub struct Promise<T>(pub Receiver<T>);
 
 impl<T> Promise<T> {

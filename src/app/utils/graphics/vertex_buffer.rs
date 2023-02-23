@@ -13,6 +13,7 @@ use {
 };
 
 /// Vertex buffer help struct.
+#[derive(Debug)]
 pub struct VertexBuffer<Idx, Vertex: Copy> {
     pub inner: GVertexBuffer<Vertex>,
     pub indices: Idx

@@ -22,6 +22,7 @@ use {
 };
 
 /// Temporary holds glutin window.
+#[derive(Debug)]
 pub struct Window {
     pub window: Option<ContextWrapper<PossiblyCurrent, GWindow>>,
 }

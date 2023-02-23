@@ -7,7 +7,7 @@ use {
 };
 
 /// Represents the camera frustum
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Frustum {
     pub near: Plane,
     pub far: Plane,

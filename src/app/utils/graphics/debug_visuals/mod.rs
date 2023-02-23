@@ -17,12 +17,14 @@ use {
 };
 
 /// Adds debug visuals to type `T`.
+#[derive(Debug)]
 pub struct DebugVisualized<T> {
     pub inner: T,
     pub mesh: UnindexedMesh<Vertex>,
     pub static_data: DebugVisualsStatics<T>,
 }
 
+#[derive(Debug)]
 pub struct DebugVisualsStatics<T> {
     pub shader: &'static Shader,
     pub draw_params: &'static DrawParameters<'static>,
@@ -37,18 +39,20 @@ pub fn switch_enable() {
 }
 
 #[repr(transparent)]
+#[derive(Debug)]
 struct ShaderWrapper(Shader);
 
 unsafe impl Send for ShaderWrapper { }
 unsafe impl Sync for ShaderWrapper { }
 
 #[repr(transparent)]
+#[derive(Debug)]
 struct DrawParametersWrapper<'a>(DrawParameters<'a>);
 
 unsafe impl<'a> Send for DrawParametersWrapper<'a> { }
 unsafe impl<'a> Sync for DrawParametersWrapper<'a> { }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Vertex {
     pos: [f32; 3],
     color: [f32; 4],

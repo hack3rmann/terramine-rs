@@ -29,8 +29,8 @@ pub const TEXTURE_SIZE_F: f32 = 1.0 / ATLAS_ROW_SIZE_T as f32;
 /// Padding to not hit neighbor textures
 pub const ATLAS_PADDING_F: f32 = ATLAS_PADDING_P as f32 / ATLAS_ROW_SIZE_P as f32;
 
-/// Handles UV information
-#[derive(Clone, Copy)]
+/// Handles UV information.
+#[derive(Clone, Copy, Debug)]
 pub struct UV {
     pub x_lo: f32,
     pub x_hi: f32,

@@ -21,9 +21,15 @@ pub struct Voxel {
 }
 
 impl Voxel {
+    pub const SIZE: f32 = cfg::terrain::VOXEL_SIZE;
+
     /// Voxel constructor.
     pub fn new(position: Int3, data: &'static VoxelData) -> Self {
         Voxel { data, position }
+    }
+
+    pub fn is_air(&self) -> bool {
+        self.data.id == AIR_VOXEL_DATA.id
     }
 }
 
@@ -99,11 +105,13 @@ pub mod shape {
     const LEFT_LIGHT:	f32 = cfg_light::LEFT;
     const RIGHT_LIGHT:	f32 = cfg_light::RIGHT;
 
+    #[derive(Debug)]
     pub struct CubeDetailed<'c> {
         data: &'c VoxelData,
         half_size: f32,
     }
 
+    #[derive(Debug)]
     pub struct CubeLowered {
         half_size: f32,
     }
@@ -117,6 +125,18 @@ pub mod shape {
         pub fn size(mut self, new_size: f32) -> Self {
             self.half_size = new_size * 0.5;
             return self
+        }
+
+        pub fn by_offset(&self, offset: Int3, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+            match offset.as_tuple() {
+                ( 1,  0,  0) => self.back(position, vertices),
+                (-1,  0,  0) => self.front(position, vertices),
+                ( 0,  1,  0) => self.top(position, vertices),
+                ( 0, -1,  0) => self.bottom(position, vertices),
+                ( 0,  0,  1) => self.right(position, vertices),
+                ( 0,  0, -1) => self.left(position, vertices),
+                _ => panic!("There's no offset {:?}", offset),
+            }
         }
 
         /// Cube front face vertex array.
@@ -236,6 +256,18 @@ pub mod shape {
     impl CubeLowered {
         pub fn new(size: f32) -> Self {
             Self { half_size: size / 2.0 }
+        }
+
+        pub fn by_offset(&self, offset: Int3, position: vec3, color: Color, vertices: &mut Vec<LoweredVertex>) {
+            match offset.as_tuple() {
+                ( 1,  0,  0) => self.back(position, color, vertices),
+                (-1,  0,  0) => self.front(position, color, vertices),
+                ( 0,  1,  0) => self.top(position, color, vertices),
+                ( 0, -1,  0) => self.bottom(position, color, vertices),
+                ( 0,  0,  1) => self.right(position, color, vertices),
+                ( 0,  0, -1) => self.left(position, color, vertices),
+                _ => panic!("There's no offset {:?}", offset),
+            }
         }
 
         /// Cube front face vertex array.

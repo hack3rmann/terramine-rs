@@ -24,6 +24,7 @@ pub type Size   = u64;
 pub type Enumerator = u64;
 
 /// Handle for save files framework.
+#[derive(Debug)]
 pub struct Save<E> {
     name: String,
     file: Option<StackHeap>,
@@ -465,7 +466,7 @@ mod tests {
     use super::*;
     use crate::app::utils::math::prelude::*;
 
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Debug)]
     enum DataType {
         Position,
         Array,
@@ -477,7 +478,7 @@ mod tests {
         fn into(self) -> Offset { self as Offset }
     }
 
-    #[derive(Clone, Copy)]
+    #[derive(Clone, Copy, Debug)]
     enum MinorTestDataType { Data }
 
     impl Into<Offset> for MinorTestDataType {

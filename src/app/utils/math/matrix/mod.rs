@@ -9,7 +9,7 @@ use {
 #[allow(dead_code)]
 pub type Matrix4 = Matrix4x4;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Matrix4x4 {
     pub mat: XMMATRIX
 }

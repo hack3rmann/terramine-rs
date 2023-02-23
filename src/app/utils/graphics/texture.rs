@@ -11,6 +11,7 @@ use {
 
 /// Texture struct.
 /// Contains texture stuff.
+#[derive(Debug)]
 pub struct Texture {
     pub path: String,
     pub opengl_texture: SrgbTexture2d,

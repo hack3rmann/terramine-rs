@@ -2,7 +2,8 @@
 
 use std::time::{Instant, Duration};
 
-/// Provides easy time management
+/// Provides easy time management.
+#[derive(Debug)]
 pub struct Timer {
     /* Time section */
     dt: f64,

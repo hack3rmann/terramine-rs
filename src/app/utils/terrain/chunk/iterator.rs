@@ -204,7 +204,7 @@ impl Iterator for CubeBorder {
 /// 	let mut res2 = vec![];
 /// 
 /// 	/* [`SpaceIter`] equivalent */
-/// 	for pos in SpaceIter::new(Int3::zero() .. Int3::all(16)) {
+/// 	for pos in SpaceIter::new(Int3::ZERO..Int3::all(16)) {
 /// 		res1.push(pos)
 /// 	}
 /// 
@@ -212,7 +212,7 @@ impl Iterator for CubeBorder {
 /// 	for x in 0..16 {
 /// 	for y in 0..16 {
 /// 	for z in 0..16 {
-/// 		res2.push(Int3::new(x, y, z))
+/// 		res2.push(veci!(x, y, z))
 /// 	}}}
 /// 
 /// 	assert_eq!(res1, res2);
@@ -226,9 +226,10 @@ pub struct SpaceIter {
     max: Int3,
 }
 
+// TODO: impl ExactSizeIterator
 impl SpaceIter {
     pub fn new(range: Range<Int3>) -> Self {
-        Self { curr: range.start, min: range.start, max: range.end - Int3::ones() }
+        Self { curr: range.start, min: range.start, max: range.end - Int3::ONE }
     }
 
     pub fn new_cubed(range: Range<i32>) -> Self {
@@ -241,11 +242,35 @@ impl SpaceIter {
 
     #[allow(dead_code)]
     pub fn zeroed(end: Int3) -> Self {
-        Self::new(Int3::zero() .. end)
+        Self::new(Int3::ZERO..end)
     }
 
     pub fn zeroed_cubed(end: i32) -> Self {
-        Self::new_cubed(0 .. end)
+        Self::new_cubed(0..end)
+    }
+
+    pub fn split_chunks(iter_size: Int3, chunk_size: Int3) -> impl Iterator<Item = Self> {
+        assert_eq!(
+            iter_size % chunk_size, Int3::ZERO,
+            "iter_size (value is {iter_size:?}) should be divisible by chunk_size (value is {chunk_size:?})"
+        );
+
+        Self::zeroed(iter_size / chunk_size)
+            .map(move |chunk_pos| {
+                let min = iter_size * chunk_pos;
+                SpaceIter::new(min .. min + iter_size)
+            })
+    }
+
+    pub fn adj_iter(pos: Int3) -> impl Iterator<Item = Int3> + ExactSizeIterator {
+        vec![
+            pos + veci!( 1,  0,  0),
+            pos + veci!(-1,  0,  0),
+            pos + veci!( 0,  1,  0),
+            pos + veci!( 0, -1,  0),
+            pos + veci!( 0,  0,  1),
+            pos + veci!( 0,  0, -1),
+        ].into_iter()
     }
 }
 
@@ -298,6 +323,7 @@ impl Iterator for SpaceIter {
 ///		}
 /// }
 /// ```
+#[derive(Debug)]
 pub struct ChunkSplitten {
     inner: SpaceIter,
     outer: SpaceIter,
@@ -344,6 +370,7 @@ impl Iterator for ChunkSplitten {
     }
 }
 
+#[derive(Debug)]
 pub struct Sides<T> {
     pub inner: [T; 6],
 }
