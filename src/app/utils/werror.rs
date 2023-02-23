@@ -94,14 +94,26 @@ impl<T> WErrorForward<T, ()> for Option<T> {
     }
 }
 
+pub fn set_panic_hook() {
+
+    // TODO: make slightly more readable error messages.
+    std::panic::set_hook(Box::new(|panic_info| {
+        error_message("Panic occured", panic_info).unwrap();
+    }))
+}
+
 /// Constructs error message box.
 pub fn error_message(msg: &str, error: &dyn Debug) -> message_box::result::Result {
-    MessageBox::new("Error message:", &format!("{msg}: {error:?}")).errored().show()
+    MessageBox::new("Error message:", &format!("{msg}: {error:?}"))
+        .errored()
+        .show()
 }
 
 /// Constructs error message box.
 pub fn message(msg: &str) -> message_box::result::Result {
-    MessageBox::new("Error message:", &format!("{msg}: no details available.")).errored().show()
+    MessageBox::new("Error message:", &format!("{msg}: no details available."))
+        .errored()
+        .show()
 }
 
 #[cfg(test)]

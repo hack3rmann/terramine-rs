@@ -10,6 +10,7 @@ mod app;
 use app::App;
 
 fn main() {
+    app::utils::werror::set_panic_hook();
     app::utils::profiler::initialyze();
     app::utils::runtime::initialyze();
 
