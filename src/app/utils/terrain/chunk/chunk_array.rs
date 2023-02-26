@@ -5,6 +5,7 @@ use {
             ChunkAdj,
             iterator::SpaceIter,
             Lod,
+            ChunkDrawBundle,
         },
         voxel::Voxel,
     },
@@ -14,6 +15,7 @@ use {
         iter::Zip,
         slice::{Iter, IterMut},
     },
+    glium as gl,
 };
 
 #[derive(Debug)]
@@ -34,6 +36,10 @@ impl ChunkArray {
         Self { chunks, sizes }
     }
 
+    pub fn new_empty() -> Self {
+        Self::new(USize3::ZERO)
+    }
+
     pub fn coord_idx_to_pos(sizes: USize3, coord_idx: USize3) -> Int3 {
         Int3::from(coord_idx) - Int3::from(sizes) / 2
     }
@@ -42,7 +48,12 @@ impl ChunkArray {
         let sizes = Int3::from(sizes);
         let shifted = pos + sizes / 2;
 
-        match (Int3::ZERO..sizes).contains(&shifted) {
+        // FIXME: (see another fixme)
+        //match (Int3::ZERO..sizes).contains(&shifted){
+        match 0 <= shifted.x && shifted.x < sizes.x &&
+              0 <= shifted.y && shifted.y < sizes.y &&
+              0 <= shifted.z && shifted.z < sizes.z
+        {
             true  => Some(shifted.into()),
             false => None
         }
@@ -57,18 +68,21 @@ impl ChunkArray {
     }
 
     pub fn get_chunk_by_pos(&self, pos: Int3) -> Option<&Chunk> {
-        Some(&self.chunks[Self::pos_to_idx(self.sizes, pos)?])
+        Some(
+            &self.chunks[Self::pos_to_idx(self.sizes, pos)?]
+        )
     }
 
     pub fn get_adj_chunks(&self, pos: Int3) -> ChunkAdj<'_> {
         let mut adj = ChunkAdj::none();
-        let adjs = SpaceIter::adj_iter(pos)
+        let adjs = SpaceIter::adj_iter(Int3::ZERO)
             .filter_map(|off|
                 Some((off, self.get_chunk_by_pos(pos + off)?))
             );
 
         for (offset, chunk) in adjs {
-            adj.set(offset, NonNull::from(chunk)).expect("failed to set adj");
+            adj.set(offset, NonNull::from(chunk))
+                .expect("offset should be adjacent (see SpaceIter::adj_iter())");
         }
 
         adj
@@ -81,10 +95,16 @@ impl ChunkArray {
         SpaceIter::new(start..end)
     }
 
-    // TODO: make mut and shared versions of ChunkAdj
+    // TODO: make mut and shared versions of ChunkAdj.
     pub fn adj_iter(&self) -> impl Iterator<Item = ChunkAdj<'_>> {
         Self::pos_iter(self.sizes)
             .map(move |pos| self.get_adj_chunks(pos))
+    }
+
+    pub fn lod_iter(&self, _cam_pos: vec3) -> impl Iterator<Item = Lod> {
+        //todo!();
+        //std::iter::empty()
+        std::iter::once(1).cycle()
     }
 
     pub fn chunks(&self) -> Iter<'_, Chunk> {
@@ -110,9 +130,23 @@ impl ChunkArray {
         Iterator::zip(self.chunks_mut(), adj_iter)
     }
 
-    pub fn generate_meshes(&mut self, lod: impl Fn(Int3) -> Lod, display: &glium::Display) {
+    pub fn generate_meshes(&mut self, lod: impl Fn(Int3) -> Lod, display: &gl::Display) {
         for (chunk, adj) in self.chunks_with_adj_mut() {
             chunk.generate_mesh(lod(chunk.pos), adj, display)
         }
+    }
+
+    pub fn render(
+        &self, target: &mut gl::Frame, draw_bundle: &ChunkDrawBundle,
+        uniforms: &impl gl::uniforms::Uniforms,
+        cam_pos: vec3,
+    ) -> Result<(), gl::DrawError> {
+        if self.sizes == USize3::ZERO { return Ok(()) }
+
+        for (chunk, lod) in self.chunks().zip(self.lod_iter(cam_pos)) {
+            chunk.render(target, &draw_bundle, uniforms, lod)?
+        }
+
+        Ok(())
     }
 }

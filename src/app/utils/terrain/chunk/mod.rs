@@ -24,6 +24,7 @@ use {
     },
     math_linear::prelude::*,
     glium::{
+        self as gl,
         DrawError,
         uniforms::Uniforms,
         Frame,
@@ -123,7 +124,7 @@ impl Chunk {
     /// Gives iterator over voxels.
     pub fn voxels(&self) -> impl Iterator<Item = Voxel> + '_ {
         self.voxel_ids.iter()
-            .cloned()
+            .copied()
             .zip(Self::global_pos_iter(self.pos))
             .map(|(id, pos)| Voxel::new(pos, &VOXEL_DATA[id as usize]))
     }
@@ -195,8 +196,56 @@ impl Chunk {
         self.fill_id().is_some()
     }
 
-    /// Makes vertices for *detailed* mesh from voxel array.
     pub fn make_vertices_detailed(&self, chunk_adj: ChunkAdj) -> Vec<DetailedVertex> {
+        if self.is_empty() { return vec![] }
+
+        let pos_iter: Box<dyn Iterator<Item = Int3>> = match self.meta_info.fill_type {
+            FillType::Default =>
+                Box::new(Self::local_pos_iter()),
+
+            FillType::AllSame(id) => if id == AIR_VOXEL_DATA.id {
+                Box::new(std::iter::empty())
+            } else {
+                Box::new(CubeBorder::new(Self::SIZE as i32))
+            },
+        };
+
+        pos_iter
+            .map(|pos| self.get_voxel_local(pos))
+            .filter(|voxel| !voxel.is_air())
+            .flat_map(|voxel| {
+                let side_iter = SpaceIter::adj_iter(Int3::ZERO)
+                    .filter(|&offset| {
+                        let adj = chunk_adj.by_offset(offset).map(|ptr| unsafe { ptr.as_ref() });
+                        match self.get_voxel_global(voxel.pos + offset) {
+                            ChunkOption::Item(voxel) => voxel.is_air(),
+
+                            ChunkOption::OutsideChunk => match adj {
+                                None => true,
+
+                                Some(chunk) => match chunk.get_voxel_global(voxel.pos + offset) {
+                                    ChunkOption::Item(voxel) => voxel.is_air(),
+                                    ChunkOption::OutsideChunk => true,
+                                }
+                            },
+                        }
+                    });
+
+                const N_CUBE_VERTICES: usize = 36;
+                let mut vertices = Vec::with_capacity(N_CUBE_VERTICES);
+
+                let mesh_builder = CubeDetailed::new(voxel.data);
+                for offset in side_iter {
+                    mesh_builder.by_offset(offset, voxel.pos, &mut vertices);
+                }
+
+                vertices
+            })
+            .collect()
+    }
+
+    /// Makes vertices for *detailed* mesh from voxel array.
+    pub fn make_vertices_detailed_old(&self, chunk_adj: ChunkAdj) -> Vec<DetailedVertex> {
         /* Early exit to avoid allocation */
         if self.is_empty() { return vec![] }
 
@@ -234,23 +283,21 @@ impl Chunk {
             /* Get position from index */
             let global_pos = Chunk::local_to_global_pos(chunk.pos, voxel_relative_pos);
             
-            /* Draw checker */
-            let is_drawable = |input: ChunkOption<Voxel>| -> bool {
-                match input {
-                    ChunkOption::OutsideChunk => false,
-                    ChunkOption::Item(voxel) => !voxel.is_air(),
-                }
-            };
-            
             /* Mesh builder */
             let is_build_needed = |offset: Int3| -> bool {
-                if is_drawable(chunk.get_voxel_global(global_pos + offset)) { return false }
+                let adj = chunk_adj.by_offset(offset).map(|ptr| unsafe { ptr.as_ref() });
+                match chunk.get_voxel_global(global_pos + offset) {
+                    ChunkOption::Item(voxel) => !voxel.is_air(),
 
-                match chunk_adj.by_offset(offset).map(|ptr| unsafe { ptr.as_ref() }) {
-                    None => true,
-                    Some(chunk) => {
-                        !is_drawable(chunk.get_voxel_global(global_pos + offset))
-                    }
+                    ChunkOption::OutsideChunk => match adj {
+                        None => false,
+
+                        Some(chunk) => match chunk.get_voxel_global(global_pos + offset) {
+                            ChunkOption::Item(voxel) => !voxel.is_air(),
+
+                            ChunkOption::OutsideChunk => false,
+                        }
+                    },
                 }
             };
 
@@ -271,6 +318,7 @@ impl Chunk {
         if self.is_empty() { return vec![] }
 
         // TODO: optimize for same-filled chunks
+        // TODO: Deal with different LOD boundaries (see old code).
         let sub_chunk_size = 2_i32.pow(lod as u32);
         self.low_voxel_iter(lod)
             .filter_map(|(voxel, p)| match voxel {
@@ -328,9 +376,14 @@ impl Chunk {
     pub fn get_voxel_global(&self, global_pos: Int3) -> ChunkOption<Voxel> {
         let local_pos = Self::global_to_local_pos(self.pos, global_pos);
 
-        if !(Int3::ZERO..Int3::all(Self::SIZE as i32)).contains(&local_pos) {
-            return ChunkOption::OutsideChunk
-        }
+        // FIXME: rewrite .contains(...)
+        // if !(Int3::ZERO..Int3::all(Self::SIZE as i32)).contains(&local_pos) {
+        //     return ChunkOption::OutsideChunk
+        // }
+        if local_pos.x < 0 || local_pos.x >= Self::SIZE as i32 ||
+           local_pos.y < 0 || local_pos.y >= Self::SIZE as i32 ||
+           local_pos.z < 0 || local_pos.z >= Self::SIZE as i32
+        { return ChunkOption::OutsideChunk }
 
         ChunkOption::Item(self.get_voxel_local(local_pos))
     }
@@ -375,25 +428,53 @@ impl Chunk {
 
     /// Renders chunk.
     pub fn render(
-        &self, target: &mut Frame, full_shader: &Shader, low_shader: &Shader,
-        uniforms: &impl Uniforms, draw_params: &glium::DrawParameters, lod: Lod,
+        &self, target: &mut Frame, draw_info: &ChunkDrawBundle,
+        uniforms: &impl Uniforms, lod: Lod,
     ) -> Result<(), DrawError> {
         if self.is_empty() { return Ok(()) }
 
-        let expect = "Expected a mesh";
+        let expect_msg = "Expected a mesh";
         match lod {
-            0 if !self.detailed_mesh.as_ref().expect(expect).is_empty() => {
-                self.detailed_mesh.as_ref().expect(expect)
-                    .render(target, full_shader, draw_params, uniforms)
+            0 if !self.detailed_mesh.as_ref().expect(expect_msg).is_empty() => {
+                self.detailed_mesh.as_ref().expect(expect_msg)
+                    .render(target, &draw_info.full_shader, &draw_info.draw_params, uniforms)
             },
 
-            lod if !self.low_meshes[lod as usize - 1].as_ref().expect(expect).is_empty() => {
-                self.low_meshes[lod as usize - 1].as_ref().expect(expect)
-                    .render(target, low_shader, draw_params, uniforms)
+            lod if !self.low_meshes[lod as usize - 1].as_ref().expect(expect_msg).is_empty() => {
+                self.low_meshes[lod as usize - 1].as_ref().expect(expect_msg)
+                    .render(target, &draw_info.low_shader, &draw_info.draw_params, uniforms)
             },
 
             _ => Ok(())
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct ChunkDrawBundle<'s> {
+    full_shader: Shader,
+    low_shader:  Shader,
+    draw_params: gl::DrawParameters<'s>,
+}
+
+impl<'s> ChunkDrawBundle<'s> {
+    pub fn new(display: &gl::Display) -> ChunkDrawBundle<'s> {
+        /* Chunk draw parameters */
+        let draw_params = gl::DrawParameters {
+            depth: gl::Depth {
+                test: gl::DepthTest::IfLess,
+                write: true,
+                .. Default::default()
+            },
+            backface_culling: gl::BackfaceCullingMode::CullClockwise,
+            .. Default::default()
+        };
+        
+        /* Create shaders */
+        let full_shader = Shader::new("full_detail", "full_detail", &display);
+        let low_shader  = Shader::new("low_detail", "low_detail", &display);
+
+        ChunkDrawBundle { full_shader, low_shader, draw_params }
     }
 }
 
@@ -416,7 +497,7 @@ pub enum ChunkOption<T> {
     Item(T),
 }
 
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ChunkAdj<'s> {
     /// Adjacent chunks in order: `top[0] -> bottom[1] -> front[2]
     /// -> back[3] -> left[4] -> right[5]`.
@@ -458,7 +539,7 @@ impl ChunkAdj<'_> {
             ( 0, -1,  0) => self.bottom(),
             ( 0,  0,  1) => self.right(),
             ( 0,  0, -1) => self.left(),
-            _ => None,
+            _ => panic!("Offset should be small (adjacent) but {:?}", offset),
         }
     }
 }

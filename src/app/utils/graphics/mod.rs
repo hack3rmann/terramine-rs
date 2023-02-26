@@ -7,28 +7,36 @@ pub mod debug_visuals;
 
 use {
     crate::app::utils::{
-        cfg::window::default::HEIGHT as DEFAULT_HEIGHT,
-        cfg::window::default::WIDTH as DEFAULT_WIDTH,
+        cfg::{
+            self,
+            window::default::HEIGHT as DEFAULT_HEIGHT,
+            window::default::WIDTH  as DEFAULT_WIDTH,
+        },
         werror::prelude::*,
     },
     super::window::Window,
     shader::Shader,
     vertex_buffer::VertexBuffer,
     glium::{
-        self,
+        self as gl,
         backend::Facade,
-        glutin::event_loop::EventLoop,
-        glutin::event::{
-            Event,
-            WindowEvent,
+        glutin::{
+            event_loop::EventLoop,
+            event::{
+                Event,
+                WindowEvent,
+            },
+            dpi,
         },
-        glutin::dpi,
+        Surface,
     },
     std::{
         sync::atomic::{
             AtomicBool, Ordering
         },
         path::PathBuf,
+        error::Error,
+        rc::Rc,
     }
 };
 
@@ -101,30 +109,34 @@ impl Graphics {
     /// Validates initialization.
     fn validate() -> Result<(), &'static str> {
         /* Checks if struct is already initialized */
-        #[allow(dead_code)]
-        static INITIALIZED: AtomicBool = AtomicBool::new(false);
-        if INITIALIZED.load(Ordering::Acquire) {
+        static INITIALIZED_OLD: AtomicBool = AtomicBool::new(false);
+        if INITIALIZED_OLD.load(Ordering::Acquire) {
             return Err("Attempting to initialize graphics twice! Graphics is already initialized!");
         } else {
-            Ok(INITIALIZED.store(true, Ordering::Release))
+            Ok(INITIALIZED_OLD.store(true, Ordering::Release))
         }
     }
 
     /// Gives event_loop and removes it from graphics struct.
     pub fn take_event_loop(&mut self) -> glium::glutin::event_loop::EventLoop<()> {
-        /* Swaps struct variable with returned */
-        if let None = self.event_loop {
-            panic!("Graphics.event_loop haven't been initialized!")
-        } else {
-            let mut event_loop = None;
-            std::mem::swap(&mut event_loop, &mut self.event_loop);
-            event_loop.wunwrap()
-        }
+        self.event_loop.take()
+            .expect("graphics.event_loop should be initialyzed!")
+    }
+
+    pub fn get_context(&self) -> &Rc<gl::backend::Context> {
+        self.display.get_context()
     }
 
     #[allow(dead_code)]
-    pub fn get_context(&self) -> &std::rc::Rc<glium::backend::Context> {
-        self.display.get_context()
+    pub fn draw<WriteFn>(display: &gl::Display, write_fn: WriteFn) -> Result<(), Box<dyn Error>>
+    where
+        WriteFn: FnOnce(&mut gl::Frame) -> Result<(), Box<dyn Error>>,
+    {
+        let mut target = display.draw();
+        target.clear_all(cfg::shader::CLEAR_COLOR, cfg::shader::CLEAR_DEPTH, cfg::shader::CLEAR_STENCIL);
+        write_fn(&mut target)?;
+        target.finish()?;
+        Ok(())
     }
 }
 

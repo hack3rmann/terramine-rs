@@ -457,11 +457,11 @@ impl<'s> MeshedChunkArray<'s> {
 
     /// Renders chunks.
     pub fn render<U: Uniforms>(
-        &mut self, target: &mut Frame,
+        &self, target: &mut Frame,
         uniforms: &U, camera: &Camera
     ) -> Result<(), DrawError> {
         /* Iterating through array */
-        for chunk in self.chunks.iter_mut() {
+        for chunk in self.chunks.iter() {
             chunk.render_meshed_chunks(
                 target, &self.full_shader, &self.low_shader,
                 uniforms, &self.draw_params, camera

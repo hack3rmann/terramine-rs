@@ -1569,6 +1569,7 @@ dependencies = [
  "imgui-winit-support",
  "math_linear",
  "profiler",
+ "thiserror",
  "tokio",
  "tokio-stream",
  "winapi",

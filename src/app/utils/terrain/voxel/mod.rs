@@ -17,7 +17,7 @@ use {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Voxel {
     pub data: &'static VoxelData,
-    pub position: Int3,
+    pub pos: Int3,
 }
 
 impl Voxel {
@@ -25,7 +25,7 @@ impl Voxel {
 
     /// Voxel constructor.
     pub fn new(position: Int3, data: &'static VoxelData) -> Self {
-        Voxel { data, position }
+        Voxel { data, pos: position }
     }
 
     pub fn is_air(&self) -> bool {
@@ -49,7 +49,7 @@ unsafe impl ReinterpretAsBytes for Voxel {
         let mut bytes = Vec::with_capacity(Self::static_size());
 
         bytes.append(&mut self.data.id.reinterpret_as_bytes());
-        bytes.append(&mut self.position.reinterpret_as_bytes());
+        bytes.append(&mut self.pos.reinterpret_as_bytes());
 
         return bytes;
     }

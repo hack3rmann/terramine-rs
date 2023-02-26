@@ -17,6 +17,8 @@ use {
                 MeshedChunkArray,
             },
             DetailedVertexVec,
+            chunk_array::ChunkArray,
+            ChunkDrawBundle,
         },
         time::timer::Timer,
         profiler,
@@ -51,7 +53,9 @@ pub struct App {
     window_size: PhysicalSize<u32>,
 
     /* Temp voxel */
-    chunk_arr: Option<MeshedChunkArray<'static>>,
+    chunk_arr_old: Option<MeshedChunkArray<'static>>,
+    chunk_arr: ChunkArray,
+    chunk_draw_bundle: ChunkDrawBundle<'static>,
 
     /* Second layer temporary stuff */
     texture: Texture,
@@ -60,17 +64,25 @@ pub struct App {
 impl App {
     /// Constructs app struct.
     pub fn new() -> Self {
-        /* Graphics initialization */
-        let graphics = Graphics::initialize().wunwrap();
+        let graphics = Graphics::initialize()
+            .expect("graphics should be initialized once");
+
+        let camera = DebugVisualized::new_camera(
+            Camera::new().with_position(0.0, 0.0, 2.0),
+            &graphics.display,
+        );
     
-        /* Camera handle */
-        let camera = DebugVisualized::new_camera(Camera::new().with_position(0.0, 0.0, 2.0), &graphics.display);
-    
-        /* Texture loading */
-        let texture = Texture::from("src/image/texture_atlas.png", &graphics.display).wunwrap();
+        let texture = Texture::from("src/image/texture_atlas.png", &graphics.display)
+            .expect("path should be valid and file is readable");
+
+        let chunk_draw_bundle = ChunkDrawBundle::new(&graphics.display);
+        let mut chunk_arr = ChunkArray::new(vecs!(7, 1, 7));
+        chunk_arr.generate_meshes(|_| 1, &graphics.display);
 
         App {
-            chunk_arr: None,
+            chunk_arr_old: None,
+            chunk_arr,
+            chunk_draw_bundle,
             graphics,
             camera,
             texture,
@@ -86,6 +98,7 @@ impl App {
     /// Runs app.
     pub fn run(mut self) {
         /* Event/game loop */
+        // TODO: rewrite `loop { async {} }` into `async { loop {} }`.
         self.graphics.take_event_loop().run(move |event, _, control_flow| {
             runtime().block_on(async {
                 self.run_frame_loop(event, control_flow).await
@@ -93,13 +106,15 @@ impl App {
         });
     }
 
-    /// Event loop run function
-    pub async fn run_frame_loop<'e>(&mut self, event: Event<'e, ()>, control_flow: &mut ControlFlow) {
-        /* Event handlers */
-        self.graphics.imguiw.handle_event(self.graphics.imguic.io_mut(), self.graphics.display.gl_window().window(), &event);
+    /// Event loop run function.
+    pub async fn run_frame_loop(&mut self, event: Event<'_, ()>, control_flow: &mut ControlFlow) {
+        self.graphics.imguiw.handle_event(
+            self.graphics.imguic.io_mut(),
+            self.graphics.display.gl_window().window(),
+            &event
+        );
         self.input_manager.handle_event(&event, &self.graphics);
 
-        /* This event handler */
         match event {
             /* Window events */
             Event::WindowEvent { event, .. } => match event {
@@ -139,6 +154,7 @@ impl App {
             *control_flow = ControlFlow::Exit;
         }
 
+        // TODO: handle it in `InputManager`
         /* Control camera by user input */
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
             if self.camera.inner.grabbes_cursor {
@@ -159,7 +175,7 @@ impl App {
         /* Update ImGui stuff */
         self.graphics.imguiw
             .prepare_frame(self.graphics.imguic.io_mut(), self.graphics.display.gl_window().window())
-            .wunwrap();
+            .expect("failed to prepare frame");
 
         /* Moves to `RedrawRequested` stage */
         self.graphics.display.gl_window().window()
@@ -187,7 +203,7 @@ impl App {
 
             /* Chunk generation window */
             Self::spawn_chunk_generation_window(
-                &ui, self.chunk_arr.is_some(), self.window_size.width as f32, self.window_size.height as f32,
+                &ui, self.chunk_arr_old.is_some(), self.window_size.width as f32, self.window_size.height as f32,
                 &mut generate_chunks, unsafe { &mut SIZES }, unsafe { GENERATION_PERCENTAGE }
             );
             if unsafe { GENERATION_PERCENTAGE } == Loading::none() {
@@ -217,18 +233,24 @@ impl App {
 
         /* Actual drawing */
         let mut target = self.graphics.display.draw(); 
-        target.clear_all(cfg::shader::CLEAR_COLOR, cfg::shader::CLEAR_DEPTH, cfg::shader::CLEAR_STENCIL); {
-            if let Some(ref mut chunk_arr) = self.chunk_arr {
-                chunk_arr.render(&mut target, &uniforms, &self.camera.inner).wunwrap();
+        target.clear_all(cfg::shader::CLEAR_COLOR, cfg::shader::CLEAR_DEPTH, cfg::shader::CLEAR_STENCIL);
+        {
+            if let Some(ref mut chunk_arr) = self.chunk_arr_old {
+                chunk_arr.render(&mut target, &uniforms, &self.camera.inner)
+                    .expect("failed to render old chunk array");
             }
 
-            self.camera.render_camera(&self.graphics.display, &mut target, &uniforms).wunwrap();
+            self.chunk_arr.render(&mut target, &self.chunk_draw_bundle, &uniforms, self.camera.inner.pos)
+                .expect("failed to render chunk array");
 
-            self.graphics.imguir.0
-                .render(&mut target, draw_data)
-                .wexpect("Error rendering imgui");
+            self.camera.render_camera(&self.graphics.display, &mut target, &uniforms)
+                .expect("failed to render camera");
 
-        } target.finish().wunwrap();
+            // TODO: deal with this unique borrow.
+            self.graphics.imguir.0.render(&mut target, draw_data)
+                .wexpect("failed to render imgui");
+        }
+        target.finish().expect("failed to finish target");
 
         /* Chunk reciever */
         // FIXME:
@@ -260,7 +282,7 @@ impl App {
                 };
 
                 /* Move result */
-                self.chunk_arr = Some(array);
+                self.chunk_arr_old = Some(array);
             }, || unsafe { CHUNKS_PROMISE = None });
         }
 
@@ -271,7 +293,7 @@ impl App {
             }
         }
 
-        if let Some(ref mut chunk_array) = self.chunk_arr {
+        if let Some(ref mut chunk_array) = self.chunk_arr_old {
             if self.input_manager.keyboard.just_pressed(cfg::key_bindings::LOD_REFRESHER_SWITCH) {
                 chunk_array.update_chunks_details(&self.graphics.display, self.camera.inner.pos);
             }
