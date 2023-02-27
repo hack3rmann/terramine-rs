@@ -257,8 +257,8 @@ impl SpaceIter {
 
         Self::zeroed(iter_size / chunk_size)
             .map(move |chunk_pos| {
-                let min = iter_size * chunk_pos;
-                SpaceIter::new(min .. min + iter_size)
+                let min = chunk_pos * chunk_size;
+                SpaceIter::new(min .. min + chunk_size)
             })
     }
 
@@ -438,6 +438,29 @@ pub fn is_bordered(pos: Int3, bounds: Range<Int3>) -> bool {
 #[cfg(test)]
 mod space_iter_tests {
     use {super::*, math_linear::veci};
+
+    #[test]
+    fn test_split_chunks() {
+        let sample: Vec<_> = SpaceIter::zeroed_cubed(4)
+            .collect();
+        let chunked: Vec<_> = SpaceIter::split_chunks(Int3::all(4), Int3::all(2))
+            .flatten()
+            .collect();
+    
+        for pos in sample.iter() {
+            match chunked.contains(&pos) {
+                true => (),
+                false => panic!("chunked.contains(&pos): {:?}", pos),
+            }
+        }
+    
+        for pos in chunked.iter() {
+            match sample.contains(&pos) {
+                true => (),
+                false => panic!("sample.contains(&pos): {:?}", pos),
+            }
+        }
+    }
 
     #[test]
     fn zero_start_simple() {

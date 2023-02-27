@@ -135,20 +135,18 @@ impl Chunk {
 
         Self::chunked_pos_iter(sub_chunk_size as usize)
             .map(move |chunk_iter| {
-                let (color_sum, is_all_air) = chunk_iter
-                    .map(|pos| {
-                        let voxel = self.get_voxel_local(pos);
-                        (voxel.data.avarage_color, voxel.is_air())
-                    })
-                    .reduce(|(acc, is_air_acc), (elem, is_air_elem)|
-                        (acc + elem, is_air_acc && is_air_elem)
-                    )
-                    .expect("iterator should be not empty");
-                (color_sum / sub_chunk_size.pow(3) as f32, is_all_air)
-            })
-            .map(|(col, is_all_air)| match is_all_air {
-                true  => LoweredVoxel::Transparent,
-                false => LoweredVoxel::Colored(col),
+                let (color_sum, n_colors) = chunk_iter
+                    .map(|pos| self.get_voxel_local(pos))
+                    .filter(|voxel| !voxel.is_air())
+                    .map(|voxel| voxel.data.avarage_color)
+                    .fold((Color::ZERO, 0_usize), |(col_acc, n_acc), col|
+                        (col_acc + col, n_acc + 1)
+                    );
+
+                match n_colors {
+                    0 => LoweredVoxel::Transparent,
+                    n => LoweredVoxel::Colored(color_sum / n as f32),
+                }
             })
             .zip(SpaceIter::zeroed_cubed(Self::SIZE as i32 / sub_chunk_size))
     }
@@ -448,6 +446,23 @@ impl Chunk {
             _ => Ok(())
         }
     }
+
+    /// Gives list of available LODs.
+    pub fn get_available_lods(&self) -> Vec<Lod> {
+        let mut result = Vec::with_capacity(Self::N_LODS);
+
+        if self.detailed_mesh.is_some() {
+            result.push(0)
+        }
+
+        for (low_mesh, lod) in self.low_meshes.iter().zip(1 as Lod..) {
+            if low_mesh.is_some() {
+                result.push(lod)
+            }
+        }
+
+        result
+    }
 }
 
 #[derive(Debug)]
@@ -556,7 +571,7 @@ impl ChunkAdj<'_> {
 
 /// Type of voxel array. May be something different during progress.
 type VoxelArray = Vec<Id>;
-type Lod = u32;
+pub type Lod = u32;
 
 #[derive(Debug)]
 pub enum OldChunkOptional<Item> {

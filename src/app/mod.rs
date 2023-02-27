@@ -19,6 +19,7 @@ use {
             DetailedVertexVec,
             chunk_array::ChunkArray,
             ChunkDrawBundle,
+            Lod,
         },
         time::timer::Timer,
         profiler,
@@ -77,7 +78,9 @@ impl App {
 
         let chunk_draw_bundle = ChunkDrawBundle::new(&graphics.display);
         let mut chunk_arr = ChunkArray::new(vecs!(7, 1, 7));
-        chunk_arr.generate_meshes(|_| 1, &graphics.display);
+        chunk_arr.generate_meshes(|pos| {
+            pos.len().floor() as Lod
+        }, &graphics.display);
 
         App {
             chunk_arr_old: None,

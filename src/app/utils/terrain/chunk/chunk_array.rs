@@ -127,7 +127,7 @@ impl ChunkArray {
         // * Safe bacause shared adjacent chunks are not aliasing current mutable chunk
         // * and the reference is made of a pointer that is made from that reference.
         let adj_iter = unsafe { NonNull::new_unchecked(self as *mut Self).as_ref() }.adj_iter();
-        Iterator::zip(self.chunks_mut(), adj_iter)
+        self.chunks_mut().zip(adj_iter)
     }
 
     pub fn generate_meshes(&mut self, lod: impl Fn(Int3) -> Lod, display: &gl::Display) {
@@ -138,12 +138,15 @@ impl ChunkArray {
 
     pub fn render(
         &self, target: &mut gl::Frame, draw_bundle: &ChunkDrawBundle,
-        uniforms: &impl gl::uniforms::Uniforms,
-        cam_pos: vec3,
+        uniforms: &impl gl::uniforms::Uniforms, cam_pos: vec3,
     ) -> Result<(), gl::DrawError> {
         if self.sizes == USize3::ZERO { return Ok(()) }
 
-        for (chunk, lod) in self.chunks().zip(self.lod_iter(cam_pos)) {
+        for (chunk, _lod) in self.chunks().zip(self.lod_iter(cam_pos)) {
+            // FIXME:
+            let lod = chunk.get_available_lods().first()
+                .copied()
+                .expect("chunk mesh should be with at least one LOD");
             chunk.render(target, &draw_bundle, uniforms, lod)?
         }
 
