@@ -307,7 +307,7 @@ impl MeshlessChunkArray {
     /// Gives an iterator over chunks.
     #[allow(dead_code)]
     pub fn iter_mut<'c, 's: 'c>(&'s mut self) -> impl Iterator<Item = (&'s mut MeshlessChunk, ChunkEnv<'c>)> {
-        // FIXME: avoid allocation.
+        // DEPRECATED_FIXME: avoid allocation.
         let envs: Vec<_> = self.chunks.iter()
             .map(|chunk| self.get_environment(chunk.pos))
             .collect();
@@ -433,7 +433,7 @@ impl<'s> MeshedChunkArray<'s> {
     /// Gives an iterator over chunks.
     #[allow(dead_code)]
     pub fn iter_mut<'m>(&'m mut self) -> impl Iterator<Item = (&'m mut MeshedChunk, ChunkEnv<'s>)> {
-        // FIXME: avoid allocation.
+        // DEPRECATED_FIXME: avoid allocation.
         let envs: Vec<_> = self.chunks.iter()
             .map(|chunk| self.get_environment(chunk.inner.inner.pos))
             .collect();
@@ -532,7 +532,7 @@ impl<'s> MeshedChunkArray<'s> {
             if chunk.is_update_needed(env.clone(), camera_pos) {
                 needs_update[Self::pos_to_idx(sizes, chunk.inner.pos)] = true;
                 for adj_ptr in env.into_iter().filter_map(|x| x) {
-                    // TODO: add safety argument or make struct that no more needs unsafe blocks.
+                    // DEPRECATED_TODO: add safety argument or make struct that no more needs unsafe blocks.
                     let pos = unsafe { adj_ptr.as_ref().pos };
                     needs_update[Self::pos_to_idx(sizes, pos)] = true;
                 }

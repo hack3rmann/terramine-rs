@@ -49,7 +49,7 @@ pub struct App {
     chunk_draw_bundle: ChunkDrawBundle<'static>,
 
     /* Second layer temporary stuff */
-    texture: Texture,
+    texture_atlas: Texture,
 }
 
 impl App {
@@ -63,7 +63,7 @@ impl App {
             &graphics.display,
         );
     
-        let texture = Texture::from_path("src/image/texture_atlas.png", &graphics.display)
+        let texture_atlas = Texture::from_path("src/image/texture_atlas.png", &graphics.display)
             .expect("path should be valid and file is readable");
 
         let chunk_draw_bundle = ChunkDrawBundle::new(&graphics.display);
@@ -78,7 +78,7 @@ impl App {
             chunk_draw_bundle,
             graphics,
             camera,
-            texture,
+            texture_atlas,
             timer: Timer::new(),
             input_manager: InputManager::new(),
             window_size: PhysicalSize::new(
@@ -124,17 +124,14 @@ impl App {
                 _ => (),
             },
 
-            Event::MainEventsCleared => {
-                self.main_events_cleared(control_flow).await;
-            },
+            Event::MainEventsCleared =>
+                self.main_events_cleared(control_flow).await,
 
-            Event::RedrawRequested(_) => {
-                self.redraw_requested().await;
-            },
+            Event::RedrawRequested(_) =>
+                self.redraw_requested().await,
 
-            Event::NewEvents(_) => {
-                self.new_events().await;
-            },
+            Event::NewEvents(_) =>
+                self.new_events().await,
 
             _ => ()
         }
@@ -147,7 +144,6 @@ impl App {
             *control_flow = ControlFlow::Exit;
         }
 
-        // TODO: handle it in `InputManager`
         /* Control camera by user input */
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
             if self.camera.inner.grabbes_cursor {
@@ -196,17 +192,17 @@ impl App {
 
         /* Uniforms set */
         let uniforms = uniform! {
-            tex: self.texture.with_mips(),
+            tex:  self.texture_atlas.with_mips(),
             time: self.timer.time(),
             proj: self.camera.inner.get_proj(),
-            view: self.camera.inner.get_view()
+            view: self.camera.inner.get_view(),
         };
 
         /* Actual drawing */
         let mut target = self.graphics.display.draw(); 
         target.clear_all(cfg::shader::CLEAR_COLOR, cfg::shader::CLEAR_DEPTH, cfg::shader::CLEAR_STENCIL);
         {
-            self.chunk_arr.render(&mut target, &self.chunk_draw_bundle, &uniforms, self.camera.inner.pos)
+            self.chunk_arr.render(&mut target, &self.chunk_draw_bundle, &uniforms, &self.graphics.display, self.camera.inner.pos)
                 .expect("failed to render chunk array");
 
             self.camera.render_camera(&self.graphics.display, &mut target, &uniforms)

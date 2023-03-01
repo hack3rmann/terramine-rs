@@ -1,18 +1,25 @@
 use {
-    crate::app::utils::terrain::{
-        chunk::{
-            Chunk,
-            ChunkAdj,
-            iterator::SpaceIter,
-            Lod,
-            ChunkDrawBundle,
+    crate::app::utils::{
+        terrain::{
+            chunk::{
+                Chunk,
+                ChunkRef,
+                ChunkAdj,
+                iterator::SpaceIter,
+                Lod,
+                ChunkDrawBundle,
+                ChunkRenderError,
+                tasks::Task,
+            },
+            voxel::Voxel,
         },
-        voxel::Voxel,
+        cfg,
     },
     math_linear::prelude::*,
     std::{
         ptr::NonNull,
         slice::{Iter, IterMut},
+        collections::HashMap,
     },
     glium as gl,
 };
@@ -21,6 +28,7 @@ use {
 pub struct ChunkArray {
     pub chunks: Vec<Chunk>,
     pub sizes: USize3,
+    pub tasks: HashMap<Int3, Task>,
 }
 
 impl ChunkArray {
@@ -32,7 +40,7 @@ impl ChunkArray {
             .map(|pos| Chunk::new(pos))
             .collect();
 
-        Self { chunks, sizes }
+        Self { chunks, sizes, tasks: HashMap::new() }
     }
 
     pub fn new_empty() -> Self {
@@ -47,8 +55,6 @@ impl ChunkArray {
         let sizes = Int3::from(sizes);
         let shifted = pos + sizes / 2;
 
-        // FIXME: (see another fixme)
-        //match (Int3::ZERO..sizes).contains(&shifted){
         match 0 <= shifted.x && shifted.x < sizes.x &&
               0 <= shifted.y && shifted.y < sizes.y &&
               0 <= shifted.z && shifted.z < sizes.z
@@ -68,9 +74,9 @@ impl ChunkArray {
         )
     }
 
-    pub fn get_chunk_by_pos(&self, pos: Int3) -> Option<&Chunk> {
+    pub fn get_chunk_by_pos(&self, pos: Int3) -> Option<ChunkRef> {
         Some(
-            &self.chunks[Self::pos_to_idx(self.sizes, pos)?]
+            self.chunks[Self::pos_to_idx(self.sizes, pos)?].make_ref()
         )
     }
 
@@ -82,7 +88,7 @@ impl ChunkArray {
             );
 
         for (offset, chunk) in adjs {
-            adj.sides.set(offset, Some(NonNull::from(chunk)))
+            adj.sides.set(offset, Some(chunk))
                 .expect("offset should be adjacent (see SpaceIter::adj_iter())");
         }
 
@@ -96,16 +102,22 @@ impl ChunkArray {
         SpaceIter::new(start..end)
     }
 
-    // TODO: make mut and shared versions of ChunkAdj.
     pub fn adj_iter(&self) -> impl Iterator<Item = ChunkAdj<'_>> {
         Self::pos_iter(self.sizes)
             .map(move |pos| self.get_adj_chunks(pos))
     }
 
-    pub fn lod_iter(&self, _cam_pos: vec3) -> impl Iterator<Item = Lod> {
-        //todo!();
-        //std::iter::empty()
-        std::iter::once(1).cycle()
+    pub fn lod_iter(chunk_array_sizes: USize3, cam_pos: vec3) -> impl Iterator<Item = Lod> {
+        Self::pos_iter(chunk_array_sizes)
+            .map(move |chunk_pos| {
+                let cam_pos_in_chunks = cam_pos / (Chunk::SIZE as f32 * cfg::terrain::VOXEL_SIZE);
+                let chunk_pos = vec3::from(chunk_pos);
+
+                Lod::min(
+                    (chunk_pos - cam_pos_in_chunks).len().floor() as Lod,
+                    Chunk::SIZE.ilog2() as Lod,
+                )
+            })
     }
 
     pub fn chunks(&self) -> Iter<'_, Chunk> {
@@ -128,9 +140,6 @@ impl ChunkArray {
         let adj_iter = aliased.adj_iter();
         self.chunks_mut()
             .zip(adj_iter)
-            .map(|(chunk, adj)|
-                (chunk, adj)
-            )
     }
 
     pub fn generate_meshes(&mut self, lod: impl Fn(Int3) -> Lod, display: &gl::Display) {
@@ -142,17 +151,23 @@ impl ChunkArray {
     }
 
     pub fn render(
-        &self, target: &mut gl::Frame, draw_bundle: &ChunkDrawBundle,
-        uniforms: &impl gl::uniforms::Uniforms, cam_pos: vec3,
-    ) -> Result<(), gl::DrawError> {
-        if self.sizes == USize3::ZERO { return Ok(()) }
+        &mut self, target: &mut gl::Frame, draw_bundle: &ChunkDrawBundle,
+        uniforms: &impl gl::uniforms::Uniforms, display: &gl::Display, cam_pos: vec3,
+    ) -> Result<(), ChunkRenderError> {
+        let sizes = self.sizes;
+        if sizes == USize3::ZERO { return Ok(()) }
 
-        for (chunk, _lod) in self.chunks().zip(self.lod_iter(cam_pos)) {
-            // FIXME:
-            let lod = chunk.get_available_lods().first()
-                .copied()
-                .expect("chunk mesh should be with at least one LOD");
-            chunk.render(target, &draw_bundle, uniforms, lod)?
+        let iter = self.chunks_with_adj_mut()
+            .zip(Self::lod_iter(sizes, cam_pos));
+
+        // TODO: draw chunk with desired lod.
+        for ((chunk, chunk_adj), lod) in iter {
+            if chunk.try_set_active_lod(lod).is_err() {
+                chunk.generate_mesh(lod, chunk_adj, display);
+                chunk.set_active_lod(lod);
+            }
+
+            chunk.render(target, &draw_bundle, uniforms, chunk.active_lod)?
         }
 
         Ok(())

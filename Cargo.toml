@@ -19,6 +19,7 @@ tokio = { version = "1.19.2", features = ["full"] }
 tokio-stream = "0.1.9"
 math_linear = { version = "0.1.0", path = "../math_linear" }
 thiserror = "1.0.38"
+rayon = "1.6.1"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"
