@@ -4,7 +4,7 @@ use {
     /* Other files */
     crate::app::utils::{
         cfg,
-        user_io::{InputManager, KeyCode},
+        user_io::InputManager,
         graphics::{
             Graphics,
             camera::Camera,
@@ -12,34 +12,25 @@ use {
             debug_visuals::{self, DebugVisualized},
         },
         terrain::chunk::{
-            chunk_array_old::{
-                MeshlessChunkArray,
-                MeshedChunkArray,
-            },
-            DetailedVertexVec,
             chunk_array::ChunkArray,
             ChunkDrawBundle,
+            Chunk,
             Lod,
         },
         time::timer::Timer,
         profiler,
-        concurrency::promise::Promise,
         runtime::prelude::*,
-        werror::prelude::*,
-        concurrency::loading::Loading,
     },
 
     /* Glium includes */
     glium::{
         glutin::{
-            event::{
-                Event,
-                WindowEvent,
-            },
-            event_loop::ControlFlow, dpi::PhysicalSize,
+            event::{Event, WindowEvent},
+            event_loop::ControlFlow,
+            dpi::PhysicalSize,
         },
         Surface,
-        uniform
+        uniform,
     },
 };
 
@@ -54,7 +45,6 @@ pub struct App {
     window_size: PhysicalSize<u32>,
 
     /* Temp voxel */
-    chunk_arr_old: Option<MeshedChunkArray<'static>>,
     chunk_arr: ChunkArray,
     chunk_draw_bundle: ChunkDrawBundle<'static>,
 
@@ -73,17 +63,17 @@ impl App {
             &graphics.display,
         );
     
-        let texture = Texture::from("src/image/texture_atlas.png", &graphics.display)
+        let texture = Texture::from_path("src/image/texture_atlas.png", &graphics.display)
             .expect("path should be valid and file is readable");
 
         let chunk_draw_bundle = ChunkDrawBundle::new(&graphics.display);
-        let mut chunk_arr = ChunkArray::new(vecs!(7, 1, 7));
-        chunk_arr.generate_meshes(|pos| {
-            pos.len().floor() as Lod
-        }, &graphics.display);
+        let mut chunk_arr = ChunkArray::new(cfg::terrain::default::WORLD_SIZES_IN_CHUNKS.into());
+        chunk_arr.generate_meshes(|pos| Lod::min(
+            pos.len().floor() as Lod,
+            Chunk::SIZE.ilog2() as Lod,
+        ), &graphics.display);
 
         App {
-            chunk_arr_old: None,
             chunk_arr,
             chunk_draw_bundle,
             graphics,
@@ -187,12 +177,6 @@ impl App {
 
     /// Prepares the frame.
     async fn redraw_requested(&mut self) {
-        /* Chunk generation flag */
-        // FIXME:
-        let mut generate_chunks = false;
-        static mut SIZES: [i32; 3] = cfg::terrain::default::WORLD_SIZES_IN_CHUNKS.as_array();
-        static mut GENERATION_PERCENTAGE: Loading = Loading::none();
-
         /* InGui draw data */
         let draw_data = {
             /* Get UI frame renderer */
@@ -203,22 +187,6 @@ impl App {
 
             /* Profiler window */
             profiler::update_and_build_window(&ui, &self.timer, &self.input_manager);
-
-            /* Chunk generation window */
-            Self::spawn_chunk_generation_window(
-                &ui, self.chunk_arr_old.is_some(), self.window_size.width as f32, self.window_size.height as f32,
-                &mut generate_chunks, unsafe { &mut SIZES }, unsafe { GENERATION_PERCENTAGE }
-            );
-            if unsafe { GENERATION_PERCENTAGE } == Loading::none() {
-                if self.input_manager.keyboard.just_pressed_combo(&[KeyCode::LControl, KeyCode::G]) {
-                    generate_chunks = true;
-                }
-
-                if self.input_manager.keyboard.just_pressed_combo(&[KeyCode::LControl, KeyCode::H]) {
-                    unsafe { SIZES = [16, 8, 16] };
-                    generate_chunks = true;
-                }
-            }
 
             /* Render UI */
             self.graphics.imguiw.prepare_render(&ui, self.graphics.display.gl_window().window());
@@ -238,11 +206,6 @@ impl App {
         let mut target = self.graphics.display.draw(); 
         target.clear_all(cfg::shader::CLEAR_COLOR, cfg::shader::CLEAR_DEPTH, cfg::shader::CLEAR_STENCIL);
         {
-            if let Some(ref mut chunk_arr) = self.chunk_arr_old {
-                chunk_arr.render(&mut target, &uniforms, &self.camera.inner)
-                    .expect("failed to render old chunk array");
-            }
-
             self.chunk_arr.render(&mut target, &self.chunk_draw_bundle, &uniforms, self.camera.inner.pos)
                 .expect("failed to render chunk array");
 
@@ -251,56 +214,9 @@ impl App {
 
             // TODO: deal with this unique borrow.
             self.graphics.imguir.0.render(&mut target, draw_data)
-                .wexpect("failed to render imgui");
+                .expect("failed to render imgui");
         }
         target.finish().expect("failed to finish target");
-
-        /* Chunk reciever */
-        // FIXME:
-        static mut CHUNKS_PROMISE: Option<Promise<(MeshlessChunkArray, Vec<DetailedVertexVec>)>> = None;
-        static mut PERCENTAGE_PROMISE: Option<Promise<Loading>> = None;
-        if generate_chunks {
-            /* Dimensions shortcut */
-            let (width, height, depth) = {
-                let [width, height, depth] = unsafe { SIZES };
-                (width as usize, height as usize, depth as usize)
-            };
-
-            /* Get receivers */
-            let (array, percentage) = MeshlessChunkArray::generate(width, height, depth);
-
-            /* Write to statics */
-            unsafe {
-                (CHUNKS_PROMISE, PERCENTAGE_PROMISE) = (Some(array), Some(percentage))
-            };
-        }
-
-        /* If array recieved then store it in self */
-        if let Some(promise) = unsafe { CHUNKS_PROMISE.as_ref() } {
-            promise.poll_do_cleanup(|array| {
-                /* Apply meshes to chunks */
-                let array = {
-                    let (array, meshes) = array;
-                    array.to_meshed(&self.graphics, meshes)
-                };
-
-                /* Move result */
-                self.chunk_arr_old = Some(array);
-            }, || unsafe { CHUNKS_PROMISE = None });
-        }
-
-        /* Receive percentage */
-        if let Some(promise) = unsafe { PERCENTAGE_PROMISE.as_ref() } {
-            if let Some(percent) = promise.iter().last() {
-                unsafe { GENERATION_PERCENTAGE = percent }
-            }
-        }
-
-        if let Some(ref mut chunk_array) = self.chunk_arr_old {
-            if self.input_manager.keyboard.just_pressed(cfg::key_bindings::LOD_REFRESHER_SWITCH) {
-                chunk_array.update_chunks_details(&self.graphics.display, self.camera.inner.pos);
-            }
-        }
     }
 
     /// Updates things.
@@ -323,37 +239,38 @@ impl App {
         self.input_manager.update(&self.graphics);		
     }
 
-    /// Spawns chunk generation window.
-    pub fn spawn_chunk_generation_window(
-        ui: &imgui::Ui, inited: bool, width: f32, height: f32,
-        generate_chunks: &mut bool, sizes: &mut [i32; 3], gen_percent: Loading
-    ) {
-        if inited { return }
+    // Spawns chunk generation window.
+    // pub fn spawn_chunk_generation_window(
+    //     ui: &imgui::Ui, inited: bool, width: f32, height: f32,
+    //     generate_chunks: &mut bool, sizes: &mut [i32; 3], gen_percent: Loading
+    // ) {
+    //     return;
+    //     if inited { return }
 
-        imgui::Window::new("Chunk generator")
-            .position_pivot([0.5, 0.5])
-            .position([width * 0.5, height * 0.5], imgui::Condition::Always)
-            .movable(false)
-            .size_constraints([150.0, 100.0], [300.0, 200.0])
-            .always_auto_resize(true)
-            .save_settings(false)
-            .build(&ui, || {
-                ui.text("How many?");
-                ui.input_int3("Sizes", sizes)
-                    .auto_select_all(true)
-                    .enter_returns_true(true)
-                    .build();
-                *generate_chunks = ui.button("Generate");
+    //     imgui::Window::new("Chunk generator")
+    //         .position_pivot([0.5, 0.5])
+    //         .position([width * 0.5, height * 0.5], imgui::Condition::Always)
+    //         .movable(false)
+    //         .size_constraints([150.0, 100.0], [300.0, 200.0])
+    //         .always_auto_resize(true)
+    //         .save_settings(false)
+    //         .build(&ui, || {
+    //             ui.text("How many?");
+    //             ui.input_int3("Sizes", sizes)
+    //                 .auto_select_all(true)
+    //                 .enter_returns_true(true)
+    //                 .build();
+    //             *generate_chunks = ui.button("Generate");
 
-                if gen_percent != Loading::none() {
-                    imgui::ProgressBar::new(gen_percent.percent as f32)
-                        .overlay_text(format!(
-                            "{state} ({percent:.1}%)",
-                            percent = gen_percent.percent * 100.0,
-                            state = gen_percent.state
-                        ))
-                        .build(&ui);
-                }
-            });
-    }
+    //             if gen_percent != Loading::none() {
+    //                 imgui::ProgressBar::new(gen_percent.percent as f32)
+    //                     .overlay_text(format!(
+    //                         "{state} ({percent:.1}%)",
+    //                         percent = gen_percent.percent * 100.0,
+    //                         state = gen_percent.state
+    //                     ))
+    //                     .build(&ui);
+    //             }
+    //         });
+    // }
 }

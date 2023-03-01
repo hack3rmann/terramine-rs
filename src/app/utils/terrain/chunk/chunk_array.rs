@@ -12,7 +12,6 @@ use {
     math_linear::prelude::*,
     std::{
         ptr::NonNull,
-        iter::Zip,
         slice::{Iter, IterMut},
     },
     glium as gl,
@@ -64,7 +63,9 @@ impl ChunkArray {
     }
 
     pub fn pos_to_idx(sizes: USize3, pos: Int3) -> Option<usize> {
-        Some(Self::coord_idx_to_idx(sizes, Self::pos_to_coord_idx(sizes, pos)?))
+        Some(
+            Self::coord_idx_to_idx(sizes, Self::pos_to_coord_idx(sizes, pos)?)
+        )
     }
 
     pub fn get_chunk_by_pos(&self, pos: Int3) -> Option<&Chunk> {
@@ -81,7 +82,7 @@ impl ChunkArray {
             );
 
         for (offset, chunk) in adjs {
-            adj.set(offset, NonNull::from(chunk))
+            adj.sides.set(offset, Some(NonNull::from(chunk)))
                 .expect("offset should be adjacent (see SpaceIter::adj_iter())");
         }
 
@@ -119,20 +120,24 @@ impl ChunkArray {
         self.chunks.iter_mut()
     }
 
-    pub fn chunks_with_adj(&self) -> Zip<Iter<'_, Chunk>, impl Iterator<Item = ChunkAdj<'_>>> {
-        Iterator::zip(self.chunks(), self.adj_iter())
-    }
-
-    pub fn chunks_with_adj_mut(&mut self) -> Zip<IterMut<'_, Chunk>, impl Iterator<Item = ChunkAdj<'_>>> {
+    pub fn chunks_with_adj_mut(&mut self) -> impl Iterator<Item = (&mut Chunk, ChunkAdj<'_>)> + '_ {
         // * Safe bacause shared adjacent chunks are not aliasing current mutable chunk
         // * and the reference is made of a pointer that is made from that reference.
-        let adj_iter = unsafe { NonNull::new_unchecked(self as *mut Self).as_ref() }.adj_iter();
-        self.chunks_mut().zip(adj_iter)
+        let aliased = unsafe { NonNull::new_unchecked(self as *mut Self).as_ref() };
+
+        let adj_iter = aliased.adj_iter();
+        self.chunks_mut()
+            .zip(adj_iter)
+            .map(|(chunk, adj)|
+                (chunk, adj)
+            )
     }
 
     pub fn generate_meshes(&mut self, lod: impl Fn(Int3) -> Lod, display: &gl::Display) {
         for (chunk, adj) in self.chunks_with_adj_mut() {
-            chunk.generate_mesh(lod(chunk.pos), adj, display)
+            let active_lod = lod(chunk.pos);
+            chunk.generate_mesh(active_lod, adj, display);
+            chunk.set_active_lod(active_lod);
         }
     }
 

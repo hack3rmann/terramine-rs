@@ -229,6 +229,12 @@ pub struct SpaceIter {
 // TODO: impl ExactSizeIterator
 impl SpaceIter {
     pub fn new(range: Range<Int3>) -> Self {
+        assert!(
+            range.start.x < range.end.x &&
+            range.start.y < range.end.y &&
+            range.start.z < range.end.z,
+            "start position should be smaller by each coordinate than end",
+        );
         Self { curr: range.start, min: range.start, max: range.end - Int3::ONE }
     }
 
@@ -370,12 +376,15 @@ impl Iterator for ChunkSplitten {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
 pub struct Sides<T> {
+    /// Adjacent chunks in order: `back[0] -> front[1] -> top[2] -> 
+    /// bottom[3] -> right[4] -> left[5]`.
     pub inner: [T; 6],
 }
 
-#[allow(dead_code)]
+impl<T: Copy> Copy for Sides<T> { }
+
 impl<T> Sides<T> {
     pub fn new(sides: [T; 6]) -> Self {
         Self { inner: sides }
@@ -391,6 +400,32 @@ impl<T> Sides<T> {
 
     pub fn as_array(&self) -> [T; 6] where T: Clone {
         self.inner.clone()
+    }
+
+    pub fn set(&mut self, offset: Int3, item: T) -> Result<(), String> {
+        match offset.as_tuple() {
+            ( 1,  0,  0) => self.inner[0] = item,
+            (-1,  0,  0) => self.inner[1] = item,
+            ( 0,  1,  0) => self.inner[2] = item,
+            ( 0, -1,  0) => self.inner[3] = item,
+            ( 0,  0,  1) => self.inner[4] = item,
+            ( 0,  0, -1) => self.inner[5] = item,
+            _ => return Err(format!("Offset should be small (adjacent) but {offset:?}")),
+        }
+
+        Ok(())
+    }
+
+    pub fn by_offset(&self, offset: Int3) -> T where T: Clone {
+        match offset.as_tuple() {
+            ( 1,  0,  0) => self.back(),
+            (-1,  0,  0) => self.front(),
+            ( 0,  1,  0) => self.top(),
+            ( 0, -1,  0) => self.bottom(),
+            ( 0,  0,  1) => self.right(),
+            ( 0,  0, -1) => self.left(),
+            _ => panic!("Offset should be small (adjacent) but {:?}", offset),
+        }
     }
 
     pub fn back_mut(&mut self)   -> &mut T { &mut self.inner[0] }
@@ -413,6 +448,12 @@ impl<T> Sides<T> {
     pub fn bottom(&self) -> T where T: Clone { self.inner[3].clone() }
     pub fn right(&self)  -> T where T: Clone { self.inner[4].clone() }
     pub fn left(&self)   -> T where T: Clone { self.inner[5].clone() }
+
+    pub fn map<P>(self, map: impl Fn(T) -> P) -> Sides<P> {
+        let Self { inner: sides } = self;
+        let sides = sides.map(map);
+        Sides { inner: sides }
+    }
 }
 
 impl<T> std::ops::Index<usize> for Sides<T> {
@@ -551,6 +592,36 @@ mod border_test {
         crate::app::utils::terrain::chunk::{MeshlessChunk as Chunk, idx_to_pos},
         super::*,
     };
+
+    #[test]
+    fn test_sides() {
+        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        enum Side {
+            Top, Bottom, Left, Right, Front, Back,
+        }
+        
+        let back   = veci!( 1,  0,  0);
+        let front  = veci!(-1,  0,  0);
+        let top    = veci!( 0,  1,  0);
+        let bottom = veci!( 0, -1,  0);
+        let right  = veci!( 0,  0,  1);
+        let left   = veci!( 0,  0, -1);
+    
+        let mut sides = Sides::new([Side::Top; 6]);
+        sides.set(back,   Side::Back).unwrap();
+        sides.set(front,  Side::Front).unwrap();
+        sides.set(top,    Side::Top).unwrap();
+        sides.set(bottom, Side::Bottom).unwrap();
+        sides.set(right,  Side::Right).unwrap();
+        sides.set(left,   Side::Left).unwrap();
+    
+        assert_eq!(sides.back(), Side::Back);
+        assert_eq!(sides.front(), Side::Front);
+        assert_eq!(sides.top(), Side::Top);
+        assert_eq!(sides.bottom(), Side::Bottom);
+        assert_eq!(sides.right(), Side::Right);
+        assert_eq!(sides.left(), Side::Left);
+    }
 
     #[test]
     fn test1() {

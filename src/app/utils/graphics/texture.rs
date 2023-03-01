@@ -21,7 +21,7 @@ pub struct Texture {
 
 impl Texture {
     /// Loads texture from path.
-    pub fn from(path: &str, display: &gl::Display) -> Result<Self, std::io::Error> {
+    pub fn from_path(path: &str, display: &gl::Display) -> Result<Self, std::io::Error> {
         let image_bytes = fs::read(path)?;
 
         let image = image::load(
