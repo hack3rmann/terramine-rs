@@ -417,12 +417,12 @@ impl Chunk {
 
     /// Renders chunk.
     pub fn render(
-        &self, target: &mut Frame, draw_info: &ChunkDrawBundle,
+        &self, target: &mut Frame, draw_info: &ChunkDrawBundle<'_>,
         uniforms: &impl Uniforms, lod: Lod,
     ) -> Result<(), ChunkRenderError> {
         if self.is_empty() { return Ok(()) }
 
-        // TODO: If there no mesh just render blank chunk
+        // TODO: If there no mesh just render a blank chunk
 
         use ChunkRenderError as Err;
         match lod {

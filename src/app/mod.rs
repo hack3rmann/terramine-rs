@@ -67,7 +67,7 @@ impl App {
             .expect("path should be valid and file is readable");
 
         let chunk_draw_bundle = ChunkDrawBundle::new(&graphics.display);
-        let chunk_arr = ChunkArray::new(vecs!(16, 2, 8));
+        let chunk_arr = ChunkArray::new(vecs!(7, 1, 7));
 
         App {
             chunk_arr,

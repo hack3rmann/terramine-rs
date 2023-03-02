@@ -227,7 +227,11 @@ impl ChunkArray {
     }
 
     #[profile]
-    pub async fn try_finish_task(&mut self, pos: Int3, lod: Lod, chunk: &mut Chunk, display: &gl::Display) -> Result<(), ()> {
+    pub async fn try_finish_task(
+        &mut self, pos: Int3, lod: Lod,
+        chunk: &mut Chunk, display: &gl::Display
+    ) -> Result<(), ()>
+    {
         match lod {
             0 => match self.full_tasks.get_mut(&pos) {
                 Some(task) => match task.try_take_result().await {
