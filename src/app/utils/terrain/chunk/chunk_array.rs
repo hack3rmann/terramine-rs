@@ -9,11 +9,12 @@ use {
                 Lod,
                 ChunkDrawBundle,
                 ChunkRenderError,
-                tasks::Task,
+                tasks::{FullTask, LowTask, Task},
             },
             voxel::Voxel,
         },
         cfg,
+        profiler::prelude::*,
     },
     math_linear::prelude::*,
     std::{
@@ -28,7 +29,9 @@ use {
 pub struct ChunkArray {
     pub chunks: Vec<Chunk>,
     pub sizes: USize3,
-    pub tasks: HashMap<Int3, Task>,
+
+    pub full_tasks: HashMap<Int3, FullTask>,
+    pub low_tasks: HashMap<(Int3, Lod), LowTask>,
 }
 
 impl ChunkArray {
@@ -40,7 +43,7 @@ impl ChunkArray {
             .map(|pos| Chunk::new(pos))
             .collect();
 
-        Self { chunks, sizes, tasks: HashMap::new() }
+        Self { chunks, sizes, full_tasks: HashMap::new(), low_tasks: HashMap::new() }
     }
 
     pub fn new_empty() -> Self {
@@ -110,11 +113,13 @@ impl ChunkArray {
     pub fn lod_iter(chunk_array_sizes: USize3, cam_pos: vec3) -> impl Iterator<Item = Lod> {
         Self::pos_iter(chunk_array_sizes)
             .map(move |chunk_pos| {
-                let cam_pos_in_chunks = cam_pos / (Chunk::SIZE as f32 * cfg::terrain::VOXEL_SIZE);
+                let chunk_size = Chunk::SIZE as f32 * cfg::terrain::VOXEL_SIZE;
+                let cam_pos_in_chunks = cam_pos / chunk_size;
                 let chunk_pos = vec3::from(chunk_pos);
 
+                let dist = (chunk_pos - cam_pos_in_chunks + vec3::all(0.5)).len();
                 Lod::min(
-                    (chunk_pos - cam_pos_in_chunks).len().floor() as Lod,
+                    (dist / 2.0).floor() as Lod,
                     Chunk::SIZE.ilog2() as Lod,
                 )
             })
@@ -150,26 +155,105 @@ impl ChunkArray {
         }
     }
 
-    pub fn render(
-        &mut self, target: &mut gl::Frame, draw_bundle: &ChunkDrawBundle,
+    #[profile]
+    pub async fn render(
+        &mut self, target: &mut gl::Frame, draw_bundle: &ChunkDrawBundle<'_>,
         uniforms: &impl gl::uniforms::Uniforms, display: &gl::Display, cam_pos: vec3,
     ) -> Result<(), ChunkRenderError> {
         let sizes = self.sizes;
         if sizes == USize3::ZERO { return Ok(()) }
 
-        let iter = self.chunks_with_adj_mut()
+        // FIXME:
+        let aliased_mut = unsafe { NonNull::new_unchecked(self as *mut Self).as_mut() };
+
+        let iter = self.chunks_mut()
             .zip(Self::lod_iter(sizes, cam_pos));
 
-        // TODO: draw chunk with desired lod.
-        for ((chunk, chunk_adj), lod) in iter {
-            if chunk.try_set_active_lod(lod).is_err() {
-                chunk.generate_mesh(lod, chunk_adj, display);
-                chunk.set_active_lod(lod);
+        for (chunk, lod) in iter {
+            if aliased_mut.is_task_running(chunk.pos, lod) &&
+               aliased_mut.try_finish_task(chunk.pos, lod, chunk, display).await.is_ok() ||
+               chunk.get_available_lods().contains(&lod)
+            {
+                chunk.set_active_lod(lod)
+            } else {
+                aliased_mut.start_task_generate_vertices(lod, chunk.pos)
             }
 
-            chunk.render(target, &draw_bundle, uniforms, chunk.active_lod)?
+            if chunk.can_render_active_lod() {
+                chunk.render(target, &draw_bundle, uniforms, chunk.active_lod)?
+            }
         }
 
         Ok(())
+    }
+
+    #[profile]
+    pub fn is_task_running(&self, pos: Int3, lod: Lod) -> bool {
+        match lod {
+            0 =>
+                self.full_tasks.contains_key(&pos),
+            lod =>
+                self.low_tasks.contains_key(&(pos, lod)),
+        }
+    }
+
+    #[profile]
+    pub fn start_task_generate_vertices(&mut self, lod: Lod, pos: Int3) {
+        // FIXME: fix this UB:
+        let aliased_mut = unsafe { NonNull::new_unchecked(self as *mut Self).as_mut() };
+        let aliased_ref = unsafe { NonNull::new_unchecked(self as *mut Self).as_ref() };
+
+        let chunk = aliased_ref.get_chunk_by_pos(pos)
+            .expect(&format!("chunk with pos {pos:?} should exist"));
+        let adj = aliased_ref.get_adj_chunks(pos);
+
+        match lod {
+            0 => if !aliased_mut.full_tasks.contains_key(&pos) {
+                let prev = aliased_mut.full_tasks.insert(pos, Task::spawn(async move {
+                    chunk.make_vertices_detailed(adj)
+                }));
+                assert!(prev.is_none(), "there should be only one task");
+            },
+
+            lod if !aliased_mut.low_tasks.contains_key(&(pos, lod)) => {
+                let prev = aliased_mut.low_tasks.insert((pos, lod), Task::spawn(async move {
+                    chunk.make_vertices_low(adj, lod)
+                }));
+                assert!(prev.is_none(), "there should be only one task");
+            },
+
+            _ => (),
+        }
+    }
+
+    #[profile]
+    pub async fn try_finish_task(&mut self, pos: Int3, lod: Lod, chunk: &mut Chunk, display: &gl::Display) -> Result<(), ()> {
+        match lod {
+            0 => match self.full_tasks.get_mut(&pos) {
+                Some(task) => match task.try_take_result().await {
+                    None => Err(()),
+                    Some(vertices) => {
+                        chunk.upload_full_detail_vertices(&vertices, display);
+                        let _ = self.full_tasks.remove(&pos)
+                            .expect("there should be a task");
+                        Ok(())
+                    }
+                },
+                None => Err(()),
+            },
+
+            lod => match self.low_tasks.get_mut(&(pos, lod)) {
+                Some(task) => match task.try_take_result().await {
+                    None => Err(()),
+                    Some(vertices) => {
+                        chunk.upload_low_detail_vertices(&vertices, lod, display);
+                        let _ = self.low_tasks.remove(&(pos, lod))
+                            .expect("there should be a task");
+                        Ok(())
+                    }
+                },
+                None => Err(())
+            }
+        }
     }
 }

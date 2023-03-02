@@ -410,12 +410,19 @@ impl Chunk {
         }
     }
 
+    pub fn can_render_active_lod(&self) -> bool {
+        self.get_available_lods()
+            .contains(&self.active_lod)
+    }
+
     /// Renders chunk.
     pub fn render(
         &self, target: &mut Frame, draw_info: &ChunkDrawBundle,
         uniforms: &impl Uniforms, lod: Lod,
     ) -> Result<(), ChunkRenderError> {
         if self.is_empty() { return Ok(()) }
+
+        // TODO: If there no mesh just render blank chunk
 
         use ChunkRenderError as Err;
         match lod {

@@ -1,37 +1,44 @@
 use {
-    crate::app::utils::terrain::chunk::DetailedVertex,
-    std::{
-        thread::{JoinHandle, self},
-        mem,
+    crate::app::utils::{
+        terrain::chunk::{DetailedVertex, LoweredVertex},
+        profiler::prelude::*,
     },
+    std::future::Future,
+    tokio::task::JoinHandle,
 };
 
 #[derive(Debug)]
-pub struct Task {
-    pub handle: Option<JoinHandle<Vec<DetailedVertex>>>,
+pub struct Task<Item> {
+    pub handle: Option<JoinHandle<Item>>,
 }
 
-impl Task {
-    pub fn new(f: impl FnOnce() -> Vec<DetailedVertex> + Send + 'static) -> Self {
-        Self { handle: Some(thread::spawn(f)) }
+pub type FullTask = Task<Vec<DetailedVertex>>;
+pub type LowTask  = Task<Vec<LoweredVertex>>;
+
+impl<Item: Send + 'static> Task<Item> {
+    pub fn spawn(f: impl Future<Output = Item> + Send + 'static) -> Self {
+        Self { handle: Some(tokio::spawn(f)) }
     }
 
-    pub fn try_take_result(&mut self) -> Option<Vec<DetailedVertex>> {
-        match self.handle {
-            Some(ref mut handle) if handle.is_finished() =>
-                mem::take(&mut self.handle)
-                    .unwrap()
-                    .join()
-                    .ok(),
+    #[profile]
+    pub async fn try_take_result(&mut self) -> Option<Item> {
+        match self.handle.take() {
+            Some(handle) if handle.is_finished() =>
+                handle.await.ok(),
 
-            _ => None,
+            Some(handle) => {
+                self.handle = Some(handle);
+                None
+            },
+
+            None => None,
         }
     }
 
-    pub fn take_result(&mut self) -> Vec<DetailedVertex> {
-        let handle = mem::take(&mut self.handle)
-            .expect("task cannot be taken twice!");
-        handle.join()
+    pub async fn take_result(&mut self) -> Item {
+        self.handle.take()
+            .expect("task cannot be taken twice!")
+            .await
             .expect("task thread panicked")
     }
 }

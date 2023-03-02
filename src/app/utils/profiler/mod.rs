@@ -13,6 +13,7 @@ use {
         werror::prelude::*,
         time::timer::Timer,
         user_io::{InputManager, KeyCode},
+        cfg,
     },
     std::{
         collections::HashMap,
@@ -77,6 +78,7 @@ impl Profiler {
     }
 }
 
+pub static mut IS_DRAWING_ENABLED: bool = true;
 pub static mut PROFILER: Profiler = Profiler::uninitialized();
 static mut IS_INITIALYZED: bool = false;
 
@@ -121,7 +123,13 @@ pub fn start_capture(target_name: &str, id: ID) -> Measure {
 }
 
 /// Updates profiler and builds ImGui window.
-pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer, input: &InputManager) {
+pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer, input: &mut InputManager) {
+    if input.keyboard.just_pressed(cfg::key_bindings::ENABLE_PROFILER_WINDOW) {
+        unsafe {
+            IS_DRAWING_ENABLED = !IS_DRAWING_ENABLED
+        }
+    }
+
     build_window(ui, input, get_result(timer));
     update();
 }
@@ -160,7 +168,7 @@ pub fn update() {
 
 /// Builds ImGui window of capturing results
 pub fn build_window(ui: &imgui::Ui, input: &InputManager, profiler_result: DataSummary) {
-    if profiler_result.len() != 0 {
+    if profiler_result.len() != 0 && unsafe { IS_DRAWING_ENABLED } {
         /* Create ImGui window */
         let mut window = imgui::Window::new("Profiler").always_auto_resize(true);
 

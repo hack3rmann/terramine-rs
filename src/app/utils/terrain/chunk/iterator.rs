@@ -294,8 +294,8 @@ impl Iterator for SpaceIter {
                 if self.curr.x() < self.max.x() {
                     self.curr = Int3::new(self.curr.x() + 1, self.min.y(), self.min.z());
                 } else if self.curr == self.max {
-                    self.curr = self.max + Int3::ones();
-                } else if self.curr == self.max + Int3::ones() {
+                    self.curr = self.max + Int3::ONE;
+                } else if self.curr == self.max + Int3::ONE {
                     return None
                 }
             }
@@ -322,7 +322,7 @@ impl Iterator for SpaceIter {
 /// 
 /// fn example() {
 /// 	let split = ChunkSplitten::new(Int3::all(16), Int3::all(2));
-///		let space: Vec<_> = SpaceIter::new(Int3::zero() .. Int3::all(16)).collect();
+///		let space: Vec<_> = SpaceIter::new(Int3::ZERO..Int3::all(16)).collect();
 ///
 ///		for (entire, _) in split {
 ///			assert!(space.contains(&entire));
@@ -343,17 +343,17 @@ impl ChunkSplitten {
     /// entire data and [`Int3`] of chunk sizes in elements of entire data structure.
     /// 
     /// # Panic
-    /// If entire chunk size is not divisible into smaller chunk size.
+    /// Pnics if entire chunk size is not divisible into smaller chunk sizes.
     #[allow(dead_code)] 
     pub fn new(entire: Int3, chunk_size: Int3) -> Self {
         /* Check that entire chunk are divisible into smaller ones */
-        assert_eq!(entire % chunk_size, Int3::zero());
+        assert_eq!(entire % chunk_size, Int3::ZERO);
 
-        let mut outer = SpaceIter::new(Int3::zero() .. entire / chunk_size);
+        let mut outer = SpaceIter::new(Int3::ZERO .. entire / chunk_size);
         let current = outer.next().wunwrap();
 
         Self {
-            inner: SpaceIter::new(Int3::zero() .. chunk_size),
+            inner: SpaceIter::new(Int3::ZERO..chunk_size),
             outer, current: Some(current), chunk_size,
         }
     }
@@ -471,9 +471,9 @@ impl<T> std::ops::IndexMut<usize> for Sides<T> {
 
 #[allow(dead_code)]
 pub fn is_bordered(pos: Int3, bounds: Range<Int3>) -> bool {
-    pos.x() == bounds.start.x() || pos.x() == bounds.end.x() - 1 ||
-    pos.y() == bounds.start.y() || pos.y() == bounds.end.y() - 1 ||
-    pos.z() == bounds.start.z() || pos.z() == bounds.end.z() - 1
+    pos.x == bounds.start.x || pos.x == bounds.end.x - 1 ||
+    pos.y == bounds.start.y || pos.y == bounds.end.y - 1 ||
+    pos.z == bounds.start.z || pos.z == bounds.end.z - 1
 }
 
 #[cfg(test)]
@@ -551,7 +551,7 @@ mod space_iter_tests {
         for x in -5..5 {
         for y in -5..5 {
         for z in -5..5 {
-            res2.push(Int3::new(x, y, z))
+            res2.push(veci!(x, y, z))
         }}}
 
         assert_eq!(res1, res2);

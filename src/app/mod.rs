@@ -14,8 +14,6 @@ use {
         terrain::chunk::{
             chunk_array::ChunkArray,
             ChunkDrawBundle,
-            Chunk,
-            Lod,
         },
         time::timer::Timer,
         profiler,
@@ -59,7 +57,9 @@ impl App {
             .expect("graphics should be initialized once");
 
         let camera = DebugVisualized::new_camera(
-            Camera::new().with_position(0.0, 0.0, 2.0),
+            Camera::new()
+                .with_position(0.0, 16.0, 2.0)
+                .with_rotation(0.0, 0.0, 3.14),
             &graphics.display,
         );
     
@@ -67,11 +67,7 @@ impl App {
             .expect("path should be valid and file is readable");
 
         let chunk_draw_bundle = ChunkDrawBundle::new(&graphics.display);
-        let mut chunk_arr = ChunkArray::new(cfg::terrain::default::WORLD_SIZES_IN_CHUNKS.into());
-        chunk_arr.generate_meshes(|pos| Lod::min(
-            pos.len().floor() as Lod,
-            Chunk::SIZE.ilog2() as Lod,
-        ), &graphics.display);
+        let chunk_arr = ChunkArray::new(vecs!(16, 2, 8));
 
         App {
             chunk_arr,
@@ -182,7 +178,7 @@ impl App {
             self.camera.inner.spawn_control_window(&ui, &mut self.input_manager);
 
             /* Profiler window */
-            profiler::update_and_build_window(&ui, &self.timer, &self.input_manager);
+            profiler::update_and_build_window(&ui, &self.timer, &mut self.input_manager);
 
             /* Render UI */
             self.graphics.imguiw.prepare_render(&ui, self.graphics.display.gl_window().window());
@@ -203,6 +199,7 @@ impl App {
         target.clear_all(cfg::shader::CLEAR_COLOR, cfg::shader::CLEAR_DEPTH, cfg::shader::CLEAR_STENCIL);
         {
             self.chunk_arr.render(&mut target, &self.chunk_draw_bundle, &uniforms, &self.graphics.display, self.camera.inner.pos)
+                .await
                 .expect("failed to render chunk array");
 
             self.camera.render_camera(&self.graphics.display, &mut target, &uniforms)
