@@ -67,7 +67,7 @@ impl App {
             .expect("path should be valid and file is readable");
 
         let chunk_draw_bundle = ChunkDrawBundle::new(&graphics.display);
-        let chunk_arr = ChunkArray::new(vecs!(7, 1, 7));
+        let chunk_arr = ChunkArray::new_empty_chunks(vecs!(32, 2, 32));
 
         App {
             chunk_arr,
@@ -198,14 +198,13 @@ impl App {
         let mut target = self.graphics.display.draw(); 
         target.clear_all(cfg::shader::CLEAR_COLOR, cfg::shader::CLEAR_DEPTH, cfg::shader::CLEAR_STENCIL);
         {
-            self.chunk_arr.render(&mut target, &self.chunk_draw_bundle, &uniforms, &self.graphics.display, self.camera.inner.pos)
+            self.chunk_arr.render(&mut target, &self.chunk_draw_bundle, &uniforms, &self.graphics.display, &self.camera.inner)
                 .await
                 .expect("failed to render chunk array");
 
             self.camera.render_camera(&self.graphics.display, &mut target, &uniforms)
                 .expect("failed to render camera");
 
-            // TODO: deal with this unique borrow.
             self.graphics.imguir.0.render(&mut target, draw_data)
                 .expect("failed to render imgui");
         }

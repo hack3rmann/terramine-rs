@@ -1,7 +1,8 @@
 use {
     crate::app::utils::{
-        terrain::chunk::{DetailedVertex, LoweredVertex},
-        profiler::prelude::*,
+        terrain::{
+            chunk::{DetailedVertex, LoweredVertex, Id},
+        },
     },
     std::future::Future,
     tokio::task::JoinHandle,
@@ -14,13 +15,13 @@ pub struct Task<Item> {
 
 pub type FullTask = Task<Vec<DetailedVertex>>;
 pub type LowTask  = Task<Vec<LoweredVertex>>;
+pub type GenTask  = Task<Vec<Id>>;
 
 impl<Item: Send + 'static> Task<Item> {
     pub fn spawn(f: impl Future<Output = Item> + Send + 'static) -> Self {
         Self { handle: Some(tokio::spawn(f)) }
     }
 
-    #[profile]
     pub async fn try_take_result(&mut self) -> Option<Item> {
         match self.handle.take() {
             Some(handle) if handle.is_finished() =>

@@ -103,6 +103,7 @@ impl MeshlessChunkArray {
         use SaveType::*;
         Save::new(file_name)
             .create(save_path)
+            .expect("failed to create Save")
             .write(&width,  Width)
             .write(&height, Height)
             .write(&depth,  Depth)
@@ -165,7 +166,7 @@ impl MeshlessChunkArray {
         let mut chunks = vec![];
 
         use SaveType::*;
-        let save = Save::new(file_name).open(save_path);
+        let save = Save::new(file_name).open(save_path).expect("failed to open Save");
 
         if !std::path::Path::new(save_path).exists() ||
            (width, height, depth) != (save.read(Width), save.read(Height), save.read(Depth))

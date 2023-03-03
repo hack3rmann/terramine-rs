@@ -239,6 +239,9 @@ pub fn build_window(ui: &imgui::Ui, input: &InputManager, profiler_result: DataS
                 /* Percent of frame time */
                 ui.text(format!("Frame time: {:.3}%", data.frame_time * 100.0));
 
+                /* Percent of frame time */
+                ui.text(format!("Max time: {:.3}ms", data.max_time * 1000.0));
+
                 /* Separator to next result */
                 if i != profiler_result.len() - 1 {
                     ui.separator();

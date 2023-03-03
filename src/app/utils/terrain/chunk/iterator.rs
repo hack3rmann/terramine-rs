@@ -6,6 +6,17 @@ use {
     },
     math_linear::prelude::*,
     std::ops::Range,
+    rayon::iter::{
+        IndexedParallelIterator,
+        ParallelIterator,
+        plumbing::{
+            UnindexedConsumer,
+            Consumer,
+            ProducerCallback,
+            Producer,
+            self,
+        },
+    },
 };
 
 /// Iterator over chunk border.
@@ -218,32 +229,31 @@ impl Iterator for CubeBorder {
 /// 	assert_eq!(res1, res2);
 /// }
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Debug, Clone)]
 pub struct SpaceIter {
-    curr: Int3,
-
-    min: Int3,
-    max: Int3,
+    back_shift: Int3,
+    sizes: USize3,
+    idx: usize,
+    size: usize,
 }
 
-// TODO: impl ExactSizeIterator
 impl SpaceIter {
     pub fn new(range: Range<Int3>) -> Self {
+        let diff = range.end - range.start;
         assert!(
-            range.start.x < range.end.x &&
-            range.start.y < range.end.y &&
-            range.start.z < range.end.z,
-            "start position should be smaller by each coordinate than end",
+            0 <= diff.x && 0 <= diff.y && 0 <= diff.z,
+            "start position should be not greater by each coordinate than end",
         );
-        Self { curr: range.start, min: range.start, max: range.end - Int3::ONE }
+
+        let sizes = USize3::from(diff);
+        let size = sizes.x * sizes.y * sizes.z;
+
+        Self { sizes, size, idx: 0, back_shift: range.start }
     }
 
     pub fn new_cubed(range: Range<i32>) -> Self {
-        Self {
-            curr: Int3::all(range.start),
-            min: Int3::all(range.start),
-            max: Int3::all(range.end - 1)
-        }
+        assert!(range.start <= range.end, "space iter cannot go back");
+        Self::new(Int3::all(range.start)..Int3::all(range.end))
     }
 
     #[allow(dead_code)]
@@ -278,32 +288,133 @@ impl SpaceIter {
             pos + veci!( 0,  0, -1),
         ].into_iter()
     }
+
+    fn coord_idx_from_idx(idx: usize, sizes: USize3) -> USize3 {
+        idx_to_coord_idx(idx, sizes)
+    }
+
+    fn pos_from_coord_idx(idx: USize3, back_shift: Int3) -> Int3 {
+        back_shift + idx.into()
+    }
+
+    fn pos_from_idx(idx: usize, back_shift: Int3, sizes: USize3) -> Int3 {
+        Self::pos_from_coord_idx(
+            Self::coord_idx_from_idx(idx, sizes),
+            back_shift,
+        )
+    }
 }
 
 impl Iterator for SpaceIter {
     type Item = Int3;
     fn next(&mut self) -> Option<Self::Item> {
-        let result = self.curr;
+        match self.idx < self.size {
+            true => {
+                let pos = Self::pos_from_idx(self.idx, self.back_shift, self.sizes);
+                self.idx += 1;
+                Some(pos)
+            },
 
-        if self.curr.z < self.max.z {
-            self.curr += Int3::new(0, 0, 1);
-        } else {
-            if self.curr.y < self.max.y {
-                self.curr = Int3::new(self.curr.x, self.curr.y + 1, self.min.z);
-            } else {
-                if self.curr.x() < self.max.x() {
-                    self.curr = Int3::new(self.curr.x() + 1, self.min.y(), self.min.z());
-                } else if self.curr == self.max {
-                    self.curr = self.max + Int3::ONE;
-                } else if self.curr == self.max + Int3::ONE {
-                    return None
-                }
-            }
+            false => None,
         }
-
-        return Some(result)
     }
 }
+
+impl ExactSizeIterator for SpaceIter {
+    fn len(&self) -> usize { self.size }
+}
+
+impl DoubleEndedIterator for SpaceIter {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        match self.idx < self.size {
+            true if 0 < self.size => {
+                let pos = Self::pos_from_idx(self.size - 1, self.back_shift, self.sizes);
+                self.size -= 1;
+                Some(pos)
+            },
+
+            _ => None,
+        }
+    }
+}
+
+// FIXME: "too many items pushed into the consumer."
+#[derive(Debug, Clone)]
+pub struct ParSpaceIter(SpaceIter);
+
+impl ParSpaceIter {
+    pub fn new(range: Range<Int3>) -> Self {
+        ParSpaceIter(SpaceIter::new(range))
+    }
+}
+
+impl Producer for ParSpaceIter {
+    type Item = Int3;
+    type IntoIter = SpaceIter;
+
+    fn into_iter(self) -> Self::IntoIter { self.0 }
+
+    fn split_at(self, idx: usize) -> (Self, Self) {
+        use std::cmp::Ordering::*;
+        let (idx_l, idx_r) = match self.0.idx.cmp(&idx) {
+            Less => (self.0.idx, idx),
+            Equal | Greater => (idx, idx),
+        };
+
+        (
+            ParSpaceIter(SpaceIter { idx: idx_l, size: idx, ..self.0 }),
+            ParSpaceIter(SpaceIter { idx: idx_r, ..self.0 }),
+        )
+    }
+}
+
+impl ParallelIterator for ParSpaceIter {
+    type Item = Int3;
+
+    fn drive_unindexed<Consumer>(self, consumer: Consumer) -> Consumer::Result
+    where
+        Consumer: UnindexedConsumer<Self::Item>,
+    {
+        plumbing::bridge(self, consumer)
+    }
+
+    fn opt_len(&self) -> Option<usize> {
+        Some(ExactSizeIterator::len(&self.0))
+    }
+}
+
+impl IndexedParallelIterator for ParSpaceIter {
+    fn drive<C>(self, consumer: C) -> C::Result
+    where
+        C: Consumer<Self::Item>,
+    {
+        plumbing::bridge(self, consumer)
+    }
+
+    fn with_producer<C>(self, callback: C) -> C::Output
+    where
+        C: ProducerCallback<Self::Item>,
+    {
+        callback.callback(self)
+    }
+
+    fn len(&self) -> usize {
+        ExactSizeIterator::len(&self.0)
+    }
+}
+
+/// Position function.
+pub fn idx_to_coord_idx(idx: usize, sizes: USize3) -> USize3 {
+    let xy = idx / sizes.z;
+
+    let z = idx % sizes.z;
+    let y = xy % sizes.y;
+    let x = xy / sizes.y;
+
+    vecs!(x, y, z)
+}
+
+
 
 /// Walks around 3D array in very specific way.
 /// It breaks standart 3-fold cycle into chunks
@@ -481,6 +592,34 @@ mod space_iter_tests {
     use {super::*, math_linear::veci};
 
     #[test]
+    fn test_new() {
+        let range = veci!(-10, -3, -1)..veci!(-3, 4, 2);
+        let poses1: Vec<_> = SpaceIter::new(range.clone())
+            .collect();
+        let poses2: Vec<_> = SpaceIter::new(range)
+            .collect();
+
+        for pos in poses1.iter().copied() {
+            assert!(poses2.contains(&pos), "{}, {:?}, {:?}", pos, poses1, poses2);
+        }
+ 
+        for pos in poses2.iter().copied() {
+            assert!(poses1.contains(&pos), "{}, {:?}, {:?}", pos, poses1, poses2);
+        }
+    }
+
+    #[test]
+    fn test_par() {
+        let range = veci!(-1, -1, -1)..veci!(0, 1, 1);
+        let par: Vec<_> = ParSpaceIter::new(range.clone())
+            .collect();
+        let sync: Vec<_> = SpaceIter::new(range)
+            .collect();
+
+        assert_eq!(sync, par);
+    }
+
+    #[test]
     fn test_split_chunks() {
         let sample: Vec<_> = SpaceIter::zeroed_cubed(4)
             .collect();
@@ -589,7 +728,7 @@ mod space_iter_tests {
 #[cfg(test)]
 mod border_test {
     use {
-        crate::app::utils::terrain::chunk::{MeshlessChunk as Chunk, idx_to_pos},
+        crate::app::utils::terrain::chunk::{Chunk, idx_to_coord_idx},
         super::*,
     };
 
@@ -645,7 +784,7 @@ mod border_test {
         const MAX: i32 = Chunk::SIZE as i32 - 1;
 
         let works = (0..Chunk::VOLUME)
-            .map(|i| idx_to_pos(i))
+            .map(|i| Int3::from(idx_to_coord_idx(i, Chunk::SIZES)))
             .filter(|pos|
                 pos.x == 0 || pos.x == MAX ||
                 pos.y == 0 || pos.y == MAX ||

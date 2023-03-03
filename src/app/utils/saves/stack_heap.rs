@@ -9,14 +9,28 @@ use {
         fs::{File, OpenOptions},
         os::windows::prelude::FileExt,
         collections::HashSet,
-        ops::Range
+        ops::Range,
+        io,
     },
+    thiserror::Error,
 };
 
-#[derive(Debug)]
-pub struct ShError(pub String);
+#[derive(Debug, Error, Clone)]
+pub enum StackHeapError {
+    #[error("data lengths on given offset and on passed type T are not equal! Expected: {expected}, got: {read}")]
+    AllocSizeIsDifferent {
+        read: usize,
+        expected: usize,
+    },
 
-pub type ShResult<T> = Result<T, ShError>;
+    #[error("data size ({data_len}) passed to this function should be not greater than allowed allocation ({alloc_size})!")]
+    NotEnoughMemory {
+        data_len: usize,
+        alloc_size: usize,
+    },
+}
+
+pub type StackHeapResult<T> = Result<T, StackHeapError>;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Alloc {
@@ -44,19 +58,30 @@ pub struct StackHeap {
 
 impl StackHeap {
     /// Makes new StackHeap struct and new directory for their files.
-    pub fn new(path: &str, name: &str) -> Self {
+    pub fn new(path: &str, name: &str) -> io::Result<Self> {
         /* Create directory if this path doesn't exist */
         if !std::path::Path::new(path).exists() {
-            std::fs::create_dir(path).wunwrap();
+            std::fs::create_dir(path)?;
         }
+
+        let stack = OpenOptions::new()
+            .write(true)
+            .read(true)
+            .create(true)
+            .open(format!("{path}/{name}.{STACK_FILE_EXTENTION}"))?;
+        let heap = OpenOptions::new()
+            .write(true)
+            .read(true)
+            .create(true)
+            .open(format!("{path}/{name}.{HEAP_FILE_EXTENTION}"))?;
         
-        Self {
-            stack: OpenOptions::new().write(true).read(true).create(true).open(format!("{path}/{name}.{STACK_FILE_EXTENTION}")).wunwrap(),
-            heap:  OpenOptions::new().write(true).read(true).create(true).open(format!("{path}/{name}.{HEAP_FILE_EXTENTION}")).wunwrap(),
+        Ok(Self {
+            stack,
+            heap,
             stack_ptr: 0,
             eof: 0,
             freed_space: HashSet::new(),
-        }
+        })
     }
 
     /// Saves the files.
@@ -113,7 +138,7 @@ impl StackHeap {
 
     /// Reads value from heap of file by offset on stack.
     #[allow(dead_code)]
-    pub fn heap_read<T: ReinterpretFromBytes + StaticSize>(&self, stack_offset: Offset) -> ShResult<T> {
+    pub fn heap_read<T: ReinterpretFromBytes + StaticSize>(&self, stack_offset: Offset) -> StackHeapResult<T> {
         /* Read offset on heap from stack */
         let heap_offset: Offset = self.read_from_stack(stack_offset);
 
@@ -124,7 +149,7 @@ impl StackHeap {
         if bytes.len() == T::static_size() {
             Ok(T::reinterpret_from_bytes(&bytes))
         } else {
-            Err(ShError("Data lengthes on given offset and on passed type T are not equal!".to_owned()))
+            Err(StackHeapError::AllocSizeIsDifferent { read: bytes.len(), expected: T::static_size() })
         }
     }
 
@@ -209,15 +234,15 @@ impl StackHeap {
     }
 
     /// Writes bytes to heap. Alloc struct must be passed in. It's a contract to write to available allocated chunk of bytes.
-    pub fn write_to_heap(&self, Alloc { size, heap_offset: offset, .. }: Alloc, data: &[u8]) -> ShResult<()> {
+    pub fn write_to_heap(&self, Alloc { size, heap_offset: offset, .. }: Alloc, data: &[u8]) -> StackHeapResult<()> {
         if size >= data.len() as Size {
             self.heap.seek_write(data, offset + Size::static_size() as Size).wunwrap();
             Ok(())
         } else {
-            Err(ShError(format!(
-                "Data size ({}) passed to this function should be not greater than allowed allocation ({})!",
-                size, data.len()
-            )))
+            Err(StackHeapError::NotEnoughMemory {
+                data_len: data.len(),
+                alloc_size: size as usize
+            })
         }
     }
 
@@ -270,7 +295,8 @@ mod tests {
     #[test]
     fn test_allocation() {
         let name = "test_allocation";
-        let mut file = StackHeap::new(name, name);
+        let mut file = StackHeap::new(name, name)
+            .expect("failed to create StackHeap");
 
         let bytes_64:  Vec<_> = (0_u64..).flat_map(|num| num.reinterpret_as_bytes()).take(64) .collect();
         let bytes_128: Vec<_> = (0_u64..).flat_map(|num| num.reinterpret_as_bytes()).take(128).collect();
@@ -298,7 +324,8 @@ mod tests {
     #[test]
     fn test_merging() {
         let name = "test_merging";
-        let mut file = StackHeap::new(name, name);
+        let mut file = StackHeap::new(name, name)
+            .expect("failed to create StackHeap");
 
         let bytes_64:  Vec<_> = (0_u64..).flat_map(|num| num.reinterpret_as_bytes()).take(64) .collect();
         let bytes_128: Vec<_> = (0_u64..).flat_map(|num| num.reinterpret_as_bytes()).take(128).collect();

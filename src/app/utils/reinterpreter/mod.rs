@@ -508,72 +508,63 @@ unsafe impl<T: StaticSize> StaticSize for Option<T> {
 
 
 
-use math_linear::prelude::{Int3, Float4, Float3};
+use math_linear::prelude::*;
 
-unsafe impl Reinterpret for Int3 { }
+macro_rules! reinterpret_3d_vectors {
+    ($($VecName:ident = ($x:ident, $y:ident, $z:ident): $Type:ty);* $(;)?) => {$(
+        unsafe impl Reinterpret for $VecName { }
 
-unsafe impl ReinterpretAsBytes for Int3 {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(Self::static_size());
+        unsafe impl ReinterpretAsBytes for $VecName {
+            fn reinterpret_as_bytes(&self) -> Vec<u8> {
+                let mut out = Vec::with_capacity(Self::static_size());
 
-        out.append(&mut self.x().reinterpret_as_bytes());
-        out.append(&mut self.y().reinterpret_as_bytes());
-        out.append(&mut self.z().reinterpret_as_bytes());
+                out.append(&mut self.$x.reinterpret_as_bytes());
+                out.append(&mut self.$y.reinterpret_as_bytes());
+                out.append(&mut self.$z.reinterpret_as_bytes());
 
-        return out;
-    }
+                return out;
+            }
+        }
+
+        unsafe impl ReinterpretFromBytes for $VecName {
+            fn reinterpret_from_bytes(source: &[u8]) -> Self {
+                let size = <$Type>::static_size();
+
+                let x = <$Type>::reinterpret_from_bytes(&source[0..size]);
+                let y = <$Type>::reinterpret_from_bytes(&source[size .. 2 * size]);
+                let z = <$Type>::reinterpret_from_bytes(&source[2 * size .. 3 * size]);
+
+                Self::new(x, y, z)
+            }
+        }
+
+        unsafe impl ReinterpretSize for $VecName {
+            fn reinterpret_size(&self) -> usize { Self::static_size() }
+        }
+
+        unsafe impl StaticSize for $VecName {
+            fn static_size() -> usize { 3 * <$Type>::static_size() }
+        }
+    )*};
 }
 
-unsafe impl ReinterpretFromBytes for Int3 {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
-        let x = i32::reinterpret_from_bytes(&source[0..4]);
-        let y = i32::reinterpret_from_bytes(&source[4..8]);
-        let z = i32::reinterpret_from_bytes(&source[8..12]);
-
-        Self::new(x, y, z)
-    }
-}
-
-unsafe impl ReinterpretSize for Int3 {
-    fn reinterpret_size(&self) -> usize { Self::static_size() }
-}
-
-unsafe impl StaticSize for Int3 {
-    fn static_size() -> usize { 12 }
-}
-
-
-
-unsafe impl Reinterpret for Float3 { }
-
-unsafe impl ReinterpretAsBytes for Float3 {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(Self::static_size());
-
-        out.append(&mut self.x.reinterpret_as_bytes());
-        out.append(&mut self.y.reinterpret_as_bytes());
-        out.append(&mut self.z.reinterpret_as_bytes());
-
-        return out;
-    }
-}
-
-unsafe impl ReinterpretFromBytes for Float3 {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
-        let x = f32::reinterpret_from_bytes(&source[0..4]);
-        let y = f32::reinterpret_from_bytes(&source[4..8]);
-        let z = f32::reinterpret_from_bytes(&source[8..12]);
-
-        Self::new(x, y, z)
-    }
-}
-
-unsafe impl ReinterpretSize for Float3 {
-    fn reinterpret_size(&self) -> usize { Self::static_size() }
-}
-
-unsafe impl StaticSize for Float3 {
-    fn static_size() -> usize { 12 }
+reinterpret_3d_vectors! {
+    Byte3   = (x, y, z): i8;
+    UByte3  = (x, y, z): u8;
+    Short3  = (x, y, z): i16;
+    UShort3 = (x, y, z): u16;
+    Int3    = (x, y, z): i32;
+    UInt3   = (x, y, z): u32;
+    Long3   = (x, y, z): i64;
+    ULong3  = (x, y, z): u64;
+    Large3  = (x, y, z): i128;
+    ULarge3 = (x, y, z): u128;
+    ISize3  = (x, y, z): isize;
+    USize3  = (x, y, z): usize;
+    Float3  = (x, y, z): f32;
+    Double3 = (x, y, z): f64;
+    Color   = (r, g, b): f32;
+    Color64 = (r, g, b): f64;
 }
 
 

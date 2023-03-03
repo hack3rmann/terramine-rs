@@ -12,7 +12,7 @@ use app::App;
 fn main() {
     app::utils::werror::set_panic_hook();
     app::utils::profiler::initialize();
-    app::utils::runtime::initialyze();
+    app::utils::runtime::initialize();
 
     App::new().run();
 }

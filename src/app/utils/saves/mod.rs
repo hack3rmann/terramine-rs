@@ -15,13 +15,32 @@ use {
         collections::HashMap,
         os::windows::prelude::FileExt,
         fs::{File, OpenOptions},
+        io,
     },
-    stack_heap::{StackHeap, ShResult, ShError},
+    stack_heap::{StackHeap, StackHeapError},
+    thiserror::Error,
 };
 
 pub type Offset = u64;
 pub type Size   = u64;
 pub type Enumerator = u64;
+
+#[derive(Error, Debug, Clone)]
+pub enum SaveError {
+    #[error("error from `StackHeap`")]
+    StackHeap(#[from] StackHeapError),
+
+    #[error("index shpuld be in 0..{size} but {idx}")]
+    IndexOutOfBounds {
+        idx: Offset,
+        size: Size,
+    },
+
+    #[error("Trying to write same key of some data to another place. Old enumerator value: {0}.")]
+    DataOverride(Enumerator),
+}
+
+pub type SaveResult<T> = Result<T, SaveError>;
 
 /// Handle for save files framework.
 #[derive(Debug)]
@@ -53,32 +72,37 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     }
 
     /// Creates heap-stack folder.
-    pub fn create(mut self, path: &str) -> Self {
-        self.file = Some(StackHeap::new(path, &self.name));
-        self.offsets_save = Some(File::create(Self::get_meta_path(path).as_str()).wunwrap());
+    pub fn create(mut self, path: &str) -> io::Result<Self> {
+        self.file = Some(
+            StackHeap::new(path, &self.name)?
+        );
 
-        return self
+        self.offsets_save = Some(
+            File::create(Self::get_meta_path(path).as_str())?
+        );
+
+        Ok(self)
     }
 
     /// Opens heap-stack folder. And reads all offsets from save [`META_FILE_NAME`].
-    pub fn open(mut self, path: &str) -> Self {
-        self.file = Some(StackHeap::new(path, &self.name));
+    pub fn open(mut self, path: &str) -> io::Result<Self> {
+        self.file = Some(StackHeap::new(path, &self.name)?);
         self.offsets_save = Some(
             OpenOptions::new()
                 .read(true)
                 .write(true)
                 .create(false)
-                .open(Self::get_meta_path(path).as_str())
-                .wunwrap()
+                .open(Self::get_meta_path(path).as_str())?
         );
 
         /* Offsets save shortcut */
-        let offsets_save = self.offsets_save.as_ref().wunwrap();
+        let offsets_save = self.offsets_save.as_ref()
+            .expect("self.offsets_save should be `Ok(...)`");
 
         /* Read number of offsets */
         let n_offsets = {
             let mut buffer = vec![0; Size::static_size()];
-            offsets_save.seek_read(&mut buffer, 0).wunwrap();
+            offsets_save.seek_read(&mut buffer, 0)?;
             Size::reinterpret_from_bytes(&buffer)
         };
 
@@ -87,17 +111,17 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         let mut buffer = vec![0; Enumerator::static_size()];
         for i in (1..).step_by(2).take(n_offsets as usize) {
             let enumerator = {
-                offsets_save.seek_read(&mut buffer, offset_size * i).wunwrap();
+                offsets_save.seek_read(&mut buffer, offset_size * i)?;
                 Enumerator::reinterpret_from_bytes(&buffer)
             };
             let offset = {
-                offsets_save.seek_read(&mut buffer, offset_size * (i + 1)).wunwrap();
+                offsets_save.seek_read(&mut buffer, offset_size * (i + 1))?;
                 Offset::reinterpret_from_bytes(&buffer)
             };
             self.offests.insert(enumerator, offset);
         }
 
-        return self
+        Ok(self)
     }
 
     /// Writes enum-named value to stack file.
@@ -107,9 +131,10 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         let offset = self.get_file_mut().push(&bytes);
 
         /* Saving offset of value */
-        self.store_offset(enumerator, offset).wunwrap();
+        self.store_offset(enumerator, offset)
+            .expect("failed to store offset");
 
-        return self
+        self
     }
 
     /// Assigns enum-named value to value on stack.
@@ -139,7 +164,8 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         let offset = self.get_file_mut().push(&(length as Size).reinterpret_as_bytes());
 
         /* Save offset of an array */
-        self.store_offset(enumerator, offset).wunwrap();
+        self.store_offset(enumerator, offset)
+            .expect("failed to store offset");
 
         /* Write all elements to file */
         for i in 0..length {
@@ -147,7 +173,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
             self.get_file_mut().push(&bytes);
         }
 
-        return self
+        self
     }
 
     /// Assignes new values to enum-named array.
@@ -175,7 +201,10 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
     /// Assings new value to some element in enum-named array.
     #[allow(dead_code)]
-    pub fn assign_array_element<T: ReinterpretAsBytes + StaticSize>(&mut self, enumerator: E, elem: T, idx: usize) -> ShResult<()> {
+    pub fn assign_array_element<T>(&mut self, enumerator: E, elem: T, idx: usize) -> SaveResult<()>
+    where
+        T: ReinterpretAsBytes + StaticSize,
+    {
         /* Load offset */
         let offset = self.load_offset(enumerator);
 
@@ -186,7 +215,9 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         Self::test_index(idx as Offset, length)?;
 
         /* Get offset of an element */
-        let offset = offset + idx as Offset * T::static_size() as Size + Size::static_size() as Size;
+        let offset = offset
+                   + idx as Offset * T::static_size() as Size
+                   + Size::static_size() as Size;
 
         /* Write element */
         self.get_file_mut().write_to_stack(offset, &elem.reinterpret_as_bytes());
@@ -215,7 +246,9 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         /* Read all elements to `result` */
         for i in 0..length {
             /* Read to buffer */
-            self.get_file_ref().stack.seek_read(&mut buffer, offset + i * T::static_size() as Size).wunwrap();
+            self.get_file_ref().stack
+                .seek_read(&mut buffer, offset + i * T::static_size() as Size)
+                .expect("failed to `seek_read(...)`");
 
             /* Push value to `result` */
             result.push(T::reinterpret_from_bytes(&buffer));
@@ -226,7 +259,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
     /// Reads element of enum-named array on stack by index `idx`.
     #[allow(dead_code)]
-    pub fn read_array_element<T: ReinterpretFromBytes + StaticSize>(&self, enumerator: E, idx: usize) -> ShResult<T> {
+    pub fn read_array_element<T: ReinterpretFromBytes + StaticSize>(&self, enumerator: E, idx: usize) -> SaveResult<T> {
         /* Load offset */
         let offset = self.load_offset(enumerator);
 
@@ -283,13 +316,13 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     }
 
     /// Allocates an array of pinters on stack and array of data on heap.
-    pub fn pointer_array<F: FnMut(usize) -> Vec<u8>>(mut self, length: usize, enumerator: E, mut elem: F) -> Self {
+    pub fn pointer_array<F: FnMut(usize) -> Vec<u8>>(mut self, len: usize, enumerator: E, mut elem: F) -> Self {
         /* Push size to stack and store its offset */
-        let stack_offset = self.get_file_mut().push(&(length as Size).reinterpret_as_bytes());
+        let stack_offset = self.get_file_mut().push(&(len as Size).reinterpret_as_bytes());
         self.store_offset(enumerator, stack_offset).wunwrap();
 
         /* Write all elements to heap */
-        for data in (0..length).map(|i| elem(i)) {
+        for data in (0..len).map(|i| elem(i)) {
             let alloc = self.get_file_mut().alloc(data.len() as Size);
             self.get_file_ref().write_to_heap(alloc, &data).wunwrap();
         }
@@ -321,7 +354,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
     /// Assigns new element to the element by index of pointer on stack.
     #[allow(dead_code)]
-    pub fn assign_pointer_array_element(&mut self, enumerator: E, bytes: Vec<u8>, idx: usize) -> ShResult<()> {
+    pub fn assign_pointer_array_element(&mut self, enumerator: E, bytes: Vec<u8>, idx: usize) -> SaveResult<()> {
         /* Load offset */
         let offset = self.load_offset(enumerator);
 
@@ -373,7 +406,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
     /// Reads a pointer array element at index `idx`.
     #[allow(dead_code)]
-    pub fn read_pointer_array_element<T, F>(&self, enumerator: E, idx: usize, elem: F) -> ShResult<T>
+    pub fn read_pointer_array_element<T, F>(&self, enumerator: E, idx: usize, elem: F) -> SaveResult<T>
     where
         F: FnOnce(&[u8]) -> T
     {
@@ -398,13 +431,10 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     }
 
     /// Saves offset by enumerator.
-    fn store_offset(&mut self, enumerator: E, offset: Offset) -> ShResult<()> {
+    fn store_offset(&mut self, enumerator: E, offset: Offset) -> SaveResult<()> {
         match self.offests.insert(enumerator.into(), offset) {
             None => Ok(()),
-            Some(old) => Err(ShError(format!(
-                "Trying to write same key of some data to another place. Old data: {}.",
-                old
-            )))
+            Some(old) => Err(SaveError::DataOverride(old))
         }
     }
 
@@ -412,52 +442,58 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     fn load_offset(&self, enumerator: E) -> Offset {
         *self.offests
             .get(&enumerator.into())
-            .wexpect(format!(
+            .expect(&format!(
                 "There is no data enumerated by {}",
                 enumerator.into()
-            ).as_str())
+            ))
     }
 
     /// Saves the save.
-    pub fn save(self) -> std::io::Result<Self> {
+    pub fn save(self) -> io::Result<Self> {
         /* Sync all changes to file */
         self.get_file_ref().sync()?;
 
         /* Get shortcut to offsets_save */
-        let offsets_save = self.offsets_save.as_ref().wunwrap();
+        let offsets_save = self.offsets_save.as_ref()
+            .expect("offsets_save should be `Some(...)`");
 
         /* Save offsets length to `meta.off` file */
         let n_offsets = self.offests.len() as Size;
-        offsets_save.seek_write(&n_offsets.reinterpret_as_bytes(), 0).wunwrap();
+        offsets_save.seek_write(&n_offsets.reinterpret_as_bytes(), 0)?;
 
         /* Save all offsets to `meta.off` file */
         let offset_size = Offset::static_size() as Size;
         for ((&enumerator, &offset), i) in self.offests.iter().zip((1_u64..).step_by(2)) {
-            offsets_save.seek_write(&enumerator.reinterpret_as_bytes(), offset_size * i).wunwrap();
-            offsets_save.seek_write(&offset.reinterpret_as_bytes(), offset_size * (i + 1)).wunwrap();
+            offsets_save.seek_write(&enumerator.reinterpret_as_bytes(), offset_size * i)?;
+            offsets_save.seek_write(&offset.reinterpret_as_bytes(), offset_size * (i + 1))?;
         }
 
         /* Sync all changes to file */
-        offsets_save.sync_all().wunwrap();
+        offsets_save.sync_all()?;
 
-        return Ok(self)
+        Ok(self)
     }
 
     /// Gives reference to file if it initialized.
     fn get_file_ref(&self) -> &StackHeap {
-        self.file.as_ref().wexpect("File had not created! Consider call .create() method on Save.")
+        self.file
+            .as_ref()
+            .expect("File had not created! Consider call .create() method on Save.")
     }
 
     /// Gives mutable reference to file if it initialized.
     fn get_file_mut(&mut self) -> &mut StackHeap {
-        self.file.as_mut().wexpect("File had not created! Consider call .create() method on Save.")
+        self.file
+            .as_mut()
+            .expect("File had not created! Consider call .create() method on Save.")
     }
 
     /// Test if given index is valid.
-    fn test_index(idx: Offset, len: Size) -> ShResult<()> {
-        if idx < len {
-            return Err(ShError(format!("Given index ({}) should be in 0..{}", idx, len)))
-        } else { Ok(()) }
+    fn test_index(idx: Offset, len: Size) -> SaveResult<()> {
+        match idx < len {
+            true => Err(SaveError::IndexOutOfBounds { idx, size: len }),
+            false => Ok(()),
+        }
     }
 }
 
@@ -496,6 +532,7 @@ mod tests {
         use DataType::*;
         let mut save = Save::new("Test1")
             .create("test1")
+            .expect("failed to create Save")
             .write(&pos_before, Position)
             .array(array_before.len(), Array, |i| &array_before[i])
             .pointer(ptr_start.reinterpret_as_bytes(), Pointer)
@@ -512,7 +549,9 @@ mod tests {
             })
             .save().wunwrap();
         save.assign_to_pointer(ptr_before.reinterpret_as_bytes(), Pointer);
-        let save = Save::new("Test1").open("test1");
+        let save = Save::new("Test1")
+            .open("test1")
+            .expect("failed to create Save");
 
         let pos_after: Float4 = save.read(DataType::Position);
         let array_after: Vec<i32> = save.read_array(DataType::Array);
@@ -538,11 +577,15 @@ mod tests {
         use MinorTestDataType::*;
         let mut save = Save::new("Test2")
             .create("test2")
+            .expect("failed to create Save")
             .write(&data_before, Data)
             .save().wunwrap();
         save.assign(&data_expected, Data);
 
-        let save = Save::new("Test2").open("test2");
+        let save = Save::new("Test2")
+            .open("test2")
+            .expect("failed to create Save");
+
         let data_after: Int3 = save.read(Data);
 
         assert_eq!(data_expected, data_after);
@@ -556,11 +599,15 @@ mod tests {
         use MinorTestDataType::*;
         let mut save = Save::new("Test3")
             .create("test3")
+            .expect("failed to create Save")
             .array(data_before.len(), Data, |i| &data_before[i])
             .save().wunwrap();
         save.assign_array(Data, |i| &data_expected[i]);
 
-        let save = Save::new("Test3").open("test3");
+        let save = Save::new("Test3")
+            .open("test3")
+            .expect("failed to create Save");
+
         let data_after: Vec<i32> = save.read_array(Data);
 
         assert_eq!(data_expected[..], data_after[..]);
@@ -574,11 +621,14 @@ mod tests {
         use MinorTestDataType::*;
         let mut save = Save::new("Test4")
             .create("test4")
+            .expect("failed to create Save")
             .array(data_before.len(), Data, |i| &data_before[i])
             .save().wunwrap();
         save.assign_array_element(Data, 999, 2).wunwrap();
 
-        let save = Save::new("Test4").open("test4");
+        let save = Save::new("Test4")
+            .open("test4")
+            .expect("failed to create Save");
         let data_after: Vec<i32> = save.read_array(Data);
 
         assert_eq!(data_expected[..], data_after[..]);
@@ -591,10 +641,14 @@ mod tests {
         use MinorTestDataType::*;
         Save::new("Test5")
             .create("test5")
+            .expect("failed to create Save")
             .array(data_before.len(), Data, |i| &data_before[i])
             .save().wunwrap();
 
-        let save = Save::new("Test5").open("test5");
+        let save = Save::new("Test5")
+            .open("test5")
+            .expect("failed to create Save");
+
         let mut data_after = Vec::with_capacity(data_before.len());
 
         for num in (0..).map(|i| -> i32 { save.read_array_element(Data, i).wunwrap() }).take(data_before.len()) {
@@ -612,11 +666,14 @@ mod tests {
         use MinorTestDataType::*;
         let mut save = Save::new("Test6")
             .create("test6")
+            .expect("failed to create Save")
             .pointer_array(data_before.len(), Data, |i| data_expected[i].reinterpret_as_bytes())
             .save().wunwrap();
         save.assign_pointer_array(Data, |i| data_expected[i].reinterpret_as_bytes());
 
-        let save = Save::new("Test6").open("test6");
+        let save = Save::new("Test6")
+            .open("test6")
+            .expect("failed to create Save");
         let data_after = save.read_pointer_array(Data, |_, bytes| i32::reinterpret_from_bytes(bytes));
 
         assert_eq!(data_expected[..], data_after[..]);
@@ -630,11 +687,14 @@ mod tests {
         use MinorTestDataType::*;
         let mut save = Save::new("Test7")
             .create("test7")
+            .expect("failed to create Save")
             .pointer_array(data_before.len(), Data, |i| data_before[i].reinterpret_as_bytes())
             .save().wunwrap();
         save.assign_pointer_array_element(Data, 999.reinterpret_as_bytes(), 2).wunwrap();
 
-        let save = Save::new("Test7").open("test7");
+        let save = Save::new("Test7")
+            .open("test7")
+            .expect("failed to create Save");
         let data_after = save.read_pointer_array(Data, |_, bytes| i32::reinterpret_from_bytes(bytes));
 
         assert_eq!(data_expected[..], data_after[..]);
@@ -647,10 +707,13 @@ mod tests {
         use MinorTestDataType::*;
         Save::new("Test8")
             .create("test8")
+            .expect("failed to create Save")
             .pointer_array(data_before.len(), Data, |i| data_before[i].reinterpret_as_bytes())
             .save().wunwrap();
 
-        let save = Save::new("Test8").open("test8");
+        let save = Save::new("Test8")
+            .open("test8")
+            .expect("failed to create Save");
         let mut data_after = Vec::with_capacity(data_before.len());
 
         let nums = (0..).map(|i|
