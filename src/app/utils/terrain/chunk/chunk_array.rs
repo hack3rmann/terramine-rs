@@ -580,11 +580,11 @@ impl ChunkArray {
     }
 
     pub fn spawn_control_window(&mut self, ui: &imgui::Ui) {
-        imgui::Window::new("Chunk array")
+        ui.window("Chunk array")
             .always_auto_resize(true)
             .collapsible(true)
             .movable(true)
-            .build(ui, || {
+            .build(|| {
                 ui.text(format!(
                     "{n} chunk generation tasks.",
                     n = self.voxels_gen_tasks.len()
@@ -595,8 +595,11 @@ impl ChunkArray {
                     n = self.low_tasks.len() + self.full_tasks.len()
                 ));
 
-                imgui::Slider::new("Chunks lod threashold", 0.01, 20.0)
-                    .build(ui, &mut self.lod_dist_threashold)
+                ui.slider(
+                    "Chunks lod threashold",
+                    0.01, 20.0,
+                    &mut self.lod_dist_threashold,
+                );
             });
     }
 }

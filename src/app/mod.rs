@@ -176,7 +176,7 @@ impl App {
         /* InGui draw data */
         let draw_data = {
             /* Get UI frame renderer */
-            let ui = self.graphics.imguic.frame();
+            let ui = self.graphics.imguic.new_frame();
 
             /* Camera window */
             self.camera.spawn_control_window(&ui, &mut self.input_manager);
@@ -190,7 +190,7 @@ impl App {
             /* Chunk array control window */
             self.chunk_arr.spawn_control_window(&ui);
 
-            ui.render()
+            self.graphics.imguic.render()
         };
 
         /* Uniforms set */

@@ -12,10 +12,11 @@ use {
             window::default as window_def,
         },
         werror::prelude::*,
-        user_io::{InputManager, KeyCode},
+        user_io::InputManager,
     },
     math_linear::prelude::*,
     frustum::Frustum,
+    glium::glutin::event::VirtualKeyCode as KeyCode,
 };
 
 /// Camera handler.
@@ -221,7 +222,7 @@ impl Camera {
     /// Spawns camera control window.
     pub fn spawn_control_window(&mut self, ui: &imgui::Ui, input: &mut InputManager) {
         /* Camera control window */
-        let mut camera_window = imgui::Window::new("Camera");
+        let mut camera_window = ui.window("Camera");
 
         /* Move and resize if pressed I key */
         if !input.keyboard.is_pressed(cfg::key_bindings::ENABLE_DRAG_AND_RESIZE_WINDOWS) {
@@ -232,21 +233,21 @@ impl Camera {
         }
 
         /* UI building */
-        camera_window.build(&ui, || {
+        camera_window.build(|| {
             ui.text("Position");
             ui.text(format!("x: {x:.3}, y: {y:.3}, z: {z:.3}", x = self.get_x(), y = self.get_y(), z = self.get_z()));
             ui.text("Rotation");
             ui.text(format!("roll: {roll:.3}, pitch: {pitch:.3}, yaw: {yaw:.3}", roll = self.roll, pitch = self.pitch, yaw = self.yaw));
             ui.separator();
-            imgui::Slider::new("Speed", 5.0, 300.0)
+            ui.slider_config("Speed", 5.0, 300.0)
                 .display_format("%.1f")
-                .build(&ui, &mut self.speed_factor);
-            imgui::Slider::new("Speed falloff", 0.0, 1.0)
+                .build(&mut self.speed_factor);
+            ui.slider_config("Speed falloff", 0.0, 1.0)
                 .display_format("%.3f")
-                .build(&ui, &mut self.speed_falloff);
-            imgui::Slider::new("FOV", 1.0, 180.0)
+                .build(&mut self.speed_falloff);
+            ui.slider_config("FOV", 1.0, 180.0)
                 .display_format("%.0f")
-                .build(&ui, self.fov.get_degrees_mut());
+                .build(self.fov.get_degrees_mut());
             self.fov.update_from_degrees();
         });
     }

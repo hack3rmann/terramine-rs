@@ -213,7 +213,7 @@ pub fn update() {
 pub fn build_window(ui: &imgui::Ui, input: &InputManager, profiler_result: DataSummary) {
     if profiler_result.len() != 0 && *DRAWING_ENABLED.lock().expect("mutex should be not poisoned") {
         /* Create ImGui window */
-        let mut window = imgui::Window::new("Profiler").always_auto_resize(true);
+        let mut window = ui.window("Profiler").always_auto_resize(true);
 
         /* Check if window can be moved or resized */
         if !input.keyboard.is_pressed(cfg::key_bindings::ENABLE_DRAG_AND_RESIZE_WINDOWS) {
@@ -224,7 +224,7 @@ pub fn build_window(ui: &imgui::Ui, input: &InputManager, profiler_result: DataS
         }
 
         /* Ui building */
-        window.build(ui, || {
+        window.build(|| {
             /* Build all elements. Separate only existing lines. */
             for (i, data) in profiler_result.iter().enumerate() {
                 /* Target name */

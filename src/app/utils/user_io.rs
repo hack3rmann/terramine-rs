@@ -2,14 +2,6 @@
  * Keyboard IO handler
  */
 
-pub use glium::glutin::event::{
-    ElementState,
-    VirtualKeyCode as KeyCode,
-    MouseButton,
-    Event,
-    WindowEvent
-};
-
 use {
     crate::app::utils::werror::prelude::*,
     super::graphics::Graphics,
@@ -18,6 +10,16 @@ use {
         shared::windef::{LPPOINT, POINT},
     },
     std::collections::HashMap,
+    glium::glutin::{
+        event::{
+            ElementState,
+            VirtualKeyCode as KeyCode,
+            MouseButton,
+            Event,
+            WindowEvent
+        },
+        window::CursorGrabMode,
+    }
 };
 
 /// Keyboard handler.
@@ -186,15 +188,26 @@ impl Mouse {
 
     /// Grabs the cursor for camera control.
     pub fn grab_cursor(&mut self, graphics: &Graphics) {
-        graphics.display.gl_window().window().set_cursor_grab(true).wunwrap();
-        graphics.display.gl_window().window().set_cursor_visible(false);
+        let window = graphics.display.gl_window();
+        let window = window.window();
+
+        window.set_cursor_grab(CursorGrabMode::Confined)
+            .or_else(|_| window.set_cursor_grab(CursorGrabMode::Locked))
+            .expect("failed to set cursor grab");
+        window.set_cursor_visible(false);
+
         self.is_grabbed = true;
     }
 
     /// Releases cursor for standart input.
     pub fn release_cursor(&mut self, graphics: &Graphics) {
-        graphics.display.gl_window().window().set_cursor_grab(false).wunwrap();
-        graphics.display.gl_window().window().set_cursor_visible(true);
+        let window = graphics.display.gl_window();
+        let window = window.window();
+
+        window.set_cursor_grab(CursorGrabMode::None)
+            .expect("failed to release cursor");
+        window.set_cursor_visible(true);
+
         self.is_grabbed = false;
     }
 }
