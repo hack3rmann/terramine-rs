@@ -12,6 +12,7 @@ use {
             ChunkDrawBundle,
             ChunkRenderError,
         },
+        profiler::prelude::*,
     },
     super::*,
     glium::{
@@ -76,18 +77,19 @@ pub mod data {
     pub fn construct_mesh(chunk_arr: &ChunkArray, display: &Display) -> UnindexedMesh<Vertex> {
         let vertices: Vec<_> = chunk_arr.chunks()
             .flat_map(|chunk| {
-                const BIAS: f32 = cfg::topology::Z_FIGHTING_BIAS;
-                const SIZE: f32 = Chunk::SIZE as f32 + BIAS;
+                let bias = cfg::topology::Z_FIGHTING_BIAS
+                         * (chunk.meta_info.active_lod as f32 * 80.0 + 1.0);
+                let size = Chunk::SIZE as f32 + bias;
 
                 let pos = Chunk::global_pos(chunk.pos);
-                let lll = [ -0.5 + pos.x as f32 - BIAS, -0.5 + pos.y as f32 - BIAS, -0.5 + pos.z as f32 - BIAS ];
-                let llh = [ -0.5 + pos.x as f32 - BIAS, -0.5 + pos.y as f32 - BIAS, -0.5 + pos.z as f32 + SIZE ];
-                let lhl = [ -0.5 + pos.x as f32 - BIAS, -0.5 + pos.y as f32 + SIZE, -0.5 + pos.z as f32 - BIAS ];
-                let lhh = [ -0.5 + pos.x as f32 - BIAS, -0.5 + pos.y as f32 + SIZE, -0.5 + pos.z as f32 + SIZE ];
-                let hll = [ -0.5 + pos.x as f32 + SIZE, -0.5 + pos.y as f32 - BIAS, -0.5 + pos.z as f32 - BIAS ];
-                let hlh = [ -0.5 + pos.x as f32 + SIZE, -0.5 + pos.y as f32 - BIAS, -0.5 + pos.z as f32 + SIZE ];
-                let hhl = [ -0.5 + pos.x as f32 + SIZE, -0.5 + pos.y as f32 + SIZE, -0.5 + pos.z as f32 - BIAS ];
-                let hhh = [ -0.5 + pos.x as f32 + SIZE, -0.5 + pos.y as f32 + SIZE, -0.5 + pos.z as f32 + SIZE ];
+                let lll = [ -0.5 + pos.x as f32 - bias, -0.5 + pos.y as f32 - bias, -0.5 + pos.z as f32 - bias ];
+                let llh = [ -0.5 + pos.x as f32 - bias, -0.5 + pos.y as f32 - bias, -0.5 + pos.z as f32 + size ];
+                let lhl = [ -0.5 + pos.x as f32 - bias, -0.5 + pos.y as f32 + size, -0.5 + pos.z as f32 - bias ];
+                let lhh = [ -0.5 + pos.x as f32 - bias, -0.5 + pos.y as f32 + size, -0.5 + pos.z as f32 + size ];
+                let hll = [ -0.5 + pos.x as f32 + size, -0.5 + pos.y as f32 - bias, -0.5 + pos.z as f32 - bias ];
+                let hlh = [ -0.5 + pos.x as f32 + size, -0.5 + pos.y as f32 - bias, -0.5 + pos.z as f32 + size ];
+                let hhl = [ -0.5 + pos.x as f32 + size, -0.5 + pos.y as f32 + size, -0.5 + pos.z as f32 - bias ];
+                let hhh = [ -0.5 + pos.x as f32 + size, -0.5 + pos.y as f32 + size, -0.5 + pos.z as f32 + size ];
 
                 let color = if !chunk.is_generated() {
                     [0.1, 0.0, 0.0, 0.5]
@@ -98,6 +100,14 @@ pub mod data {
                 } else {
                     [0.3, 0.3, 0.3, 0.5]
                 };
+
+                let color = color.map(|c| {
+                    let lod_coef = 1.0
+                                 - chunk.meta_info.active_lod as f32
+                                     / Chunk::N_LODS as f32
+                                 + 0.001;
+                    c * (lod_coef * 0.7 + 0.3)
+                });
 
                 [
                     Vertex { pos: lll, color },
@@ -152,6 +162,7 @@ impl DebugVisualized<'_, ChunkArray> {
         Self { inner: chunk_array, mesh, static_data: data::get(display) }
     }
 
+    #[profile]
     pub async fn render_chunk_array(
         &mut self, target: &mut Frame, draw_bundle: &ChunkDrawBundle<'_>,
         uniforms: &impl Uniforms, display: &Display, cam: &Camera,

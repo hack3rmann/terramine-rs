@@ -541,6 +541,11 @@ impl Chunk {
         result
     }
 
+    /// Gives list of all possible LODs.
+    pub fn get_possible_lods() -> Vec<Lod> {
+        (0 ..= Self::N_LODS as Lod).collect()
+    }
+
     pub fn can_render_active_lod(&self) -> bool {
         self.get_available_lods()
             .contains(&self.meta_info.active_lod)

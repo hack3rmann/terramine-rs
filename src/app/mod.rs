@@ -218,16 +218,15 @@ impl App {
                 .expect("failed to render imgui");
         }
         target.finish().expect("failed to finish target");
-    }
 
-    /// Updates things.
-    async fn new_events(&mut self) {
-        /* Update time */
         self.timer.update();
         self.graphics.imguic
             .io_mut()
             .update_delta_time(self.timer.duration());
-        
+    }
+
+    /// Updates things.
+    async fn new_events(&mut self) {
         /* Rotating camera */
         self.camera.update(&mut self.input_manager, self.timer.dt_as_f64());
 

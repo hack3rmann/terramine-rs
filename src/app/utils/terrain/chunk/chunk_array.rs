@@ -61,7 +61,7 @@ impl Default for ChunkArray {
             full_tasks: Default::default(),
             low_tasks: Default::default(),
             voxels_gen_tasks: Default::default(),
-            lod_dist_threashold: 2.0,
+            lod_dist_threashold: 5.8,
         }
     }
 }
@@ -332,7 +332,7 @@ impl ChunkArray {
             let r_dist = vec3::len(cam.pos - rhs.pos.into());
 
             l_dist.partial_cmp(&r_dist)
-                .expect("distance to chunk should be not NaN")
+                .expect("distance to chunk should be a number")
         });
 
         for (chunk, lod) in chunks {
@@ -356,6 +356,8 @@ impl ChunkArray {
                 aliased_self.start_task_gen_vertices(lod, chunk.pos)
             }
 
+            aliased_self.drop_all_useless_tasks(lod, chunk.pos);
+
             if !chunk.can_render_active_lod() {
                 chunk.try_set_best_fit_lod(lod);
             }
@@ -366,6 +368,26 @@ impl ChunkArray {
         }
 
         Ok(())
+    }
+
+    pub fn drop_all_useless_tasks(&mut self, useful_lod: Lod, cur_pos: Int3) {
+        for lod in Chunk::get_possible_lods() {
+            if 2 < lod.abs_diff(useful_lod) {
+                self.drop_task(cur_pos, lod);
+            }
+        }
+    }
+
+    pub fn drop_task(&mut self, pos: Int3, lod: Lod) {
+        match lod {
+            0 => {
+                let _ = self.full_tasks.remove(&pos);
+            },
+
+            lod => {
+                let _ = self.low_tasks.remove(&(pos, lod));
+            },
+        }
     }
 
     pub async fn try_finish_full_tasks(&mut self, display: &gl::Display) {
