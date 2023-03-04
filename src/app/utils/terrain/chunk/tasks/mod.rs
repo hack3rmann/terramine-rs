@@ -43,3 +43,11 @@ impl<Item: Send + 'static> Task<Item> {
             .expect("task thread panicked")
     }
 }
+
+impl<Item> Drop for Task<Item> {
+    fn drop(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
+    }
+}

@@ -1,11 +1,6 @@
-use {
-    crate::app::utils::terrain::chunk::ChunkEnvironment,
-    math_linear::prelude::*,
-};
-
-/**
- * Debug visuals for [`Chunk`]
- */
+//! 
+//! Debug visuals for [`Chunk`]
+//! 
 
 use {
     crate::app::utils::{
@@ -15,6 +10,7 @@ use {
             self,
             MeshedChunk,
             MeshlessChunk as Chunk,
+            ChunkEnvironment,
         },
         graphics::{
             mesh::Mesh,
@@ -39,6 +35,7 @@ use {
         marker::PhantomData,
         sync::atomic::Ordering
     },
+    math_linear::prelude::*,
 };
 
 pub mod data {
@@ -47,7 +44,7 @@ pub mod data {
     static mut SHADER: Option<ShaderWrapper> = None;
     static mut DRAW_PARAMS: Option<DrawParametersWrapper> = None;
 
-    pub fn get(display: &Display) -> DebugVisualsStatics<MeshedChunk> {
+    pub fn get<'s>(display: &Display) -> DebugVisualsStatics<'s, MeshedChunk> {
         unsafe {
             cond_init(display);
 
@@ -60,7 +57,7 @@ pub mod data {
     }
 
     #[allow(dead_code)]
-    pub fn get_unchecked() -> DebugVisualsStatics<MeshedChunk> {
+    pub fn get_unchecked<'s>() -> DebugVisualsStatics<'s, MeshedChunk> {
         unsafe {
             DebugVisualsStatics {
                 shader: &SHADER.as_ref().wunwrap().0,
@@ -73,11 +70,12 @@ pub mod data {
     pub fn cond_init(display: &Display) {
         unsafe {
             /* Check if uninitialyzed */
-            if let None = SHADER.as_ref() {
+            if SHADER.is_none() {
                 let shader = Shader::new("debug_lines", "debug_lines", display);
                 SHADER.replace(ShaderWrapper(shader));
             }
-            if let None = DRAW_PARAMS.as_ref() {
+
+            if DRAW_PARAMS.is_none() {
                 let draw_params = DrawParameters {
                     polygon_mode: glium::PolygonMode::Line,
                     line_width: Some(2.0),
@@ -95,7 +93,7 @@ pub mod data {
     }
 }
 
-impl DebugVisualized<MeshedChunk> {
+impl DebugVisualized<'_, MeshedChunk> {
     pub fn new_meshed_chunk(chunk: MeshedChunk, display: &Display) -> Self {
         let mesh = {
             const BIAS: f32 = cfg::topology::Z_FIGHTING_BIAS;
@@ -165,14 +163,21 @@ impl DebugVisualized<MeshedChunk> {
         DebugVisualized { inner: chunk, mesh, static_data: data::get(display) }
     }
 
-    pub fn render_debug_meshed_chunks(&self, target: &mut Frame, uniforms: &impl Uniforms, camera: &Camera) -> Result<(), DrawError> {
+    pub fn render_debug_meshed_chunks(
+        &self, target: &mut Frame,
+        uniforms: &impl Uniforms, camera: &Camera
+    ) -> Result<(), DrawError> {
         match ENABLED.load(Ordering::Relaxed) && self.inner.is_visible(camera) {
             true => self.mesh.render(target, self.static_data.shader, self.static_data.draw_params, uniforms),
             false => Ok(()),
         }
     }
 
-    pub fn render_meshed_chunks(&self, target: &mut Frame, full_shader: &Shader, low_shader: &Shader, uniforms: &impl Uniforms, draw_params: &DrawParameters, camera: &Camera) -> Result<(), DrawError> {
+    pub fn render_meshed_chunks(
+        &self, target: &mut Frame, full_shader: &Shader,
+        low_shader: &Shader, uniforms: &impl Uniforms,
+        draw_params: &DrawParameters, camera: &Camera
+    ) -> Result<(), DrawError> {
         self.inner.render(target, full_shader, low_shader, uniforms, draw_params, camera)?;
         self.render_debug_meshed_chunks(target, uniforms, camera)?;
         Ok(())

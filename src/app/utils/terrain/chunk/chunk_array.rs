@@ -25,6 +25,7 @@ use {
         slice::{Iter, IterMut},
         collections::HashMap,
         io,
+        mem,
     },
     glium as gl,
 };
@@ -40,7 +41,7 @@ impl From<ChunkArrSaveType> for u64 {
 }
 
 /// Represents 3d array of [`Chunk`]s. Can control their mesh generation, etc.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct ChunkArray {
     pub chunks: Vec<Chunk>,
     pub sizes: USize3,
@@ -48,6 +49,21 @@ pub struct ChunkArray {
     pub full_tasks: HashMap<Int3, FullTask>,
     pub low_tasks: HashMap<(Int3, Lod), LowTask>,
     pub voxels_gen_tasks: HashMap<Int3, GenTask>,
+
+    pub lod_dist_threashold: f32,
+}
+
+impl Default for ChunkArray {
+    fn default() -> Self {
+        Self {
+            chunks: Default::default(),
+            sizes: Default::default(),
+            full_tasks: Default::default(),
+            low_tasks: Default::default(),
+            voxels_gen_tasks: Default::default(),
+            lod_dist_threashold: 2.0,
+        }
+    }
 }
 
 impl ChunkArray {
@@ -202,10 +218,15 @@ impl ChunkArray {
     }
 
     /// Gives reference to chunk by it's position.
-    pub fn get_chunk_by_pos(&self, pos: Int3) -> Option<ChunkRef> {
-        Some(
-            self.chunks[Self::pos_to_idx(self.sizes, pos)?].make_ref()
-        )
+    pub fn get_chunk_by_pos(&self, pos: Int3) -> Option<ChunkRef<'_>> {
+        let idx = Self::pos_to_idx(self.sizes, pos)?;
+        Some(self.chunks[idx].make_ref())
+    }
+
+    /// Gives reference to chunk by it's position.
+    pub fn get_chunk_mut_by_pos(&mut self, pos: Int3) -> Option<&mut Chunk> {
+        let idx = Self::pos_to_idx(self.sizes, pos)?;
+        Some(&mut self.chunks[idx])
     }
 
     /// Gives adjacent chunks references by center chunk position.
@@ -239,7 +260,7 @@ impl ChunkArray {
     }
 
     /// Gives iterator over desired LOD for each chunk.
-    pub fn lod_iter(chunk_array_sizes: USize3, cam_pos: vec3) -> impl Iterator<Item = Lod> {
+    pub fn lod_iter(chunk_array_sizes: USize3, cam_pos: vec3, threashold: f32) -> impl Iterator<Item = Lod> {
         Self::pos_iter(chunk_array_sizes)
             .map(move |chunk_pos| {
                 let chunk_size = Chunk::SIZE as f32 * cfg::terrain::VOXEL_SIZE;
@@ -248,7 +269,7 @@ impl ChunkArray {
 
                 let dist = (chunk_pos - cam_pos_in_chunks + vec3::all(0.5)).len();
                 Lod::min(
-                    (dist / 2.0).floor() as Lod,
+                    (dist / threashold).floor() as Lod,
                     Chunk::SIZE.ilog2() as Lod,
                 )
             })
@@ -299,11 +320,13 @@ impl ChunkArray {
         let sizes = self.sizes;
         if sizes == USize3::ZERO { return Ok(()) }
 
+        self.try_finish_all_tasks(display).await;
+
         // FIXME:
         let aliased_self = unsafe { NonNull::new_unchecked(self as *mut Self).as_mut() };
 
         let mut chunks: Vec<_> = self.chunks_mut()
-            .zip(Self::lod_iter(sizes, cam.pos))
+            .zip(Self::lod_iter(sizes, cam.pos, aliased_self.lod_dist_threashold))
             .collect();
 
         chunks.sort_by(|(lhs, _), (rhs, _)| {
@@ -316,24 +339,27 @@ impl ChunkArray {
 
         for (chunk, lod) in chunks {
             if !chunk.is_generated() {
-                match aliased_self.is_voxels_gen_task_running(chunk.pos) {
-                    false => {
-                        aliased_self.start_task_gen_voxels(chunk.pos);
-                        continue;
-                    },
-                    
-                    true =>
-                        aliased_self.try_finish_voxels_gen_task(chunk.pos, chunk).await,
+                if aliased_self.is_voxels_gen_task_running(chunk.pos) {
+                    aliased_self.try_finish_voxels_gen_task(chunk.pos, chunk).await
+                } else {
+                    aliased_self.start_task_gen_voxels(chunk.pos);
+                    continue;
                 }
             }
 
-            if aliased_self.is_mesh_task_running(chunk.pos, lod) &&
-               aliased_self.try_finish_mesh_task(chunk.pos, lod, chunk, display).await.is_ok() ||
-               chunk.get_available_lods().contains(&lod)
-            {
+            let can_set_new_lod =
+                aliased_self.is_mesh_task_running(chunk.pos, lod) &&
+                aliased_self.try_finish_mesh_task(chunk.pos, lod, chunk, display).await.is_ok() ||
+                chunk.get_available_lods().contains(&lod);
+
+            if can_set_new_lod {
                 chunk.set_active_lod(lod)
             } else {
                 aliased_self.start_task_gen_vertices(lod, chunk.pos)
+            }
+
+            if !chunk.can_render_active_lod() {
+                chunk.try_set_best_fit_lod(lod);
             }
 
             if chunk.can_render_active_lod() && chunk.is_visible_by_camera(cam) {
@@ -342,6 +368,85 @@ impl ChunkArray {
         }
 
         Ok(())
+    }
+
+    pub async fn try_finish_full_tasks(&mut self, display: &gl::Display) {
+        let full: Vec<_> = self.full_tasks.iter_mut()
+            .filter(|(_, task)| match task.handle.as_ref() {
+                None => false,
+                Some(handle) => handle.is_finished()
+            })
+            .map(|(&pos, task)|
+                (pos, task.take_result())
+            )
+            .collect();
+
+        let mut new_full = Vec::with_capacity(full.len());
+        for (pos, fut) in full {
+            new_full.push((pos, fut.await));
+        }
+
+        for (pos, vertices) in new_full {
+            self.full_tasks.remove(&pos);
+
+            self.get_chunk_mut_by_pos(pos)
+                .expect("pos should be valid")
+                .upload_full_detail_vertices(&vertices, display);
+        }
+    }
+
+    pub async fn try_finish_low_tasks(&mut self, display: &gl::Display) {
+        let low: Vec<_> = self.low_tasks.iter_mut()
+            .filter(|(_, task)| match task.handle.as_ref() {
+                None => false,
+                Some(handle) => handle.is_finished()
+            })
+            .map(|(&(pos, lod), task)|
+                (pos, lod, task.take_result())
+            )
+            .collect();
+
+        let mut new_low = Vec::with_capacity(low.len());
+        for (pos, lod, fut) in low {
+            new_low.push((pos, lod, fut.await));
+        }
+
+        for (pos, lod, vertices) in new_low {
+            self.low_tasks.remove(&(pos, lod));
+
+            self.get_chunk_mut_by_pos(pos)
+                .expect("pos should be valid")
+                .upload_low_detail_vertices(&vertices, lod, display);
+        }
+    }
+
+    pub async fn try_finish_gen_tasks(&mut self) {
+        let voxel_futs: Vec<_> = self.voxels_gen_tasks.iter_mut()
+            .filter(|(_, task)| match task.handle {
+                None => false,
+                Some(ref handle) => handle.is_finished(),
+            })
+            .map(|(&pos, task)| (pos, task.take_result()))
+            .collect();
+
+        let mut voxel_vecs = Vec::with_capacity(voxel_futs.len());
+        for (pos, fut) in voxel_futs {
+            voxel_vecs.push((pos, fut.await));
+        }
+
+        for (pos, voxels) in voxel_vecs {
+            self.voxels_gen_tasks.remove(&pos);
+
+            let chunk = self.get_chunk_mut_by_pos(pos)
+                .expect("pos should be valid");
+            *chunk = Chunk::from_voxels(voxels, pos);
+        }
+    }
+
+    pub async fn try_finish_all_tasks(&mut self, display: &gl::Display) {
+        self.try_finish_full_tasks(display).await;
+        self.try_finish_low_tasks(display).await;
+        self.try_finish_gen_tasks().await;
     }
 
     pub fn is_voxels_gen_task_running(&self, pos: Int3) -> bool {
@@ -418,8 +523,7 @@ impl ChunkArray {
     pub async fn try_finish_mesh_task(
         &mut self, pos: Int3, lod: Lod,
         chunk: &mut Chunk, display: &gl::Display
-    ) -> Result<(), ()>
-    {
+    ) -> Result<(), ()> {
         match lod {
             0 => match self.full_tasks.get_mut(&pos) {
                 Some(task) => match task.try_take_result().await {
@@ -447,5 +551,32 @@ impl ChunkArray {
                 None => Err(())
             }
         }
+    }
+
+    pub fn drop_tasks(&mut self) {
+        let _ = mem::take(&mut self.full_tasks);
+        let _ = mem::take(&mut self.low_tasks);
+        let _ = mem::take(&mut self.voxels_gen_tasks);
+    }
+
+    pub fn spawn_control_window(&mut self, ui: &imgui::Ui) {
+        imgui::Window::new("Chunk array")
+            .always_auto_resize(true)
+            .collapsible(true)
+            .movable(true)
+            .build(ui, || {
+                ui.text(format!(
+                    "{n} chunk generation tasks.",
+                    n = self.voxels_gen_tasks.len()
+                ));
+
+                ui.text(format!(
+                    "{n} mesh generation tasks.",
+                    n = self.low_tasks.len() + self.full_tasks.len()
+                ));
+
+                imgui::Slider::new("Chunks lod threashold", 0.01, 20.0)
+                    .build(ui, &mut self.lod_dist_threashold)
+            });
     }
 }

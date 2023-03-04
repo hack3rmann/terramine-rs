@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 pub mod chunk;
 pub mod camera;
 
@@ -18,24 +20,38 @@ use {
 
 /// Adds debug visuals to type `T`.
 #[derive(Debug)]
-pub struct DebugVisualized<T> {
+pub struct DebugVisualized<'s, T> {
     pub inner: T,
     pub mesh: UnindexedMesh<Vertex>,
-    pub static_data: DebugVisualsStatics<T>,
+    pub static_data: DebugVisualsStatics<'s, T>,
+}
+
+impl<T> Deref for DebugVisualized<'_, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T> std::ops::DerefMut for DebugVisualized<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
 }
 
 #[derive(Debug)]
-pub struct DebugVisualsStatics<T> {
-    pub shader: &'static Shader,
-    pub draw_params: &'static DrawParameters<'static>,
+pub struct DebugVisualsStatics<'s, T> {
+    pub shader: &'s Shader,
+    pub draw_params: &'s DrawParameters<'s>,
 
-    _phantom: PhantomData<T>
+    _phantom: PhantomData<fn() -> T>
 }
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
 
 pub fn switch_enable() {
-    ENABLED.store(!ENABLED.load(Ordering::Acquire), Ordering::Release);
+    let is_enabled = ENABLED.load(Ordering::Acquire);
+    ENABLED.store(!is_enabled, Ordering::Release);
 }
 
 #[repr(transparent)]

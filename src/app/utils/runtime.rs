@@ -16,6 +16,7 @@ pub fn initialize() {
         RUNTIME.replace(
             Builder::new_multi_thread()
                 .enable_all()
+                .worker_threads(6)
                 .build()
                 .expect("failed to build tokio runtime")
         );

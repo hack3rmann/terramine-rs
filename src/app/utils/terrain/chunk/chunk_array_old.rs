@@ -424,7 +424,7 @@ pub struct MeshedChunkArray<'s> {
     pub height: usize,
     pub depth:  usize,
 
-    pub chunks:      Vec<DebugVisualized<MeshedChunk>>,
+    pub chunks:      Vec<DebugVisualized<'s, MeshedChunk>>,
     pub full_shader: Shader,
     pub low_shader:  Shader,
     pub draw_params: DrawParameters<'s>

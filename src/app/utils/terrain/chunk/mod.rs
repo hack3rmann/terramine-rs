@@ -517,6 +517,22 @@ impl Chunk {
         }
     }
 
+    /// Tries to set LOD value that have least difference with given value.
+    /// If success it will return `Some(..)` with that value, otherwise, `None`.
+    pub fn try_set_best_fit_lod(&mut self, lod: Lod) -> Option<Lod> {
+        let best_fit = self.get_available_lods()
+            .into_iter()
+            .max_by(|&lhs, &rhs| {
+                let lhs_diff = (lhs as isize - lod as isize).abs();
+                let rhs_diff = (rhs as isize - lod as isize).abs();
+                lhs_diff.cmp(&rhs_diff)
+            })?;
+
+        self.set_active_lod(best_fit);
+
+        Some(best_fit)
+    }
+
     /// Gives list of available LODs.
     pub fn get_available_lods(&self) -> Vec<Lod> {
         let mut result = Vec::with_capacity(Chunk::N_LODS);
@@ -592,11 +608,11 @@ impl<'r> From<&'r mut Chunk> for ChunkMut<'r> {
 
 #[derive(Error, Debug)]
 pub enum SetLodError {
-    #[error("Failed to set LOD value to {tried} because there's no mesh for it. Active LOD value is {active}")]
+    #[error("failed to set LOD value to {tried} because there's no mesh for it. Active LOD value is {active}")]
     SetActiveLod {
         tried: Lod,
         active: Lod,
-    }
+    },
 }
 
 #[derive(Error, Debug, Clone)]

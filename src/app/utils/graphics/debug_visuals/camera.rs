@@ -23,12 +23,12 @@ pub mod data {
     static mut SHADER: Option<ShaderWrapper> = None;
     static mut DRAW_PARAMS: Option<DrawParametersWrapper> = None;
 
-    pub fn get(display: &Display) -> DebugVisualsStatics<Camera> {
+    pub fn get<'s>(display: &Display) -> DebugVisualsStatics<'s, Camera> {
         cond_init(display);
         get_unchecked()
     }
 
-    pub fn get_unchecked() -> DebugVisualsStatics<Camera> {
+    pub fn get_unchecked<'s>() -> DebugVisualsStatics<'s, Camera> {
         unsafe {
             DebugVisualsStatics {
                 shader: &SHADER.as_ref().wunwrap().0,
@@ -40,12 +40,13 @@ pub mod data {
 
     pub fn cond_init(display: &Display) {
         unsafe {
-            /* Check if uninitialyzed */
-            if let None = SHADER.as_ref() {
+            /* Check if uninitialized */
+            if SHADER.is_none() {
                 let shader = Shader::new("debug_lines", "debug_lines", display);
                 SHADER.replace(ShaderWrapper(shader));
             }
-            if let None = DRAW_PARAMS.as_ref() {
+
+            if DRAW_PARAMS.is_none() {
                 let draw_params = DrawParameters {
                     polygon_mode: glium::PolygonMode::Line,
                     line_width: Some(2.0),
@@ -101,7 +102,7 @@ pub mod data {
     }
 }
 
-impl DebugVisualized<Camera> {
+impl DebugVisualized<'_, Camera> {
     pub fn new_camera(camera: Camera, display: &Display) -> Self {
         let mesh = UnindexedMesh::new_empty(display);
         Self { inner: camera, mesh, static_data: data::get(display) }

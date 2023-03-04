@@ -38,7 +38,7 @@ pub struct App {
     /* Important stuff */
     input_manager: InputManager,
     graphics: Graphics,
-    camera: DebugVisualized<Camera>,
+    camera: DebugVisualized<'static, Camera>,
     timer: Timer,
     window_size: PhysicalSize<u32>,
 
@@ -110,10 +110,11 @@ impl App {
                 /* Close event */
                 WindowEvent::CloseRequested => {
                     *control_flow = ControlFlow::Exit;
+                    self.chunk_arr.drop_tasks();
                 },
 
                 WindowEvent::Resized(new_size) => {
-                    self.camera.inner.aspect_ratio = new_size.height as f32 / new_size.width as f32;
+                    self.camera.aspect_ratio = new_size.height as f32 / new_size.width as f32;
                     self.window_size = new_size;
                 },
 
@@ -142,13 +143,13 @@ impl App {
 
         /* Control camera by user input */
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
-            if self.camera.inner.grabbes_cursor {
-                self.camera.inner.grabbes_cursor = false;
+            if self.camera.grabbes_cursor {
+                self.camera.grabbes_cursor = false;
                 self.input_manager.mouse.release_cursor(&self.graphics);
             }
             
             else {
-                self.camera.inner.grabbes_cursor = true;
+                self.camera.grabbes_cursor = true;
                 self.input_manager.mouse.grab_cursor(&self.graphics);
             }
         }
@@ -175,13 +176,16 @@ impl App {
             let ui = self.graphics.imguic.frame();
 
             /* Camera window */
-            self.camera.inner.spawn_control_window(&ui, &mut self.input_manager);
+            self.camera.spawn_control_window(&ui, &mut self.input_manager);
 
             /* Profiler window */
             profiler::update_and_build_window(&ui, &self.timer, &mut self.input_manager);
 
             /* Render UI */
             self.graphics.imguiw.prepare_render(&ui, self.graphics.display.gl_window().window());
+
+            /* Chunk array control window */
+            self.chunk_arr.spawn_control_window(&ui);
 
             ui.render()
         };
@@ -190,15 +194,15 @@ impl App {
         let uniforms = uniform! {
             tex:  self.texture_atlas.with_mips(),
             time: self.timer.time(),
-            proj: self.camera.inner.get_proj(),
-            view: self.camera.inner.get_view(),
+            proj: self.camera.get_proj(),
+            view: self.camera.get_view(),
         };
 
         /* Actual drawing */
         let mut target = self.graphics.display.draw(); 
         target.clear_all(cfg::shader::CLEAR_COLOR, cfg::shader::CLEAR_DEPTH, cfg::shader::CLEAR_STENCIL);
         {
-            self.chunk_arr.render(&mut target, &self.chunk_draw_bundle, &uniforms, &self.graphics.display, &self.camera.inner)
+            self.chunk_arr.render(&mut target, &self.chunk_draw_bundle, &uniforms, &self.graphics.display, &self.camera)
                 .await
                 .expect("failed to render chunk array");
 
@@ -220,7 +224,7 @@ impl App {
             .update_delta_time(self.timer.duration());
         
         /* Rotating camera */
-        self.camera.inner.update(&mut self.input_manager, self.timer.dt_as_f64());
+        self.camera.update(&mut self.input_manager, self.timer.dt_as_f64());
 
         /* Debug visuals switcher */
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::DEBUG_VISUALS_SWITCH) {
@@ -230,39 +234,4 @@ impl App {
         /* Input update */
         self.input_manager.update(&self.graphics);		
     }
-
-    // Spawns chunk generation window.
-    // pub fn spawn_chunk_generation_window(
-    //     ui: &imgui::Ui, inited: bool, width: f32, height: f32,
-    //     generate_chunks: &mut bool, sizes: &mut [i32; 3], gen_percent: Loading
-    // ) {
-    //     return;
-    //     if inited { return }
-
-    //     imgui::Window::new("Chunk generator")
-    //         .position_pivot([0.5, 0.5])
-    //         .position([width * 0.5, height * 0.5], imgui::Condition::Always)
-    //         .movable(false)
-    //         .size_constraints([150.0, 100.0], [300.0, 200.0])
-    //         .always_auto_resize(true)
-    //         .save_settings(false)
-    //         .build(&ui, || {
-    //             ui.text("How many?");
-    //             ui.input_int3("Sizes", sizes)
-    //                 .auto_select_all(true)
-    //                 .enter_returns_true(true)
-    //                 .build();
-    //             *generate_chunks = ui.button("Generate");
-
-    //             if gen_percent != Loading::none() {
-    //                 imgui::ProgressBar::new(gen_percent.percent as f32)
-    //                     .overlay_text(format!(
-    //                         "{state} ({percent:.1}%)",
-    //                         percent = gen_percent.percent * 100.0,
-    //                         state = gen_percent.state
-    //                     ))
-    //                     .build(&ui);
-    //             }
-    //         });
-    // }
 }
