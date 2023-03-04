@@ -728,7 +728,7 @@ mod space_iter_tests {
 #[cfg(test)]
 mod border_test {
     use {
-        crate::app::utils::terrain::chunk::{Chunk, idx_to_coord_idx},
+        crate::app::utils::terrain::chunk::Chunk,
         super::*,
     };
 

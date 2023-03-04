@@ -5,18 +5,13 @@
 use {
     crate::app::utils::{
         cfg,
-        werror::prelude::*,
         terrain::chunk::{
-            self,
-            MeshedChunk,
-            MeshlessChunk as Chunk,
-            ChunkEnvironment,
+            Chunk,
         },
         graphics::{
             mesh::Mesh,
             shader::Shader,
             vertex_buffer::VertexBuffer,
-            camera::Camera,
         }
     },
     super::*,
@@ -27,15 +22,10 @@ use {
         DepthTest,
         BackfaceCullingMode,
         index::PrimitiveType,
-        uniforms::Uniforms,
-        Frame,
-        DrawError,
     },
     std::{
         marker::PhantomData,
-        sync::atomic::Ordering
     },
-    math_linear::prelude::*,
 };
 
 pub mod data {
@@ -44,7 +34,7 @@ pub mod data {
     static mut SHADER: Option<ShaderWrapper> = None;
     static mut DRAW_PARAMS: Option<DrawParametersWrapper> = None;
 
-    pub fn get<'s>(display: &Display) -> DebugVisualsStatics<'s, MeshedChunk> {
+    pub fn get<'s>(display: &Display) -> DebugVisualsStatics<'s, Chunk> {
         unsafe {
             cond_init(display);
 
@@ -57,7 +47,7 @@ pub mod data {
     }
 
     #[allow(dead_code)]
-    pub fn get_unchecked<'s>() -> DebugVisualsStatics<'s, MeshedChunk> {
+    pub fn get_unchecked<'s>() -> DebugVisualsStatics<'s, Chunk> {
         unsafe {
             DebugVisualsStatics {
                 shader: &SHADER.as_ref().wunwrap().0,
@@ -93,12 +83,12 @@ pub mod data {
     }
 }
 
-impl DebugVisualized<'_, MeshedChunk> {
-    pub fn new_meshed_chunk(chunk: MeshedChunk, display: &Display) -> Self {
+impl DebugVisualized<'_, Chunk> {
+    pub fn new_meshed_chunk(chunk: Chunk, display: &Display) -> Self {
         let mesh = {
             const BIAS: f32 = cfg::topology::Z_FIGHTING_BIAS;
             const SIZE: f32 = Chunk::SIZE as f32 + BIAS;
-            let pos = chunk::chunk_coords_to_min_world_int3(chunk.inner.pos);
+            let pos = Chunk::global_pos(chunk.pos);
             let lll = [ -0.5 + pos.x() as f32 - BIAS, -0.5 + pos.y() as f32 - BIAS, -0.5 + pos.z() as f32 - BIAS ];
             let llh = [ -0.5 + pos.x() as f32 - BIAS, -0.5 + pos.y() as f32 - BIAS, -0.5 + pos.z() as f32 + SIZE ];
             let lhl = [ -0.5 + pos.x() as f32 - BIAS, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 - BIAS ];
@@ -108,9 +98,9 @@ impl DebugVisualized<'_, MeshedChunk> {
             let hhl = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 - BIAS ];
             let hhh = [ -0.5 + pos.x() as f32 + SIZE, -0.5 + pos.y() as f32 + SIZE, -0.5 + pos.z() as f32 + SIZE ];
 
-            let color = if chunk.inner.is_empty() {
+            let color = if chunk.is_empty() {
                 [0.5, 0.1, 0.1, 0.5]
-            } else if chunk.inner.is_filled() {
+            } else if chunk.is_same_filled() {
                 [0.1, 0.1, 0.5, 0.5]
             } else {
                 [0.3, 0.3, 0.3, 0.5]
@@ -161,38 +151,5 @@ impl DebugVisualized<'_, MeshedChunk> {
         };
         
         DebugVisualized { inner: chunk, mesh, static_data: data::get(display) }
-    }
-
-    pub fn render_debug_meshed_chunks(
-        &self, target: &mut Frame,
-        uniforms: &impl Uniforms, camera: &Camera
-    ) -> Result<(), DrawError> {
-        match ENABLED.load(Ordering::Relaxed) && self.inner.is_visible(camera) {
-            true => self.mesh.render(target, self.static_data.shader, self.static_data.draw_params, uniforms),
-            false => Ok(()),
-        }
-    }
-
-    pub fn render_meshed_chunks(
-        &self, target: &mut Frame, full_shader: &Shader,
-        low_shader: &Shader, uniforms: &impl Uniforms,
-        draw_params: &DrawParameters, camera: &Camera
-    ) -> Result<(), DrawError> {
-        self.inner.render(target, full_shader, low_shader, uniforms, draw_params, camera)?;
-        self.render_debug_meshed_chunks(target, uniforms, camera)?;
-        Ok(())
-    }
-
-    pub fn update_details(&mut self, display: &Display, env: ChunkEnvironment, camera_pos: vec3) {
-        self.update_details_data(camera_pos);
-        self.refresh_mesh(display, &env)
-    }
-
-    pub fn update_details_data(&mut self, camera_pos: vec3) {
-        self.inner.update_details_data(camera_pos)
-    }
-
-    pub fn refresh_mesh(&mut self, display: &Display, env: &ChunkEnvironment) {
-        self.inner.refresh_mesh(display, env)
     }
 }

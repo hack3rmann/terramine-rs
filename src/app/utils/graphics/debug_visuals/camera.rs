@@ -68,32 +68,32 @@ pub mod data {
         let rays = camera.get_frustum().courner_rays;
         const LEN: f32 = cfg::camera::FRUSTUM_EDGE_LINE_LENGTH;
         let vertices = [
-            Vertex { pos: [rays[0].origin.x(), rays[0].origin.y(), rays[0].origin.z()], color },
+            Vertex { pos: [rays[0].origin.x, rays[0].origin.y, rays[0].origin.z], color },
             Vertex { pos: [
-                rays[0].origin.x() + LEN * rays[0].direction.x(),
-                rays[0].origin.y() + LEN * rays[0].direction.y(),
-                rays[0].origin.z() + LEN * rays[0].direction.z()
+                rays[0].origin.x + LEN * rays[0].direction.x,
+                rays[0].origin.y + LEN * rays[0].direction.y,
+                rays[0].origin.z + LEN * rays[0].direction.z
             ], color },
             
-            Vertex { pos: [rays[1].origin.x(), rays[1].origin.y(), rays[1].origin.z()], color },
+            Vertex { pos: [rays[1].origin.x, rays[1].origin.y, rays[1].origin.z], color },
             Vertex { pos: [
-                rays[1].origin.x() + LEN * rays[1].direction.x(),
-                rays[1].origin.y() + LEN * rays[1].direction.y(),
-                rays[1].origin.z() + LEN * rays[1].direction.z()
+                rays[1].origin.x + LEN * rays[1].direction.x,
+                rays[1].origin.y + LEN * rays[1].direction.y,
+                rays[1].origin.z + LEN * rays[1].direction.z
             ], color },
             
-            Vertex { pos: [rays[2].origin.x(), rays[2].origin.y(), rays[2].origin.z()], color },
+            Vertex { pos: [rays[2].origin.x, rays[2].origin.y, rays[2].origin.z], color },
             Vertex { pos: [
-                rays[2].origin.x() + LEN * rays[2].direction.x(),
-                rays[2].origin.y() + LEN * rays[2].direction.y(),
-                rays[2].origin.z() + LEN * rays[2].direction.z()
+                rays[2].origin.x + LEN * rays[2].direction.x,
+                rays[2].origin.y + LEN * rays[2].direction.y,
+                rays[2].origin.z + LEN * rays[2].direction.z
             ], color },
             
-            Vertex { pos: [rays[3].origin.x(), rays[3].origin.y(), rays[3].origin.z()], color },
+            Vertex { pos: [rays[3].origin.x, rays[3].origin.y, rays[3].origin.z], color },
             Vertex { pos: [
-                rays[3].origin.x() + LEN * rays[3].direction.x(),
-                rays[3].origin.y() + LEN * rays[3].direction.y(),
-                rays[3].origin.z() + LEN * rays[3].direction.z()
+                rays[3].origin.x + LEN * rays[3].direction.x,
+                rays[3].origin.y + LEN * rays[3].direction.y,
+                rays[3].origin.z + LEN * rays[3].direction.z
             ], color },
         ];
 

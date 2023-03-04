@@ -1,0 +1,171 @@
+use {
+    crate::app::utils::{
+        cfg,
+        graphics::{
+            camera::Camera,
+            vertex_buffer::VertexBuffer,
+            mesh::UnindexedMesh,
+        },
+        terrain::chunk::{
+            Chunk,
+            chunk_array::ChunkArray,
+            ChunkDrawBundle,
+            ChunkRenderError,
+        },
+    },
+    super::*,
+    glium::{
+        Display, Depth, DepthTest, BackfaceCullingMode, Frame,
+        index::PrimitiveType,
+        uniforms::Uniforms,
+    },
+};
+
+pub mod data {
+    use super::*;
+
+    static mut SHADER: Option<ShaderWrapper> = None;
+    static mut DRAW_PARAMS: Option<DrawParametersWrapper> = None;
+
+    pub fn get<'s>(display: &Display) -> DebugVisualsStatics<'s, ChunkArray> {
+        cond_init(display);
+        get_unchecked()
+    }
+
+    pub fn get_unchecked<'s>() -> DebugVisualsStatics<'s, ChunkArray> {
+        unsafe {
+            let err_msg = "debug visuals statics should been initialized";
+
+            let ShaderWrapper(shader) = &SHADER
+                .as_ref()
+                .expect(err_msg);
+
+            let DrawParametersWrapper(draw_params) = &DRAW_PARAMS
+                .as_ref()
+                .expect(err_msg);
+            
+            DebugVisualsStatics { shader, draw_params, _phantom: PhantomData }
+        }
+    }
+
+    pub fn cond_init(display: &Display) {
+        unsafe {
+            /* Check if uninitialized */
+            if SHADER.is_none() {
+                let shader = Shader::new("debug_lines", "debug_lines", display);
+                SHADER.replace(ShaderWrapper(shader));
+            }
+
+            if DRAW_PARAMS.is_none() {
+                let draw_params = DrawParameters {
+                    polygon_mode: glium::PolygonMode::Line,
+                    line_width: Some(1.5),
+                    depth: Depth {
+                        test: DepthTest::IfLessOrEqual,
+                        write: true,
+                        .. Default::default()
+                    },
+                    backface_culling: BackfaceCullingMode::CullingDisabled,
+                    .. Default::default()
+                };
+                DRAW_PARAMS.replace(DrawParametersWrapper(draw_params));
+            }
+        }
+    }
+
+    pub fn construct_mesh(chunk_arr: &ChunkArray, display: &Display) -> UnindexedMesh<Vertex> {
+        let vertices: Vec<_> = chunk_arr.chunks()
+            .flat_map(|chunk| {
+                const BIAS: f32 = cfg::topology::Z_FIGHTING_BIAS;
+                const SIZE: f32 = Chunk::SIZE as f32 + BIAS;
+
+                let pos = Chunk::global_pos(chunk.pos);
+                let lll = [ -0.5 + pos.x as f32 - BIAS, -0.5 + pos.y as f32 - BIAS, -0.5 + pos.z as f32 - BIAS ];
+                let llh = [ -0.5 + pos.x as f32 - BIAS, -0.5 + pos.y as f32 - BIAS, -0.5 + pos.z as f32 + SIZE ];
+                let lhl = [ -0.5 + pos.x as f32 - BIAS, -0.5 + pos.y as f32 + SIZE, -0.5 + pos.z as f32 - BIAS ];
+                let lhh = [ -0.5 + pos.x as f32 - BIAS, -0.5 + pos.y as f32 + SIZE, -0.5 + pos.z as f32 + SIZE ];
+                let hll = [ -0.5 + pos.x as f32 + SIZE, -0.5 + pos.y as f32 - BIAS, -0.5 + pos.z as f32 - BIAS ];
+                let hlh = [ -0.5 + pos.x as f32 + SIZE, -0.5 + pos.y as f32 - BIAS, -0.5 + pos.z as f32 + SIZE ];
+                let hhl = [ -0.5 + pos.x as f32 + SIZE, -0.5 + pos.y as f32 + SIZE, -0.5 + pos.z as f32 - BIAS ];
+                let hhh = [ -0.5 + pos.x as f32 + SIZE, -0.5 + pos.y as f32 + SIZE, -0.5 + pos.z as f32 + SIZE ];
+
+                let color = if !chunk.is_generated() {
+                    [0.1, 0.0, 0.0, 0.5]
+                } else if chunk.is_empty() {
+                    [0.5, 0.1, 0.1, 0.5]
+                } else if chunk.is_same_filled() {
+                    [0.1, 0.1, 0.5, 0.5]
+                } else {
+                    [0.3, 0.3, 0.3, 0.5]
+                };
+
+                [
+                    Vertex { pos: lll, color },
+                    Vertex { pos: lhl, color },
+                    
+                    Vertex { pos: llh, color },
+                    Vertex { pos: lhh, color },
+                    
+                    Vertex { pos: hlh, color },
+                    Vertex { pos: hhh, color },
+                    
+                    Vertex { pos: hll, color },
+                    Vertex { pos: hhl, color },
+                    
+
+                    Vertex { pos: lll, color },
+                    Vertex { pos: hll, color },
+                    
+                    Vertex { pos: lhl, color },
+                    Vertex { pos: hhl, color },
+                    
+                    Vertex { pos: lhh, color },
+                    Vertex { pos: hhh, color },
+                    
+                    Vertex { pos: llh, color },
+                    Vertex { pos: hlh, color },
+                    
+                    
+                    Vertex { pos: lll, color },
+                    Vertex { pos: llh, color },
+                    
+                    Vertex { pos: hll, color },
+                    Vertex { pos: hlh, color },
+                    
+                    Vertex { pos: hhl, color },
+                    Vertex { pos: hhh, color },
+                    
+                    Vertex { pos: lhl, color },
+                    Vertex { pos: lhh, color },
+                ]
+            })
+            .collect();
+
+        let vbuffer = VertexBuffer::no_indices(display, &vertices, PrimitiveType::LinesList);
+        UnindexedMesh::new(vbuffer)
+    }
+}
+
+impl DebugVisualized<'_, ChunkArray> {
+    pub fn new_chunk_array(chunk_array: ChunkArray, display: &Display) -> Self {
+        let mesh = data::construct_mesh(&chunk_array, display);
+        Self { inner: chunk_array, mesh, static_data: data::get(display) }
+    }
+
+    pub async fn render_chunk_array(
+        &mut self, target: &mut Frame, draw_bundle: &ChunkDrawBundle<'_>,
+        uniforms: &impl Uniforms, display: &Display, cam: &Camera,
+    ) -> Result<(), ChunkRenderError> {
+        self.render(target, draw_bundle, uniforms, display, cam).await?;
+
+        if ENABLED.load(Ordering::Relaxed) {
+            self.mesh = data::construct_mesh(self, display);
+        
+            let shader = data::get(display).shader;
+            let draw_params = data::get(display).draw_params;
+            self.mesh.render(target, shader, draw_params, uniforms)?;
+        }
+
+        Ok(())
+    }
+}

@@ -247,9 +247,7 @@ impl ChunkArray {
 
     /// Gives iterator over chunk coordinates.
     pub fn pos_iter(sizes: USize3) -> SpaceIter {
-        let start = Self::coord_idx_to_pos(sizes, USize3::ZERO);
-        let end   = Self::coord_idx_to_pos(sizes, sizes);
-
+        let (start, end) = Self::pos_bounds(sizes);
         SpaceIter::new(start..end)
     }
 

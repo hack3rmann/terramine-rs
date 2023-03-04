@@ -43,7 +43,7 @@ pub struct App {
     window_size: PhysicalSize<u32>,
 
     /* Temp voxel */
-    chunk_arr: ChunkArray,
+    chunk_arr: DebugVisualized<'static, ChunkArray>,
     chunk_draw_bundle: ChunkDrawBundle<'static>,
 
     /* Second layer temporary stuff */
@@ -67,7 +67,10 @@ impl App {
             .expect("path should be valid and file is readable");
 
         let chunk_draw_bundle = ChunkDrawBundle::new(&graphics.display);
-        let chunk_arr = ChunkArray::new_empty_chunks(vecs!(32, 2, 32));
+        let chunk_arr = DebugVisualized::new_chunk_array(
+            ChunkArray::new_empty_chunks(vecs!(32, 2, 32)),
+            &graphics.display,
+        );
 
         App {
             chunk_arr,
@@ -202,8 +205,10 @@ impl App {
         let mut target = self.graphics.display.draw(); 
         target.clear_all(cfg::shader::CLEAR_COLOR, cfg::shader::CLEAR_DEPTH, cfg::shader::CLEAR_STENCIL);
         {
-            self.chunk_arr.render(&mut target, &self.chunk_draw_bundle, &uniforms, &self.graphics.display, &self.camera)
-                .await
+            self.chunk_arr.render_chunk_array(
+                &mut target, &self.chunk_draw_bundle,
+                &uniforms, &self.graphics.display, &self.camera
+            ).await
                 .expect("failed to render chunk array");
 
             self.camera.render_camera(&self.graphics.display, &mut target, &uniforms)
