@@ -57,10 +57,10 @@ impl Window {
 
         /* Bytemap pointer load from 4 bytes of file */
         /* This pointer is 4 bytes large and can be found on 10th byte position from file begin */
-        let start_bytes: usize =	(raw_data[13] as usize) << 24 |
-                                    (raw_data[12] as usize) << 16 |
-                                    (raw_data[11] as usize) << 8  |
-                                    (raw_data[10] as usize);
+        let start_bytes = (raw_data[13] as usize) << 24 |
+                          (raw_data[12] as usize) << 16 |
+                          (raw_data[11] as usize) << 8  |
+                          (raw_data[10] as usize);
 
         /* Trim useless information */
         let raw_data = raw_data[start_bytes..].as_mut();

@@ -6,6 +6,7 @@ use {
         cfg,
         user_io::InputManager,
         graphics::{
+            self,
             Graphics,
             camera::Camera,
             texture::Texture,
@@ -35,18 +36,15 @@ use {
 /// Struct that handles everything.
 #[derive(Debug)]
 pub struct App {
-    /* Important stuff */
     input_manager: InputManager,
     graphics: Graphics,
     camera: DebugVisualized<'static, Camera>,
     timer: Timer,
     window_size: PhysicalSize<u32>,
 
-    /* Temp voxel */
     chunk_arr: DebugVisualized<'static, ChunkArray>,
     chunk_draw_bundle: ChunkDrawBundle<'static>,
 
-    /* Second layer temporary stuff */
     texture_atlas: Texture,
 }
 
@@ -157,18 +155,19 @@ impl App {
             }
         }
 
+        let window = self.graphics.display.gl_window();
+        let window = window.window();
+
         /* Display FPS */
-        self.graphics.display.gl_window().window()
-            .set_title(&format!("Terramine: {0:.0} FPS", self.timer.fps()));
+        window.set_title(&format!("Terramine: {0:.0} FPS", self.timer.fps()));
 
         /* Update ImGui stuff */
         self.graphics.imguiw
-            .prepare_frame(self.graphics.imguic.io_mut(), self.graphics.display.gl_window().window())
+            .prepare_frame(self.graphics.imguic.io_mut(), window)
             .expect("failed to prepare frame");
 
         /* Moves to `RedrawRequested` stage */
-        self.graphics.display.gl_window().window()
-            .request_redraw();
+        window.request_redraw();
     }
 
     /// Prepares the frame.
@@ -179,16 +178,16 @@ impl App {
             let ui = self.graphics.imguic.new_frame();
 
             /* Camera window */
-            self.camera.spawn_control_window(&ui, &mut self.input_manager);
+            self.camera.spawn_control_window(ui, &mut self.input_manager);
 
             /* Profiler window */
-            profiler::update_and_build_window(&ui, &self.timer, &mut self.input_manager);
+            profiler::update_and_build_window(ui, &self.timer, &mut self.input_manager);
 
             /* Render UI */
-            self.graphics.imguiw.prepare_render(&ui, self.graphics.display.gl_window().window());
+            self.graphics.imguiw.prepare_render(ui, self.graphics.display.gl_window().window());
 
             /* Chunk array control window */
-            self.chunk_arr.spawn_control_window(&ui);
+            self.chunk_arr.spawn_control_window(ui);
 
             self.graphics.imguic.render()
         };
@@ -202,22 +201,22 @@ impl App {
         };
 
         /* Actual drawing */
-        let mut target = self.graphics.display.draw(); 
-        target.clear_all(cfg::shader::CLEAR_COLOR, cfg::shader::CLEAR_DEPTH, cfg::shader::CLEAR_STENCIL);
-        {
-            self.chunk_arr.render_chunk_array(
-                &mut target, &self.chunk_draw_bundle,
-                &uniforms, &self.graphics.display, &self.camera
-            ).await
-                .expect("failed to render chunk array");
+        graphics::draw!(
+            self.graphics.display.draw(),
+            |mut target| {
+                self.chunk_arr.render_chunk_array(
+                    &mut target, &self.chunk_draw_bundle,
+                    &uniforms, &self.graphics.display, &self.camera
+                ).await
+                    .expect("failed to render chunk array");
 
-            self.camera.render_camera(&self.graphics.display, &mut target, &uniforms)
-                .expect("failed to render camera");
+                self.camera.render_camera(&self.graphics.display, &mut target, &uniforms)
+                    .expect("failed to render camera");
 
-            self.graphics.imguir.0.render(&mut target, draw_data)
-                .expect("failed to render imgui");
-        }
-        target.finish().expect("failed to finish target");
+                self.graphics.imguir.0.render(&mut target, draw_data)
+                    .expect("failed to render imgui");
+            }
+        );
 
         self.timer.update();
         self.graphics.imguic

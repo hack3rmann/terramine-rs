@@ -44,15 +44,15 @@ use {
 #[derive(Debug)]
 pub struct Graphics {
     /* Gluim main struct */
-    pub display:	glium::Display,
+    pub display: glium::Display,
 
     /* OpenGL pipeline stuff */
     pub event_loop:	Option<EventLoop<()>>,
 
     /* ImGui stuff */
-    pub imguic:		imgui::Context,
-    pub imguiw:		imgui_winit_support::WinitPlatform,
-    pub imguir:		ImguiRendererWrapper,
+    pub imguic: imgui::Context,
+    pub imguiw: imgui_winit_support::WinitPlatform,
+    pub imguir: ImguiRendererWrapper,
 }
 
 
@@ -109,18 +109,18 @@ impl Graphics {
     /// Validates initialization.
     fn validate() -> Result<(), &'static str> {
         /* Checks if struct is already initialized */
-        static INITIALIZED_OLD: AtomicBool = AtomicBool::new(false);
-        if INITIALIZED_OLD.load(Ordering::Acquire) {
+        static IS_INITIALIZED: AtomicBool = AtomicBool::new(false);
+        if IS_INITIALIZED.load(Ordering::Acquire) {
             return Err("Attempting to initialize graphics twice! Graphics is already initialized!");
         } else {
-            Ok(INITIALIZED_OLD.store(true, Ordering::Release))
+            Ok(IS_INITIALIZED.store(true, Ordering::Release))
         }
     }
 
     /// Gives event_loop and removes it from graphics struct.
     pub fn take_event_loop(&mut self) -> glium::glutin::event_loop::EventLoop<()> {
         self.event_loop.take()
-            .expect("graphics.event_loop should be initialyzed!")
+            .expect("graphics.event_loop should be initialized!")
     }
 
     pub fn get_context(&self) -> &Rc<gl::backend::Context> {
@@ -146,4 +146,27 @@ impl std::fmt::Debug for ImguiRendererWrapper {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "imgui_glium_renderer::Renderer {{...}}")
     }
+}
+
+pub use crate::draw;
+
+#[macro_export]
+macro_rules! draw {
+    (
+        $target_src:expr,
+        |mut $target_name:ident $(:Frame)?| {
+            $($draw_call:stmt;)*
+        }$(,)?
+    ) => {{
+        use $crate::app::utils::cfg::shader::{
+            CLEAR_COLOR as __CLEAR_COLOR,
+            CLEAR_DEPTH as __CLEAR_DEPTH,
+            CLEAR_STENCIL as __CLEAR_STENCIL,
+        };
+
+        let mut $target_name = { $target_src }; 
+        $target_name.clear_all(__CLEAR_COLOR, __CLEAR_DEPTH, __CLEAR_STENCIL);
+        $($draw_call)*
+        $target_name.finish().expect("failed to finish target");
+    }};
 }
