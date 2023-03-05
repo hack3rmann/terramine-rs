@@ -82,10 +82,12 @@ pub mod data {
         let vertices: Vec<_> = chunk_arr.chunks()
             .flat_map(|chunk| {
                 let bias = cfg::topology::Z_FIGHTING_BIAS
-                         * (chunk.meta_info.active_lod as f32 * 80.0 + 1.0);
+                         * (chunk.info.active_lod as f32 * 80.0 + 1.0);
                 let size = Chunk::GLOBAL_SIZE as f32 + bias;
 
-                let pos = vec3::from(Chunk::global_pos(chunk.pos)) * Voxel::SIZE - vec3::all(0.5 * Voxel::SIZE);
+                let pos = vec3::from(Chunk::global_pos(chunk.pos)) * Voxel::SIZE
+                        - vec3::all(0.5 * Voxel::SIZE);
+                        
                 let lll = [ pos.x - bias, pos.y - bias, pos.z - bias ];
                 let llh = [ pos.x - bias, pos.y - bias, pos.z + size ];
                 let lhl = [ pos.x - bias, pos.y + size, pos.z - bias ];
@@ -107,7 +109,7 @@ pub mod data {
 
                 let color = color.map(|c| {
                     let lod_coef = 1.0
-                                 - chunk.meta_info.active_lod as f32
+                                 - chunk.info.active_lod as f32
                                      / Chunk::N_LODS as f32
                                  + 0.001;
                     c * (lod_coef * 0.7 + 0.3)

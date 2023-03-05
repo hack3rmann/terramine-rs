@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub mod iterator;
 pub mod chunk_array;
 pub mod tasks;
@@ -65,14 +67,14 @@ macro_rules! impl_chunk_with_refs {
 pub struct Chunk {
     pub pos: Int3,
     pub voxel_ids: Vec<Id>,
-    pub meta_info: MetaInfo,
+    pub info: Info,
 
     pub detailed_mesh: Option<UnindexedMesh<DetailedVertex>>,
     pub low_meshes: [Option<UnindexedMesh<LoweredVertex>>; Self::N_LODS],
 }
 
 impl_chunk_with_refs! {
-    /// Gives `Some()` with fill id or returns `None`.
+    /// Gives iterator over all voxels in chunk.
     pub fn voxels(&self) -> impl Iterator<Item = Voxel> + '_ {
         self.voxel_ids.iter()
             .copied()
@@ -108,7 +110,7 @@ impl_chunk_with_refs! {
             return true
         }
 
-        match self.meta_info.fill_type {
+        match self.info.fill_type {
             FillType::AllSame(id) => id == AIR_VOXEL_DATA.id,
             _ => false,
         }
@@ -116,7 +118,7 @@ impl_chunk_with_refs! {
 
     /// Gives `Some()` with fill id or returns `None`.
     pub fn fill_id(&self) -> Option<Id> {
-        match self.meta_info.fill_type {
+        match self.info.fill_type {
             FillType::AllSame(id) => Some(id),
             _ => None,
         }
@@ -127,10 +129,11 @@ impl_chunk_with_refs! {
         self.fill_id().is_some()
     }
 
+    /// Gives [`Vec`] with full detail vertices mesh of [`Chunk`].
     pub fn make_vertices_detailed(&self, chunk_adj: ChunkAdj) -> Vec<DetailedVertex> {
         if self.is_empty() { return vec![] }
 
-        let pos_iter: Box<dyn Iterator<Item = Int3>> = match self.meta_info.fill_type {
+        let pos_iter: Box<dyn Iterator<Item = Int3>> = match self.info.fill_type {
             FillType::Default =>
                 Box::new(Chunk::local_pos_iter()),
 
@@ -266,15 +269,15 @@ impl_chunk_with_refs! {
     }
 
     /// Gives voxel from local position (relative to chunk).
+    /// 
+    /// # Panic
+    /// Panics if [`Chunk`] is not already been generated.
     pub fn get_voxel_local(&self, local_pos: Int3) -> Voxel {
+        assert!(self.is_generated(), "chunk should be generated before it can provide voxels");
+
         let global_pos = Chunk::local_to_global_pos(self.pos.to_owned(), local_pos);
 
-        // FIXME: handle this more convinient.
-        if !self.is_generated() {
-            return Voxel::new(global_pos, AIR_VOXEL_DATA)
-        }
-
-        match self.meta_info.fill_type {
+        match self.info.fill_type {
             FillType::Default => Voxel::new(
                 global_pos,
                 &VOXEL_DATA[self.voxel_ids[Chunk::voxel_pos_to_idx(local_pos)] as usize]
@@ -324,7 +327,7 @@ impl Chunk {
         ChunkRef {
             pos: &self.pos,
             voxel_ids: &self.voxel_ids,
-            meta_info: &self.meta_info,
+            info: &self.info,
         }
     }
 
@@ -333,7 +336,7 @@ impl Chunk {
         ChunkMut {
             pos: &mut self.pos,
             voxel_ids: &mut self.voxel_ids,
-            meta_info: &mut self.meta_info,
+            info: &mut self.info,
         }
     }
 
@@ -365,7 +368,7 @@ impl Chunk {
     pub fn new_same_filled(chunk_pos: Int3, fill_id: Id) -> Self {
         Self {
             voxel_ids: vec![fill_id],
-            meta_info: MetaInfo {
+            info: Info {
                 fill_type: FillType::AllSame(fill_id),
                 active_lod: 0,
             },
@@ -377,7 +380,7 @@ impl Chunk {
         Self {
             pos: chunk_pos,
             voxel_ids,
-            meta_info: Default::default(),
+            info: Default::default(),
             detailed_mesh: None,
 
             // FIXME:
@@ -412,7 +415,7 @@ impl Chunk {
         let sample_id = self.voxel_ids[0];
         if self.voxel_ids.iter().all(|&voxel_id| voxel_id == sample_id) {
             self.voxel_ids = vec![sample_id];
-            self.meta_info.fill_type = FillType::AllSame(sample_id);
+            self.info.fill_type = FillType::AllSame(sample_id);
         }
 
         return self
@@ -474,8 +477,6 @@ impl Chunk {
     ) -> Result<(), ChunkRenderError> {
         if self.is_empty() { return Ok(()) }
 
-        // TODO: If there no mesh just render a blank chunk
-
         use ChunkRenderError as Err;
         match lod {
             0 => {
@@ -511,8 +512,8 @@ impl Chunk {
     /// Tries to set active LOD to given value.
     pub fn try_set_active_lod(&mut self, lod: Lod) -> Result<(), SetLodError> {
         match self.get_available_lods().contains(&lod) {
-            true => Ok(self.meta_info.active_lod = lod),
-            false => Err(SetLodError::SetActiveLod { tried: lod, active: self.meta_info.active_lod }),
+            true => Ok(self.info.active_lod = lod),
+            false => Err(SetLodError::SetActiveLod { tried: lod, active: self.info.active_lod }),
         }
     }
 
@@ -521,9 +522,9 @@ impl Chunk {
     pub fn try_set_best_fit_lod(&mut self, lod: Lod) -> Option<Lod> {
         let best_fit = self.get_available_lods()
             .into_iter()
-            .max_by(|&lhs, &rhs| {
-                let lhs_diff = (lhs as isize - lod as isize).abs();
-                let rhs_diff = (rhs as isize - lod as isize).abs();
+            .min_by(|&lhs, &rhs| {
+                let lhs_diff = u32::abs_diff(lhs, lod as u32);
+                let rhs_diff = u32::abs_diff(rhs, lod as u32);
                 lhs_diff.cmp(&rhs_diff)
             })?;
 
@@ -556,7 +557,7 @@ impl Chunk {
 
     pub fn can_render_active_lod(&self) -> bool {
         self.get_available_lods()
-            .contains(&self.meta_info.active_lod)
+            .contains(&self.info.active_lod)
     }
 }
 
@@ -564,14 +565,14 @@ impl Chunk {
 pub struct ChunkRef<'s> {
     pub pos: &'s Int3,
     pub voxel_ids: &'s Vec<Id>,
-    pub meta_info: &'s MetaInfo,
+    pub info: &'s Info,
 }
 
 #[derive(Debug)]
 pub struct ChunkMut<'s> {
     pub pos: &'s mut Int3,
     pub voxel_ids: &'s mut Vec<Id>,
-    pub meta_info: &'s mut MetaInfo,
+    pub info: &'s mut Info,
 }
 
 impl From<ChunkRef<'_>> for Chunk {
@@ -579,7 +580,7 @@ impl From<ChunkRef<'_>> for Chunk {
         Self {
             pos: other.pos.clone(),
             voxel_ids: other.voxel_ids.clone(),
-            meta_info: other.meta_info.clone(),
+            info: other.info.clone(),
             detailed_mesh: None,
             low_meshes: [None, None, None, None, None, None],
         }
@@ -591,7 +592,7 @@ impl From<ChunkMut<'_>> for Chunk {
         Self {
             pos: other.pos.clone(),
             voxel_ids: other.voxel_ids.clone(),
-            meta_info: other.meta_info.clone(),
+            info: other.info.clone(),
             detailed_mesh: None,
             low_meshes: [None, None, None, None, None, None],
         }
@@ -612,7 +613,8 @@ impl<'r> From<&'r mut Chunk> for ChunkMut<'r> {
 
 #[derive(Error, Debug)]
 pub enum SetLodError {
-    #[error("failed to set LOD value to {tried} because there's no mesh for it. Active LOD value is {active}")]
+    #[error("failed to set LOD value to {tried} because \
+             there's no mesh for it. Active LOD value is {active}")]
     SetActiveLod {
         tried: Lod,
         active: Lod,
@@ -660,7 +662,7 @@ impl<'s> ChunkDrawBundle<'s> {
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub struct MetaInfo {
+pub struct Info {
     pub fill_type: FillType,
     pub active_lod: Lod,
 }
@@ -732,10 +734,3 @@ impl ChunkAdj<'_> {
 }
 
 pub type Lod = u32;
-
-/// FIXME: turn into free function to prevent from conflicts, because [`Vec<u16>`].
-unsafe impl StaticSize for Vec<Id> {
-    fn static_size() -> usize {
-        Chunk::VOLUME * u16::static_size()
-    }
-}

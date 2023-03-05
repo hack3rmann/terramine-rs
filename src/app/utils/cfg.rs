@@ -1,5 +1,7 @@
 //! The place where all significant constants are placed.
 
+#![allow(dead_code)]
+
 pub mod save {
     pub const META_FILE_NAME: &str = "meta.off";
     pub const STACK_FILE_EXTENTION: &str = "stk";
@@ -37,7 +39,7 @@ pub mod terrain {
     /// Chunk side length in voxels.
     /// Must be a power of 2 due to be halfed in process of lowering details.
     pub const CHUNK_SIZE: usize = 64;
-    pub const VOXEL_SIZE: f32   = 20.0;
+    pub const VOXEL_SIZE: f32   = 1.0;
 
     pub mod voxel_types {
         use {
@@ -93,7 +95,6 @@ pub mod key_bindings {
     pub const DEBUG_VISUALS_SWITCH:           Key = Key::F3;
     pub const APP_EXIT:                       Key = Key::Escape;
     pub const MOUSE_CAPTURE:                  Key = Key::T;
-    pub const LOD_REFRESHER_SWITCH:           Key = Key::R;
     pub const ENABLE_DRAG_AND_RESIZE_WINDOWS: Key = Key::I;
     pub const ENABLE_PROFILER_WINDOW:         Key = Key::E;
 }

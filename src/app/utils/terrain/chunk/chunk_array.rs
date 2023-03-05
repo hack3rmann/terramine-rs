@@ -120,7 +120,7 @@ impl ChunkArray {
             .create(save_path)?
             .write(&self.sizes, ChunkArrSaveType::Sizes)
             .pointer_array(volume, ChunkArrSaveType::Array, |i| {
-                match self.chunks[i].meta_info.fill_type {
+                match self.chunks[i].info.fill_type {
                     FillType::AllSame(id) => FillType::AllSame(id)
                         .reinterpret_as_bytes()
                         .into_iter()
@@ -362,7 +362,7 @@ impl ChunkArray {
             }
 
             if chunk.can_render_active_lod() && chunk.is_visible_by_camera(cam) {
-                chunk.render(target, &draw_bundle, uniforms, chunk.meta_info.active_lod)?
+                chunk.render(target, &draw_bundle, uniforms, chunk.info.active_lod)?
             }
         }
 

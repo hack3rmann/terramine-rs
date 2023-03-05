@@ -66,7 +66,7 @@ impl App {
 
         let chunk_draw_bundle = ChunkDrawBundle::new(&graphics.display);
         let chunk_arr = DebugVisualized::new_chunk_array(
-            ChunkArray::new_empty_chunks(vecs!(10, 2, 10)),
+            ChunkArray::new_empty_chunks(vecs!(32, 2, 32)),
             &graphics.display,
         );
 

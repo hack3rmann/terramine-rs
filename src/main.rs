@@ -1,5 +1,4 @@
 #![cfg_attr(feature = "release", windows_subsystem = "windows")]
-#![allow(dead_code)]
 
 #[allow(unused_imports)]
 #[macro_use(vecf, veci, vecu, vecs)]

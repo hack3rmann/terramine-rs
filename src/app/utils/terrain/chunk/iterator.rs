@@ -1,5 +1,7 @@
 //! A bunch of handy iterators for chunks.
 
+#![allow(dead_code)]
+
 use {
     crate::app::utils::{
         werror::prelude::*,

@@ -14,8 +14,6 @@ use {
     shader::Shader,
     vertex_buffer::VertexBuffer,
     glium::{
-        self as gl,
-        backend::Facade,
         glutin::{
             event_loop::EventLoop,
             event::{
@@ -24,15 +22,12 @@ use {
             },
             dpi,
         },
-        Surface,
     },
     std::{
         sync::atomic::{
             AtomicBool, Ordering
         },
         path::PathBuf,
-        error::Error,
-        rc::Rc,
     },
     derive_deref_rs::Deref,
     math_linear::prelude::*,
@@ -121,22 +116,6 @@ impl Graphics {
     pub fn take_event_loop(&mut self) -> glium::glutin::event_loop::EventLoop<()> {
         self.event_loop.take()
             .expect("graphics.event_loop should be initialized!")
-    }
-
-    pub fn get_context(&self) -> &Rc<gl::backend::Context> {
-        self.display.get_context()
-    }
-
-    #[allow(dead_code)]
-    pub fn draw<WriteFn>(display: &gl::Display, write_fn: WriteFn) -> Result<(), Box<dyn Error>>
-    where
-        WriteFn: FnOnce(&mut gl::Frame) -> Result<(), Box<dyn Error>>,
-    {
-        let mut target = display.draw();
-        target.clear_all(cfg::shader::CLEAR_COLOR, cfg::shader::CLEAR_DEPTH, cfg::shader::CLEAR_STENCIL);
-        write_fn(&mut target)?;
-        target.finish()?;
-        Ok(())
     }
 }
 
