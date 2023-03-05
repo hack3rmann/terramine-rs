@@ -118,7 +118,9 @@ pub mod shape {
 
     impl<'c> CubeDetailed<'c> {
         /// Constructs new cube maker with filled voxel data.
-        pub fn new(data: &'c VoxelData) -> Self { CubeDetailed { data, half_size: cfg::terrain::VOXEL_SIZE * 0.5 } }
+        pub fn new(data: &'c VoxelData) -> Self {
+            Self { data, half_size: Voxel::SIZE * 0.5 }
+        }
 
         /// Edit defaulted size.
         #[allow(dead_code)]
@@ -127,7 +129,8 @@ pub mod shape {
             return self
         }
 
-        pub fn by_offset(&self, offset: Int3, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+        pub fn by_offset(&self, offset: Int3, position: vec3, vertices: &mut Vec<DetailedVertex>) {
+            let position = 2.0 * self.half_size * position;
             match offset.as_tuple() {
                 ( 1,  0,  0) => self.back(position, vertices),
                 (-1,  0,  0) => self.front(position, vertices),
@@ -140,13 +143,13 @@ pub mod shape {
         }
 
         /// Cube front face vertex array.
-        pub fn front(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+        pub fn front(&self, position: vec3, vertices: &mut Vec<DetailedVertex>) {
             /* UVs for front face */
             let uv = UV::new(self.data.textures.front);
             
             /* Shortcuts */
             let light = FRONT_LIGHT;
-            let (x, y, z) = vec3::from(position).as_tuple();
+            let (x, y, z) = position.as_tuple();
 
             vertices.push(DetailedVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
             vertices.push(DetailedVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), light });
@@ -157,13 +160,13 @@ pub mod shape {
         }
 
         /// Cube back face vertex array.
-        pub fn back(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+        pub fn back(&self, position: vec3, vertices: &mut Vec<DetailedVertex>) {
             /* UVs for back face */
             let uv = UV::new(self.data.textures.back);
             
             /* Shortcuts */
             let light = BACK_LIGHT;
-            let (x, y, z) = vec3::from(position).as_tuple();
+            let (x, y, z) = position.as_tuple();
 
             vertices.push(DetailedVertex { position: (self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), light });
             vertices.push(DetailedVertex { position: (self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
@@ -174,13 +177,13 @@ pub mod shape {
         }
 
         /// Cube top face vertex array.
-        pub fn top(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+        pub fn top(&self, position: vec3, vertices: &mut Vec<DetailedVertex>) {
             /* UVs for top face */
             let uv = UV::new(self.data.textures.top);
             
             /* Shortcuts */
             let light = TOP_LIGHT;
-            let (x, y, z) = vec3::from(position).as_tuple();
+            let (x, y, z) = position.as_tuple();
 
             vertices.push(DetailedVertex { position: ( self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), light });
             vertices.push(DetailedVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
@@ -191,13 +194,13 @@ pub mod shape {
         }
 
         /// Cube bottom face vertex array.
-        pub fn bottom(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+        pub fn bottom(&self, position: vec3, vertices: &mut Vec<DetailedVertex>) {
             /* UVs for bottom face */
             let uv = UV::new(self.data.textures.bottom);
             
             /* Shortcuts */
             let light = BOTTOM_LIGHT;
-            let (x, y, z) = vec3::from(position).as_tuple();
+            let (x, y, z) = position.as_tuple();
 
             vertices.push(DetailedVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), light });
             vertices.push(DetailedVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
@@ -208,13 +211,13 @@ pub mod shape {
         }
 
         /// Cube left face vertex array.
-        pub fn left(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+        pub fn left(&self, position: vec3, vertices: &mut Vec<DetailedVertex>) {
             /* UVs for left face */
             let uv = UV::new(self.data.textures.left);
             
             /* Shortcuts */
             let light = LEFT_LIGHT;
-            let (x, y, z) = vec3::from(position).as_tuple();
+            let (x, y, z) = position.as_tuple();
 
             vertices.push(DetailedVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), light });
             vertices.push(DetailedVertex { position: ( self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), light });
@@ -225,13 +228,13 @@ pub mod shape {
         }
 
         /// Cube right face vertex array.
-        pub fn right(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+        pub fn right(&self, position: vec3, vertices: &mut Vec<DetailedVertex>) {
             /* UVs for right face */
             let uv = UV::new(self.data.textures.right);
             
             /* Shortcuts */
             let light = RIGHT_LIGHT;
-            let (x, y, z) = vec3::from(position).as_tuple();
+            let (x, y, z) = position.as_tuple();
 
             vertices.push(DetailedVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), light });
             vertices.push(DetailedVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
@@ -243,7 +246,7 @@ pub mod shape {
 
         /// Cube all sides.
         #[allow(dead_code)]
-        pub fn all(&self, position: Int3, vertices: &mut Vec<DetailedVertex>) {
+        pub fn all(&self, position: vec3, vertices: &mut Vec<DetailedVertex>) {
             self.left(position, vertices);
             self.right(position, vertices);
             self.front(position, vertices);

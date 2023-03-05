@@ -1,5 +1,3 @@
-use std::ops::Deref;
-
 pub mod camera;
 pub mod chunk_array;
 
@@ -16,27 +14,17 @@ use {
         marker::PhantomData,
         sync::atomic::{AtomicBool, Ordering}
     },
+    derive_deref_rs::Deref,
 };
 
 /// Adds debug visuals to type `T`.
-#[derive(Debug)]
+#[derive(Debug, Deref)]
 pub struct DebugVisualized<'s, T> {
+    #[deref]
     pub inner: T,
+    
     pub mesh: UnindexedMesh<Vertex>,
     pub static_data: DebugVisualsStatics<'s, T>,
-}
-
-impl<T> Deref for DebugVisualized<'_, T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl<T> std::ops::DerefMut for DebugVisualized<'_, T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
 }
 
 #[derive(Debug)]
@@ -63,14 +51,14 @@ pub struct Vertex {
 implement_vertex!(Vertex, pos, color);
 
 #[repr(transparent)]
-#[derive(Debug)]
+#[derive(Debug, Deref)]
 struct ShaderWrapper(Shader);
 
 unsafe impl Send for ShaderWrapper { }
 unsafe impl Sync for ShaderWrapper { }
 
 #[repr(transparent)]
-#[derive(Debug)]
+#[derive(Debug, Deref)]
 struct DrawParametersWrapper<'a>(DrawParameters<'a>);
 
 unsafe impl<'a> Send for DrawParametersWrapper<'a> { }

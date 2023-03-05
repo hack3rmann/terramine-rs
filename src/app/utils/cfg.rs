@@ -21,8 +21,11 @@ pub mod camera {
 
 pub mod window {
     pub mod default {
-        pub const WIDTH:  f32 = 1024.0;
-        pub const HEIGHT: f32 = 768.0;
+        use math_linear::prelude::*;
+        
+        pub const WIDTH:  usize = 1024;
+        pub const HEIGHT: usize = 768;
+        pub const SIZES: USize2 = vecs!(WIDTH, HEIGHT);
     }
 }
 
@@ -34,9 +37,7 @@ pub mod terrain {
     /// Chunk side length in voxels.
     /// Must be a power of 2 due to be halfed in process of lowering details.
     pub const CHUNK_SIZE: usize = 64;
-
-    /// FIXME: add support for non-unit voxel sizes.
-    pub const VOXEL_SIZE: f32   = 1.0;
+    pub const VOXEL_SIZE: f32   = 20.0;
 
     pub mod voxel_types {
         use {

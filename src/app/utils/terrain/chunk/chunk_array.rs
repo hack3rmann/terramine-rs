@@ -14,7 +14,6 @@ use {
             },
             voxel::Voxel,
         },
-        cfg,
         saves::Save,
         reinterpreter::*,
         graphics::camera::Camera,
@@ -261,7 +260,7 @@ impl ChunkArray {
     pub fn lod_iter(chunk_array_sizes: USize3, cam_pos: vec3, threashold: f32) -> impl Iterator<Item = Lod> {
         Self::pos_iter(chunk_array_sizes)
             .map(move |chunk_pos| {
-                let chunk_size = Chunk::SIZE as f32 * cfg::terrain::VOXEL_SIZE;
+                let chunk_size = Chunk::GLOBAL_SIZE;
                 let cam_pos_in_chunks = cam_pos / chunk_size;
                 let chunk_pos = vec3::from(chunk_pos);
 

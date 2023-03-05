@@ -5,7 +5,6 @@ pub mod message_box;
  */
 
 use {
-    crate::app::utils::werror::prelude::*,
     glium::glutin::{
         event_loop::EventLoop,
         window::{
@@ -19,6 +18,7 @@ use {
         ContextBuilder,
         GlRequest,
     },
+    math_linear::prelude::*,
 };
 
 /// Temporary holds glutin window.
@@ -29,11 +29,11 @@ pub struct Window {
 
 impl Window {
     /// Constructs window.
-    pub fn from(event_loop: &EventLoop<()>, width: i32, height: i32) -> Self {
+    pub fn from(event_loop: &EventLoop<()>, sizes: USize2) -> Self {
         let window = WindowBuilder::new()
             .with_title("Terramine")
             .with_resizable(true)
-            .with_inner_size(PhysicalSize::new(width, height))
+            .with_inner_size(PhysicalSize::new(sizes.x as u32, sizes.y as u32))
             .with_window_icon(Some(Self::load_icon()));
         let window = ContextBuilder::new()
             .with_gl(GlRequest::Latest)
@@ -41,9 +41,10 @@ impl Window {
             .with_stencil_buffer(8)
             .with_vsync(true)
             .build_windowed(window, event_loop)
-            .wunwrap();
+            .expect("failed to build the window");
         let window = unsafe {
-            window.make_current().wunwrap()
+            window.make_current()
+                .expect("failed to make window as current context")
         };
 
         Window { window: Some(window) }
@@ -75,18 +76,14 @@ impl Window {
         /* Upload data */
         let mut data = Vec::with_capacity(raw_data.len());
         data.extend_from_slice(raw_data);
-        Icon::from_rgba(data, 32, 32).wunwrap()
+        Icon::from_rgba(data, 32, 32)
+            .expect("length of data should be divisible by 4, \
+                     and width * height must equal data.len() / 4")
     }
 
     /// Gives window and removes it from graphics struct
     pub fn take_window(&mut self) -> ContextWrapper<PossiblyCurrent, GWindow> {
-        /* Swaps struct variable with returned */
-        if let None = self.window {
-            panic!("Window.window is None!")
-        } else {
-            let mut window = None;
-            std::mem::swap(&mut window, &mut self.window);
-            window.wunwrap()
-        }
+        self.window.take()
+            .expect("cannot take window twice")
     }
 }

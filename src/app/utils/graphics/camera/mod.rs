@@ -265,7 +265,7 @@ impl Default for Camera {
             grabbes_cursor: false,
             speed_factor: cam_def::SPEED,
             speed_falloff: cam_def::SPEED_FALLOFF,
-            aspect_ratio: window_def::HEIGHT / window_def::WIDTH,
+            aspect_ratio: window_def::HEIGHT as f32 / window_def::WIDTH as f32,
             pos:    vecf!(0, 0, -3),
             speed:  vec3::zero(),
             up:     vecf!(0, 1, 0),

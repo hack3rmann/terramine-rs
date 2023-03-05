@@ -167,7 +167,7 @@ impl_chunk_with_refs! {
 
                 let mesh_builder = CubeDetailed::new(voxel.data);
                 for offset in side_iter {
-                    mesh_builder.by_offset(offset, voxel.pos, &mut vertices);
+                    mesh_builder.by_offset(offset, voxel.pos.into(), &mut vertices);
                 }
 
                 vertices
@@ -192,9 +192,9 @@ impl_chunk_with_refs! {
                 let local_pos = local_low_pos * sub_chunk_size;
                 let global_pos = Chunk::local_to_global_pos(self.pos.to_owned(), local_pos);
 
-                let center_pos = vec3::from(global_pos)
-                         + 0.5 * vec3::all(sub_chunk_size as f32)
-                         - 0.5 * vec3::all(cfg::terrain::VOXEL_SIZE);
+                let center_pos = (vec3::from(global_pos)
+                          + 0.5 * vec3::all(sub_chunk_size as f32)) * Voxel::SIZE
+                          - 0.5 * vec3::all(Voxel::SIZE);
                          
                 let is_blocking_voxel = |pos: Int3, offset: Int3| match self.get_voxel_global(pos) {
                     ChunkOption::OutsideChunk => {
@@ -237,7 +237,9 @@ impl_chunk_with_refs! {
                     }
                 };
 
-                let mesh_builder = CubeLowered::new(sub_chunk_size as f32);
+                let mesh_builder = CubeLowered::new(
+                    sub_chunk_size as f32 * Voxel::SIZE
+                );
                 
                 const N_CUBE_VERTICES: usize = 36;
                 let mut vertices = Vec::with_capacity(N_CUBE_VERTICES);
@@ -285,16 +287,12 @@ impl_chunk_with_refs! {
 
     /// Tests that chunk is visible by camera.
     pub fn is_visible_by_camera(&self, camera: &Camera) -> bool {
-        const HALF_VOXEL_SIZE: f32 = cfg::terrain::VOXEL_SIZE * 0.5;
-
         let global_chunk_pos = Chunk::global_pos(self.pos.to_owned());
+        let global_chunk_pos = vec3::from(global_chunk_pos) * Voxel::SIZE;
 
-        let lo = vec3::from(global_chunk_pos)
-               - vec3::all(HALF_VOXEL_SIZE);
-
+        let lo = global_chunk_pos - 0.5 * vec3::all(Voxel::SIZE);
         let hi = lo
-               + vec3::from(Chunk::SIZES)
-               - vec3::all(HALF_VOXEL_SIZE);
+               + vec3::all(Chunk::GLOBAL_SIZE) - 0.5 * vec3::all(Voxel::SIZE);
 
         camera.is_aabb_in_view(AABB::from_float3(lo, hi))
     }
@@ -306,10 +304,20 @@ impl_chunk_with_refs! {
 }
 
 impl Chunk {
-    pub const SIZE:   usize = cfg::terrain::CHUNK_SIZE;
+    /// Chunk size in voxels.
+    pub const SIZE: usize = cfg::terrain::CHUNK_SIZE;
+
+    /// Chunk sizes in voxels.
     pub const SIZES: USize3 = USize3::all(Self::SIZE);
+
+    /// Chunk volume in voxels.
     pub const VOLUME: usize = Self::SIZE.pow(3);
+
+    /// Number of available LODs.
     pub const N_LODS: usize = Self::SIZE.ilog2() as usize;
+
+    /// Chunk size in global units.
+    pub const GLOBAL_SIZE: f32 = Self::SIZE as f32 * Voxel::SIZE;
 
     /// Gives shared reference wrapper for chunk.
     pub fn make_ref(&self) -> ChunkRef<'_> {

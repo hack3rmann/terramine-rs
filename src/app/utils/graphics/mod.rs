@@ -7,11 +7,7 @@ pub mod debug_visuals;
 
 use {
     crate::app::utils::{
-        cfg::{
-            self,
-            window::default::HEIGHT as DEFAULT_HEIGHT,
-            window::default::WIDTH  as DEFAULT_WIDTH,
-        },
+        cfg,
         werror::prelude::*,
     },
     super::window::Window,
@@ -37,7 +33,9 @@ use {
         path::PathBuf,
         error::Error,
         rc::Rc,
-    }
+    },
+    derive_deref_rs::Deref,
+    math_linear::prelude::*,
 };
 
 /// Struct that handles graphics.
@@ -66,8 +64,10 @@ impl Graphics {
         /* Glutin event loop */
         let event_loop = EventLoop::new();
 
+        const DEFAULT_SIZES: USize2 = cfg::window::default::SIZES;
+
         /* Window creation */
-        let window = Window::from(&event_loop, DEFAULT_WIDTH as i32, DEFAULT_HEIGHT as i32).take_window();
+        let window = Window::from(&event_loop, DEFAULT_SIZES).take_window();
 
         /* Create ImGui context ant set settings file name. */
         let mut imgui_context = imgui::Context::create();
@@ -80,7 +80,7 @@ impl Graphics {
         /* Bad start size fix */
         let dummy_event: Event<()> = Event::WindowEvent {
             window_id: window.window().id(),
-            event: WindowEvent::Resized(dpi::PhysicalSize::new(DEFAULT_WIDTH as u32, DEFAULT_HEIGHT as u32))
+            event: WindowEvent::Resized(dpi::PhysicalSize::new(DEFAULT_SIZES.x as u32, DEFAULT_SIZES.y as u32))
         };
         winit_platform.handle_event(imgui_context.io_mut(), window.window(), &dummy_event);
 
@@ -140,6 +140,7 @@ impl Graphics {
     }
 }
 
+#[derive(Deref)]
 pub struct ImguiRendererWrapper(pub imgui_glium_renderer::Renderer);
 
 impl std::fmt::Debug for ImguiRendererWrapper {
@@ -150,14 +151,22 @@ impl std::fmt::Debug for ImguiRendererWrapper {
 
 pub use crate::draw;
 
+/// Draw to target macro.
+/// It will execute draw calls passed it after clearing target and before finishing it.
 #[macro_export]
 macro_rules! draw {
     (
         $target_src:expr,
-        |mut $target_name:ident $(:Frame)?| {
-            $($draw_call:stmt;)*
-        }$(,)?
+        |mut $target_name:ident $(:$FrameType:ty)?| $draw_call:expr
+        $(,)?
     ) => {{
+        $(
+            assert!(
+                ::types::is_same::<::glium::Frame, $FrameType>(),
+                "target type should be glium::Frame",
+            );
+        )?
+
         use $crate::app::utils::cfg::shader::{
             CLEAR_COLOR as __CLEAR_COLOR,
             CLEAR_DEPTH as __CLEAR_DEPTH,
@@ -166,7 +175,9 @@ macro_rules! draw {
 
         let mut $target_name = { $target_src }; 
         $target_name.clear_all(__CLEAR_COLOR, __CLEAR_DEPTH, __CLEAR_STENCIL);
-        $($draw_call)*
+        let __result = { $draw_call };
         $target_name.finish().expect("failed to finish target");
+
+        __result
     }};
 }

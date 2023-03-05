@@ -57,7 +57,7 @@ impl App {
         let camera = DebugVisualized::new_camera(
             Camera::new()
                 .with_position(0.0, 16.0, 2.0)
-                .with_rotation(0.0, 0.0, 3.14),
+                .with_rotation(0.0, 0.0, std::f64::consts::PI),
             &graphics.display,
         );
     
@@ -66,7 +66,7 @@ impl App {
 
         let chunk_draw_bundle = ChunkDrawBundle::new(&graphics.display);
         let chunk_arr = DebugVisualized::new_chunk_array(
-            ChunkArray::new_empty_chunks(vecs!(32, 2, 32)),
+            ChunkArray::new_empty_chunks(vecs!(10, 2, 10)),
             &graphics.display,
         );
 
@@ -115,7 +115,8 @@ impl App {
                 },
 
                 WindowEvent::Resized(new_size) => {
-                    self.camera.aspect_ratio = new_size.height as f32 / new_size.width as f32;
+                    self.camera.aspect_ratio = new_size.height as f32
+                                             / new_size.width  as f32;
                     self.window_size = new_size;
                 },
 
@@ -213,9 +214,9 @@ impl App {
                 self.camera.render_camera(&self.graphics.display, &mut target, &uniforms)
                     .expect("failed to render camera");
 
-                self.graphics.imguir.0.render(&mut target, draw_data)
+                self.graphics.imguir.render(&mut target, draw_data)
                     .expect("failed to render imgui");
-            }
+            },
         );
 
         self.timer.update();

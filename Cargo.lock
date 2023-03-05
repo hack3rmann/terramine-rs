@@ -452,6 +452,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "derive-deref-rs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb44ba65b4c7afe45d03d8e33ecb53a21c57d0ffff196f04aefa15c43671f8a6"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "directx_math"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1696,6 +1707,7 @@ name = "terramine"
 version = "0.0.2"
 dependencies = [
  "crossbeam",
+ "derive-deref-rs",
  "directx_math",
  "glium",
  "image",
@@ -1708,6 +1720,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
+ "types",
  "winapi",
  "winit 0.28.2",
  "winres",
@@ -1876,6 +1889,10 @@ name = "ttf-parser"
 version = "0.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0609f771ad9c6155384897e1df4d948e692667cc0588548b68eb44d052b27633"
+
+[[package]]
+name = "types"
+version = "0.1.0"
 
 [[package]]
 name = "unicode-ident"

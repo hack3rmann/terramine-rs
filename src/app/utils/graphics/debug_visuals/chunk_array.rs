@@ -6,11 +6,14 @@ use {
             vertex_buffer::VertexBuffer,
             mesh::UnindexedMesh,
         },
-        terrain::chunk::{
-            Chunk,
-            chunk_array::ChunkArray,
-            ChunkDrawBundle,
-            ChunkRenderError,
+        terrain::{
+            chunk::{
+                Chunk,
+                chunk_array::ChunkArray,
+                ChunkDrawBundle,
+                ChunkRenderError,
+            },
+            voxel::Voxel,
         },
         profiler::prelude::*,
     },
@@ -20,6 +23,7 @@ use {
         index::PrimitiveType,
         uniforms::Uniforms,
     },
+    math_linear::prelude::*,
 };
 
 pub mod data {
@@ -79,17 +83,17 @@ pub mod data {
             .flat_map(|chunk| {
                 let bias = cfg::topology::Z_FIGHTING_BIAS
                          * (chunk.meta_info.active_lod as f32 * 80.0 + 1.0);
-                let size = Chunk::SIZE as f32 + bias;
+                let size = Chunk::GLOBAL_SIZE as f32 + bias;
 
-                let pos = Chunk::global_pos(chunk.pos);
-                let lll = [ -0.5 + pos.x as f32 - bias, -0.5 + pos.y as f32 - bias, -0.5 + pos.z as f32 - bias ];
-                let llh = [ -0.5 + pos.x as f32 - bias, -0.5 + pos.y as f32 - bias, -0.5 + pos.z as f32 + size ];
-                let lhl = [ -0.5 + pos.x as f32 - bias, -0.5 + pos.y as f32 + size, -0.5 + pos.z as f32 - bias ];
-                let lhh = [ -0.5 + pos.x as f32 - bias, -0.5 + pos.y as f32 + size, -0.5 + pos.z as f32 + size ];
-                let hll = [ -0.5 + pos.x as f32 + size, -0.5 + pos.y as f32 - bias, -0.5 + pos.z as f32 - bias ];
-                let hlh = [ -0.5 + pos.x as f32 + size, -0.5 + pos.y as f32 - bias, -0.5 + pos.z as f32 + size ];
-                let hhl = [ -0.5 + pos.x as f32 + size, -0.5 + pos.y as f32 + size, -0.5 + pos.z as f32 - bias ];
-                let hhh = [ -0.5 + pos.x as f32 + size, -0.5 + pos.y as f32 + size, -0.5 + pos.z as f32 + size ];
+                let pos = vec3::from(Chunk::global_pos(chunk.pos)) * Voxel::SIZE - vec3::all(0.5 * Voxel::SIZE);
+                let lll = [ pos.x - bias, pos.y - bias, pos.z - bias ];
+                let llh = [ pos.x - bias, pos.y - bias, pos.z + size ];
+                let lhl = [ pos.x - bias, pos.y + size, pos.z - bias ];
+                let lhh = [ pos.x - bias, pos.y + size, pos.z + size ];
+                let hll = [ pos.x + size, pos.y - bias, pos.z - bias ];
+                let hlh = [ pos.x + size, pos.y - bias, pos.z + size ];
+                let hhl = [ pos.x + size, pos.y + size, pos.z - bias ];
+                let hhh = [ pos.x + size, pos.y + size, pos.z + size ];
 
                 let color = if !chunk.is_generated() {
                     [0.1, 0.0, 0.0, 0.5]
