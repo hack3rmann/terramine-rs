@@ -15,13 +15,29 @@ use {
         uniforms::Uniforms,
     },
     std::sync::atomic::Ordering,
+    lazy_static::lazy_static,
 };
 
 pub mod data {
     use super::*;
 
     static mut SHADER: Option<ShaderWrapper> = None;
-    static mut DRAW_PARAMS: Option<DrawParametersWrapper> = None;
+
+    lazy_static! {
+        static ref DRAW_PARAMS: DrawParametersWrapper<'static> = DrawParametersWrapper(
+            DrawParameters {
+                polygon_mode: glium::PolygonMode::Line,
+                line_width: Some(2.0),
+                depth: Depth {
+                    test: DepthTest::IfLessOrEqual,
+                    write: true,
+                    .. Default::default()
+                },
+                backface_culling: BackfaceCullingMode::CullingDisabled,
+                .. Default::default()
+            }
+        );
+    }
 
     pub fn get<'s>(display: &Display) -> DebugVisualsStatics<'s, Camera> {
         cond_init(display);
@@ -32,7 +48,7 @@ pub mod data {
         unsafe {
             DebugVisualsStatics {
                 shader: &SHADER.as_ref().wunwrap().0,
-                draw_params: &DRAW_PARAMS.as_ref().wunwrap().0,
+                draw_params: &DRAW_PARAMS.0,
                 _phantom: PhantomData
             }
         }
@@ -44,21 +60,6 @@ pub mod data {
             if SHADER.is_none() {
                 let shader = Shader::new("debug_lines", "debug_lines", display);
                 SHADER.replace(ShaderWrapper(shader));
-            }
-
-            if DRAW_PARAMS.is_none() {
-                let draw_params = DrawParameters {
-                    polygon_mode: glium::PolygonMode::Line,
-                    line_width: Some(2.0),
-                    depth: Depth {
-                        test: DepthTest::IfLessOrEqual,
-                        write: true,
-                        .. Default::default()
-                    },
-                    backface_culling: BackfaceCullingMode::CullingDisabled,
-                    .. Default::default()
-                };
-                DRAW_PARAMS.replace(DrawParametersWrapper(draw_params));
             }
         }
     }

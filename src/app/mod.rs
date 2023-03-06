@@ -10,7 +10,7 @@ use {
             Graphics,
             camera::Camera,
             texture::Texture,
-            debug_visuals::{self, DebugVisualized},
+            debug_visuals::{self, DebugVisualizedStatic},
         },
         terrain::chunk::{
             chunk_array::ChunkArray,
@@ -18,7 +18,7 @@ use {
         },
         time::timer::Timer,
         profiler,
-        runtime::prelude::*,
+        runtime::RUNTIME,
     },
 
     /* Glium includes */
@@ -38,11 +38,11 @@ use {
 pub struct App {
     input_manager: InputManager,
     graphics: Graphics,
-    camera: DebugVisualized<'static, Camera>,
+    camera: DebugVisualizedStatic<Camera>,
     timer: Timer,
     window_size: PhysicalSize<u32>,
 
-    chunk_arr: DebugVisualized<'static, ChunkArray>,
+    chunk_arr: DebugVisualizedStatic<ChunkArray>,
     chunk_draw_bundle: ChunkDrawBundle<'static>,
 
     texture_atlas: Texture,
@@ -51,10 +51,10 @@ pub struct App {
 impl App where Self: 'static {
     /// Constructs app struct.
     pub fn new() -> Self {
-        let graphics = Graphics::initialize()
-            .expect("graphics should be initialized once");
+        let graphics = Graphics::new()
+            .expect("failed to create graphics");
 
-        let camera = DebugVisualized::new_camera(
+        let camera = DebugVisualizedStatic::new_camera(
             Camera::new()
                 .with_position(0.0, 16.0, 2.0)
                 .with_rotation(0.0, 0.0, std::f64::consts::PI),
@@ -65,7 +65,7 @@ impl App where Self: 'static {
             .expect("path should be valid and file is readable");
 
         let chunk_draw_bundle = ChunkDrawBundle::new(&graphics.display);
-        let chunk_arr = DebugVisualized::new_chunk_array(
+        let chunk_arr = DebugVisualizedStatic::new_chunk_array(
             ChunkArray::new_empty_chunks(vecs!(32, 2, 32)),
             &graphics.display,
         );
@@ -85,12 +85,11 @@ impl App where Self: 'static {
         }
     }
 
-    /// Runs app.
+    /// Runs app. Runs glium's `event_loop`.
     pub fn run(mut self) {
-        /* Event/game loop */
         // TODO: rewrite `loop { async {} }` into `async { loop {} }`.
         self.graphics.take_event_loop().run(move |event, _, control_flow| {
-            runtime().block_on(async {
+            RUNTIME.block_on(async {
                 self.run_frame_loop(event, control_flow).await
             })
         });

@@ -9,7 +9,7 @@ use {
         um::winuser::GetCursorPos,
         shared::windef::{LPPOINT, POINT},
     },
-    std::collections::HashMap,
+    std::{collections::HashMap, sync::Mutex},
     glium::glutin::{
         event::{
             ElementState,
@@ -224,7 +224,7 @@ impl InputManager {
     pub fn new() -> Self { Default::default() }
 
     pub fn handle_event(&mut self, event: &Event<()>, graphics: &Graphics) {
-        static mut CURSOR_REGRABBED: bool = false;
+        static CURSOR_REGRABBED: Mutex<bool> = Mutex::new(false);
         
         match event {
             /* Window events */
@@ -272,20 +272,17 @@ impl InputManager {
 
                 WindowEvent::Focused(focused) => {
                     /* If window has unfocused then release cursor. */
-                    if *focused {
-                        if unsafe { CURSOR_REGRABBED } {
-                            if !self.mouse.is_grabbed {
-                                self.mouse.grab_cursor(graphics);
-                                unsafe { CURSOR_REGRABBED = false };
-                            }
-                        }
+                    let mut lock_is_grabbed = CURSOR_REGRABBED.lock()
+                        .expect("mutex should be not poisoned");
+
+                    if *focused && *lock_is_grabbed && !self.mouse.is_grabbed {
+                        self.mouse.grab_cursor(graphics);
+                        *lock_is_grabbed = false;
                     }
                     
-                    else {
-                        if self.mouse.is_grabbed {
-                            self.mouse.release_cursor(graphics);
-                            unsafe { CURSOR_REGRABBED = true };
-                        }
+                    else if self.mouse.is_grabbed {
+                        self.mouse.release_cursor(graphics);
+                        *lock_is_grabbed = true;
                     }
                 }
                 _ => (),

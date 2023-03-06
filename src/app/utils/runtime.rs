@@ -1,31 +1,14 @@
 use {
     tokio::runtime::{Runtime, Builder},
+    lazy_static::lazy_static,
 };
 
-pub mod prelude {
-    pub use super::{
-        runtime,
+lazy_static! {
+    pub static ref RUNTIME: Runtime = {
+        Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(6)
+            .build()
+            .expect("failed to build tokio runtime")
     };
-
-}
-
-static mut RUNTIME: Option<Runtime> = None;
-
-pub fn initialize() {
-    unsafe {
-        RUNTIME.replace(
-            Builder::new_multi_thread()
-                .enable_all()
-                .worker_threads(6)
-                .build()
-                .expect("failed to build tokio runtime")
-        );
-    }
-}
-
-pub fn runtime<'l>() -> &'l Runtime {
-    unsafe {
-        RUNTIME.as_ref()
-            .expect("runtime is not initialized!")
-    }
 }

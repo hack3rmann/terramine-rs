@@ -1714,6 +1714,7 @@ dependencies = [
  "imgui",
  "imgui-glium-renderer",
  "imgui-winit-support",
+ "lazy_static",
  "math_linear",
  "profiler",
  "rayon",

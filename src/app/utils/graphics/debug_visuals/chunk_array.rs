@@ -24,13 +24,29 @@ use {
         uniforms::Uniforms,
     },
     math_linear::prelude::*,
+    lazy_static::lazy_static,
 };
 
 pub mod data {
     use super::*;
 
     static mut SHADER: Option<ShaderWrapper> = None;
-    static mut DRAW_PARAMS: Option<DrawParametersWrapper> = None;
+
+    lazy_static! {
+        static ref DRAW_PARAMS: DrawParametersWrapper<'static> = DrawParametersWrapper(
+            DrawParameters {
+                polygon_mode: glium::PolygonMode::Line,
+                line_width: Some(1.5),
+                depth: Depth {
+                    test: DepthTest::IfLessOrEqual,
+                    write: true,
+                    .. Default::default()
+                },
+                backface_culling: BackfaceCullingMode::CullingDisabled,
+                .. Default::default()
+            }
+        );
+    }
 
     pub fn get<'s>(display: &Display) -> DebugVisualsStatics<'s, ChunkArray> {
         cond_init(display);
@@ -41,13 +57,11 @@ pub mod data {
         unsafe {
             let err_msg = "debug visuals statics should been initialized";
 
-            let ShaderWrapper(shader) = &SHADER
+            let ShaderWrapper(ref shader) = SHADER
                 .as_ref()
                 .expect(err_msg);
 
-            let DrawParametersWrapper(draw_params) = &DRAW_PARAMS
-                .as_ref()
-                .expect(err_msg);
+            let DrawParametersWrapper(ref draw_params) = *DRAW_PARAMS;
             
             DebugVisualsStatics { shader, draw_params, _phantom: PhantomData }
         }
@@ -59,21 +73,6 @@ pub mod data {
             if SHADER.is_none() {
                 let shader = Shader::new("debug_lines", "debug_lines", display);
                 SHADER.replace(ShaderWrapper(shader));
-            }
-
-            if DRAW_PARAMS.is_none() {
-                let draw_params = DrawParameters {
-                    polygon_mode: glium::PolygonMode::Line,
-                    line_width: Some(1.5),
-                    depth: Depth {
-                        test: DepthTest::IfLessOrEqual,
-                        write: true,
-                        .. Default::default()
-                    },
-                    backface_culling: BackfaceCullingMode::CullingDisabled,
-                    .. Default::default()
-                };
-                DRAW_PARAMS.replace(DrawParametersWrapper(draw_params));
             }
         }
     }

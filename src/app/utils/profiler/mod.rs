@@ -14,6 +14,7 @@ use {
         time::Instant,
         sync::Mutex,
     },
+    lazy_static::lazy_static,
 };
 
 pub mod prelude {
@@ -60,7 +61,7 @@ impl Profile {
 pub struct Measure {
     pub value: f64,
     pub now: Instant,
-    pub id: Id
+    pub id: Id,
 }
 
 impl Measure {
@@ -79,38 +80,15 @@ impl Drop for Measure {
 /// Handles all profiles.
 #[derive(Debug)]
 pub struct Profiler {
-    pub profiles: Option<HashMap<Id, Profile>>,
-}
-
-impl Profiler {
-    /// Gives uninitialyzed version of `Profiler` to create static variable
-    const fn uninitialized() -> Self { Profiler { profiles: None } }
-
-    /// Initialyzes static
-    pub fn initialize(&mut self) {
-        self.profiles = Some(HashMap::new())
-    }
+    pub profiles: HashMap<Id, Profile>,
 }
 
 static DRAWING_ENABLED: Mutex<bool> = Mutex::new(false);
-static IS_INITIALIZED:  Mutex<bool> = Mutex::new(false);
-static PROFILER: Mutex<Profiler> = Mutex::new(Profiler::uninitialized());
 
-/// Initializes static profiler.
-/// Can be called only once! If not then it will panic.
-pub fn initialize() {
-    let mut inited = IS_INITIALIZED.lock()
-        .expect("mutex should be not poisoned");
-
-    match *inited {
-        false => {
-            *inited = true;
-            PROFILER.lock()
-                .expect("mutex should be not poisoned")
-                .initialize();
-        },
-        true => panic!("cannot initialize profiler twice!"),
-    }
+lazy_static! {
+    static ref PROFILER: Mutex<Profiler> = Mutex::new(Profiler {
+        profiles: HashMap::new(),
+    });
 }
 
 /// Adds profile
@@ -118,8 +96,6 @@ pub fn add_profile(profile: Profile, id: Id) {
     PROFILER.lock()
         .expect("mutex should be not poisoned")
         .profiles
-        .as_mut()
-        .expect("profiler should be initialized")
         .insert(id, profile);
 }
 
@@ -128,8 +104,6 @@ pub fn upload_measure(measure: &Measure) {
     PROFILER.lock()
         .expect("mutex should be not poisoned")
         .profiles
-        .as_mut()
-        .expect("profiler should be initialized")
         .get_mut(&measure.id)
         .expect(&format!("measure {measure:?} should be in measure map"))
         .measures
@@ -138,16 +112,13 @@ pub fn upload_measure(measure: &Measure) {
 
 /// Starting capturing to to profile under given `id`.
 pub fn start_capture(target_name: &str, id: Id) -> Measure {
-    let mut lock = PROFILER.lock()
-        .expect("mutex should be not poisoned");
-    let new_profile_needed = lock.profiles
-        .as_mut()
-        .expect("profiler should be initialized")
+    let is_already_captured = PROFILER.lock()
+        .expect("mutex should be not poisoned")
+        .profiles
         .get(&id)
-        .is_none();
-    drop(lock);
+        .is_some();
     
-    if new_profile_needed {
+    if !is_already_captured {
         add_profile(Profile::new(target_name), id)
     }
 
@@ -165,8 +136,6 @@ pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer, input: &mut InputM
     let mut lock = PROFILER.lock()
         .expect("mutex should be not poisoned");
     let data = lock.profiles
-        .as_mut()
-        .expect("profiler should be initialized")
         .iter_mut()
         .map(|(_, profile)| {
             let time_summary: f64 = profile.measures.iter()
@@ -200,8 +169,6 @@ pub fn update() {
     let mut lock = PROFILER.lock()
         .expect("mutex should be not poisoned");
     let profiles = lock.profiles
-        .as_mut()
-        .expect("profiler should be initialized")
         .iter_mut();
 
     for (_, profile) in profiles {

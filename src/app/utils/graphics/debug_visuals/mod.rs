@@ -27,6 +27,9 @@ pub struct DebugVisualized<'s, T> {
     pub static_data: DebugVisualsStatics<'s, T>,
 }
 
+/// [`DebugVisualized`] with `'static` lifetime of debug visuals.
+pub type DebugVisualizedStatic<T> = DebugVisualized<'static, T>;
+
 #[derive(Debug)]
 pub struct DebugVisualsStatics<'s, T> {
     pub shader: &'s Shader,

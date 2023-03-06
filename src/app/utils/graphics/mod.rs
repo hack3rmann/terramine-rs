@@ -8,7 +8,6 @@ pub mod debug_visuals;
 use {
     crate::app::utils::{
         cfg,
-        werror::prelude::*,
     },
     super::window::Window,
     shader::Shader,
@@ -24,13 +23,15 @@ use {
         },
     },
     std::{
-        sync::atomic::{
-            AtomicBool, Ordering
-        },
         path::PathBuf,
     },
     derive_deref_rs::Deref,
     math_linear::prelude::*,
+    thiserror::Error,
+    imgui_glium_renderer::{
+        Renderer as ImguiRenderer,
+        RendererError as ImguiRendererError,
+    },
 };
 
 /// Struct that handles graphics.
@@ -50,12 +51,8 @@ pub struct Graphics {
 
 
 impl Graphics {
-    /// Graphics initialize function. Can be called once.
-    /// If you call it again it will panic.
-    pub fn initialize() -> Result<Self, &'static str> {
-        /* Validating initialization */
-        Self::validate()?;
-
+    /// Creates new [`Graphics`] that holds some renderer stuff.
+    pub fn new() -> Result<Self, GraphicsError> {
         /* Glutin event loop */
         let event_loop = EventLoop::new();
 
@@ -85,42 +82,38 @@ impl Graphics {
         imgui_context.style_mut().window_rounding = 16.0;
 
         /* Glium setup. */
-        let display = glium::Display::from_gl_window(window).wunwrap();
+        let display = glium::Display::from_gl_window(window)?;
 
         /* ImGui glium renderer setup. */
-        let imgui_renderer = imgui_glium_renderer::Renderer::init(&mut imgui_context, &display).wunwrap();
+        let imgui_renderer = ImguiRenderer::init(&mut imgui_context, &display)?;
 
-        Ok (
-            Graphics {
-                display,
-                imguic: imgui_context,
-                imguir: ImguiRendererWrapper(imgui_renderer),
-                imguiw: winit_platform,
-                event_loop: Some(event_loop),
-            }
-        )
-    }
-
-    /// Validates initialization.
-    fn validate() -> Result<(), &'static str> {
-        /* Checks if struct is already initialized */
-        static IS_INITIALIZED: AtomicBool = AtomicBool::new(false);
-        if IS_INITIALIZED.load(Ordering::Acquire) {
-            return Err("Attempting to initialize graphics twice! Graphics is already initialized!");
-        } else {
-            Ok(IS_INITIALIZED.store(true, Ordering::Release))
-        }
+        Ok(Graphics {
+            display,
+            imguic: imgui_context,
+            imguir: ImguiRendererWrapper(imgui_renderer),
+            imguiw: winit_platform,
+            event_loop: Some(event_loop),
+        })
     }
 
     /// Gives event_loop and removes it from graphics struct.
-    pub fn take_event_loop(&mut self) -> glium::glutin::event_loop::EventLoop<()> {
+    pub fn take_event_loop(&mut self) -> EventLoop<()> {
         self.event_loop.take()
-            .expect("graphics.event_loop should be initialized!")
+            .expect("event loop can't be taken twice")
     }
 }
 
+#[derive(Debug, Error)]
+pub enum GraphicsError {
+    #[error("failed to initialize imgui glium renderer: {0}")]
+    GliumRenderer(#[from] ImguiRendererError),
+
+    #[error("opengl should be compatible: {0}")]
+    IncompatibleOpenGl(#[from] glium::IncompatibleOpenGl),
+}
+
 #[derive(Deref)]
-pub struct ImguiRendererWrapper(pub imgui_glium_renderer::Renderer);
+pub struct ImguiRendererWrapper(pub ImguiRenderer);
 
 impl std::fmt::Debug for ImguiRendererWrapper {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

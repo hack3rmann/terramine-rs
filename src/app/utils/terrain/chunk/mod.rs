@@ -35,6 +35,24 @@ use {
     thiserror::Error,
 };
 
+pub mod prelude {
+    pub use super::{
+        Chunk,
+        ChunkRef,
+        ChunkMut,
+        SetLodError,
+        ChunkRenderError,
+        ChunkDrawBundle,
+        Info as ChunkInfo,
+        Lod,
+        ChunkAdj,
+        ChunkOption,
+        FillType,
+        chunk_array::ChunkArray,
+        iterator::SpaceIter,
+    };
+}
+
 /// Full-detailed vertex.
 #[derive(Copy, Clone, Debug)]
 pub struct FullVertex {
@@ -569,13 +587,14 @@ pub struct ChunkRef<'s> {
 }
 
 impl ChunkRef<'_> {
+    /// Makes borrow for `'static` and allows aliasing with mutable references.
+    /// # Safety:
+    /// Safe if it follows rust's aliasing rules and borrowed data is indeed lives for `'static`.
     pub unsafe fn as_static(self) -> ChunkRef<'static> {
-        unsafe {
-            ChunkRef {
-                pos: (self.pos as *const Int3).as_ref().unwrap_unchecked(),
-                voxel_ids: (self.voxel_ids as *const Vec<Id>).as_ref().unwrap_unchecked(),
-                info: (self.info as *const Info).as_ref().unwrap_unchecked()
-            }
+        ChunkRef {
+            pos: (self.pos as *const Int3).as_ref().unwrap_unchecked(),
+            voxel_ids: (self.voxel_ids as *const Vec<Id>).as_ref().unwrap_unchecked(),
+            info: (self.info as *const Info).as_ref().unwrap_unchecked()
         }
     }
 }

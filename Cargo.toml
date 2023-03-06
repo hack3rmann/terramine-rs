@@ -23,6 +23,7 @@ rayon = "1.6.1"
 winit = "0.28.2"
 derive-deref-rs = "0.1.1"
 types = { version = "0.1.0", path = "../types" }
+lazy_static = "1.4.0"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"
