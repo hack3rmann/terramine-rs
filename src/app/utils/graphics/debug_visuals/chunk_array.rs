@@ -172,7 +172,10 @@ impl DebugVisualized<'_, ChunkArray> {
     pub async fn render_chunk_array(
         &mut self, target: &mut Frame, draw_bundle: &ChunkDrawBundle<'_>,
         uniforms: &impl Uniforms, display: &Display, cam: &Camera,
-    ) -> Result<(), ChunkRenderError> {
+    ) -> Result<(), ChunkRenderError>
+    where
+        Self: 'static,
+    {
         self.render(target, draw_bundle, uniforms, display, cam).await?;
 
         if ENABLED.load(Ordering::Relaxed) {

@@ -37,7 +37,7 @@ use {
 
 /// Full-detailed vertex.
 #[derive(Copy, Clone, Debug)]
-pub struct DetailedVertex {
+pub struct FullVertex {
     pub position: (f32, f32, f32),
     pub tex_coords: (f32, f32),
     pub light: f32
@@ -45,15 +45,15 @@ pub struct DetailedVertex {
 
 /// Low-detailed vertex.
 #[derive(Copy, Clone, Debug)]
-pub struct LoweredVertex {
+pub struct LowVertex {
     pub position: (f32, f32, f32),
     pub color: (f32, f32, f32),
     pub light: f32
 }
 
 /* Implement Vertex structs as glium intended */
-implement_vertex!(DetailedVertex, position, tex_coords, light);
-implement_vertex!(LoweredVertex, position, color, light);
+implement_vertex!(FullVertex, position, tex_coords, light);
+implement_vertex!(LowVertex, position, color, light);
 
 macro_rules! impl_chunk_with_refs {
     ($($impls:item)*) => {
@@ -69,8 +69,8 @@ pub struct Chunk {
     pub voxel_ids: Vec<Id>,
     pub info: Info,
 
-    pub detailed_mesh: Option<UnindexedMesh<DetailedVertex>>,
-    pub low_meshes: [Option<UnindexedMesh<LoweredVertex>>; Self::N_LODS],
+    pub detailed_mesh: Option<UnindexedMesh<FullVertex>>,
+    pub low_meshes: [Option<UnindexedMesh<LowVertex>>; Self::N_LODS],
 }
 
 impl_chunk_with_refs! {
@@ -130,7 +130,7 @@ impl_chunk_with_refs! {
     }
 
     /// Gives [`Vec`] with full detail vertices mesh of [`Chunk`].
-    pub fn make_vertices_detailed(&self, chunk_adj: ChunkAdj) -> Vec<DetailedVertex> {
+    pub fn make_vertices_detailed(&self, chunk_adj: ChunkAdj) -> Vec<FullVertex> {
         if self.is_empty() { return vec![] }
 
         let pos_iter: Box<dyn Iterator<Item = Int3>> = match self.info.fill_type {
@@ -179,7 +179,7 @@ impl_chunk_with_refs! {
     }
 
     /// Makes vertices for *low detail* mesh from voxel array.
-    pub fn make_vertices_low(&self, chunk_adj: ChunkAdj, lod: Lod) -> Vec<LoweredVertex> {
+    pub fn make_vertices_low(&self, chunk_adj: ChunkAdj, lod: Lod) -> Vec<LowVertex> {
         assert!(lod > 0, "There's a separate function for LOD = 0! Use .make_vertices_detailed() instead!");
         
         if self.is_empty() { return vec![] }
@@ -442,14 +442,14 @@ impl Chunk {
     }
 
     /// Sets mesh to chunk.
-    pub fn upload_full_detail_vertices(&mut self, vertices: &[DetailedVertex], display: &gl::Display) {
+    pub fn upload_full_detail_vertices(&mut self, vertices: &[FullVertex], display: &gl::Display) {
         let vbuffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
         let mesh = Mesh::new(vbuffer);
         self.detailed_mesh.replace(mesh);
     }
 
     /// Sets mesh to chunk.
-    pub fn upload_low_detail_vertices(&mut self, vertices: &[LoweredVertex], lod: Lod, display: &gl::Display) {
+    pub fn upload_low_detail_vertices(&mut self, vertices: &[LowVertex], lod: Lod, display: &gl::Display) {
         let vbuffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
         let mesh = Mesh::new(vbuffer);
         self.low_meshes[lod as usize - 1].replace(mesh);
@@ -566,6 +566,18 @@ pub struct ChunkRef<'s> {
     pub pos: &'s Int3,
     pub voxel_ids: &'s Vec<Id>,
     pub info: &'s Info,
+}
+
+impl ChunkRef<'_> {
+    pub unsafe fn as_static(self) -> ChunkRef<'static> {
+        unsafe {
+            ChunkRef {
+                pos: (self.pos as *const Int3).as_ref().unwrap_unchecked(),
+                voxel_ids: (self.voxel_ids as *const Vec<Id>).as_ref().unwrap_unchecked(),
+                info: (self.info as *const Info).as_ref().unwrap_unchecked()
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -730,6 +742,16 @@ pub struct ChunkAdj<'s> {
 impl ChunkAdj<'_> {
     pub fn none() -> Self {
         Self { sides: Sides::all(None) }
+    }
+
+    pub unsafe fn as_static(self) -> ChunkAdj<'static> {
+        ChunkAdj {
+            sides: self.sides.map(|opt|
+                opt.map(|chunk| unsafe {
+                    chunk.as_static()
+                })
+            )
+        }
     }
 }
 

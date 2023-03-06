@@ -20,7 +20,6 @@ use {
     },
     math_linear::prelude::*,
     std::{
-        ptr::NonNull,
         slice::{Iter, IterMut},
         collections::HashMap,
         io,
@@ -200,9 +199,8 @@ impl ChunkArray {
 
     /// Convertes chunk pos to an array index.
     pub fn pos_to_idx(sizes: USize3, pos: Int3) -> Option<usize> {
-        Some(
-            Self::coord_idx_to_idx(sizes, Self::pos_to_coord_idx(sizes, pos)?)
-        )
+        let coord_idx = Self::pos_to_coord_idx(sizes, pos)?;
+        Some(Self::coord_idx_to_idx(sizes, coord_idx))
     }
 
     /// Convertes array index to 3d index.
@@ -216,13 +214,17 @@ impl ChunkArray {
         Self::coord_idx_to_pos(sizes, coord_idx)
     }
 
-    /// Gives reference to chunk by it's position.
+    /// Gives reference to chunk by its position.
     pub fn get_chunk_by_pos(&self, pos: Int3) -> Option<ChunkRef<'_>> {
-        let idx = Self::pos_to_idx(self.sizes, pos)?;
-        Some(self.chunks[idx].make_ref())
+        Self::get_chunk_by_pos_inner(&self.chunks, self.sizes, pos)
     }
 
-    /// Gives reference to chunk by it's position.
+    fn get_chunk_by_pos_inner(chunks: &[Chunk], sizes: USize3, pos: Int3) -> Option<ChunkRef<'_>> {
+        let idx = Self::pos_to_idx(sizes, pos)?;
+        Some(chunks[idx].make_ref())
+    }
+
+    /// Gives reference to chunk by its position.
     pub fn get_chunk_mut_by_pos(&mut self, pos: Int3) -> Option<&mut Chunk> {
         let idx = Self::pos_to_idx(self.sizes, pos)?;
         Some(&mut self.chunks[idx])
@@ -230,10 +232,15 @@ impl ChunkArray {
 
     /// Gives adjacent chunks references by center chunk position.
     pub fn get_adj_chunks(&self, pos: Int3) -> ChunkAdj<'_> {
+        Self::get_adj_chunks_inner(&self.chunks, self.sizes, pos)
+    }
+
+    /// Gives adjacent chunks references by center chunk position.
+    fn get_adj_chunks_inner(chunks: &[Chunk], sizes: USize3, pos: Int3) -> ChunkAdj<'_> {
         let mut adj = ChunkAdj::none();
         let adjs = SpaceIter::adj_iter(Int3::ZERO)
             .filter_map(|off|
-                Some((off, self.get_chunk_by_pos(pos + off)?))
+                Some((off, Self::get_chunk_by_pos_inner(chunks, sizes, pos + off)?))
             );
 
         for (offset, chunk) in adjs {
@@ -252,12 +259,17 @@ impl ChunkArray {
 
     /// Gives iterator over all chunk's adjacents.
     pub fn adj_iter(&self) -> impl Iterator<Item = ChunkAdj<'_>> {
-        Self::pos_iter(self.sizes)
-            .map(move |pos| self.get_adj_chunks(pos))
+        Self::adj_iter_inner(&self.chunks, self.sizes)
+    }
+
+    /// Gives iterator over all chunk's adjacents.
+    fn adj_iter_inner(chunks: &[Chunk], sizes: USize3) -> impl Iterator<Item = ChunkAdj<'_>> {
+        Self::pos_iter(sizes)
+            .map(move |pos| Self::get_adj_chunks_inner(chunks, sizes, pos))
     }
 
     /// Gives iterator over desired LOD for each chunk.
-    pub fn lod_iter(chunk_array_sizes: USize3, cam_pos: vec3, threashold: f32) -> impl Iterator<Item = Lod> {
+    pub fn desired_lod_iter(chunk_array_sizes: USize3, cam_pos: vec3, threashold: f32) -> impl Iterator<Item = Lod> {
         Self::pos_iter(chunk_array_sizes)
             .map(move |chunk_pos| {
                 let chunk_size = Chunk::GLOBAL_SIZE;
@@ -282,6 +294,18 @@ impl ChunkArray {
         self.chunks.iter_mut()
     }
 
+    /// Gives mutable iterator over chunks through shared reference.
+    /// # Safety
+    /// Following rust's aliasing rules, resulting mutable reference must
+    /// be not aliased by others references.
+    unsafe fn chunks_mut_shared(chunks: &[Chunk]) -> IterMut<'_, Chunk> {
+        let chunks = (chunks as *const [Chunk] as *mut [Chunk])
+            .as_mut()
+            .unwrap_unchecked();
+
+        chunks.iter_mut()
+    }
+
     /// Gives iterator over all voxels in [`ChunkArray`].
     pub fn voxels(&self) -> impl Iterator<Item = Voxel> + '_ {
         self.chunks().flat_map(|chunk| chunk.voxels())
@@ -289,13 +313,20 @@ impl ChunkArray {
 
     /// Gives iterator over mutable chunks and their adjacents.
     pub fn chunks_with_adj_mut(&mut self) -> impl Iterator<Item = (&mut Chunk, ChunkAdj<'_>)> + '_ {
-        // * Safe bacause shared adjacent chunks are not aliasing current mutable chunk
-        // * and the reference is made of a pointer that is made from that reference.
-        let aliased = unsafe { NonNull::new_unchecked(self as *mut Self).as_ref() };
+        Self::chunks_with_adj_mut_inner(&mut self.chunks, self.sizes)
+    }
 
-        let adj_iter = aliased.adj_iter();
-        self.chunks_mut()
-            .zip(adj_iter)
+    /// Gives iterator over mutable chunks and their adjacents.
+    pub fn chunks_with_adj_mut_inner<'a>(
+        chunks: &mut [Chunk], sizes: USize3,
+    ) -> impl Iterator<Item = (&'a mut Chunk, ChunkAdj<'a>)> + 'a {
+        let chunks = unsafe { (chunks as *const [Chunk]).as_ref().unwrap_unchecked() };
+
+        // * Safe bacause shared adjacent chunks are not aliasing current mutable chunk.
+        unsafe {
+            Self::chunks_mut_shared(chunks)
+                .zip(Self::adj_iter_inner(chunks, sizes))
+        }
     }
 
     /// Generates mesh for each chunk.
@@ -313,20 +344,20 @@ impl ChunkArray {
     pub async fn render(
         &mut self, target: &mut gl::Frame, draw_bundle: &ChunkDrawBundle<'_>,
         uniforms: &impl gl::uniforms::Uniforms, display: &gl::Display, cam: &Camera,
-    ) -> Result<(), ChunkRenderError> {
+    ) -> Result<(), ChunkRenderError>
+    where
+        Self: 'static,
+    {
         let sizes = self.sizes;
         if sizes == USize3::ZERO { return Ok(()) }
 
         self.try_finish_all_tasks(display).await;
 
-        // FIXME:
-        let aliased_self = unsafe { NonNull::new_unchecked(self as *mut Self).as_mut() };
-
-        let mut chunks: Vec<_> = self.chunks_mut()
-            .zip(Self::lod_iter(sizes, cam.pos, aliased_self.lod_dist_threashold))
+        let mut chunks: Vec<_> = Self::chunks_with_adj_mut_inner(&mut self.chunks, sizes)
+            .zip(Self::desired_lod_iter(sizes, cam.pos, self.lod_dist_threashold))
             .collect();
 
-        chunks.sort_by(|(lhs, _), (rhs, _)| {
+        chunks.sort_by(|((lhs, _), _), ((rhs, _), _)| {
             let l_dist = vec3::len(cam.pos - lhs.pos.into());
             let r_dist = vec3::len(cam.pos - rhs.pos.into());
 
@@ -334,28 +365,42 @@ impl ChunkArray {
                 .expect("distance to chunk should be a number")
         });
 
-        for (chunk, lod) in chunks {
+        for ((chunk, chunk_adj), lod) in chunks {
             if !chunk.is_generated() {
-                if aliased_self.is_voxels_gen_task_running(chunk.pos) {
-                    aliased_self.try_finish_voxels_gen_task(chunk.pos, chunk).await
+                if Self::is_voxels_gen_task_running(&self.voxels_gen_tasks, chunk.pos) {
+                    Self::try_finish_voxels_gen_task(&mut self.voxels_gen_tasks, chunk.pos, chunk).await
                 } else {
-                    aliased_self.start_task_gen_voxels(chunk.pos);
+                    Self::start_task_gen_voxels(&mut self.voxels_gen_tasks, chunk.pos);
                     continue;
                 }
             }
 
             let can_set_new_lod =
-                aliased_self.is_mesh_task_running(chunk.pos, lod) &&
-                aliased_self.try_finish_mesh_task(chunk.pos, lod, chunk, display).await.is_ok() ||
+                Self::is_mesh_task_running(&self.full_tasks, &self.low_tasks, chunk.pos, lod) &&
+                Self::try_finish_mesh_task(&mut self.full_tasks, &mut self.low_tasks,
+                    chunk.pos, lod, chunk, display).await.is_ok() ||
                 chunk.get_available_lods().contains(&lod);
 
             if can_set_new_lod {
                 chunk.set_active_lod(lod)
             } else {
-                aliased_self.start_task_gen_vertices(lod, chunk.pos)
+                // * Safety:
+                // * Safe because this function borrows chunk to mutate its meshes
+                // * but later it borrows for set new LOD value so mut references
+                // * are not aliasing. We can make reference static due to
+                // * `Self`'s lifetime is `'static`.
+                unsafe {
+                    Self::start_task_gen_vertices(
+                        &mut self.full_tasks,
+                        &mut self.low_tasks,
+                        chunk.make_ref().as_static(),
+                        chunk_adj,
+                        lod,
+                    );
+                }
             }
 
-            aliased_self.drop_all_useless_tasks(lod, chunk.pos);
+            Self::drop_all_useless_tasks(&mut self.full_tasks, &mut self.low_tasks, lod, chunk.pos);
 
             if !chunk.can_render_active_lod() {
                 chunk.try_set_best_fit_lod(lod);
@@ -369,23 +414,26 @@ impl ChunkArray {
         Ok(())
     }
 
-    pub fn drop_all_useless_tasks(&mut self, useful_lod: Lod, cur_pos: Int3) {
+    pub fn drop_all_useless_tasks(
+        full_tasks: &mut HashMap<Int3, FullTask>,
+        low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
+        useful_lod: Lod, cur_pos: Int3
+    ) {
         for lod in Chunk::get_possible_lods() {
             if 2 < lod.abs_diff(useful_lod) {
-                self.drop_task(cur_pos, lod);
+                Self::drop_task(full_tasks, low_tasks, cur_pos, lod);
             }
         }
     }
 
-    pub fn drop_task(&mut self, pos: Int3, lod: Lod) {
+    pub fn drop_task(
+        full_tasks: &mut HashMap<Int3, FullTask>,
+        low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
+        pos: Int3, lod: Lod
+    ) {
         match lod {
-            0 => {
-                let _ = self.full_tasks.remove(&pos);
-            },
-
-            lod => {
-                let _ = self.low_tasks.remove(&(pos, lod));
-            },
+            0 =>   { let _ = full_tasks.remove(&pos); },
+            lod => { let _ = low_tasks.remove(&(pos, lod)); },
         }
     }
 
@@ -468,22 +516,26 @@ impl ChunkArray {
         self.try_finish_gen_tasks().await;
     }
 
-    pub fn is_voxels_gen_task_running(&self, pos: Int3) -> bool {
-        self.voxels_gen_tasks.contains_key(&pos)
+    pub fn is_voxels_gen_task_running(tasks: &HashMap<Int3, GenTask>, pos: Int3) -> bool {
+        tasks.contains_key(&pos)
     }
 
     /// Checks if generate mesh task id running.
-    pub fn is_mesh_task_running(&self, pos: Int3, lod: Lod) -> bool {
+    pub fn is_mesh_task_running(
+        full_tasks: &HashMap<Int3, FullTask>,
+        low_tasks: &HashMap<(Int3, Lod), LowTask>,
+        pos: Int3, lod: Lod
+    ) -> bool {
         match lod {
             0 =>
-                self.full_tasks.contains_key(&pos),
+                full_tasks.contains_key(&pos),
             lod =>
-                self.low_tasks.contains_key(&(pos, lod)),
+                low_tasks.contains_key(&(pos, lod)),
         }
     }
 
-    pub fn start_task_gen_voxels(&mut self, pos: Int3) {
-        let prev_value = self.voxels_gen_tasks.insert(pos, Task::spawn(async move {
+    pub fn start_task_gen_voxels(tasks: &mut HashMap<Int3, GenTask>, pos: Int3) {
+        let prev_value = tasks.insert(pos, Task::spawn(async move {
             Chunk::generate_voxels(pos)
         }));
 
@@ -491,14 +543,12 @@ impl ChunkArray {
     }
 
     /// Starts new generate vertices task.
-    pub fn start_task_gen_vertices(&mut self, lod: Lod, pos: Int3) {
-        // FIXME: fix this UB:
-        let aliased_mut = unsafe { NonNull::new_unchecked(self as *mut Self).as_mut() };
-        let aliased_ref = unsafe { NonNull::new_unchecked(self as *mut Self).as_ref() };
-
-        let chunk = aliased_ref.get_chunk_by_pos(pos)
-            .expect(&format!("chunk with pos {pos:?} should exist"));
-        let adj = aliased_ref.get_adj_chunks(pos);
+    pub fn start_task_gen_vertices(
+        full_tasks: &mut HashMap<Int3, FullTask>,
+        low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
+        chunk: ChunkRef<'static>, adj: ChunkAdj<'static>, lod: Lod
+    ) {
+        let pos = chunk.pos.to_owned();
 
         let is_adj_generated = adj.sides.inner
             .iter()
@@ -509,15 +559,15 @@ impl ChunkArray {
         if !chunk.is_generated() || !is_adj_generated { return }
 
         match lod {
-            0 => if !aliased_mut.full_tasks.contains_key(&pos) {
-                let prev = aliased_mut.full_tasks.insert(pos, Task::spawn(async move {
+            0 => if !full_tasks.contains_key(&pos) {
+                let prev = full_tasks.insert(pos, Task::spawn(async move {
                     chunk.make_vertices_detailed(adj)
                 }));
                 assert!(prev.is_none(), "there should be only one task");
             },
 
-            lod if !aliased_mut.low_tasks.contains_key(&(pos, lod)) => {
-                let prev = aliased_mut.low_tasks.insert((pos, lod), Task::spawn(async move {
+            lod if !low_tasks.contains_key(&(pos, lod)) => {
+                let prev = low_tasks.insert((pos, lod), Task::spawn(async move {
                     chunk.make_vertices_low(adj, lod)
                 }));
                 assert!(prev.is_none(), "there should be only one task");
@@ -527,11 +577,11 @@ impl ChunkArray {
         }
     }
 
-    pub async fn try_finish_voxels_gen_task(&mut self, pos: Int3, chunk: &mut Chunk) {
-        if let Some(task) = self.voxels_gen_tasks.get_mut(&pos) {
+    pub async fn try_finish_voxels_gen_task(tasks: &mut HashMap<Int3, GenTask>, pos: Int3, chunk: &mut Chunk) {
+        if let Some(task) = tasks.get_mut(&pos) {
             if let Some(voxel_ids) = task.try_take_result().await {
                 *chunk = Chunk::from_voxels(voxel_ids, pos);
-                self.voxels_gen_tasks.remove(&pos);
+                tasks.remove(&pos);
             }
         }
     }
@@ -540,16 +590,18 @@ impl ChunkArray {
     /// Tries to get mesh from task if it is ready then sets it to chunk.
     /// Otherwise will return `Err(())`.
     pub async fn try_finish_mesh_task(
-        &mut self, pos: Int3, lod: Lod,
+        full_tasks: &mut HashMap<Int3, FullTask>,
+        low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
+        pos: Int3, lod: Lod,
         chunk: &mut Chunk, display: &gl::Display
     ) -> Result<(), ()> {
         match lod {
-            0 => match self.full_tasks.get_mut(&pos) {
+            0 => match full_tasks.get_mut(&pos) {
                 Some(task) => match task.try_take_result().await {
                     None => Err(()),
                     Some(vertices) => {
                         chunk.upload_full_detail_vertices(&vertices, display);
-                        let _ = self.full_tasks.remove(&pos)
+                        let _ = full_tasks.remove(&pos)
                             .expect("there should be a task");
                         Ok(())
                     }
@@ -557,12 +609,12 @@ impl ChunkArray {
                 None => Err(()),
             },
 
-            lod => match self.low_tasks.get_mut(&(pos, lod)) {
+            lod => match low_tasks.get_mut(&(pos, lod)) {
                 Some(task) => match task.try_take_result().await {
                     None => Err(()),
                     Some(vertices) => {
                         chunk.upload_low_detail_vertices(&vertices, lod, display);
-                        let _ = self.low_tasks.remove(&(pos, lod))
+                        let _ = low_tasks.remove(&(pos, lod))
                             .expect("there should be a task");
                         Ok(())
                     }

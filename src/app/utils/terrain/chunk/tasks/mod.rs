@@ -1,7 +1,7 @@
 use {
     crate::app::utils::{
         terrain::{
-            chunk::{DetailedVertex, LoweredVertex, Id},
+            chunk::{FullVertex, LowVertex, Id},
         },
     },
     std::future::Future,
@@ -13,8 +13,8 @@ pub struct Task<Item> {
     pub handle: Option<JoinHandle<Item>>,
 }
 
-pub type FullTask = Task<Vec<DetailedVertex>>;
-pub type LowTask  = Task<Vec<LoweredVertex>>;
+pub type FullTask = Task<Vec<FullVertex>>;
+pub type LowTask  = Task<Vec<LowVertex>>;
 pub type GenTask  = Task<Vec<Id>>;
 
 impl<Item: Send + 'static> Task<Item> {

@@ -48,7 +48,7 @@ pub struct App {
     texture_atlas: Texture,
 }
 
-impl App {
+impl App where Self: 'static {
     /// Constructs app struct.
     pub fn new() -> Self {
         let graphics = Graphics::initialize()
