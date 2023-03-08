@@ -2,16 +2,22 @@
  * Provides some `type-byte` and `byte-type` reinterpretations to common types
  */
 
-use std::{mem::transmute, iter::FromIterator};
+use std::mem::transmute;
 
 pub unsafe trait Reinterpret: ReinterpretAsBytes + ReinterpretFromBytes + ReinterpretSize { }
 
+unsafe impl<T> Reinterpret for T
+where
+    T: ReinterpretAsBytes + ReinterpretFromBytes + ReinterpretSize,
+{ }
+
 pub unsafe trait ReinterpretAsBytes {
-    fn reinterpret_as_bytes(&self) -> Vec<u8>;
+    fn as_bytes(&self) -> Vec<u8>;
 }
 
 pub unsafe trait ReinterpretFromBytes {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self;
+    /// TODO: make returning `Option<Self>` instead of `Self`.
+    fn from_bytes(source: &[u8]) -> Self;
 }
 
 pub unsafe trait ReinterpretSize {
@@ -29,14 +35,12 @@ where
 
 
 
-unsafe impl Reinterpret for u8 { }
-
 unsafe impl ReinterpretAsBytes for u8 {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> { vec![*self] }
+    fn as_bytes(&self) -> Vec<u8> { vec![*self] }
 }
 
 unsafe impl ReinterpretFromBytes for u8 {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
+    fn from_bytes(source: &[u8]) -> Self {
         source[0]
     }
 }
@@ -49,14 +53,12 @@ unsafe impl StaticSize for u8 { }
 
 
 
-unsafe impl Reinterpret for i8 { }
-
 unsafe impl ReinterpretAsBytes for i8 {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> { unsafe { vec![transmute(*self)] } }
+    fn as_bytes(&self) -> Vec<u8> { unsafe { vec![transmute(*self)] } }
 }
 
 unsafe impl ReinterpretFromBytes for i8 {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
+    fn from_bytes(source: &[u8]) -> Self {
         unsafe { transmute(source[0]) }
     }
 }
@@ -69,10 +71,8 @@ unsafe impl StaticSize for i8 { }
 
 
 
-unsafe impl Reinterpret for u16 { }
-
 unsafe impl ReinterpretAsBytes for u16 {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Vec<u8> {
         unsafe {
             let bytes: [u8; 2] = transmute(*self);
             vec![bytes[0], bytes[1]]
@@ -81,7 +81,7 @@ unsafe impl ReinterpretAsBytes for u16 {
 }
 
 unsafe impl ReinterpretFromBytes for u16 {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
+    fn from_bytes(source: &[u8]) -> Self {
         unsafe {
             transmute([source[0], source[1]])
         }
@@ -96,10 +96,8 @@ unsafe impl StaticSize for u16 { }
 
 
 
-unsafe impl Reinterpret for i16 { }
-
 unsafe impl ReinterpretAsBytes for i16 {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Vec<u8> {
         unsafe {
             let bytes: [u8; 2] = transmute(*self);
             vec![bytes[0], bytes[1]]
@@ -108,7 +106,7 @@ unsafe impl ReinterpretAsBytes for i16 {
 }
 
 unsafe impl ReinterpretFromBytes for i16 {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
+    fn from_bytes(source: &[u8]) -> Self {
         unsafe {
             transmute([source[0], source[1]])
         }
@@ -123,10 +121,8 @@ unsafe impl StaticSize for i16 { }
 
 
 
-unsafe impl Reinterpret for u32 { }
-
 unsafe impl ReinterpretAsBytes for u32 {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Vec<u8> {
         unsafe {
             let bytes: [u8; 4] = transmute(*self);
             vec![bytes[0], bytes[1], bytes[2], bytes[3]]
@@ -135,7 +131,7 @@ unsafe impl ReinterpretAsBytes for u32 {
 }
 
 unsafe impl ReinterpretFromBytes for u32 {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
+    fn from_bytes(source: &[u8]) -> Self {
         unsafe {
             transmute([source[0], source[1], source[2], source[3]])
         }
@@ -150,10 +146,8 @@ unsafe impl StaticSize for u32 { }
 
 
 
-unsafe impl Reinterpret for i32 { }
-
 unsafe impl ReinterpretAsBytes for i32 {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Vec<u8> {
         unsafe {
             let bytes: [u8; 4] = transmute(*self);
             vec![bytes[0], bytes[1], bytes[2], bytes[3]]
@@ -162,7 +156,7 @@ unsafe impl ReinterpretAsBytes for i32 {
 }
 
 unsafe impl ReinterpretFromBytes for i32 {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
+    fn from_bytes(source: &[u8]) -> Self {
         unsafe {
             transmute([source[0], source[1], source[2], source[3]])
         }
@@ -177,10 +171,8 @@ unsafe impl StaticSize for i32 { }
 
 
 
-unsafe impl Reinterpret for u64 { }
-
 unsafe impl ReinterpretAsBytes for u64 {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Vec<u8> {
         unsafe {
             let bytes: [u8; 8] = transmute(*self);
             vec![bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]]
@@ -189,7 +181,7 @@ unsafe impl ReinterpretAsBytes for u64 {
 }
 
 unsafe impl ReinterpretFromBytes for u64 {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
+    fn from_bytes(source: &[u8]) -> Self {
         unsafe {
             transmute([source[0], source[1], source[2], source[3], source[4], source[5], source[6], source[7]])
         }
@@ -204,10 +196,8 @@ unsafe impl StaticSize for u64 { }
 
 
 
-unsafe impl Reinterpret for i64 { }
-
 unsafe impl ReinterpretAsBytes for i64 {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Vec<u8> {
         unsafe {
             let bytes: [u8; 8] = transmute(*self);
             vec![bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]]
@@ -216,7 +206,7 @@ unsafe impl ReinterpretAsBytes for i64 {
 }
 
 unsafe impl ReinterpretFromBytes for i64 {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
+    fn from_bytes(source: &[u8]) -> Self {
         unsafe {
             transmute([source[0], source[1], source[2], source[3], source[4], source[5], source[6], source[7]])
         }
@@ -231,10 +221,8 @@ unsafe impl StaticSize for i64 { }
 
 
 
-unsafe impl Reinterpret for u128 { }
-
 unsafe impl ReinterpretAsBytes for u128 {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Vec<u8> {
         unsafe {
             let bytes: [u8; 16] = transmute(*self);
             vec![bytes[0], bytes[1], bytes[2],  bytes[3],  bytes[4],  bytes[5],  bytes[6],  bytes[7],
@@ -244,7 +232,7 @@ unsafe impl ReinterpretAsBytes for u128 {
 }
 
 unsafe impl ReinterpretFromBytes for u128 {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
+    fn from_bytes(source: &[u8]) -> Self {
         unsafe {
             transmute([source[0], source[1], source[2],  source[3],  source[4],  source[5],  source[6],  source[7],
                        source[8], source[9], source[10], source[11], source[12], source[13], source[14], source[15]])
@@ -260,10 +248,8 @@ unsafe impl StaticSize for u128 { }
 
 
 
-unsafe impl Reinterpret for i128 { }
-
 unsafe impl ReinterpretAsBytes for i128 {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Vec<u8> {
         unsafe {
             let bytes: [u8; 16] = transmute(*self);
             vec![bytes[0], bytes[1], bytes[2],  bytes[3],  bytes[4],  bytes[5],  bytes[6],  bytes[7],
@@ -273,7 +259,7 @@ unsafe impl ReinterpretAsBytes for i128 {
 }
 
 unsafe impl ReinterpretFromBytes for i128 {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
+    fn from_bytes(source: &[u8]) -> Self {
         unsafe {
             transmute([source[0], source[1], source[2],  source[3],  source[4],  source[5],  source[6],  source[7],
                        source[8], source[9], source[10], source[11], source[12], source[13], source[14], source[15]])
@@ -289,10 +275,8 @@ unsafe impl StaticSize for i128 { }
 
 
 
-unsafe impl Reinterpret for f32 { }
-
 unsafe impl ReinterpretAsBytes for f32 {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Vec<u8> {
         unsafe {
             let bytes: [u8; 4] = transmute(*self);
             vec![bytes[0], bytes[1], bytes[2], bytes[3]]
@@ -301,7 +285,7 @@ unsafe impl ReinterpretAsBytes for f32 {
 }
 
 unsafe impl ReinterpretFromBytes for f32 {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
+    fn from_bytes(source: &[u8]) -> Self {
         unsafe {
             transmute([source[0], source[1], source[2], source[3]])
         }
@@ -316,10 +300,8 @@ unsafe impl StaticSize for f32 { }
 
 
 
-unsafe impl Reinterpret for f64 { }
-
 unsafe impl ReinterpretAsBytes for f64 {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Vec<u8> {
         unsafe {
             let bytes: [u8; 8] = transmute(*self);
             vec![bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]]
@@ -328,7 +310,7 @@ unsafe impl ReinterpretAsBytes for f64 {
 }
 
 unsafe impl ReinterpretFromBytes for f64 {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
+    fn from_bytes(source: &[u8]) -> Self {
         unsafe {
             transmute([source[0], source[1], source[2], source[3], source[4], source[5], source[6], source[7]])
         }
@@ -343,28 +325,17 @@ unsafe impl StaticSize for f64 { }
 
 
 
-unsafe impl Reinterpret for usize { }
-
 unsafe impl ReinterpretAsBytes for usize {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
-        unsafe {
-            let bytes: [u8; std::mem::size_of::<Self>()] = transmute(*self);
-            Vec::from_iter(bytes.iter().map(|r| *r))
-        }
+    fn as_bytes(&self) -> Vec<u8> {
+        let filled = *self as u64;
+        filled.as_bytes()
     }
 }
 
 unsafe impl ReinterpretFromBytes for usize {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
-        debug_assert_eq!(source.len(), Self::static_size(), "Attempting to assign wrong sized usize!");
-
-        unsafe {
-            match Self::static_size() {
-                4 => transmute::<_, u32>([source[0], source[1], source[2], source[3]]) as usize,
-                8 => transmute::<_, u64>([source[0], source[1], source[2], source[3], source[4], source[5], source[6], source[7]]) as usize,
-                _ => unreachable!()
-            }
-        }
+    fn from_bytes(source: &[u8]) -> Self {
+        let filled = u64::from_bytes(source);
+        filled as Self
     }
 }
 
@@ -372,32 +343,25 @@ unsafe impl ReinterpretSize for usize {
     fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl StaticSize for usize { }
+unsafe impl StaticSize for usize {
+    fn static_size() -> usize {
+        u64::static_size()
+    }
+}
 
 
-
-unsafe impl Reinterpret for isize { }
 
 unsafe impl ReinterpretAsBytes for isize {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
-        unsafe {
-            let bytes: [u8; std::mem::size_of::<Self>()] = transmute(*self);
-            Vec::from_iter(bytes.iter().map(|r| *r))
-        }
+    fn as_bytes(&self) -> Vec<u8> {
+        let filled = *self as i64;
+        filled.as_bytes()
     }
 }
 
 unsafe impl ReinterpretFromBytes for isize {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
-        debug_assert_eq!(source.len(), Self::static_size(), "Attempting to assign wrong sized isize!");
-
-        unsafe {
-            match Self::static_size() {
-                4 => transmute::<_, i32>([source[0], source[1], source[2], source[3]]) as isize,
-                8 => transmute::<_, i64>([source[0], source[1], source[2], source[3], source[4], source[5], source[6], source[7]]) as isize,
-                _ => unreachable!()
-            }
-        }
+    fn from_bytes(source: &[u8]) -> Self {
+        let filled = i64::from_bytes(source);
+        filled as Self
     }
 }
 
@@ -405,70 +369,53 @@ unsafe impl ReinterpretSize for isize {
     fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-unsafe impl StaticSize for isize { }
+unsafe impl StaticSize for isize {
+    fn static_size() -> usize {
+        i64::static_size()
+    }
+}
 
 
 
-unsafe impl<T: Reinterpret + StaticSize> Reinterpret for Vec<T> { }
+unsafe impl<T: ReinterpretAsBytes + StaticSize> ReinterpretAsBytes for Vec<T> {
+    fn as_bytes(&self) -> Vec<u8> {
+        let mut result = Vec::with_capacity(self.reinterpret_size());
 
-unsafe impl<T: ReinterpretAsBytes + ReinterpretSize> ReinterpretAsBytes for Vec<T> {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(self.reinterpret_size());
+        result.append(&mut self.len().as_bytes());
 
-        for elem in self.iter() {
-            bytes.append(&mut elem.reinterpret_as_bytes());
+        for elem in self {
+            result.append(&mut elem.as_bytes())
         }
 
-        return bytes;
+        result
     }
 }
 
 unsafe impl<T: ReinterpretFromBytes + StaticSize> ReinterpretFromBytes for Vec<T> {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
-        if source.len() == 0 {
-            return vec![];
-        } else {
-            /* Byte data should be aligned by destination byte size */
-            debug_assert_eq!(
-                source.len() % T::static_size(), 0,
-                "Attempting to reinterpret unaligned bytes as aligned by {} bytes. Actual length is {}",
-                T::static_size(),
-                source.len()
-            );
+    fn from_bytes(mut source: &[u8]) -> Self {
+        let len = usize::from_bytes(source);
+        source = &source[usize::static_size()..];
 
-            /* Counter */
-            let mut current: usize = 0;
+        let mut result = Vec::with_capacity(len);
 
-            /* Result */
-            let mut result = Vec::with_capacity(source.len() / T::static_size());
-
-            /* Reintepret bytes until vector is full */
-            while current <= source.len() - T::static_size() {
-                result.push(T::reinterpret_from_bytes(&source[current .. current + T::static_size()]));
-                current += T::static_size();
-            }
-
-            return result;
+        for chunk in source.chunks(T::static_size()) {
+            result.push(T::from_bytes(chunk))
         }
+
+        result
     }
 }
 
-unsafe impl<T: ReinterpretSize> ReinterpretSize for Vec<T> {
+unsafe impl<T: StaticSize> ReinterpretSize for Vec<T> {
     fn reinterpret_size(&self) -> usize {
-        if self.len() == 0 {
-            0
-        } else {
-            self.len() * self[0].reinterpret_size()
-        }
+        usize::static_size() + T::static_size() * self.len()
     }
 }
 
 
-
-unsafe impl<T: Reinterpret + StaticSize> Reinterpret for Option<T> { }
 
 unsafe impl<T: ReinterpretAsBytes + StaticSize + ReinterpretSize> ReinterpretAsBytes for Option<T> {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Vec<u8> {
         match self {
             None => {
                 let mut bytes = Vec::with_capacity(Self::static_size());
@@ -480,7 +427,7 @@ unsafe impl<T: ReinterpretAsBytes + StaticSize + ReinterpretSize> ReinterpretAsB
             Some(item) => {
                 let mut bytes = Vec::with_capacity(1 + item.reinterpret_size());
                 bytes.push(true as u8);
-                bytes.append(&mut item.reinterpret_as_bytes());
+                bytes.append(&mut item.as_bytes());
 
                 return bytes;
             }
@@ -489,11 +436,11 @@ unsafe impl<T: ReinterpretAsBytes + StaticSize + ReinterpretSize> ReinterpretAsB
 }
 
 unsafe impl<T: ReinterpretFromBytes + StaticSize> ReinterpretFromBytes for Option<T> {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
+    fn from_bytes(source: &[u8]) -> Self {
         if source[0] == 0 {
             None
         } else {
-            Some(T::reinterpret_from_bytes(&source[1 .. T::static_size() + 1]))
+            Some(T::from_bytes(&source[1 .. T::static_size() + 1]))
         }
     }
 }
@@ -512,27 +459,25 @@ use math_linear::prelude::*;
 
 macro_rules! reinterpret_3d_vectors {
     ($($VecName:ident = ($x:ident, $y:ident, $z:ident): $Type:ty);* $(;)?) => {$(
-        unsafe impl Reinterpret for $VecName { }
-
         unsafe impl ReinterpretAsBytes for $VecName {
-            fn reinterpret_as_bytes(&self) -> Vec<u8> {
+            fn as_bytes(&self) -> Vec<u8> {
                 let mut out = Vec::with_capacity(Self::static_size());
 
-                out.append(&mut self.$x.reinterpret_as_bytes());
-                out.append(&mut self.$y.reinterpret_as_bytes());
-                out.append(&mut self.$z.reinterpret_as_bytes());
+                out.append(&mut self.$x.as_bytes());
+                out.append(&mut self.$y.as_bytes());
+                out.append(&mut self.$z.as_bytes());
 
                 return out;
             }
         }
 
         unsafe impl ReinterpretFromBytes for $VecName {
-            fn reinterpret_from_bytes(source: &[u8]) -> Self {
+            fn from_bytes(source: &[u8]) -> Self {
                 let size = <$Type>::static_size();
 
-                let x = <$Type>::reinterpret_from_bytes(&source[0..size]);
-                let y = <$Type>::reinterpret_from_bytes(&source[size .. 2 * size]);
-                let z = <$Type>::reinterpret_from_bytes(&source[2 * size .. 3 * size]);
+                let x = <$Type>::from_bytes(&source[0..size]);
+                let y = <$Type>::from_bytes(&source[size .. 2 * size]);
+                let z = <$Type>::from_bytes(&source[2 * size .. 3 * size]);
 
                 Self::new(x, y, z)
             }
@@ -569,27 +514,25 @@ reinterpret_3d_vectors! {
 
 
 
-unsafe impl Reinterpret for Float4 { }
-
 unsafe impl ReinterpretAsBytes for Float4 {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Vec<u8> {
         let mut out = Vec::with_capacity(Self::static_size());
 
-        out.append(&mut self.x().reinterpret_as_bytes());
-        out.append(&mut self.y().reinterpret_as_bytes());
-        out.append(&mut self.z().reinterpret_as_bytes());
-        out.append(&mut self.w().reinterpret_as_bytes());
+        out.append(&mut self.x().as_bytes());
+        out.append(&mut self.y().as_bytes());
+        out.append(&mut self.z().as_bytes());
+        out.append(&mut self.w().as_bytes());
 
         return out;
     }
 }
 
 unsafe impl ReinterpretFromBytes for Float4 {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
-        let x = f32::reinterpret_from_bytes(&source[0..4]);
-        let y = f32::reinterpret_from_bytes(&source[4..8]);
-        let z = f32::reinterpret_from_bytes(&source[8..12]);
-        let w = f32::reinterpret_from_bytes(&source[12..16]);
+    fn from_bytes(source: &[u8]) -> Self {
+        let x = f32::from_bytes(&source[0..4]);
+        let y = f32::from_bytes(&source[4..8]);
+        let z = f32::from_bytes(&source[8..12]);
+        let w = f32::from_bytes(&source[12..16]);
 
         Self::new(x, y, z, w)
     }
@@ -610,7 +553,7 @@ mod tests {
     #[test]
     fn reinterpret_u8() {
         let before: u8 = 23;
-        let after = u8::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = u8::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), u8::static_size());
@@ -620,7 +563,7 @@ mod tests {
     #[test]
     fn reinterpret_i8() {
         let before: i8 = 23;
-        let after = i8::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = i8::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), i8::static_size());
@@ -630,7 +573,7 @@ mod tests {
     #[test]
     fn reinterpret_u16() {
         let before: u16 = 13243;
-        let after = u16::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = u16::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), u16::static_size());
@@ -640,7 +583,7 @@ mod tests {
     #[test]
     fn reinterpret_i16() {
         let before: i16 = 1442;
-        let after = i16::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = i16::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), i16::static_size());
@@ -650,7 +593,7 @@ mod tests {
     #[test]
     fn reinterpret_u32() {
         let before: u32 = 41432;
-        let after = u32::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = u32::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), u32::static_size());
@@ -660,7 +603,7 @@ mod tests {
     #[test]
     fn reinterpret_i32() {
         let before: i32 = 2454;
-        let after = i32::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = i32::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), i32::static_size());
@@ -670,7 +613,7 @@ mod tests {
     #[test]
     fn reinterpret_u64() {
         let before: u64 = 234;
-        let after = u64::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = u64::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), u64::static_size());
@@ -680,7 +623,7 @@ mod tests {
     #[test]
     fn reinterpret_i64() {
         let before: i64 = 5424254;
-        let after = i64::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = i64::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), i64::static_size());
@@ -690,7 +633,7 @@ mod tests {
     #[test]
     fn reinterpret_u128() {
         let before: u128 = 23452523453452334;
-        let after = u128::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = u128::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), u128::static_size());
@@ -700,7 +643,7 @@ mod tests {
     #[test]
     fn reinterpret_i128() {
         let before: i128 = 243523452345;
-        let after = i128::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = i128::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), i128::static_size());
@@ -710,7 +653,7 @@ mod tests {
     #[test]
     fn reinterpret_f32() {
         let before: f32 = 12.54;
-        let after = f32::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = f32::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), f32::static_size());
@@ -720,7 +663,7 @@ mod tests {
     #[test]
     fn reinterpret_f64() {
         let before: f64 = 134442.4454;
-        let after = f64::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = f64::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), f64::static_size());
@@ -730,16 +673,16 @@ mod tests {
     #[test]
     fn reinterpret_vec() {
         let before: Vec<i32> = vec![1, 124, 11, 44, 111, 4523, 765];
-        let after = Vec::<i32>::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = Vec::<i32>::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
-        assert_eq!(before.reinterpret_size(), before.len() * i32::static_size());
+        assert_eq!(before.reinterpret_size(), usize::static_size() + before.len() * i32::static_size());
     }
 
     #[test]
     fn reinterpret_some() {
         let before: Option<i32> = Some(213);
-        let after = Option::<i32>::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = Option::<i32>::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), Option::<i32>::static_size());
@@ -749,7 +692,7 @@ mod tests {
     #[test]
     fn reinterpret_none() {
         let before: Option<u128> = None;
-        let after = Option::<u128>::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = Option::<u128>::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_ne!(before.reinterpret_size(), Option::<u128>::static_size());
@@ -759,7 +702,7 @@ mod tests {
     #[test]
     fn reinterpret_usize() {
         let before: usize = 14242;
-        let after = usize::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = usize::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), usize::static_size());
@@ -769,7 +712,7 @@ mod tests {
     #[test]
     fn reinterpret_isize() {
         let before: isize = 14242;
-        let after = isize::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = isize::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), isize::static_size());
@@ -779,7 +722,7 @@ mod tests {
     #[test]
     fn reinterpret_vec_option() {
         let before: Vec<Option<i32>> = vec![Some(1), None, None, Some(12), None, Some(7327), Some(42)];
-        let after = Vec::<Option::<i32>>::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = Vec::<Option::<i32>>::from_bytes(&before.as_bytes());
 
         println!("Before: {:?}\nAfter: {:?}", before, after);
 

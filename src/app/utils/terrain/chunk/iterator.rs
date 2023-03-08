@@ -3,22 +3,8 @@
 #![allow(dead_code)]
 
 use {
-    crate::app::utils::{
-        werror::prelude::*,
-    },
     math_linear::prelude::*,
     std::ops::Range,
-    rayon::iter::{
-        IndexedParallelIterator,
-        ParallelIterator,
-        plumbing::{
-            UnindexedConsumer,
-            Consumer,
-            ProducerCallback,
-            Producer,
-            self,
-        },
-    },
 };
 
 /// Iterator over chunk border.
@@ -340,71 +326,6 @@ impl DoubleEndedIterator for SpaceIter {
     }
 }
 
-// FIXME: "too many items pushed into the consumer."
-#[derive(Debug, Clone)]
-pub struct ParSpaceIter(SpaceIter);
-
-impl ParSpaceIter {
-    pub fn new(range: Range<Int3>) -> Self {
-        ParSpaceIter(SpaceIter::new(range))
-    }
-}
-
-impl Producer for ParSpaceIter {
-    type Item = Int3;
-    type IntoIter = SpaceIter;
-
-    fn into_iter(self) -> Self::IntoIter { self.0 }
-
-    fn split_at(self, idx: usize) -> (Self, Self) {
-        use std::cmp::Ordering::*;
-        let (idx_l, idx_r) = match self.0.idx.cmp(&idx) {
-            Less => (self.0.idx, idx),
-            Equal | Greater => (idx, idx),
-        };
-
-        (
-            ParSpaceIter(SpaceIter { idx: idx_l, size: idx, ..self.0 }),
-            ParSpaceIter(SpaceIter { idx: idx_r, ..self.0 }),
-        )
-    }
-}
-
-impl ParallelIterator for ParSpaceIter {
-    type Item = Int3;
-
-    fn drive_unindexed<Consumer>(self, consumer: Consumer) -> Consumer::Result
-    where
-        Consumer: UnindexedConsumer<Self::Item>,
-    {
-        plumbing::bridge(self, consumer)
-    }
-
-    fn opt_len(&self) -> Option<usize> {
-        Some(ExactSizeIterator::len(&self.0))
-    }
-}
-
-impl IndexedParallelIterator for ParSpaceIter {
-    fn drive<C>(self, consumer: C) -> C::Result
-    where
-        C: Consumer<Self::Item>,
-    {
-        plumbing::bridge(self, consumer)
-    }
-
-    fn with_producer<C>(self, callback: C) -> C::Output
-    where
-        C: ProducerCallback<Self::Item>,
-    {
-        callback.callback(self)
-    }
-
-    fn len(&self) -> usize {
-        ExactSizeIterator::len(&self.0)
-    }
-}
-
 /// Position function.
 pub fn idx_to_coord_idx(idx: usize, sizes: USize3) -> USize3 {
     let xy = idx / sizes.z;
@@ -463,7 +384,7 @@ impl ChunkSplitten {
         assert_eq!(entire % chunk_size, Int3::ZERO);
 
         let mut outer = SpaceIter::new(Int3::ZERO .. entire / chunk_size);
-        let current = outer.next().wunwrap();
+        let current = outer.next().unwrap();
 
         Self {
             inner: SpaceIter::new(Int3::ZERO..chunk_size),
@@ -478,9 +399,9 @@ impl Iterator for ChunkSplitten {
     fn next(&mut self) -> Option<Self::Item> {
         let inner = self.inner.next().unwrap_or_else(|| {
             self.current = self.outer.next();
-            self.inner = SpaceIter::new(Int3::zero() .. self.chunk_size);
+            self.inner = SpaceIter::new(Int3::ZERO..self.chunk_size);
 
-            return self.inner.next().wunwrap()
+            return self.inner.next().unwrap()
         });
         
         let outer = self.current?;
@@ -608,17 +529,6 @@ mod space_iter_tests {
         for pos in poses2.iter().copied() {
             assert!(poses1.contains(&pos), "{}, {:?}, {:?}", pos, poses1, poses2);
         }
-    }
-
-    #[test]
-    fn test_par() {
-        let range = veci!(-1, -1, -1)..veci!(0, 1, 1);
-        let par: Vec<_> = ParSpaceIter::new(range.clone())
-            .collect();
-        let sync: Vec<_> = SpaceIter::new(range)
-            .collect();
-
-        assert_eq!(sync, par);
     }
 
     #[test]

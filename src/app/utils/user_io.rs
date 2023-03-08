@@ -3,7 +3,6 @@
  */
 
 use {
-    crate::app::utils::werror::prelude::*,
     super::graphics::Graphics,
     winapi::{
         um::winuser::GetCursorPos,
@@ -19,6 +18,7 @@ use {
             WindowEvent
         },
         window::CursorGrabMode,
+        dpi::PhysicalPosition,
     }
 };
 
@@ -137,7 +137,8 @@ impl Mouse {
     /// Update mouse delta.
     pub fn update(&mut self, graphics: &Graphics) {
         /* Get cursor position from WinAPI */
-        let (x, y) = Self::get_cursor_pos(graphics).wunwrap();
+        let (x, y) = Self::get_cursor_pos(graphics)
+            .expect("failed to get cursir pos");
 
         /* Update struct */
         self.dx = x - self.x;
@@ -151,8 +152,8 @@ impl Mouse {
         /* If cursor grabbed then not change mouse position and put cursor on center */
         if self.is_grabbed {
             graphics.display.gl_window().window().set_cursor_position(
-                glium::glutin::dpi::PhysicalPosition::new(wsize.width / 2, wsize.height / 2)
-            ).wunwrap();
+                PhysicalPosition::new(wsize.width / 2, wsize.height / 2)
+            ).expect("failed to set cursor position");
             
             self.x = (wsize.width  / 2) as f64;
             self.y = (wsize.height / 2) as f64;
@@ -181,7 +182,11 @@ impl Mouse {
     /// Gives cursor position in window cordinates.
     pub fn get_cursor_pos(graphics: &Graphics) -> Result<(f64, f64), &'static str> {
         let (x, y) = Self::get_cursor_screen_pos()?;
-        let window_pos = graphics.display.gl_window().window().inner_position().wunwrap();
+        let window_pos = graphics.display
+            .gl_window()
+            .window()
+            .inner_position()
+            .expect("failed to get inner position");
 
         Ok((x - window_pos.x as f64, y - window_pos.y as f64))
     }

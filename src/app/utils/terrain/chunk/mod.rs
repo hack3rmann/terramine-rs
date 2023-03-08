@@ -49,7 +49,7 @@ pub mod prelude {
         ChunkOption,
         FillType,
         chunk_array::ChunkArray,
-        iterator::SpaceIter,
+        iterator::{SpaceIter, self},
     };
 }
 
@@ -296,10 +296,16 @@ impl_chunk_with_refs! {
         let global_pos = Chunk::local_to_global_pos(self.pos.to_owned(), local_pos);
 
         match self.info.fill_type {
-            FillType::Default => Voxel::new(
-                global_pos,
-                &VOXEL_DATA[self.voxel_ids[Chunk::voxel_pos_to_idx(local_pos)] as usize]
-            ),
+            FillType::Default => {
+                let id = self.voxel_ids[Chunk::voxel_pos_to_idx(local_pos)] as usize;
+
+                assert!(
+                    (0..VOXEL_DATA.len()).contains(&id),
+                    "Invalid voxel ID",
+                );
+
+                Voxel::new(global_pos, &VOXEL_DATA[id])
+            },
 
             FillType::AllSame(id) =>
                 Voxel::new(global_pos, &VOXEL_DATA[id as usize]),
@@ -400,8 +406,6 @@ impl Chunk {
             voxel_ids,
             info: Default::default(),
             detailed_mesh: None,
-
-            // FIXME:
             low_meshes: [None, None, None, None, None, None],
         }.as_optimized()
     }
@@ -705,10 +709,8 @@ pub enum FillType {
     AllSame(Id),
 }
 
-unsafe impl Reinterpret for FillType { }
-
 unsafe impl ReinterpretAsBytes for FillType {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Vec<u8> {
         match self {
             Self::Default =>
                 vec![0; Self::static_size()],
@@ -716,7 +718,7 @@ unsafe impl ReinterpretAsBytes for FillType {
             Self::AllSame(id) => {
                 let mut result = Vec::with_capacity(Self::static_size());
                 result.push(1);
-                result.append(&mut id.reinterpret_as_bytes());
+                result.append(&mut id.as_bytes());
 
                 assert_eq!(result.capacity(), Self::static_size());
 
@@ -727,11 +729,11 @@ unsafe impl ReinterpretAsBytes for FillType {
 }
 
 unsafe impl ReinterpretFromBytes for FillType {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
+    fn from_bytes(source: &[u8]) -> Self {
         match source[0] {
             0 => Self::Default,
             1 => {
-                let id = Id::reinterpret_from_bytes(&source[1..]);
+                let id = Id::from_bytes(&source[1..]);
                 Self::AllSame(id)
             },
             _ => unreachable!("There's no FillType variant that matches with {} byte!", source[0])

@@ -33,6 +33,11 @@ impl Voxel {
     }
 }
 
+pub fn is_id_valid(id: Id) -> bool {
+    let id = id as usize;
+    (0..VOXEL_DATA.len()).contains(&id)
+}
+
 /// Generalization of voxel details.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LoweredVoxel {
@@ -42,23 +47,21 @@ pub enum LoweredVoxel {
 
 
 
-unsafe impl Reinterpret for Voxel { }
-
 unsafe impl ReinterpretAsBytes for Voxel {
-    fn reinterpret_as_bytes(&self) -> Vec<u8> {
+    fn as_bytes(&self) -> Vec<u8> {
         let mut bytes = Vec::with_capacity(Self::static_size());
 
-        bytes.append(&mut self.data.id.reinterpret_as_bytes());
-        bytes.append(&mut self.pos.reinterpret_as_bytes());
+        bytes.append(&mut self.data.id.as_bytes());
+        bytes.append(&mut self.pos.as_bytes());
 
         return bytes;
     }
 }
 
 unsafe impl ReinterpretFromBytes for Voxel {
-    fn reinterpret_from_bytes(source: &[u8]) -> Self {
-        let id = u32::reinterpret_from_bytes(&source[0..4]);
-        let pos = Int3::reinterpret_from_bytes(&source[4..16]);
+    fn from_bytes(source: &[u8]) -> Self {
+        let id = u32::from_bytes(&source[0..4]);
+        let pos = Int3::from_bytes(&source[4..16]);
 
         Self::new(pos, &VOXEL_DATA[id as usize])
     }
@@ -79,7 +82,7 @@ mod tests {
     #[test]
     fn reinterpret_voxel1() {
         let before = Voxel::new(Int3::new(123, 4212, 11), STONE_VOXEL_DATA);
-        let after = Voxel::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = Voxel::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
     }
@@ -87,7 +90,7 @@ mod tests {
     #[test]
     fn reinterpret_voxel2() {
         let before = Voxel::new(Int3::new(-213, 4212, 11), LOG_VOXEL_DATA);
-        let after = Voxel::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+        let after = Voxel::from_bytes(&before.as_bytes());
 
         assert_eq!(before, after);
     }

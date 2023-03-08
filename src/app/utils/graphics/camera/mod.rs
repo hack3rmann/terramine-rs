@@ -11,7 +11,6 @@ use {
             camera::default as cam_def,
             window::default as window_def,
         },
-        werror::prelude::*,
         user_io::InputManager,
     },
     math_linear::prelude::*,
@@ -201,12 +200,11 @@ impl Camera {
         self.get_frustum().is_aabb_in_frustum(aabb)
     }
 
-    /// Gives frustum from camera
+    /// Gives frustum from camera.
     pub fn get_frustum(&self) -> Frustum {
-        if self.frustum.is_none() {
-            Frustum::new(self)
-        } else {
-            self.frustum.as_ref().wunwrap().clone()
+        match self.frustum {
+            None => Frustum::new(self),
+            Some(ref frustum) => frustum.clone(),
         }
     }
 

@@ -3,7 +3,6 @@
  */
 
 use {
-    crate::app::utils::werror::prelude::*,
     glium::{
         index::{IndicesSource, PrimitiveType, NoIndices},
         VertexBuffer as GVertexBuffer,
@@ -27,7 +26,8 @@ where
     /// Constructs [`VertexBuffer`] from vertex vector.
     pub fn new(display: &Display, vertices: &[Vertex], indices: Idx) -> Self {
         /* Define vertex buffer */
-        let vertex_buffer = GVertexBuffer::new(display, vertices).wunwrap();
+        let vertex_buffer = GVertexBuffer::new(display, vertices)
+            .expect("failed to create new vertex buffer");
 
         VertexBuffer { inner: vertex_buffer, indices }
     }
@@ -42,7 +42,8 @@ impl<Vertex: Copy + TVertex> VertexBuffer<NoIndices, Vertex> {
     /// Constructs empty vertex buffer.
     pub fn new_empty(display: &Display) -> Self {
         /* Define vertex buffer */
-        let vertex_buffer = GVertexBuffer::new(display, &[]).wunwrap();
+        let vertex_buffer = GVertexBuffer::new(display, &[])
+            .expect("failed to create new vertex buffer");
         Self { inner: vertex_buffer, indices: NoIndices(PrimitiveType::Points) }
     }
 }

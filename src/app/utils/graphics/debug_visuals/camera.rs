@@ -1,7 +1,6 @@
 use {
     crate::app::utils::{
         cfg,
-        werror::prelude::*,
         graphics::{
             camera::Camera,
             vertex_buffer::VertexBuffer,
@@ -47,7 +46,7 @@ pub mod data {
     pub fn get_unchecked<'s>() -> DebugVisualsStatics<'s, Camera> {
         unsafe {
             DebugVisualsStatics {
-                shader: &SHADER.as_ref().wunwrap().0,
+                shader: &SHADER.as_ref().expect("shader should be initialized").0,
                 draw_params: &DRAW_PARAMS.0,
                 _phantom: PhantomData
             }

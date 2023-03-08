@@ -2,21 +2,15 @@ use {
     crate::app::utils::{
         terrain::{
             chunk::{
-                FillType,
-                Chunk,
-                ChunkRef,
-                ChunkAdj,
-                iterator::{SpaceIter, self},
-                Lod, Id,
-                ChunkDrawBundle,
-                ChunkRenderError,
-                tasks::{FullTask, LowTask, Task, GenTask},
+                prelude::*, Id,
+                tasks::{FullTask, LowTask, Task, GenTask}
             },
-            voxel::Voxel,
+            voxel::{Voxel, self},
         },
         saves::Save,
         reinterpreter::*,
         graphics::camera::Camera,
+        concurrency::loading::{self, Command},
     },
     math_linear::prelude::*,
     std::{
@@ -26,6 +20,7 @@ use {
         mem,
     },
     glium as gl,
+    thiserror::Error,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -112,65 +107,152 @@ impl ChunkArray {
         Self::default()
     }
 
-    pub fn save_to_file(&self, save_name: &str, save_path: &str) -> io::Result<()> {
-        let volume = Self::volume(self.sizes);
+    pub async fn save_to_file(
+        sizes: USize3, chunks: Vec<ChunkRef<'static>>, save_name: impl Into<String>, save_path: &'static str,
+    ) -> io::Result<()> {
+        let volume = Self::volume(sizes);
+        assert_eq!(volume, chunks.len(), "chunks should have same length as sizes volume");
+
+        let loading_sender = loading::make_sender();
+        
+        let loading_name = "Chunk saving";
+        loading_sender.send(Command::Add(loading_name.into()))
+            .await
+            .expect("failed to send loading command");
 
         Save::new(save_name)
-            .create(save_path)?
-            .write(&self.sizes, ChunkArrSaveType::Sizes)
+            .create(save_path).await?
+            .write(&sizes, ChunkArrSaveType::Sizes).await
             .pointer_array(volume, ChunkArrSaveType::Array, |i| {
-                match self.chunks[i].info.fill_type {
-                    FillType::AllSame(id) => FillType::AllSame(id)
-                        .reinterpret_as_bytes()
-                        .into_iter()
-                        .chain(self.chunks[i].pos.reinterpret_as_bytes())
-                        .collect(),
+                let chunks = &chunks;
+                let loading_sender = loading_sender.clone();
+                async move {
+                    let loading_value = i as f32 / (volume - 1) as f32;
 
-                    FillType::Default => {
-                        assert_eq!(
-                            self.chunks.len(), Chunk::VOLUME,
-                            "cannot save unknown-sized chunk with size {size}",
-                            size = self.chunks.len(),
-                        );
+                    loading_sender.send(Command::Refresh(loading_name, loading_value))
+                        .await
+                        .expect("failed to send loading command");
 
-                        FillType::Default
-                            .reinterpret_as_bytes()
+                    match chunks[i].info.fill_type {
+                        FillType::AllSame(id) =>
+                            FillType::AllSame(id).as_bytes(),
+
+                        FillType::Default => {
+                            let n_voxels = chunks[i].voxel_ids.len();
+                            assert_eq!(
+                                n_voxels, Chunk::VOLUME,
+                                "cannot save unknown-sized chunk with size {n_voxels}",
+                            );
+
+                            FillType::Default
+                                .as_bytes()
+                                .into_iter()
+                                .chain(chunks[i].voxel_ids.as_bytes())
+                                .collect()
+                        }
                     }
                 }
-            })
-            .save()?;
+            }).await
+            .save()
+            .await?;
+
+        loading_sender.send(Command::Finish(loading_name))
+            .await
+            .expect("failed to send loading finish command");
 
         Ok(())
     }
 
-    pub fn read_from_file(&mut self, save_name: &str, save_path: &str) -> io::Result<()> {
-        let save = Save::new(save_name).open(save_path)?;
+    pub async fn read_from_file(
+        save_name: &str, save_path: &str,
+    ) -> io::Result<(USize3, Vec<(Vec<Id>, FillType)>)> {
+        let loading = loading::make_sender();
 
-        self.sizes = save.read(ChunkArrSaveType::Sizes);
+        let loading_name = "Reading chunks from file";
+        loading.send(Command::Add(loading_name.into()))
+            .await
+            .expect("failed to send an add command");
 
-        self.chunks = save.read_pointer_array(ChunkArrSaveType::Array, |i, mut bytes| {
-            let chunk_pos = Self::idx_to_pos(i, self.sizes);
+        let mut save = Save::new(save_name)
+            .open(save_path)
+            .await?;
+        
+        let sizes = save.read(ChunkArrSaveType::Sizes).await;
 
-            let fill_type = FillType::reinterpret_from_bytes(bytes);
-            bytes = &bytes[FillType::static_size()..];
+        let chunks = save.read_pointer_array(ChunkArrSaveType::Array, |i, bytes| {
+            let loading = loading.clone();
+            async move {
+                let percent = i as f32 / (Self::volume(sizes) - 1) as f32;
 
-            match fill_type {
-                FillType::Default => {
-                    let voxel_ids = Vec::<Id>::reinterpret_from_bytes(bytes);
-                    Chunk::from_voxels(voxel_ids, chunk_pos)
-                },
+                loading.send(Command::Refresh(loading_name, percent))
+                    .await
+                    .expect("failed to send a refresh command");
 
-                FillType::AllSame(id) =>
-                    Chunk::new_same_filled(chunk_pos, id),
+                let fill_type = FillType::from_bytes(&bytes);
+                let bytes = &bytes[FillType::static_size()..];
+
+                match fill_type {
+                    FillType::Default => {
+                        use voxel::is_id_valid;
+
+                        let voxel_ids = Vec::<Id>::from_bytes(bytes);
+
+                        let is_id_valid = voxel_ids.iter()
+                            .copied()
+                            .all(is_id_valid);
+
+                        assert!(is_id_valid, "Voxel ids in voxel array should be valid");
+                        assert_eq!(voxel_ids.len(), Chunk::VOLUME, "There's should be Chunk::VOLUME voxels");
+
+                        (voxel_ids, FillType::Default)
+                    },
+
+                    FillType::AllSame(id) =>
+                        (vec![], FillType::AllSame(id)),
+                }
             }
-        });
+        }).await;
 
-        Ok(())
+        loading.send(Command::Finish(loading_name))
+            .await
+            .expect("failed to send a finish command");
+
+        Ok((sizes, chunks))
+    }
+
+    // FIXME: make unmodifiable flag on chunks.
+    pub fn make_static_refs(&self) -> Vec<ChunkRef<'static>>
+    where
+        Self: 'static,
+    {
+        self.chunks()
+            .map(|chunk| unsafe { chunk.make_ref().as_static() })
+            .collect()
+    }
+
+    pub fn apply_new(&mut self, sizes: USize3, chunk_arr: Vec<(Vec<Id>, FillType)>) {
+        assert_eq!(Self::volume(sizes), chunk_arr.len(), "chunk array should have same len as sizes");
+
+        self.drop_tasks();
+
+        self.sizes = sizes;
+        self.chunks = chunk_arr.into_iter()
+            .enumerate()
+            .map(|(idx, (voxel_ids, fill_type))| {
+                let chunk_pos = Self::idx_to_pos(idx, sizes);
+                match fill_type {
+                    FillType::Default =>
+                        Chunk::from_voxels(voxel_ids, chunk_pos),
+                    FillType::AllSame(id) =>
+                        Chunk::new_same_filled(chunk_pos, id),
+                }
+            })
+            .collect();
     }
 
     /// Gives chunk count.
     pub fn volume(arr_sizes: USize3) -> usize {
-        arr_sizes.x * arr_sizes.y * arr_sizes.z
+        arr_sizes.as_array().iter().product()
     }
 
     /// Convertes 3d index into chunk pos.
@@ -586,41 +668,54 @@ impl ChunkArray {
         }
     }
 
-    // TODO: return more informative `Result`
     /// Tries to get mesh from task if it is ready then sets it to chunk.
-    /// Otherwise will return `Err(())`.
+    /// Otherwise will return `Err(TaskError)`.
     pub async fn try_finish_mesh_task(
         full_tasks: &mut HashMap<Int3, FullTask>,
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
         pos: Int3, lod: Lod,
-        chunk: &mut Chunk, display: &gl::Display
-    ) -> Result<(), ()> {
+        chunk: &mut Chunk, display: &gl::Display,
+    ) -> Result<(), TaskError> {
         match lod {
-            0 => match full_tasks.get_mut(&pos) {
-                Some(task) => match task.try_take_result().await {
-                    None => Err(()),
-                    Some(vertices) => {
-                        chunk.upload_full_detail_vertices(&vertices, display);
-                        let _ = full_tasks.remove(&pos)
-                            .expect("there should be a task");
-                        Ok(())
-                    }
-                },
-                None => Err(()),
-            },
+            0   => Self::try_finish_full_mesh_task(full_tasks, pos, chunk, display).await,
+            lod => Self::try_finish_low_mesh_task(low_tasks, pos, lod, chunk, display).await,
+        }
+    }
 
-            lod => match low_tasks.get_mut(&(pos, lod)) {
-                Some(task) => match task.try_take_result().await {
-                    None => Err(()),
-                    Some(vertices) => {
-                        chunk.upload_low_detail_vertices(&vertices, lod, display);
-                        let _ = low_tasks.remove(&(pos, lod))
-                            .expect("there should be a task");
-                        Ok(())
-                    }
+    pub async fn try_finish_full_mesh_task(
+        full_tasks: &mut HashMap<Int3, FullTask>,
+        pos: Int3, chunk: &mut Chunk, display: &gl::Display,
+    ) -> Result<(), TaskError> {
+        match full_tasks.get_mut(&pos) {
+            Some(task) => match task.try_take_result().await {
+                Some(vertices) => {
+                    chunk.upload_full_detail_vertices(&vertices, display);
+                    let _ = full_tasks.remove(&pos)
+                        .expect("there should be a task");
+                    Ok(())
                 },
-                None => Err(())
-            }
+                None => Err(TaskError::TaskNotReady),
+            },
+            None => Err(TaskError::TaskNotFound { lod: 0, pos }),
+        }
+    }
+    
+    pub async fn try_finish_low_mesh_task(
+        low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
+        pos: Int3, lod: Lod,
+        chunk: &mut Chunk, display: &gl::Display,
+    ) -> Result<(), TaskError> {
+        match low_tasks.get_mut(&(pos, lod)) {
+            Some(task) => match task.try_take_result().await {
+                Some(vertices) => {
+                    chunk.upload_low_detail_vertices(&vertices, lod, display);
+                    let _ = low_tasks.remove(&(pos, lod))
+                        .expect("there should be a task");
+                    Ok(())
+                },
+                None => Err(TaskError::TaskNotReady),
+            },
+            None => Err(TaskError::TaskNotFound { lod, pos })
         }
     }
 
@@ -653,4 +748,16 @@ impl ChunkArray {
                 );
             });
     }
+}
+
+#[derive(Debug, Error)]
+pub enum TaskError {
+    #[error("task is not already finished")]
+    TaskNotReady,
+
+    #[error("there is no task to generate mesh with lod {lod} and pos {pos} in map")]
+    TaskNotFound {
+        lod: Lod,
+        pos: Int3,
+    },
 }
