@@ -138,7 +138,7 @@ impl StackHeap {
         Self::seek_read(&mut self.stack, &mut buffer, offset).await?;
 
         /* Reinterpret */
-        Ok(T::from_bytes(&buffer))
+        Ok(T::from_bytes(&buffer).expect("failed to make T from bytes"))
     }
 
     /// Reads value from heap by `heap_offset`.
@@ -149,6 +149,7 @@ impl StackHeap {
             let mut buffer = vec![0; Size::static_size()];
             Self::seek_read(&mut self.heap, &mut buffer, heap_offset).await?;
             Size::from_bytes(&buffer)
+                .expect("failed to make Size from bytes")
         };
 
         /* Read data */
@@ -169,7 +170,7 @@ impl StackHeap {
 
         /* Read bytes from heap */
         if bytes.len() == T::static_size() {
-            Ok(T::from_bytes(&bytes))
+            Ok(T::from_bytes(&bytes).expect("failed to make T from bytes"))
         } else {
             Err(StackHeapError::AllocSizeIsDifferent { read: bytes.len(), expected: T::static_size() })
         }
@@ -199,6 +200,7 @@ impl StackHeap {
             let mut buffer = vec![0; Size::static_size()];
             Self::seek_read(&mut self.heap, &mut buffer, heap_offset).await?;
             Size::from_bytes(&buffer)
+                .expect("failed to make Size from bytes")
         };
 
         /* Calculate size include sizes bytes */
@@ -279,7 +281,10 @@ impl StackHeap {
             Self::seek_read(&mut self.heap, &mut buffer, heap_offset).await?;
 
             /* Note: Size mark in heap is included */
-            Size::from_bytes(&buffer) + Size::static_size() as Size
+            let size = Size::from_bytes(&buffer)
+                .expect("failed to make Size from bytes");
+
+            size + Size::static_size() as Size
         };
         
         /* Insert free range */

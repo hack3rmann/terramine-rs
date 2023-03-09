@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use {
+    crate::app::utils::cfg,
     std::{
         collections::HashMap,
         sync::Mutex,
@@ -104,8 +105,7 @@ lazy_static! {
     pub static ref LOADINGS: Mutex<ChannelLoadings<'static>> = Mutex::new(ChannelLoadings::new());
 }
 
-// FIXME: move to cfg ->
-pub const BUFFER_SIZE: usize = 128_000;
+pub const BUFFER_SIZE: usize = cfg::concurrency::loadings::BUFFER_SIZE;
 
 pub fn make_sender() -> CommandSender<'static> {
     LOADINGS.lock()

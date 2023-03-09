@@ -188,14 +188,16 @@ impl ChunkArray {
                     .await
                     .expect("failed to send a refresh command");
 
-                let fill_type = FillType::from_bytes(&bytes);
+                let fill_type = FillType::from_bytes(&bytes)
+                    .expect("failed to reinterpret bytes");
                 let bytes = &bytes[FillType::static_size()..];
 
                 match fill_type {
                     FillType::Default => {
                         use voxel::is_id_valid;
 
-                        let voxel_ids = Vec::<Id>::from_bytes(bytes);
+                        let voxel_ids = Vec::<Id>::from_bytes(bytes)
+                            .expect("failed to reinterpret voxel ids vector from bytes");
 
                         let is_id_valid = voxel_ids.iter()
                             .copied()

@@ -450,12 +450,12 @@ unsafe impl ReinterpretAsBytes for Int3 {
 }
 
 unsafe impl ReinterpretFromBytes for Int3 {
-    fn from_bytes(source: &[u8]) -> Self {
-        let x = i32::from_bytes(&source[0..4]);
-        let y = i32::from_bytes(&source[4..8]);
-        let z = i32::from_bytes(&source[8..12]);
+    fn from_bytes(source: &[u8]) -> Option<Self> {
+        let x = i32::from_bytes(&source[0..4])?;
+        let y = i32::from_bytes(&source[4..8])?;
+        let z = i32::from_bytes(&source[8..12])?;
 
-        Self::new(x, y, z)
+        Some(Self::new(x, y, z))
     }
 }
 
@@ -483,13 +483,13 @@ unsafe impl ReinterpretAsBytes for Float4 {
 }
 
 unsafe impl ReinterpretFromBytes for Float4 {
-    fn from_bytes(source: &[u8]) -> Self {
-        let x = f32::from_bytes(&source[0..4]);
-        let y = f32::from_bytes(&source[4..8]);
-        let z = f32::from_bytes(&source[8..12]);
-        let w = f32::from_bytes(&source[12..16]);
+    fn from_bytes(source: &[u8]) -> Option<Self> {
+        let x = f32::from_bytes(&source[0..4])?;
+        let y = f32::from_bytes(&source[4..8])?;
+        let z = f32::from_bytes(&source[8..12])?;
+        let w = f32::from_bytes(&source[12..16])?;
 
-        Self::new(x, y, z, w)
+        Some(Self::new(x, y, z, w))
     }
 }
 
@@ -510,7 +510,7 @@ mod test {
     #[test]
     fn reinterpret_int3() {
         let before = Int3::new(23, 441, 52);
-        let after = Int3::from_bytes(&before.as_bytes());
+        let after = Int3::from_bytes(&before.as_bytes()).unwrap();
 
         assert_eq!(before, after);
     }
@@ -518,7 +518,7 @@ mod test {
     #[test]
     fn reinterpret_float4() {
         let before = Float4::new(233.7, 123.5, 123123.5, 444.5);
-        let after = Float4::from_bytes(&before.as_bytes());
+        let after = Float4::from_bytes(&before.as_bytes()).unwrap();
 
         assert_eq!(before, after);
     }

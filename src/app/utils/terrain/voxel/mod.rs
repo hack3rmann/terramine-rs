@@ -59,11 +59,11 @@ unsafe impl ReinterpretAsBytes for Voxel {
 }
 
 unsafe impl ReinterpretFromBytes for Voxel {
-    fn from_bytes(source: &[u8]) -> Self {
-        let id = u32::from_bytes(&source[0..4]);
-        let pos = Int3::from_bytes(&source[4..16]);
+    fn from_bytes(source: &[u8]) -> Option<Self> {
+        let id = u32::from_bytes(&source[0..4])?;
+        let pos = Int3::from_bytes(&source[4..16])?;
 
-        Self::new(pos, &VOXEL_DATA[id as usize])
+        Some(Self::new(pos, &VOXEL_DATA[id as usize]))
     }
 }
 
@@ -82,7 +82,7 @@ mod tests {
     #[test]
     fn reinterpret_voxel1() {
         let before = Voxel::new(Int3::new(123, 4212, 11), STONE_VOXEL_DATA);
-        let after = Voxel::from_bytes(&before.as_bytes());
+        let after = Voxel::from_bytes(&before.as_bytes()).unwrap();
 
         assert_eq!(before, after);
     }
@@ -90,7 +90,7 @@ mod tests {
     #[test]
     fn reinterpret_voxel2() {
         let before = Voxel::new(Int3::new(-213, 4212, 11), LOG_VOXEL_DATA);
-        let after = Voxel::from_bytes(&before.as_bytes());
+        let after = Voxel::from_bytes(&before.as_bytes()).unwrap();
 
         assert_eq!(before, after);
     }

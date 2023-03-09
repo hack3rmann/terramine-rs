@@ -100,6 +100,7 @@ impl<E: Copy + Into<Enumerator>> SaveBuilder<E> {
             offsets_save.read(&mut buffer).await?;
 
             Size::from_bytes(&buffer)
+                .expect("failed to make offsets out of bytes")
         };
 
         /* Read all offsets to HashMap */
@@ -111,6 +112,7 @@ impl<E: Copy + Into<Enumerator>> SaveBuilder<E> {
                 offsets_save.read(&mut buffer).await?;
                 
                 Enumerator::from_bytes(&buffer)
+                    .expect("failed to make enumerator from bytes")
             };
 
             let offset = {
@@ -118,6 +120,7 @@ impl<E: Copy + Into<Enumerator>> SaveBuilder<E> {
                 offsets_save.read(&mut buffer).await?;
 
                 Offset::from_bytes(&buffer)
+                    .expect("failed to make offset from bytes")
             };
 
             self.offsets.insert(enumerator, offset);
@@ -292,7 +295,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
                 .expect("failed to seek-read");
 
             /* Push value to `result` */
-            result.push(T::from_bytes(&buffer));
+            result.push(T::from_bytes(&buffer).expect("failed to make T from bytes"));
         }
 
         return result

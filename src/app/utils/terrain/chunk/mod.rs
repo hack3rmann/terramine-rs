@@ -729,14 +729,14 @@ unsafe impl ReinterpretAsBytes for FillType {
 }
 
 unsafe impl ReinterpretFromBytes for FillType {
-    fn from_bytes(source: &[u8]) -> Self {
+    fn from_bytes(source: &[u8]) -> Option<Self> {
         match source[0] {
-            0 => Self::Default,
+            0 => Some(Self::Default),
             1 => {
-                let id = Id::from_bytes(&source[1..]);
-                Self::AllSame(id)
+                let id = Id::from_bytes(&source[1..])?;
+                Some(Self::AllSame(id))
             },
-            _ => unreachable!("There's no FillType variant that matches with {} byte!", source[0])
+            _ => None
         }
     }
 }
