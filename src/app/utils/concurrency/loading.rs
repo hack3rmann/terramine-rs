@@ -85,6 +85,19 @@ impl Loadings {
     }
 }
 
+pub fn spawn_info_window(ui: &imgui::Ui) {
+    LOADINGS.lock()
+        .expect("mutex should be not poisoned")
+        .loads
+        .spawn_info_window(ui)
+}
+
+pub fn recv_all() -> Result<(), LoadingError> {
+    LOADINGS.lock()
+        .expect("mutex should be not poisoned")
+        .recv_all()
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command<'s> {
     Add(String),

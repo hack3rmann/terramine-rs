@@ -3,7 +3,8 @@ pub mod utils;
 use {
     /* Other files */
     crate::app::utils::{
-        cfg, concurrency::loading::LOADINGS,
+        cfg,
+        concurrency::loading,
         user_io::InputManager,
         graphics::{
             self,
@@ -15,9 +16,7 @@ use {
         terrain::chunk::{
             chunk_array::ChunkArray,
             ChunkDrawBundle,
-            prelude::*,
         },
-        terrain::voxel::voxel_data::Id,
         time::timer::Timer,
         profiler,
         runtime::RUNTIME,
@@ -26,15 +25,12 @@ use {
     /* Glium includes */
     glium::{
         glutin::{
-            event::{Event, WindowEvent, VirtualKeyCode as Key},
+            event::{Event, WindowEvent},
             event_loop::ControlFlow,
         },
         Surface,
         uniform,
     },
-
-    tokio::task::JoinHandle,
-    math_linear::prelude::*,
 };
 
 /// Struct that handles everything.
@@ -49,10 +45,6 @@ pub struct App {
     chunk_draw_bundle: ChunkDrawBundle<'static>,
 
     texture_atlas: Texture,
-
-    // FIXME: remove this ->
-    reading_handle: Option<JoinHandle<std::io::Result<(USize3, Vec<(Vec<Id>, FillType)>)>>>,
-    saving_handle: Option<JoinHandle<std::io::Result<()>>>,
 }
 
 impl App where Self: 'static {
@@ -73,7 +65,7 @@ impl App where Self: 'static {
 
         let chunk_draw_bundle = ChunkDrawBundle::new(&graphics.display);
         let chunk_arr = DebugVisualizedStatic::new_chunk_array(
-            ChunkArray::new_empty_chunks(vecs!(16, 2, 16)),
+            ChunkArray::new_empty(),
             &graphics.display,
         );
 
@@ -85,8 +77,6 @@ impl App where Self: 'static {
             texture_atlas,
             timer: Timer::new(),
             input_manager: InputManager::new(),
-            reading_handle: None,
-            saving_handle: None,
         }
     }
 
@@ -144,52 +134,27 @@ impl App where Self: 'static {
         /* Close window is `escape` pressed */
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::APP_EXIT) {
             *control_flow = ControlFlow::Exit;
+            self.chunk_arr.drop_tasks();
+        }
+
+        if self.input_manager.keyboard.just_pressed(glium::glutin::event::VirtualKeyCode::Y) {
+            self.chunk_arr.drop_tasks();
         }
 
         /* Control camera by user input */
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
             if self.camera.grabbes_cursor {
-                self.camera.grabbes_cursor = false;
                 self.input_manager.mouse.release_cursor(&self.graphics);
-            }
-            
-            else {
-                self.camera.grabbes_cursor = true;
+            } else {
                 self.input_manager.mouse.grab_cursor(&self.graphics);
             }
+
+            self.camera.grabbes_cursor = !self.camera.grabbes_cursor;
         }
 
-        if self.input_manager.keyboard.just_pressed_combo(&[Key::LControl, Key::S]) {
-            let handle = tokio::spawn(
-                ChunkArray::save_to_file(self.chunk_arr.sizes, self.chunk_arr.make_static_refs(), "world", "world")
-            );
-            self.saving_handle = Some(handle);
-        }
-
-        if self.saving_handle.is_some() && self.saving_handle.as_ref().unwrap().is_finished() {
-            let handle = self.saving_handle.take().unwrap();
-            match handle.await {
-                Ok(save_result) => save_result.expect("failed to save chunk array"),
-                Err(_) => (),
-            }
-        }
-
-        if self.input_manager.keyboard.just_pressed_combo(&[Key::LControl, Key::O]) {
-            let handle = tokio::spawn(ChunkArray::read_from_file("world", "world"));
-            self.reading_handle = Some(handle);
-        }
-
-        if self.reading_handle.is_some() && self.reading_handle.as_ref().unwrap().is_finished() {
-            let handle = self.reading_handle.take().unwrap();
-            match handle.await {
-                Ok(load_result) => {
-                    let (sizes, arr) = load_result.expect("failed to read chunk array");
-                    self.chunk_arr.apply_new(sizes, arr);
-                },
-
-                Err(_) => (),
-            }
-        }
+        /* Update save/load tasks of `ChunkArray` */
+        self.chunk_arr.update(&mut self.input_manager).await
+            .expect("failed to update chunk array");
 
         let window = self.graphics.display.gl_window();
         let window = window.window();
@@ -226,10 +191,7 @@ impl App where Self: 'static {
             self.chunk_arr.spawn_control_window(ui);
 
             /* Spawns loadings window */
-            LOADINGS.lock()
-                .expect("mutex should be not poisoned")
-                .loads
-                .spawn_info_window(ui);
+            loading::spawn_info_window(ui);
 
             self.graphics.imguic.render()
         };
@@ -280,9 +242,7 @@ impl App where Self: 'static {
         self.input_manager.update(&self.graphics);		
 
         /* Loading recieve */
-        LOADINGS.lock()
-            .expect("mutex should be not poisoned")
-            .recv_all()
+        loading::recv_all()
             .expect("failed to receive all loadings");
     }
 }

@@ -147,9 +147,15 @@ impl_chunk_with_refs! {
         self.fill_id().is_some()
     }
 
+    /// Checks if chunk is filled with non-air voxels.
+    pub fn is_filled(&self) -> bool {
+        self.info.is_filled
+    }
+
     /// Gives [`Vec`] with full detail vertices mesh of [`Chunk`].
     pub fn make_vertices_detailed(&self, chunk_adj: ChunkAdj) -> Vec<FullVertex> {
-        if self.is_empty() { return vec![] }
+        let is_filled_and_blocked = self.is_filled() && chunk_adj.is_filled();
+        if self.is_empty() || is_filled_and_blocked { return vec![] }
 
         let pos_iter: Box<dyn Iterator<Item = Int3>> = match self.info.fill_type {
             FillType::Default =>
@@ -200,7 +206,8 @@ impl_chunk_with_refs! {
     pub fn make_vertices_low(&self, chunk_adj: ChunkAdj, lod: Lod) -> Vec<LowVertex> {
         assert!(lod > 0, "There's a separate function for LOD = 0! Use .make_vertices_detailed() instead!");
         
-        if self.is_empty() { return vec![] }
+        let is_filled_and_blocked = self.is_filled() && chunk_adj.is_filled();
+        if self.is_empty() || is_filled_and_blocked { return vec![] }
 
         // TODO: optimize for same-filled chunks
         let sub_chunk_size = 2_i32.pow(lod as u32);
@@ -394,6 +401,7 @@ impl Chunk {
             voxel_ids: vec![fill_id],
             info: Info {
                 fill_type: FillType::AllSame(fill_id),
+                is_filled: true,
                 active_lod: 0,
             },
             ..Self::new_empty(chunk_pos)
@@ -435,10 +443,16 @@ impl Chunk {
 
         /* All-same pass */
         let sample_id = self.voxel_ids[0];
-        if self.voxel_ids.iter().all(|&voxel_id| voxel_id == sample_id) {
+        let is_all_same = self.voxel_ids.iter()
+            .all(|&voxel_id| voxel_id == sample_id);
+        if is_all_same {
             self.voxel_ids = vec![sample_id];
             self.info.fill_type = FillType::AllSame(sample_id);
         }
+
+        let is_all_not_air = self.voxel_ids.iter()
+            .all(|&voxel_id| voxel_id != AIR_VOXEL_DATA.id);
+        self.info.is_filled = is_all_not_air;
 
         return self
     }
@@ -699,6 +713,7 @@ impl<'s> ChunkDrawBundle<'s> {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Info {
     pub fill_type: FillType,
+    pub is_filled: bool,
     pub active_lod: Lod,
 }
 
@@ -763,6 +778,26 @@ pub struct ChunkAdj<'s> {
 impl ChunkAdj<'_> {
     pub fn none() -> Self {
         Self { sides: Sides::all(None) }
+    }
+
+    pub fn is_same_filled(&self) -> bool {
+        self.sides
+            .as_array()
+            .iter()
+            .all(|opt| match opt {
+                Some(chunk) => chunk.is_same_filled(),
+                None => false,
+            })
+    }
+
+    pub fn is_filled(&self) -> bool {
+        self.sides
+            .as_array()
+            .iter()
+            .all(|opt| match opt {
+                Some(chunk) => chunk.is_filled(),
+                None => false,
+            })
     }
 
     pub unsafe fn as_static(self) -> ChunkAdj<'static> {

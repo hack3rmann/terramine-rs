@@ -11,6 +11,7 @@ use {
         reinterpreter::*,
         graphics::camera::Camera,
         concurrency::loading::{self, Command},
+        user_io::InputManager,
     },
     math_linear::prelude::*,
     std::{
@@ -21,6 +22,7 @@ use {
     },
     glium as gl,
     thiserror::Error,
+    tokio::task::{JoinHandle, JoinError},
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -44,6 +46,9 @@ pub struct ChunkArray {
     pub voxels_gen_tasks: HashMap<Int3, GenTask>,
 
     pub lod_dist_threashold: f32,
+
+    pub reading_handle: Option<JoinHandle<std::io::Result<(USize3, Vec<(Vec<Id>, FillType)>)>>>,
+    pub saving_handle: Option<JoinHandle<std::io::Result<()>>>,
 }
 
 impl Default for ChunkArray {
@@ -55,6 +60,8 @@ impl Default for ChunkArray {
             low_tasks: Default::default(),
             voxels_gen_tasks: Default::default(),
             lod_dist_threashold: 5.8,
+            reading_handle: None,
+            saving_handle: None,
         }
     }
 }
@@ -750,6 +757,44 @@ impl ChunkArray {
                 );
             });
     }
+
+    pub async fn update(&mut self, input: &mut InputManager) -> Result<(), UpdateError> {
+        use glium::glutin::event::VirtualKeyCode as Key;
+
+        if input.keyboard.just_pressed_combo(&[Key::LControl, Key::S]) {
+            let handle = tokio::spawn(
+                ChunkArray::save_to_file(self.sizes, self.make_static_refs(), "world", "world")
+            );
+            self.saving_handle = Some(handle);
+        }
+
+        if self.saving_handle.is_some() && self.saving_handle.as_ref().unwrap().is_finished() {
+            let handle = self.saving_handle.take().unwrap();
+            handle.await??;
+        }
+
+        if input.keyboard.just_pressed_combo(&[Key::LControl, Key::O]) {
+            let handle = tokio::spawn(ChunkArray::read_from_file("world", "world"));
+            self.reading_handle = Some(handle);
+        }
+
+        if self.reading_handle.is_some() && self.reading_handle.as_ref().unwrap().is_finished() {
+            let handle = self.reading_handle.take().unwrap();
+            let (sizes, arr) = handle.await??;
+            self.apply_new(sizes, arr);
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum UpdateError {
+    #[error("failed to join task: {0}")]
+    Join(#[from] JoinError),
+
+    #[error("failed to save chunk array: {0}")]
+    Save(#[from] io::Error),
 }
 
 #[derive(Debug, Error)]
