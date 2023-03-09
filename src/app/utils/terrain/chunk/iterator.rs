@@ -230,7 +230,8 @@ impl SpaceIter {
         let diff = range.end - range.start;
         assert!(
             0 <= diff.x && 0 <= diff.y && 0 <= diff.z,
-            "start position should be not greater by each coordinate than end",
+            "start position should be not greater by each coordinate than end. Range: {:?}",
+            range,
         );
 
         let sizes = USize3::from(diff);

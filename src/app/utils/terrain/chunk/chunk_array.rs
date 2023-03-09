@@ -17,8 +17,8 @@ use {
     std::{
         slice::{Iter, IterMut},
         collections::HashMap,
-        io,
-        mem,
+        io, mem,
+        sync::Mutex,
     },
     glium as gl,
     thiserror::Error,
@@ -117,6 +117,10 @@ impl ChunkArray {
     pub async fn save_to_file(
         sizes: USize3, chunks: Vec<ChunkRef<'static>>, save_name: impl Into<String>, save_path: &'static str,
     ) -> io::Result<()> {
+        let is_all_generated = chunks.iter()
+            .all(|chunk| chunk.is_generated());
+        assert!(is_all_generated, "Chunks should be generated to save them to file");
+
         let volume = Self::volume(sizes);
         assert_eq!(volume, chunks.len(), "chunks should have same length as sizes volume");
 
@@ -460,7 +464,9 @@ impl ChunkArray {
             if !chunk.is_generated() {
                 if Self::is_voxels_gen_task_running(&self.voxels_gen_tasks, chunk.pos) {
                     Self::try_finish_voxels_gen_task(&mut self.voxels_gen_tasks, chunk.pos, chunk).await
-                } else {
+                }
+                
+                else if self.can_start_tasks() {
                     Self::start_task_gen_voxels(&mut self.voxels_gen_tasks, chunk.pos);
                     continue;
                 }
@@ -474,7 +480,9 @@ impl ChunkArray {
 
             if can_set_new_lod {
                 chunk.set_active_lod(lod)
-            } else {
+            }
+            
+            else if self.can_start_tasks() {
                 // * Safety:
                 // * Safe because this function borrows chunk to mutate its meshes
                 // * but later it borrows for set new LOD value so mut references
@@ -728,10 +736,14 @@ impl ChunkArray {
         }
     }
 
+    pub fn can_start_tasks(&self) -> bool {
+        self.saving_handle.is_none() && self.reading_handle.is_none()
+    }
+
     pub fn drop_tasks(&mut self) {
-        let _ = mem::take(&mut self.full_tasks);
-        let _ = mem::take(&mut self.low_tasks);
-        let _ = mem::take(&mut self.voxels_gen_tasks);
+        drop(mem::take(&mut self.full_tasks));
+        drop(mem::take(&mut self.low_tasks));
+        drop(mem::take(&mut self.voxels_gen_tasks));
     }
 
     pub fn spawn_control_window(&mut self, ui: &imgui::Ui) {
@@ -755,6 +767,25 @@ impl ChunkArray {
                     0.01, 20.0,
                     &mut self.lod_dist_threashold,
                 );
+
+                ui.separator();
+
+                // TODO: chunk save/load window
+                ui.text("Generate new");
+
+                static SIZES: Mutex<[i32; 3]> = Mutex::new(Int3::ZERO.as_array());
+                let mut sizes = SIZES.lock()
+                    .expect("mutex should be not poisoned");
+
+                ui.input_int3("Sizes", &mut *sizes)
+                    .build();
+
+                if ui.button("Generate") {
+                    let sizes = USize3::from(Int3::from(*sizes).abs());
+
+                    self.drop_tasks();
+                    *self = Self::new_empty_chunks(sizes);
+                }
             });
     }
 
