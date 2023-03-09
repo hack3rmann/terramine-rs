@@ -1,793 +1,814 @@
+#![allow(dead_code)]
+
+pub mod iterator;
 pub mod chunk_array;
+pub mod tasks;
 
 use {
-	crate::app::utils::{
-		cfg,
-		werror::prelude::*,
-		math::prelude::*,
-		graphics::{
-			Graphics,
-			mesh::{Mesh, UnindexedMesh},
-			Vertex,
-			shader::Shader,
-			vertex_buffer::VertexBuffer,
-			camera::Camera,
-		},
-		reinterpreter::*,
-	},
-	super::voxel::{
-		Voxel,
-		shape::Cube,
-		voxel_data::*,
-		generator,
-	},
-	glium::{
-		DrawError,
-		uniforms::Uniforms,
-		Frame,
-		index::PrimitiveType
-	},
-	std::{cell::RefCell, marker::PhantomData, borrow::Cow},
+    crate::app::utils::{
+        cfg,
+        graphics::{
+            mesh::{Mesh, UnindexedMesh},
+            shader::Shader,
+            vertex_buffer::VertexBuffer,
+            camera::Camera,
+        },
+        reinterpreter::*,
+    },
+    super::voxel::{
+        Voxel,
+        LoweredVoxel,
+        shape::{CubeDetailed, CubeLowered},
+        voxel_data::*,
+        generator as gen,
+    },
+    math_linear::prelude::*,
+    glium::{
+        self as gl,
+        DrawError,
+        uniforms::Uniforms,
+        Frame,
+        index::PrimitiveType,
+        implement_vertex,
+    },
+    iterator::{CubeBorder, SpaceIter, Sides},
+    thiserror::Error,
 };
 
-/**
- * Index cheatsheet!
- * 
- * i = d(hx + y) + z
- * 
- * x = (i / d) / h
- * y = (i / d) % h
- * z = i % d
- */
-
-/// Predefined chunk values.
-pub const CHUNK_SIZE:	usize = cfg::terrain::CHUNK_SIZE;
-pub const CHUNK_VOLUME:	usize = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
-
-/// Type of voxel array. May be something different during progress.
-type VoxelArray = Vec<Id>;
-
-pub enum FindOptions {
-	Border,
-	InChunkNothing,
-	InChunkSome(Voxel)
+pub mod prelude {
+    pub use super::{
+        Chunk,
+        ChunkRef,
+        ChunkMut,
+        SetLodError,
+        ChunkRenderError,
+        ChunkDrawBundle,
+        Info as ChunkInfo,
+        Lod,
+        ChunkAdj,
+        ChunkOption,
+        FillType,
+        chunk_array::ChunkArray,
+        iterator::{SpaceIter, self},
+    };
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub enum ChunkFill {
-	Empty,
-	All(Id),
-
-	#[default]
-	Other,
+/// Full-detailed vertex.
+#[derive(Copy, Clone, Debug)]
+pub struct FullVertex {
+    pub position: (f32, f32, f32),
+    pub tex_coords: (f32, f32),
+    pub light: f32
 }
 
-unsafe impl Reinterpret for ChunkFill { }
-
-unsafe impl ReinterpretAsBytes for ChunkFill {
-	fn reinterpret_as_bytes(&self) -> Vec<u8> {
-		match self {
-			Self::Empty => vec![0; Self::static_size()],
-			Self::Other => {
-				let mut result = vec![0; Self::static_size()];
-				result[0] = 2;
-
-				return result
-			},
-			Self::All(id) => {
-				let mut result = vec![1];
-				result.append(&mut id.reinterpret_as_bytes());
-
-				return result
-			},
-		}
-	}
+/// Low-detailed vertex.
+#[derive(Copy, Clone, Debug)]
+pub struct LowVertex {
+    pub position: (f32, f32, f32),
+    pub color: (f32, f32, f32),
+    pub light: f32
 }
 
-unsafe impl ReinterpretFromBytes for ChunkFill {
-	fn reinterpret_from_bytes(source: &[u8]) -> Self {
-		match source[0] {
-			0 => Self::Empty,
-			1 => {
-				let id = Id::reinterpret_from_bytes(&source[1..]);
-				return Self::All(id)
-			},
-			2 => Self::Other,
-			_ => unreachable!("There's no ChunkFill variant that matches with {}!", source[0])
-		}
-	}
+/* Implement Vertex structs as glium intended */
+implement_vertex!(FullVertex, position, tex_coords, light);
+implement_vertex!(LowVertex, position, color, light);
+
+macro_rules! impl_chunk_with_refs {
+    ($($impls:item)*) => {
+        impl Chunk { $($impls)* }
+        impl ChunkRef<'_> { $($impls)* }
+        impl ChunkMut<'_> { $($impls)* }
+    };
 }
 
-unsafe impl ReinterpretSize for ChunkFill {
-	fn reinterpret_size(&self) -> usize { Self::static_size() }
+#[derive(Debug)]
+pub struct Chunk {
+    pub pos: Int3,
+    pub voxel_ids: Vec<Id>,
+    pub info: Info,
+
+    pub detailed_mesh: Option<UnindexedMesh<FullVertex>>,
+    pub low_meshes: [Option<UnindexedMesh<LowVertex>>; Self::N_LODS],
 }
 
-unsafe impl StaticSize for ChunkFill {
-	fn static_size() -> usize { u8::static_size() + Id::static_size() }
+impl_chunk_with_refs! {
+    /// Gives iterator over all voxels in chunk.
+    pub fn voxels(&self) -> impl Iterator<Item = Voxel> + '_ {
+        self.voxel_ids.iter()
+            .copied()
+            .zip(Chunk::global_pos_iter(self.pos.to_owned()))
+            .map(|(id, pos)| Voxel::new(pos, &VOXEL_DATA[id as usize]))
+    }
+
+    /// Gives iterator over low-detail voxels with their coords.
+    pub fn low_voxel_iter(&self, lod: Lod) -> impl Iterator<Item = (LoweredVoxel, Int3)> + '_ {
+        let sub_chunk_size = 2_i32.pow(lod as u32);
+
+        Chunk::chunked_pos_iter(sub_chunk_size as usize)
+            .map(move |chunk_iter| {
+                let (color_sum, n_colors) = chunk_iter
+                    .map(|pos| self.get_voxel_local(pos))
+                    .filter(|voxel| !voxel.is_air())
+                    .map(|voxel| voxel.data.avarage_color)
+                    .fold((Color::ZERO, 0_usize), |(col_acc, n_acc), col|
+                        (col_acc + col, n_acc + 1)
+                    );
+
+                match n_colors {
+                    0 => LoweredVoxel::Transparent,
+                    n => LoweredVoxel::Colored(color_sum / n as f32),
+                }
+            })
+            .zip(SpaceIter::zeroed_cubed(Chunk::SIZE as i32 / sub_chunk_size))
+    }
+
+    /// Checks if chunk is empty.
+    pub fn is_empty(&self) -> bool {
+        if self.voxel_ids.is_empty() {
+            return true
+        }
+
+        match self.info.fill_type {
+            FillType::AllSame(id) => id == AIR_VOXEL_DATA.id,
+            _ => false,
+        }
+    }
+
+    /// Gives `Some()` with fill id or returns `None`.
+    pub fn fill_id(&self) -> Option<Id> {
+        match self.info.fill_type {
+            FillType::AllSame(id) => Some(id),
+            _ => None,
+        }
+    }
+
+    /// Checks if chunk is filled with same voxel id.
+    pub fn is_same_filled(&self) -> bool {
+        self.fill_id().is_some()
+    }
+
+    /// Checks if chunk is filled with non-air voxels.
+    pub fn is_filled(&self) -> bool {
+        self.info.is_filled
+    }
+
+    /// Gives [`Vec`] with full detail vertices mesh of [`Chunk`].
+    pub fn make_vertices_detailed(&self, chunk_adj: ChunkAdj) -> Vec<FullVertex> {
+        let is_filled_and_blocked = self.is_filled() && chunk_adj.is_filled();
+        if self.is_empty() || is_filled_and_blocked { return vec![] }
+
+        let pos_iter: Box<dyn Iterator<Item = Int3>> = match self.info.fill_type {
+            FillType::Default =>
+                Box::new(Chunk::local_pos_iter()),
+
+            FillType::AllSame(id) => if id == AIR_VOXEL_DATA.id {
+                Box::new(std::iter::empty())
+            } else {
+                Box::new(CubeBorder::new(Chunk::SIZE as i32))
+            },
+        };
+
+        pos_iter
+            .map(|pos| self.get_voxel_local(pos))
+            .filter(|voxel| !voxel.is_air())
+            .flat_map(|voxel| {
+                let side_iter = SpaceIter::adj_iter(Int3::ZERO)
+                    .filter(|&offset| {
+                        let adj = chunk_adj.sides.by_offset(offset);
+                        match self.get_voxel_global(voxel.pos + offset) {
+                            ChunkOption::Item(voxel) => voxel.is_air(),
+
+                            ChunkOption::OutsideChunk => match adj {
+                                None => true,
+
+                                Some(chunk) => match chunk.get_voxel_global(voxel.pos + offset) {
+                                    ChunkOption::Item(voxel) => voxel.is_air(),
+                                    ChunkOption::OutsideChunk => true,
+                                }
+                            },
+                        }
+                    });
+
+                const N_CUBE_VERTICES: usize = 36;
+                let mut vertices = Vec::with_capacity(N_CUBE_VERTICES);
+
+                let mesh_builder = CubeDetailed::new(voxel.data);
+                for offset in side_iter {
+                    mesh_builder.by_offset(offset, voxel.pos.into(), &mut vertices);
+                }
+
+                vertices
+            })
+            .collect()
+    }
+
+    /// Makes vertices for *low detail* mesh from voxel array.
+    pub fn make_vertices_low(&self, chunk_adj: ChunkAdj, lod: Lod) -> Vec<LowVertex> {
+        assert!(lod > 0, "There's a separate function for LOD = 0! Use .make_vertices_detailed() instead!");
+        
+        let is_filled_and_blocked = self.is_filled() && chunk_adj.is_filled();
+        if self.is_empty() || is_filled_and_blocked { return vec![] }
+
+        // TODO: optimize for same-filled chunks
+        let sub_chunk_size = 2_i32.pow(lod as u32);
+        self.low_voxel_iter(lod)
+            .filter_map(|(voxel, p)| match voxel {
+                LoweredVoxel::Transparent => None,
+                LoweredVoxel::Colored(color) => Some((color, p)),
+            })
+            .flat_map(|(voxel_color, local_low_pos)| {
+                let local_pos = local_low_pos * sub_chunk_size;
+                let global_pos = Chunk::local_to_global_pos(self.pos.to_owned(), local_pos);
+
+                let center_pos = (vec3::from(global_pos)
+                          + 0.5 * vec3::all(sub_chunk_size as f32)) * Voxel::SIZE
+                          - 0.5 * vec3::all(Voxel::SIZE);
+                         
+                let is_blocking_voxel = |pos: Int3, offset: Int3| match self.get_voxel_global(pos) {
+                    ChunkOption::OutsideChunk => {
+                        match chunk_adj.sides.by_offset(offset) {
+                            /* There is no chunk so voxel isn't blocked */
+                            None => false,
+                            
+                            Some(chunk) => match chunk.get_voxel_global(pos) {
+                                ChunkOption::OutsideChunk => unreachable!("Can't fall out of an adjacent chunk"),
+                                ChunkOption::Item(voxel) => !voxel.is_air(),
+                            }
+                        }
+                    },
+                    
+                    ChunkOption::Item(voxel) => !voxel.is_air(),
+                };
+
+                let is_blocked_subchunk = |offset: Int3| -> bool {
+                    let start_pos = global_pos + offset * sub_chunk_size;
+                    let end_pos   = global_pos + (offset + Int3::ONE) * sub_chunk_size;
+
+                    let pred = |pos| is_blocking_voxel(pos, offset);
+                    let mut iter = SpaceIter::new(start_pos..end_pos);
+
+                    let is_on_surface = match offset.as_tuple() {
+                        (-1, 0, 0) if 0 == local_pos.x => true,
+                        (0, -1, 0) if 0 == local_pos.y => true,
+                        (0, 0, -1) if 0 == local_pos.z => true,
+                        (1, 0, 0) if Chunk::SIZE as i32 == local_pos.x + sub_chunk_size => true,
+                        (0, 1, 0) if Chunk::SIZE as i32 == local_pos.y + sub_chunk_size => true,
+                        (0, 0, 1) if Chunk::SIZE as i32 == local_pos.z + sub_chunk_size => true,
+                        _ => false,
+                    };
+                    
+                    match chunk_adj.sides.by_offset(offset) {
+                        Some(_) if is_on_surface =>
+                            iter.all(pred),
+                        _ =>
+                            iter.any(pred),
+                    }
+                };
+
+                let mesh_builder = CubeLowered::new(
+                    sub_chunk_size as f32 * Voxel::SIZE
+                );
+                
+                const N_CUBE_VERTICES: usize = 36;
+                let mut vertices = Vec::with_capacity(N_CUBE_VERTICES);
+
+                for offset in SpaceIter::adj_iter(Int3::ZERO).filter(|&o| !is_blocked_subchunk(o)) {
+                    mesh_builder.by_offset(offset, center_pos, voxel_color, &mut vertices);
+                }
+
+                vertices
+            })
+            .collect()
+    }
+
+    /// Givex voxel from global position.
+    pub fn get_voxel_global(&self, global_pos: Int3) -> ChunkOption<Voxel> {
+        let local_pos = Chunk::global_to_local_pos(self.pos.to_owned(), global_pos);
+
+        if local_pos.x < 0 || local_pos.x >= Chunk::SIZE as i32 ||
+           local_pos.y < 0 || local_pos.y >= Chunk::SIZE as i32 ||
+           local_pos.z < 0 || local_pos.z >= Chunk::SIZE as i32
+        { return ChunkOption::OutsideChunk }
+
+        ChunkOption::Item(self.get_voxel_local(local_pos))
+    }
+
+    /// Gives voxel from local position (relative to chunk).
+    /// 
+    /// # Panic
+    /// Panics if [`Chunk`] is not already been generated.
+    pub fn get_voxel_local(&self, local_pos: Int3) -> Voxel {
+        assert!(self.is_generated(), "chunk should be generated before it can provide voxels");
+
+        let global_pos = Chunk::local_to_global_pos(self.pos.to_owned(), local_pos);
+
+        match self.info.fill_type {
+            FillType::Default => {
+                let id = self.voxel_ids[Chunk::voxel_pos_to_idx(local_pos)] as usize;
+
+                assert!(
+                    (0..VOXEL_DATA.len()).contains(&id),
+                    "Invalid voxel ID",
+                );
+
+                Voxel::new(global_pos, &VOXEL_DATA[id])
+            },
+
+            FillType::AllSame(id) =>
+                Voxel::new(global_pos, &VOXEL_DATA[id as usize]),
+        }
+    }
+
+    /// Tests that chunk is visible by camera.
+    pub fn is_visible_by_camera(&self, camera: &Camera) -> bool {
+        let global_chunk_pos = Chunk::global_pos(self.pos.to_owned());
+        let global_chunk_pos = vec3::from(global_chunk_pos) * Voxel::SIZE;
+
+        let lo = global_chunk_pos - 0.5 * vec3::all(Voxel::SIZE);
+        let hi = lo
+               + vec3::all(Chunk::GLOBAL_SIZE) - 0.5 * vec3::all(Voxel::SIZE);
+
+        camera.is_aabb_in_view(AABB::from_float3(lo, hi))
+    }
+
+    /// Checks if [`Chunk`] is not already generated.
+    pub fn is_generated(&self) -> bool {
+        !self.voxel_ids.is_empty()
+    }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub struct AdditionalData {
-	pub fill: ChunkFill,
+impl Chunk {
+    /// Chunk size in voxels.
+    pub const SIZE: usize = cfg::terrain::CHUNK_SIZE;
+
+    /// Chunk sizes in voxels.
+    pub const SIZES: USize3 = USize3::all(Self::SIZE);
+
+    /// Chunk volume in voxels.
+    pub const VOLUME: usize = Self::SIZE.pow(3);
+
+    /// Number of available LODs.
+    pub const N_LODS: usize = Self::SIZE.ilog2() as usize;
+
+    /// Chunk size in global units.
+    pub const GLOBAL_SIZE: f32 = Self::SIZE as f32 * Voxel::SIZE;
+
+    /// Gives shared reference wrapper for chunk.
+    pub fn make_ref(&self) -> ChunkRef<'_> {
+        ChunkRef {
+            pos: &self.pos,
+            voxel_ids: &self.voxel_ids,
+            info: &self.info,
+        }
+    }
+
+    /// Gives mutable reference wrapper for chunk.
+    pub fn make_mut(&mut self) -> ChunkMut<'_> {
+        ChunkMut {
+            pos: &mut self.pos,
+            voxel_ids: &mut self.voxel_ids,
+            info: &mut self.info,
+        }
+    }
+
+    /// Generates voxel id array.
+    pub fn generate_voxels(chunk_pos: Int3) -> Vec<Id> {
+        Self::global_pos_iter(chunk_pos)
+            .map(|pos| 
+                if gen::trees(pos) {
+                    LOG_VOXEL_DATA.id
+                } else if gen::sine(pos) {
+                    STONE_VOXEL_DATA.id
+                } else {
+                    AIR_VOXEL_DATA.id
+                }
+            )
+            .collect()
+    }
+
+    /// Generates a chunk.
+    pub fn new(chunk_pos: Int3) -> Self {
+        Self::from_voxels(Self::generate_voxels(chunk_pos), chunk_pos)
+    }
+
+    /// Constructs empty chunk.
+    pub fn new_empty(chunk_pos: Int3) -> Self {
+        Self::from_voxels(vec![], chunk_pos)
+    }
+
+    pub fn new_same_filled(chunk_pos: Int3, fill_id: Id) -> Self {
+        Self {
+            voxel_ids: vec![fill_id],
+            info: Info {
+                fill_type: FillType::AllSame(fill_id),
+                is_filled: true,
+                active_lod: 0,
+            },
+            ..Self::new_empty(chunk_pos)
+        }
+    }
+
+    pub fn from_voxels(voxel_ids: Vec<Id>, chunk_pos: Int3) -> Self {
+        Self {
+            pos: chunk_pos,
+            voxel_ids,
+            info: Default::default(),
+            detailed_mesh: None,
+            low_meshes: [None, None, None, None, None, None],
+        }.as_optimized()
+    }
+
+    /// Gives iterator over all id-vectors in chunk (or relative to chunk voxel positions).
+    pub fn local_pos_iter() -> SpaceIter {
+        SpaceIter::new(Int3::ZERO..Self::SIZES.into())
+    }
+
+    /// Gives iterator over all id-vectors in chunk (or relative to chunk voxel positions).
+    pub fn global_pos_iter(chunk_pos: Int3) -> impl Iterator<Item = Int3> {
+        Self::local_pos_iter()
+            .map(move |pos| Self::local_to_global_pos(chunk_pos, pos))
+    }
+
+    /// Gives iterator that yields iterator over some chunk of voxels.
+    pub fn chunked_pos_iter(sub_chunk_size: usize) -> impl Iterator<Item = SpaceIter> {
+        SpaceIter::split_chunks(
+            Self::SIZES.into(),
+            Int3::all(sub_chunk_size as i32),
+        )
+    }
+
+    /// Applies storage optimizations to voxel array.
+    pub fn as_optimized(mut self) -> Self {
+        if !self.is_generated() { return self }
+
+        /* All-same pass */
+        let sample_id = self.voxel_ids[0];
+        let is_all_same = self.voxel_ids.iter()
+            .all(|&voxel_id| voxel_id == sample_id);
+        if is_all_same {
+            self.voxel_ids = vec![sample_id];
+            self.info.fill_type = FillType::AllSame(sample_id);
+        }
+
+        let is_all_not_air = self.voxel_ids.iter()
+            .all(|&voxel_id| voxel_id != AIR_VOXEL_DATA.id);
+        self.info.is_filled = is_all_not_air;
+
+        return self
+    }
+
+    /// Converts chunk position to world position.
+    pub fn global_pos(chunk_pos: Int3) -> Int3 {
+        chunk_pos * Self::SIZE as i32
+    }
+
+    /// Computes global position from relative to chunk position.
+    pub fn local_to_global_pos(chunk_pos: Int3, relative_voxel_pos: Int3) -> Int3 {
+        Self::global_pos(chunk_pos) + relative_voxel_pos
+    }
+
+    /// Computes local (relative to chunk) position from global position.
+    pub fn global_to_local_pos(chunk_pos: Int3, global_voxel_pos: Int3) -> Int3 {
+        global_voxel_pos - Self::global_pos(chunk_pos)
+    }
+
+    /// Gives index in voxel array by it's 3D-index (or relative to chunk position)
+    pub fn voxel_pos_to_idx(pos: Int3) -> usize {
+        sdex::get_index(&USize3::from(pos).as_array(), &[Self::SIZE; 3])
+    }
+
+    /// Sets mesh to chunk.
+    pub fn upload_full_detail_vertices(&mut self, vertices: &[FullVertex], display: &gl::Display) {
+        let vbuffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
+        let mesh = Mesh::new(vbuffer);
+        self.detailed_mesh.replace(mesh);
+    }
+
+    /// Sets mesh to chunk.
+    pub fn upload_low_detail_vertices(&mut self, vertices: &[LowVertex], lod: Lod, display: &gl::Display) {
+        let vbuffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
+        let mesh = Mesh::new(vbuffer);
+        self.low_meshes[lod as usize - 1].replace(mesh);
+    }
+
+    /// Generates and sets mesh to chunk.
+    pub fn generate_mesh(&mut self, lod: Lod, chunk_adj: ChunkAdj, display: &gl::Display) {
+        match lod {
+            0 => {
+                let vertices = self.make_vertices_detailed(chunk_adj);
+                self.upload_full_detail_vertices(&vertices, display);
+            },
+            
+            lod => {
+                let vertices = self.make_vertices_low(chunk_adj, lod);
+                self.upload_low_detail_vertices(&vertices, lod, display);
+            }
+        }
+    }
+
+    /// Renders a [`Chunk`].
+    pub fn render(
+        &self, target: &mut Frame, draw_info: &ChunkDrawBundle<'_>,
+        uniforms: &impl Uniforms, lod: Lod,
+    ) -> Result<(), ChunkRenderError> {
+        if self.is_empty() { return Ok(()) }
+
+        use ChunkRenderError as Err;
+        match lod {
+            0 => {
+                let mesh = self.detailed_mesh
+                    .as_ref()
+                    .ok_or(Err::NoMesh(lod))?;
+                if !mesh.is_empty() {
+                    mesh.render(target, &draw_info.full_shader, &draw_info.draw_params, uniforms)?;
+                }
+            },
+            
+            lod => {
+                let mesh = self.low_meshes
+                    .get(lod as usize - 1)
+                    .ok_or(Err::TooBigLod(lod))?
+                    .as_ref()
+                    .ok_or(Err::NoMesh(lod))?;
+                if !mesh.is_empty() {
+                    mesh.render(target, &draw_info.low_shader, &draw_info.draw_params, uniforms)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Sets active LOD to given value.
+    pub fn set_active_lod(&mut self, lod: Lod) {
+        self.try_set_active_lod(lod)
+            .expect("new LOD value should be available")
+    }
+
+    /// Tries to set active LOD to given value.
+    pub fn try_set_active_lod(&mut self, lod: Lod) -> Result<(), SetLodError> {
+        match self.get_available_lods().contains(&lod) {
+            true => Ok(self.info.active_lod = lod),
+            false => Err(SetLodError::SetActiveLod { tried: lod, active: self.info.active_lod }),
+        }
+    }
+
+    /// Tries to set LOD value that have least difference with given value.
+    /// If success it will return `Some(..)` with that value, otherwise, `None`.
+    pub fn try_set_best_fit_lod(&mut self, lod: Lod) -> Option<Lod> {
+        let best_fit = self.get_available_lods()
+            .into_iter()
+            .min_by(|&lhs, &rhs| {
+                let lhs_diff = u32::abs_diff(lhs, lod as u32);
+                let rhs_diff = u32::abs_diff(rhs, lod as u32);
+                lhs_diff.cmp(&rhs_diff)
+            })?;
+
+        self.set_active_lod(best_fit);
+
+        Some(best_fit)
+    }
+
+    /// Gives list of available LODs.
+    pub fn get_available_lods(&self) -> Vec<Lod> {
+        let mut result = Vec::with_capacity(Chunk::N_LODS);
+
+        if self.detailed_mesh.is_some() {
+            result.push(0)
+        }
+
+        for (low_mesh, lod) in self.low_meshes.iter().zip(1 as Lod..) {
+            if low_mesh.is_some() {
+                result.push(lod)
+            }
+        }
+
+        result
+    }
+
+    /// Gives list of all possible LODs.
+    pub fn get_possible_lods() -> Vec<Lod> {
+        (0 ..= Self::N_LODS as Lod).collect()
+    }
+
+    pub fn can_render_active_lod(&self) -> bool {
+        self.get_available_lods()
+            .contains(&self.info.active_lod)
+    }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub enum Addition {
-	#[default]
-	NothingToKnow,
-	Know(AdditionalData),
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub struct ChunkRef<'s> {
+    pub pos: &'s Int3,
+    pub voxel_ids: &'s Vec<Id>,
+    pub info: &'s Info,
 }
 
-impl AsRef<Self> for Addition {
-	fn as_ref(&self) -> &Self { self }
+impl ChunkRef<'_> {
+    /// Makes borrow for `'static` and allows aliasing with mutable references.
+    /// # Safety:
+    /// Safe if it follows rust's aliasing rules and borrowed data is indeed lives for `'static`.
+    pub unsafe fn as_static(self) -> ChunkRef<'static> {
+        ChunkRef {
+            pos: (self.pos as *const Int3).as_ref().unwrap_unchecked(),
+            voxel_ids: (self.voxel_ids as *const Vec<Id>).as_ref().unwrap_unchecked(),
+            info: (self.info as *const Info).as_ref().unwrap_unchecked()
+        }
+    }
 }
 
-/// Chunk struct.
-pub struct MeshlessChunk {
-	pub voxels: VoxelArray,
-	pub pos: Int3,
-	pub additional_data: Addition,
+#[derive(Debug)]
+pub struct ChunkMut<'s> {
+    pub pos: &'s mut Int3,
+    pub voxel_ids: &'s mut Vec<Id>,
+    pub info: &'s mut Info,
 }
 
-impl MeshlessChunk {
-	/// Constructs new chunk in given position 
-	pub fn new(pos: Int3) -> Self {
-		/* Voxel array initialization */
-		let mut voxels = VoxelArray::with_capacity(CHUNK_VOLUME);
-
-		/* Additional data */
-		let mut data = AdditionalData { fill: ChunkFill::Empty };
-
-		/* Iterating in the chunk */
-		for x in 0..CHUNK_SIZE {
-		for y in 0..CHUNK_SIZE {
-		for z in 0..CHUNK_SIZE {
-			let global_pos = pos_in_chunk_to_world(Int3::new(x as i32, y as i32, z as i32), pos);
-
-			/* Update addidional chunk data */
-			let mut update_data = |id| {
-				match data.fill {
-					ChunkFill::Empty => {
-						/* Check for first iteration */
-						data.fill = if (x, y, z) != (0, 0, 0) {
-							ChunkFill::Other
-						} else {
-							ChunkFill::All(id)
-						}
-					},
-					ChunkFill::All(all_id) => {
-						if all_id != id {
-							data.fill = ChunkFill::Other;
-						}
-					}
-					ChunkFill::Other => (),
-				}
-			};
-
-			/* Kind of trees generation */
-			if generator::trees(global_pos) {
-				let id = LOG_VOXEL_DATA.id;
-				update_data(id);
-				voxels.push(id);
-			}
-			
-			/* Sine-like floor */
-			else if generator::sine(global_pos) {
-				let id = STONE_VOXEL_DATA.id;
-				update_data(id);
-				voxels.push(id);
-			}
-			
-			/* Air */
-			else {
-				if let ChunkFill::All(_) = data.fill {
-					data.fill = ChunkFill::Other
-				}
-
-				voxels.push(NOTHING_VOXEL_DATA.id)
-			}
-		}}}
-
-		/* Chunk is empty so array can be empty */
-		if let ChunkFill::Empty   = data.fill { voxels = vec![  ] }
-		if let ChunkFill::All(id) = data.fill { voxels = vec![id] }
-		
-		MeshlessChunk { voxels, pos, additional_data: Addition::Know(data) }
-	}
-
-	/// Constructs new empty chunk.
-	pub fn new_empty(pos: Int3) -> Self {
-		Self { pos, voxels: vec![], additional_data: Addition::Know(AdditionalData { fill: ChunkFill::Empty }) }
-	}
-
-	/// Constructs new filled chunk.
-	pub fn new_filled(pos: Int3, id: Id) -> Self {
-		Self { pos, voxels: vec![id], additional_data: Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) }
-	}
-
-	/// Checks if chunk is empty by its data.
-	pub fn is_empty(&self) -> bool {
-		match self.additional_data {
-			Addition::Know(AdditionalData { fill: ChunkFill::Empty }) => true,
-			_ => false,
-		}
-	}
-
-	/// Checks if chunk is empty by its data.
-	pub fn is_filled(&self) -> bool {
-		match self.additional_data {
-			Addition::Know(AdditionalData { fill: ChunkFill::All(_) }) => true,
-			_ => false,
-		}
-	}
-
-	/// Gives fill id if available
-	pub fn fill_id(&self) -> Option<Id> {
-		if let Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) = self.additional_data {
-			Some(id)
-		} else { None }
-	}
-
-	/// Creates trianlges Vec from Chunk and its environment.
-	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<Vertex> {
-		match self.additional_data.as_ref() {
-			Addition::Know(AdditionalData { fill: ChunkFill::Empty }) => return vec![],
-			Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) => {
-				/* Cycle over all coordinates in chunk */
-				let mut vertices = vec![];
-				for pos in CubeBorder::new(CHUNK_SIZE as i32) {
-					self.to_triangles_inner(pos, *id, env, &mut vertices);
-				}
-
-				/* Shrink vector */
-				vertices.shrink_to_fit();
-
-				return vertices
-			},
-			Addition::Know(AdditionalData { fill: ChunkFill::Other }) => {
-				/* Construct vertex array */
-				let mut vertices = vec![];
-				for (i, &voxel_id) in self.voxels.iter().enumerate() {
-					self.to_triangles_inner(position_function(i), voxel_id, env, &mut vertices);
-				}
-
-				/* Shrink vector */
-				vertices.shrink_to_fit();
-
-				return vertices
-			},
-			Addition::NothingToKnow => panic!(
-				"No needed information passed into mesh builder! {:?}",
-				Addition::NothingToKnow
-			),
-		}
-	}
-
-	fn to_triangles_inner(&self, in_chunk_pos: Int3, id: Id, env: &ChunkEnvironment, vertices: &mut Vec<Vertex>) {
-		if id != NOTHING_VOXEL_DATA.id {
-			/* Cube vertices generator */
-			let cube = Cube::new(&VOXEL_DATA[id as usize]);
-
-			/* Get position from index */
-			let position = pos_in_chunk_to_world(in_chunk_pos, self.pos);
-
-			/* Draw checker */
-			let check = |input: Option<Voxel>| -> bool {
-				match input {
-					None => true,
-					Some(voxel) => voxel.data == NOTHING_VOXEL_DATA,
-				}
-			};
-
-			/* Mesh builder */
-			let build = |bias, env: Option<*const MeshlessChunk>| {
-				if check(self.get_voxel_or_none(position + bias)) {
-					match env {
-						Some(chunk) => {
-							// * SAFETY: Safe because environment chunks lives as long as other chunks or that given chunk.
-							// * And it also needs only at chunk generation stage.
-							if check(unsafe { chunk.as_ref().wunwrap().get_voxel_or_none(position + bias) }) {
-								true
-							} else { false }
-						},
-						None => true
-					}
-				} else { false }
-			};
-
-			/* Build all sides separately */
-			if build(Int3::new( 1,  0,  0), env.back)   { cube.back  (position, vertices) };
-			if build(Int3::new(-1,  0,  0), env.front)  { cube.front (position, vertices) };
-			if build(Int3::new( 0,  1,  0), env.top)    { cube.top   (position, vertices) };
-			if build(Int3::new( 0, -1,  0), env.bottom) { cube.bottom(position, vertices) };
-			if build(Int3::new( 0,  0,  1), env.right)  { cube.right (position, vertices) };
-			if build(Int3::new( 0,  0, -1), env.left)   { cube.left  (position, vertices) };
-		}
-	}
-
-	/// Gives voxel by world coordinate.
-	pub fn get_voxel_optional(&self, global_pos: Int3) -> FindOptions {
-		/* Transform to local */
-		let pos = world_coords_to_in_some_chunk(global_pos, self.pos);
-		
-		if pos.x() < 0 || pos.x() >= CHUNK_SIZE as i32 || pos.y() < 0 || pos.y() >= CHUNK_SIZE as i32 || pos.z() < 0 || pos.z() >= CHUNK_SIZE as i32 {
-			FindOptions::Border
-		} else {
-			match self.additional_data.as_ref() {
-				Addition::Know(AdditionalData { fill: ChunkFill::Empty }) =>
-					FindOptions::InChunkNothing,
-				Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) =>
-					FindOptions::InChunkSome(Voxel::new(global_pos, &VOXEL_DATA[*id as usize])),
-				_ => {
-					/* Sorts: [X -> Y -> Z] */
-					let index = index_function(pos);
-					FindOptions::InChunkSome(Voxel::new(global_pos, &VOXEL_DATA[self.voxels[index] as usize]))
-				}
-			}
-		}
-	}
-
-	/// Gives voxel by world coordinate.
-	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<Voxel> {
-		match self.get_voxel_optional(pos) {
-			FindOptions::Border | FindOptions::InChunkNothing => None,
-			FindOptions::InChunkSome(chunk) => Some(chunk)
-		}
-	}
-
-	/// Checks if chunk is in camera view.
-	pub fn is_visible(&self, camera: &Camera) -> bool {
-		/* AABB init */
-		let lo = chunk_cords_to_min_world(self.pos);
-		let hi = lo + Int3::all(CHUNK_SIZE as i32);
-
-		/* Bias (voxel centration) */
-		const BIAS: f32 = cfg::terrain::VOXEL_SIZE * 0.5;
-
-		/* To Float4 conversion with biases */
-		let lo = Float4::xyz0(lo.x() as f32 - BIAS, lo.y() as f32 - BIAS, lo.z() as f32 - BIAS);
-		let hi = Float4::xyz0(hi.x() as f32 - BIAS, hi.y() as f32 - BIAS, hi.z() as f32 - BIAS);
-
-		/* Frustum check */
-		camera.is_aabb_in_view(AABB::from_float4(lo, hi))
-	}
-
-	/// Upgrades chunk to be meshed.
-	#[allow(dead_code)]
-	pub fn envs_upgrade(self, graphics: &Graphics, env: &ChunkEnvironment) -> MeshedChunk {
-		MeshedChunk::from_meshless_envs(graphics, self, env)
-	}
-
-	/// Upgrades chunk to be meshed.
-	pub fn triangles_upgrade(self, graphics: &Graphics, triangles: &[Vertex]) -> MeshedChunk {
-		MeshedChunk::from_meshless_triangles(graphics, self, triangles)
-	}
+impl From<ChunkRef<'_>> for Chunk {
+    fn from(other: ChunkRef<'_>) -> Self {
+        Self {
+            pos: other.pos.clone(),
+            voxel_ids: other.voxel_ids.clone(),
+            info: other.info.clone(),
+            detailed_mesh: None,
+            low_meshes: [None, None, None, None, None, None],
+        }
+    }
 }
 
-/// Chunk struct.
-pub struct MeshedChunk {
-	pub inner: MeshlessChunk,
-	pub mesh: RefCell<UnindexedMesh<Vertex>>
+impl From<ChunkMut<'_>> for Chunk {
+    fn from(other: ChunkMut<'_>) -> Self {
+        Self {
+            pos: other.pos.clone(),
+            voxel_ids: other.voxel_ids.clone(),
+            info: other.info.clone(),
+            detailed_mesh: None,
+            low_meshes: [None, None, None, None, None, None],
+        }
+    }
 }
 
-/// Describes blocked chunks by environent or not. 
-#[derive(Clone, Default)]
-pub struct ChunkEnvironment<'l> {
-	pub top:	Option<*const MeshlessChunk>,
-	pub bottom:	Option<*const MeshlessChunk>,
-	pub front:	Option<*const MeshlessChunk>,
-	pub back:	Option<*const MeshlessChunk>,
-	pub left:	Option<*const MeshlessChunk>,
-	pub right:	Option<*const MeshlessChunk>,
-
-	pub _phantom: PhantomData<&'l MeshlessChunk>
+impl<'r> From<&'r Chunk> for ChunkRef<'r> {
+    fn from(value: &'r Chunk) -> Self {
+        value.make_ref()
+    }
 }
 
-unsafe impl<'c> Send for ChunkEnvironment<'c> { }
-
-impl<'c> ChunkEnvironment<'c> {
-	/// Empty description.
-	pub fn none() -> Self {
-		ChunkEnvironment { top: None, bottom: None, front: None, back: None, left: None, right: None, _phantom: PhantomData }
-	}
+impl<'r> From<&'r mut Chunk> for ChunkMut<'r> {
+    fn from(value: &'r mut Chunk) -> Self {
+        value.make_mut()
+    }
 }
 
-impl MeshedChunk {
-	/// Constructs new chunk in given position.
-	#[allow(dead_code)]
-	pub fn from_envs(graphics: &Graphics, pos: Int3, env: &ChunkEnvironment) -> Self {
-		/* Construct new meshless */
-		let meshless = MeshlessChunk::new(pos);
-		
-		/* Upgrade it */
-		Self::from_meshless_envs(graphics, meshless, env)
-	}
-
-	/// Constructs mesh for meshless chunk.
-	#[allow(dead_code)]
-	pub fn from_meshless_envs(graphics: &Graphics, meshless: MeshlessChunk, env: &ChunkEnvironment) -> Self {
-		/* Create chunk */
-		let triangles = meshless.to_triangles(env);
-
-		MeshedChunk {
-			inner: meshless,
-			mesh: RefCell::new(Self::make_mesh(&graphics.display, &triangles))
-		}
-	}
-
-	/// Constructs mesh for meshless chunk.
-	pub fn from_meshless_triangles(graphics: &Graphics, meshless: MeshlessChunk, triangles: &[Vertex]) -> Self {
-		MeshedChunk {
-			inner: meshless,
-			mesh: RefCell::new(Self::make_mesh(&graphics.display, triangles))
-		}
-	}
-
-	/// Renders chunk.
-	/// * Mesh should be constructed before this function call.
-	pub fn render<U: Uniforms>(&self, target: &mut Frame, shader: &Shader, uniforms: &U, draw_params: &glium::DrawParameters, camera: &Camera) -> Result<(), DrawError> {
-		/* Borrow mesh */
-		let mesh = self.mesh.borrow();
-
-		/* Check if vertex array is empty */
-		if !mesh.is_empty() && self.is_visible(camera) {
-			mesh.render(target, shader, draw_params, uniforms)
-		} else { Ok(()) }
-	}
-
-	/// Updates mesh.
-	pub fn make_mesh(display: &glium::Display, vertices: &[Vertex]) -> UnindexedMesh<Vertex> {
-		/* Vertex buffer for chunks */
-		let vertex_buffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
-
-		Mesh::new(vertex_buffer)
-	}
-
-	/// Creates trianlges Vec from Chunk and its environment.
-	#[allow(dead_code)]
-	pub fn to_triangles(&self, env: &ChunkEnvironment) -> Vec<Vertex> {
-		self.inner.to_triangles(env)
-	}
-
-	/// Gives voxel by world coordinate.
-	#[allow(dead_code)]
-	pub fn get_voxel_optional(&self, global_pos: Int3) -> FindOptions {
-		self.inner.get_voxel_optional(global_pos)
-	}
-
-	/// Gives voxel by world coordinate.
-	#[allow(dead_code)]
-	pub fn get_voxel_or_none(&self, pos: Int3) -> Option<Voxel> {
-		self.inner.get_voxel_or_none(pos)
-	}
-
-	/// Checks if chunk is in camera view.
-	pub fn is_visible(&self, camera: &Camera) -> bool {
-		self.inner.is_visible(camera)
-	}
+#[derive(Error, Debug)]
+pub enum SetLodError {
+    #[error("failed to set LOD value to {tried} because \
+             there's no mesh for it. Active LOD value is {active}")]
+    SetActiveLod {
+        tried: Lod,
+        active: Lod,
+    },
 }
 
-unsafe impl StaticSize for VoxelArray {
-	fn static_size() -> usize {
-		CHUNK_VOLUME * u16::static_size()
-	}
+#[derive(Error, Debug, Clone)]
+pub enum ChunkRenderError {
+    #[error(transparent)]
+    GliumRender(#[from] DrawError),
+
+    #[error("Expected a mesh with LOD value {0}")]
+    NoMesh(Lod),
+
+    #[error("Unexpectedly large LOD value: {0}")]
+    TooBigLod(Lod),
 }
 
-unsafe impl Reinterpret for MeshlessChunk { }
-
-unsafe impl ReinterpretAsBytes for MeshlessChunk {
-	fn reinterpret_as_bytes(&self) -> Vec<u8> {
-		let voxels = match self.additional_data {
-			Addition::Know(AdditionalData { fill: ChunkFill::Empty }) => {
-				Cow::Owned(vec![0; CHUNK_VOLUME])
-			},
-			Addition::Know(AdditionalData { fill: ChunkFill::All(id) }) => {
-				Cow::Owned(vec![id; CHUNK_VOLUME])
-			},
-			_ => Cow::Borrowed(&self.voxels)
-		};
-
-		let mut bytes = Vec::with_capacity(Self::static_size());
-
-		bytes.append(&mut voxels.reinterpret_as_bytes());
-		bytes.append(&mut self.pos.reinterpret_as_bytes());
-
-		return bytes
-	}
+#[derive(Debug)]
+pub struct ChunkDrawBundle<'s> {
+    full_shader: Shader,
+    low_shader:  Shader,
+    draw_params: gl::DrawParameters<'s>,
 }
 
-unsafe impl ReinterpretFromBytes for MeshlessChunk {
-	fn reinterpret_from_bytes(source: &[u8]) -> Self {
-		let voxel_array_size: usize = VoxelArray::static_size();
+impl<'s> ChunkDrawBundle<'s> {
+    pub fn new(display: &gl::Display) -> ChunkDrawBundle<'s> {
+        /* Chunk draw parameters */
+        let draw_params = gl::DrawParameters {
+            depth: gl::Depth {
+                test: gl::DepthTest::IfLess,
+                write: true,
+                .. Default::default()
+            },
+            backface_culling: gl::BackfaceCullingMode::CullClockwise,
+            .. Default::default()
+        };
+        
+        /* Create shaders */
+        let full_shader = Shader::new("full_detail", "full_detail", &display);
+        let low_shader  = Shader::new("low_detail", "low_detail", &display);
 
-		let voxels = VoxelArray::reinterpret_from_bytes(&source[.. voxel_array_size]);
-		let pos = Int3::reinterpret_from_bytes(&source[voxel_array_size .. voxel_array_size + Int3::static_size()]);
-
-		MeshlessChunk { voxels, pos, additional_data: Default::default() }
-	}
+        ChunkDrawBundle { full_shader, low_shader, draw_params }
+    }
 }
 
-unsafe impl ReinterpretSize for MeshlessChunk {
-	fn reinterpret_size(&self) -> usize { Self::static_size() }
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct Info {
+    pub fill_type: FillType,
+    pub is_filled: bool,
+    pub active_lod: Lod,
 }
 
-unsafe impl StaticSize for MeshlessChunk {
-	fn static_size() -> usize {
-		VoxelArray::static_size() + Int3::static_size() + 1
-	}
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum FillType {
+    #[default]
+    Default,
+    AllSame(Id),
 }
 
-#[cfg(test)]
-mod reinterpret_test {
-	use super::*;
+unsafe impl ReinterpretAsBytes for FillType {
+    fn as_bytes(&self) -> Vec<u8> {
+        match self {
+            Self::Default =>
+                vec![0; Self::static_size()],
 
-	#[test]
-	fn reinterpret_chunk() {
-		let before = MeshlessChunk::new(Int3::new(12, 12, 11));
-		let after = MeshlessChunk::reinterpret_from_bytes(&before.reinterpret_as_bytes());
+            Self::AllSame(id) => {
+                let mut result = Vec::with_capacity(Self::static_size());
+                result.push(1);
+                result.append(&mut id.as_bytes());
 
-		assert_eq!(before.voxels, after.voxels);
-		assert_eq!(before.pos, after.pos);
-	}
+                assert_eq!(result.capacity(), Self::static_size());
+
+                return result
+            },
+        }
+    }
 }
 
-
-
-#[cfg(test)]
-mod border_test {
-	use super::*;
-
-	#[test]
-	fn test1() {
-		let border = CubeBorder::new(CHUNK_SIZE as i32);
-		const MAX: i32 = CHUNK_SIZE as i32 - 1;
-
-		for pos in border {
-			if  pos.x() == 0 || pos.x() == MAX ||
-				pos.y() == 0 || pos.y() == MAX ||
-				pos.z() == 0 || pos.z() == MAX
-			{ eprintln!("{:?}", pos) } else {
-				eprintln!("{:?}", pos);
-				panic!();
-			}
-			
-		}
-	}
-
-	#[test]
-	fn test2() {
-		let border = CubeBorder::new(CHUNK_SIZE as i32);
-		const MAX: i32 = CHUNK_SIZE as i32 - 1;
-
-		let works = (0..CHUNK_VOLUME)
-			.map(|i| position_function(i))
-			.filter(|pos|
-				pos.x() == 0 || pos.x() == MAX ||
-				pos.y() == 0 || pos.y() == MAX ||
-				pos.z() == 0 || pos.z() == MAX
-			);
-
-		for (b, w) in border.zip(works) {
-			assert_eq!(b, w)
-		}
-	}
+unsafe impl ReinterpretFromBytes for FillType {
+    fn from_bytes(source: &[u8]) -> Option<Self> {
+        match source[0] {
+            0 => Some(Self::Default),
+            1 => {
+                let id = Id::from_bytes(&source[1..])?;
+                Some(Self::AllSame(id))
+            },
+            _ => None
+        }
+    }
 }
 
-/// Iterator over chunk border.
-#[derive(Clone, Debug)]
-pub struct CubeBorder {
-	prev: Int3,
-	size: i32,
+unsafe impl ReinterpretSize for FillType {
+    fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
-impl CubeBorder {
-	fn new(size: i32) -> Self { Self { prev: Int3::all(-1), size } }
+unsafe impl StaticSize for FillType {
+    fn static_size() -> usize { u8::static_size() + Id::static_size() }
 }
 
-impl Iterator for CubeBorder {
-	type Item = Int3;
-	fn next(&mut self) -> Option<Self::Item> {
-		/* Maximun corrdinate value in border */
-		let max: i32 = self.size - 1;
-		let max_minus_one: i32 = max - 1;
-
-		/* Return if maximum reached */
-		if self.prev == Int3::new(max, max, max) {
-			return None
-		} else if self.prev == Int3::all(-1) {
-			let new = Int3::all(0);
-			self.prev = new;
-			return Some(new)
-		}
-
-		/* Previous x, y and z */
-		let (x, y, z) = (self.prev.x(), self.prev.y(), self.prev.z());
-
-		/* Returning local function */
-		let mut give = |pos| {
-			self.prev = pos;
-			return Some(pos)
-		};
-
-		/* If somewhere slicing cube (in 1 .. MAX - 1) */
-		if x >= 1 && x <= max_minus_one {
-			/* If position is slicing square */
-			if y >= 1 && y <= max_minus_one  {
-				if z == 0 { give(Int3::new(x, y, max)) }
-				else if z == max { give(Int3::new(x, y + 1, 0)) }
-				else { unreachable!(
-					"Invalid z position! Must be in 0 or {max}! But actual value is {y}.",
-					max = max,
-					y = y,
-				)}
-			}
-
-			/* If position is on flat bottom of square */
-			else if y == 0 {
-				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-				else if z == max { give(Int3::new(x, y + 1, 0)) }
-				else { unreachable!(
-					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-					size = CHUNK_SIZE,
-					z = z,
-				)}
-			}
-
-			/* If position is on flat top of square */
-			else if y == max {
-				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-				else if z == max { give(Int3::new(x + 1, 0, 0)) }
-				else { unreachable!(
-					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-					size = CHUNK_SIZE,
-					z = z,
-				)}
-			}
-
-			/* Other Ys are unreachable */
-			else { unreachable!(
-				"Invalid y position! Must be in 0..{size}! But actual value is {y}.",
-				size = CHUNK_SIZE,
-				y = y,
-			)}
-		}
-
-		/* If current position is bottom */
-		else if x == 0 {
-			/* Y is not maximum */
-			if y >= 0 && y <= max_minus_one {
-				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-				else if z == max { give(Int3::new(x, y + 1, 0)) }
-				else { unreachable!(
-					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-					size = CHUNK_SIZE,
-					z = z,
-				)}
-			}
-
-			/* Y is maximum */
-			else if y == max {
-				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-				else if z == max { give(Int3::new(x + 1, 0, 0)) }
-				else { unreachable!(
-					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-					size = CHUNK_SIZE,
-					z = z,
-				)}
-			}
-
-			/* Others Ys are unreachable */
-			else { unreachable!(
-				"Invalid y position! Must be in 0..{size}! But actual value is {y}.",
-				size = CHUNK_SIZE,
-				y = y,
-			)}
-		}
-
-		/* If currents position is top */
-		else if x == max {
-			/* Y is not maximum */
-			if y >= 0 && y <= max_minus_one {
-				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-				else if z == max { give(Int3::new(x, y + 1, 0)) }
-				else { unreachable!(
-					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-					size = CHUNK_SIZE,
-					z = z,
-				)}
-			}
-
-			/* Y is maximum */
-			else if y == max {
-				if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-				else if z == max { give(Int3::new(max, max, max)) }
-				else { unreachable!(
-					"Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-					size = CHUNK_SIZE,
-					z = z,
-				)}
-			}
-
-			/* Others Ys are unreachable */
-			else { unreachable!(
-				"Invalid y position! Must be in 0..{size}! But actual value is {y}.",
-				size = CHUNK_SIZE,
-				y = y,
-			)}
-		}
-
-		/* Other values of X is unreachable... */
-		else { unreachable!(
-			"Invalid x position! Must be in 0..{size}! But actual value is {x}.",
-			size = CHUNK_SIZE,
-			x = x,
-		)}
-	}
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+pub enum ChunkOption<T> {
+    OutsideChunk,
+    Item(T),
 }
 
-/// Transforms world coordinates to chunk 
-#[allow(dead_code)]
-pub fn world_coords_to_chunk(pos: Int3) -> Int3 {
-	pos / CHUNK_SIZE as i32
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct ChunkAdj<'s> {
+    pub sides: Sides<Option<ChunkRef<'s>>>,
 }
 
-/// Transforms chunk coords to world
-pub fn chunk_cords_to_min_world(pos: Int3) -> Int3 {
-	pos * CHUNK_SIZE as i32
+impl ChunkAdj<'_> {
+    pub fn none() -> Self {
+        Self { sides: Sides::all(None) }
+    }
+
+    pub fn is_same_filled(&self) -> bool {
+        self.sides
+            .as_array()
+            .iter()
+            .all(|opt| match opt {
+                Some(chunk) => chunk.is_same_filled(),
+                None => false,
+            })
+    }
+
+    pub fn is_filled(&self) -> bool {
+        self.sides
+            .as_array()
+            .iter()
+            .all(|opt| match opt {
+                Some(chunk) => chunk.is_filled(),
+                None => false,
+            })
+    }
+
+    pub unsafe fn as_static(self) -> ChunkAdj<'static> {
+        ChunkAdj {
+            sides: self.sides.map(|opt|
+                opt.map(|chunk| unsafe {
+                    chunk.as_static()
+                })
+            )
+        }
+    }
 }
 
-/// Transforms in-chunk coords to world
-pub fn pos_in_chunk_to_world(in_chunk: Int3, chunk: Int3) -> Int3 {
-	chunk_cords_to_min_world(chunk) + in_chunk
-}
-
-/// Transforms world coordinates to chunk
-#[allow(dead_code)]
-pub fn world_coords_to_in_chunk(pos: Int3) -> Int3 {
-	/* Take voxel coordinates to near-zero */
-	let x = pos.x() % CHUNK_SIZE as i32;
-	let y = pos.y() % CHUNK_SIZE as i32;
-	let z = pos.z() % CHUNK_SIZE as i32;
-
-	/* If negative then convert to positive */
-
-	let x = if x < 0 {
-		x + CHUNK_SIZE as i32
-	} else { x };
-
-	let y = if y < 0 {
-		y + CHUNK_SIZE as i32
-	} else { y };
-
-	let z = if z < 0 {
-		z + CHUNK_SIZE as i32
-	} else { z };
-
-	Int3::new(x, y, z)
-}
-
-/// Transforms world coordinates to chunk 
-pub fn world_coords_to_in_some_chunk(pos: Int3, chunk: Int3) -> Int3 {
-	pos - chunk_cords_to_min_world(chunk)
-}
-
-/// Index function
-pub fn index_function(pos: Int3) -> usize {
-	sdex::get_index(&[pos.x() as usize, pos.y() as usize, pos.z() as usize], &[CHUNK_SIZE; 3])
-}
-
-/// Position function
-pub fn position_function(i: usize) -> Int3 {
-	general_position(i, CHUNK_SIZE, CHUNK_SIZE)
-}
-
-/// Position function
-pub fn general_position(i: usize, height: usize, depth: usize) -> Int3 {
-	let xy = i / depth;
-
-	let z =  i % depth;
-	let y = xy % height;
-	let x = xy / height;
-
-	Int3::new(x as i32, y as i32, z as i32)
-}
+pub type Lod = u32;

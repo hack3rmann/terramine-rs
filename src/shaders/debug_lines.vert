@@ -13,7 +13,7 @@ uniform mat4 proj;
 uniform mat4 view;
 
 void main() {
-	a_color = color;
+    a_color = color;
 
-	gl_Position = proj * view * vec4(pos, 1.0);
+    gl_Position = proj * view * vec4(pos, 1.0);
 }

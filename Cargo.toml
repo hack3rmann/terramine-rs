@@ -6,17 +6,24 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-glium = "0.30.2"
+glium = "0.32.1"
 image = "0.24.3"
 directx_math = "0.2.2"
-imgui = "0.8.2"
-imgui-glium-renderer = "0.8.2"
-imgui-winit-support = "0.8.2"
+imgui = "0.10.0"
+imgui-glium-renderer = "0.10.0"
+imgui-winit-support = "0.10.0"
 winapi = "0.3.9"
 profiler = { path = "../profiler" }
 crossbeam = "0.8.1"
 tokio = { version = "1.19.2", features = ["full"] }
 tokio-stream = "0.1.9"
+math_linear = { version = "0.1.0", path = "../math_linear" }
+thiserror = "1.0.38"
+rayon = "1.6.1"
+winit = "0.28.2"
+derive-deref-rs = "0.1.1"
+types = { version = "0.1.0", path = "../types" }
+lazy_static = "1.4.0"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"

@@ -1,26 +1,14 @@
-use crate::app::utils::werror::prelude::*;
+use {
+    tokio::runtime::{Runtime, Builder},
+    lazy_static::lazy_static,
+};
 
-pub mod prelude {
-	pub use super::{
-		runtime,
-	};
-}
-
-static mut RUNTIME: Option<tokio::runtime::Runtime> = None;
-
-pub fn initialyze() {
-	unsafe {
-		RUNTIME.replace(
-			tokio::runtime::Builder::new_multi_thread()
-				.enable_all()
-				.build()
-				.wunwrap()
-		)
-	};
-}
-
-pub fn runtime<'l>() -> &'l tokio::runtime::Runtime {
-	unsafe {
-		RUNTIME.as_ref().wexpect("Runtime is not initialyzed!")
-	}
+lazy_static! {
+    pub static ref RUNTIME: Runtime = {
+        Builder::new_multi_thread()
+            .enable_all()
+            .worker_threads(6)
+            .build()
+            .expect("failed to build tokio runtime")
+    };
 }

@@ -1,3 +1,3 @@
 pub trait Inverse {
-	fn inverse(&mut self);
+    fn inverse(&mut self);
 }
