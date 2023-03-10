@@ -21,10 +21,16 @@ use {
             },
             dpi,
         },
+        texture::{
+            Texture2d,
+            DepthTexture2d,
+            UncompressedFloatFormat,
+            MipmapsOption,
+            DepthFormat,
+        },
+        framebuffer::MultiOutputFrameBuffer,
     },
-    std::{
-        path::PathBuf,
-    },
+    std::{path::PathBuf, pin::Pin},
     derive_deref_rs::Deref,
     math_linear::prelude::*,
     thiserror::Error,
@@ -34,11 +40,33 @@ use {
     },
 };
 
-/// Struct that handles graphics.
 #[derive(Debug)]
+pub struct DeferredTextures {
+    pub depth: DepthTexture2d,
+    pub albedo: Texture2d,
+    pub normal: Texture2d,
+    pub position: Texture2d,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct QuadVertex {
+    pub position: [f32; 4],
+    pub texcoord: [f32; 2],
+}
+
+glium::implement_vertex!(QuadVertex, position, texcoord);
+
+#[derive(Debug)]
+pub struct QuadDrawResources {
+    pub shader: Shader,
+    pub vertices: glium::VertexBuffer<QuadVertex>,
+    pub indices: glium::IndexBuffer<u16>,
+}
+
+/// Struct that handles graphics.
 pub struct Graphics {
     /* Gluim main struct */
-    pub display: glium::Display,
+    pub display: Pin<Box<glium::Display>>,
 
     /* OpenGL pipeline stuff */
     pub event_loop:	Option<EventLoop<()>>,
@@ -47,8 +75,12 @@ pub struct Graphics {
     pub imguic: imgui::Context,
     pub imguiw: imgui_winit_support::WinitPlatform,
     pub imguir: ImguiRendererWrapper,
-}
 
+    /* Deferred rendering stuff */
+    pub render_textures: Pin<Box<DeferredTextures>>,
+    pub frame_buffer: Option<MultiOutputFrameBuffer<'static>>,
+    pub quad_draw_resources: QuadDrawResources,
+}
 
 impl Graphics {
     /// Creates new [`Graphics`] that holds some renderer stuff.
@@ -87,13 +119,131 @@ impl Graphics {
         /* ImGui glium renderer setup. */
         let imgui_renderer = ImguiRenderer::init(&mut imgui_context, &display)?;
 
-        Ok(Graphics {
-            display,
+        let render_textures = Self::make_render_textures(&display, UInt2::from(DEFAULT_SIZES));
+
+        let quad_draw_resources = {
+            let vertices = glium::VertexBuffer::new(&display, &[
+                QuadVertex { position: [-1.0, -1.0, 0.0, 1.0], texcoord: [0.0, 0.0] },
+                QuadVertex { position: [-1.0,  1.0, 0.0, 1.0], texcoord: [0.0, 1.0] },
+                QuadVertex { position: [ 1.0,  1.0, 0.0, 1.0], texcoord: [1.0, 1.0] },
+                QuadVertex { position: [ 1.0, -1.0, 0.0, 1.0], texcoord: [1.0, 0.0] },
+            ]).expect("failed to create vertex buffer");
+    
+            let indices = glium::IndexBuffer::new(
+                &display,
+                glium::index::PrimitiveType::TrianglesList,
+                &[0_u16, 1, 2, 0, 2, 3],
+            ).expect("failed to create index buffer");
+
+            let shader = Shader::new("postprocessing", "postprocessing", &display);
+
+            QuadDrawResources { shader, vertices, indices }
+        };
+
+        let mut graphics = Self {
+            display: Box::pin(display),
             imguic: imgui_context,
             imguir: ImguiRendererWrapper(imgui_renderer),
             imguiw: winit_platform,
             event_loop: Some(event_loop),
-        })
+            render_textures: Box::pin(render_textures),
+            frame_buffer: None,
+            quad_draw_resources,
+        };
+        graphics.apply_frame_buffer();
+
+        Ok(graphics)
+    }
+
+    fn apply_frame_buffer(&mut self)
+    where
+        Self: 'static,
+    {
+        let display = self.display.as_ref().get_ref();
+        let textures = self.render_textures.as_ref().get_ref();
+
+        // * Safety:
+        // * Safe because pointers are made of Pin<Box<T>> smart pointer
+        // * so the pointers are valid. And data can't be moved due to Pin<T>.
+        unsafe {
+            self.frame_buffer = Some(Self::make_frame_buffer(
+                display as *const glium::Display,
+                textures as *const DeferredTextures,
+            ));
+        }
+    }
+
+    pub fn refresh_postprocessing_shaders(&mut self) {
+        self.quad_draw_resources.shader = Shader::new("postprocessing", "postprocessing", self.display.as_ref().get_ref());
+    }
+
+    pub fn make_render_textures(facade: &dyn glium::backend::Facade, window_size: UInt2) -> DeferredTextures {
+        let albedo = Texture2d::empty_with_format(
+            facade,
+            UncompressedFloatFormat::F11F11F10,
+            MipmapsOption::NoMipmap,
+            window_size.x,
+            window_size.y,
+        ).expect("failed to create albedo texture");
+
+        let normal = Texture2d::empty_with_format(
+            facade,
+            UncompressedFloatFormat::F32F32F32,
+            MipmapsOption::NoMipmap,
+            window_size.x,
+            window_size.y,
+        ).expect("failed to create normal texture");
+
+        let depth = DepthTexture2d::empty_with_format(
+            facade,
+            DepthFormat::F32,
+            MipmapsOption::NoMipmap,
+            window_size.x,
+            window_size.y,
+        ).expect("failed to create depth texture");
+
+        let position = Texture2d::empty_with_format(
+            facade,
+            UncompressedFloatFormat::F32F32F32,
+            MipmapsOption::NoMipmap,
+            window_size.x,
+            window_size.y,
+        ).expect("failed to create position texture");
+
+        DeferredTextures { depth, albedo, normal, position }
+    }
+
+    pub fn on_window_resize(&mut self, new_size: UInt2) {
+        self.render_textures = Box::pin(
+            Self::make_render_textures(self.display.as_ref().get_ref(), new_size)
+        );
+
+        self.apply_frame_buffer();
+    }
+
+    /// Makes frame buffer out of raw pointers.
+    /// # Safety:
+    /// * Pointers should be made out of safe valid references.
+    /// * The data behind them should be valid for `'static`.
+    /// * The data behind them cannot be moved.
+    unsafe fn make_frame_buffer(
+        display: *const glium::Display,
+        textures: *const DeferredTextures
+    ) -> MultiOutputFrameBuffer<'static> {
+        let textures = textures.as_ref()
+            .expect("textures should be non-null");
+        let display = display.as_ref()
+            .expect("display should be non-null");
+
+        MultiOutputFrameBuffer::with_depth_buffer(
+            display,
+            [
+                ("out_albedo",   &textures.albedo),
+                ("out_normal",   &textures.normal),
+                ("out_position", &textures.position),
+            ],
+            &textures.depth,
+        ).expect("failed to create frame buffer")
     }
 
     /// Gives event_loop and removes it from graphics struct.
@@ -128,10 +278,20 @@ pub use crate::draw;
 #[macro_export]
 macro_rules! draw {
     (
-        $target_src:expr,
-        |mut $target_name:ident $(:$FrameType:ty)?| $draw_call:expr
+        $graphics:expr,
+        $make_target:expr,
+        |mut $fb_name:ident $(:$FrameBufferType:ty|)?| $fb_draw_call:expr,
+        |mut $target_name:ident $(:$FrameType:ty)?| $target_draw_call:expr
+        $(
+            ,
+            uniform! {
+                $($uniform_name:ident : $uniform_def:expr),+
+                $(,)?
+            }
+        )?
         $(,)?
     ) => {{
+        // TODO: check $FrameBufferType is actually a frame buffer.
         $(
             assert!(
                 ::types::is_same::<::glium::Frame, $FrameType>(),
@@ -139,17 +299,34 @@ macro_rules! draw {
             );
         )?
 
-        use $crate::app::utils::cfg::shader::{
-            CLEAR_COLOR as __CLEAR_COLOR,
-            CLEAR_DEPTH as __CLEAR_DEPTH,
-            CLEAR_STENCIL as __CLEAR_STENCIL,
-        };
+        use $crate::app::utils::cfg::shader::{CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL};
 
-        let mut $target_name = { $target_src }; 
-        $target_name.clear_all(__CLEAR_COLOR, __CLEAR_DEPTH, __CLEAR_STENCIL);
-        let __result = { $draw_call };
+        let mut $fb_name = $graphics.frame_buffer.take().expect("frame buffer should be not taken at this point");
+            $fb_name.clear_all(CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL);
+            let result1 = { $fb_draw_call };
+        $graphics.frame_buffer = Some($fb_name);
+
+        let mut $target_name = { $make_target };
+            let quad_uniforms = uniform! {
+                depth_texture:  &$graphics.render_textures.depth,
+                albedo_texture: &$graphics.render_textures.albedo,
+                normal_texture: &$graphics.render_textures.normal,
+                position_texture: &$graphics.render_textures.position,
+                $(
+                    $($uniform_name : $uniform_def,)+
+                )?
+            };
+
+            $target_name.draw(
+                &$graphics.quad_draw_resources.vertices,
+                &$graphics.quad_draw_resources.indices,
+                &$graphics.quad_draw_resources.shader.program,
+                &quad_uniforms,
+                &Default::default()
+            ).expect("failed to draw to target");
+            let result2 = { $target_draw_call };
         $target_name.finish().expect("failed to finish target");
 
-        __result
+        (result1, result2)
     }};
 }

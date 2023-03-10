@@ -4,7 +4,7 @@ pub mod generator;
 
 use {
     crate::app::utils::{
-        cfg::{shader::voxel::light as cfg_light, self},
+        cfg,
         terrain::chunk::{FullVertex, LowVertex},
         terrain::voxel::VoxelData,
         reinterpreter::*,
@@ -101,12 +101,13 @@ mod tests {
 pub mod shape {
     use super::{*, atlas::UV};
 
-    const FRONT_LIGHT:	f32 = cfg_light::FRONT;
-    const BACK_LIGHT:	f32 = cfg_light::BACK;
-    const TOP_LIGHT:	f32 = cfg_light::TOP;
-    const BOTTOM_LIGHT:	f32 = cfg_light::BOTTOM;
-    const LEFT_LIGHT:	f32 = cfg_light::LEFT;
-    const RIGHT_LIGHT:	f32 = cfg_light::RIGHT;
+    // TODO: move to cfg
+    pub const BACK_NORMAL:   (f32, f32, f32) = ( 1.0,  0.0,  0.0);
+    pub const FRONT_NORMAL:  (f32, f32, f32) = (-1.0,  0.0,  0.0);
+    pub const TOP_NORMAL:    (f32, f32, f32) = ( 0.0,  1.0,  0.0);
+    pub const BOTTOM_NORMAL: (f32, f32, f32) = ( 0.0, -1.0,  0.0);
+    pub const RIGHT_NORMAL:  (f32, f32, f32) = ( 0.0,  0.0,  1.0);
+    pub const LEFT_NORMAL:   (f32, f32, f32) = ( 0.0,  0.0, -1.0);
 
     #[derive(Debug)]
     pub struct CubeDetailed<'c> {
@@ -151,15 +152,15 @@ pub mod shape {
             let uv = UV::new(self.data.textures.front);
             
             /* Shortcuts */
-            let light = FRONT_LIGHT;
             let (x, y, z) = position.as_tuple();
+            let normal = FRONT_NORMAL;
 
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), light });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), light });
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), light });
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), light });
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), normal });
         }
 
         /// Cube back face vertex array.
@@ -168,15 +169,15 @@ pub mod shape {
             let uv = UV::new(self.data.textures.back);
             
             /* Shortcuts */
-            let light = BACK_LIGHT;
             let (x, y, z) = position.as_tuple();
+            let normal = BACK_NORMAL;
 
-            vertices.push(FullVertex { position: (self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), light });
-            vertices.push(FullVertex { position: (self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
-            vertices.push(FullVertex { position: (self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), light });
-            vertices.push(FullVertex { position: (self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), light });
-            vertices.push(FullVertex { position: (self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), light });
-            vertices.push(FullVertex { position: (self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), light });
+            vertices.push(FullVertex { position: (self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), normal });
+            vertices.push(FullVertex { position: (self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), normal });
+            vertices.push(FullVertex { position: (self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), normal });
+            vertices.push(FullVertex { position: (self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), normal });
+            vertices.push(FullVertex { position: (self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), normal });
+            vertices.push(FullVertex { position: (self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), normal });
         }
 
         /// Cube top face vertex array.
@@ -185,15 +186,15 @@ pub mod shape {
             let uv = UV::new(self.data.textures.top);
             
             /* Shortcuts */
-            let light = TOP_LIGHT;
             let (x, y, z) = position.as_tuple();
+            let normal = TOP_NORMAL;
 
-            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), light });
-            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), light });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), light });
-            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), light });
+            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), normal });
+            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), normal });
+            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), normal });
         }
 
         /// Cube bottom face vertex array.
@@ -202,15 +203,15 @@ pub mod shape {
             let uv = UV::new(self.data.textures.bottom);
             
             /* Shortcuts */
-            let light = BOTTOM_LIGHT;
             let (x, y, z) = position.as_tuple();
+            let normal = BOTTOM_NORMAL;
 
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), light });
-            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
-            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), light });
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), light });
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), light });
-            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), normal });
+            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), normal });
+            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), normal });
+            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), normal });
         }
 
         /// Cube left face vertex array.
@@ -219,15 +220,15 @@ pub mod shape {
             let uv = UV::new(self.data.textures.left);
             
             /* Shortcuts */
-            let light = LEFT_LIGHT;
             let (x, y, z) = position.as_tuple();
+            let normal = LEFT_NORMAL;
 
-            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), light });
-            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), light });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
-            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), light });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), light });
+            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), normal });
+            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), normal });
+            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), normal });
         }
 
         /// Cube right face vertex array.
@@ -236,15 +237,15 @@ pub mod shape {
             let uv = UV::new(self.data.textures.right);
             
             /* Shortcuts */
-            let light = RIGHT_LIGHT;
             let (x, y, z) = position.as_tuple();
+            let normal = RIGHT_NORMAL;
 
-            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), light });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
-            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), light });
-            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), light });
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), light });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), light });
+            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), normal });
+            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), normal });
+            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), normal });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), normal });
         }
 
         /// Cube all sides.
@@ -279,91 +280,91 @@ pub mod shape {
         /// Cube front face vertex array.
         pub fn front(&self, position: vec3, color: Color, vertices: &mut Vec<LowVertex>) {
             /* Shortcuts */
-            let light = FRONT_LIGHT;
             let (x, y, z) = position.as_tuple();
             let color = color.as_tuple();
+            let normal = FRONT_NORMAL;
 
-            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), color, light });
+            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), color, normal });
         }
 
         /// Cube back face vertex array.
         pub fn back(&self, position: vec3, color: Color, vertices: &mut Vec<LowVertex>) {
             /* Shortcuts */
-            let light = BACK_LIGHT;
             let (x, y, z) = position.as_tuple();
             let color = color.as_tuple();
+            let normal = BACK_NORMAL;
 
-            vertices.push(LowVertex { position: (self.half_size + x, -self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (self.half_size + x, -self.half_size + y,  self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (self.half_size + x,  self.half_size + y,  self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (self.half_size + x, -self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (self.half_size + x,  self.half_size + y,  self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (self.half_size + x,  self.half_size + y, -self.half_size + z), color, light });
+            vertices.push(LowVertex { position: (self.half_size + x, -self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (self.half_size + x, -self.half_size + y,  self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (self.half_size + x,  self.half_size + y,  self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (self.half_size + x, -self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (self.half_size + x,  self.half_size + y,  self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (self.half_size + x,  self.half_size + y, -self.half_size + z), color, normal });
         }
 
         /// Cube top face vertex array.
         pub fn top(&self, position: vec3, color: Color, vertices: &mut Vec<LowVertex>) {
             /* Shortcuts */
-            let light = TOP_LIGHT;
             let (x, y, z) = position.as_tuple();
             let color = color.as_tuple();
+            let normal = TOP_NORMAL;
 
-            vertices.push(LowVertex { position: ( self.half_size + x,  self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), color, light });
+            vertices.push(LowVertex { position: ( self.half_size + x,  self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), color, normal });
         }
 
         /// Cube bottom face vertex array.
         pub fn bottom(&self, position: vec3, color: Color, vertices: &mut Vec<LowVertex>) {
             /* Shortcuts */
-            let light = BOTTOM_LIGHT;
             let (x, y, z) = position.as_tuple();
             let color = color.as_tuple();
+            let normal = BOTTOM_NORMAL;
 
-            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), color, light });
-            vertices.push(LowVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), color, light });
-            vertices.push(LowVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), color, light });
+            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), color, normal });
         }
 
         /// Cube left face vertex array.
         pub fn left(&self, position: vec3, color: Color, vertices: &mut Vec<LowVertex>) {
             /* Shortcuts */
-            let light = LEFT_LIGHT;
             let (x, y, z) = position.as_tuple();
             let color = color.as_tuple();
+            let normal = LEFT_NORMAL;
 
-            vertices.push(LowVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: ( self.half_size + x,  self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), color, light });
+            vertices.push(LowVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: ( self.half_size + x,  self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), color, normal });
         }
 
         /// Cube right face vertex array.
         pub fn right(&self, position: vec3, color: Color, vertices: &mut Vec<LowVertex>) {
             /* Shortcuts */
-            let light = RIGHT_LIGHT;
             let (x, y, z) = position.as_tuple();
             let color = color.as_tuple();
+            let normal = RIGHT_NORMAL;
 
-            vertices.push(LowVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), color, light });
-            vertices.push(LowVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), color, light });
-            vertices.push(LowVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), color, light });
-            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), color, light });
+            vertices.push(LowVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), color, normal });
+            vertices.push(LowVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), color, normal });
         }
 
         /// Cube all sides.

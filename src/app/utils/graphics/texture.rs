@@ -20,7 +20,7 @@ pub struct Texture {
 
 impl Texture {
     /// Loads texture from path.
-    pub fn from_path(path: impl AsRef<Path>, display: &gl::Display) -> Result<Self, std::io::Error> {
+    pub fn from_path(path: impl AsRef<Path>, display: &dyn gl::backend::Facade) -> Result<Self, std::io::Error> {
         let path_buf = path.as_ref().to_owned();
         let image_bytes = fs::read(path)?;
 

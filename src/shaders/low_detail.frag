@@ -1,12 +1,19 @@
 #version 440
 
 /* Input compound */
-in vec3 a_color;
-in float a_light;
+in vec3 v_color;
+in vec3 v_normal;
+in vec3 v_position;
+in vec3 v_light_dir;
+in float v_time;
 
 /* Output */
-out vec4 color;
+out vec3 out_albedo;
+out vec3 out_normal;
+out vec3 out_position;
 
 void main() {
-    color = vec4(a_color * a_light, 1.0);
+    out_albedo = v_color;
+    out_normal = v_normal * 0.5 + vec3(0.5);
+    out_position = v_position;
 }

@@ -5,9 +5,7 @@ use {
     },
     glium::{
         Vertex as TVertex,
-        Display,
         DrawParameters,
-        Frame,
         Surface,
         DrawError,
         uniforms::Uniforms,
@@ -30,7 +28,7 @@ impl<Idx, Vertex: Copy> Mesh<Idx, Vertex> {
     }
 
     /// Renders mesh.
-    pub fn render<'a, U>(&'a self, target: &mut Frame, shader: &Shader, draw_params: &DrawParameters<'_>, uniforms: &U) -> Result<(), DrawError>
+    pub fn render<'a, U>(&'a self, target: &mut impl Surface, shader: &Shader, draw_params: &DrawParameters<'_>, uniforms: &U) -> Result<(), DrawError>
     where
         U: Uniforms,
         &'a Idx: Into<IndicesSource<'a>>,
@@ -45,7 +43,7 @@ impl<Idx, Vertex: Copy> Mesh<Idx, Vertex> {
 }
 
 impl <Vertex: Copy + TVertex> Mesh<NoIndices, Vertex> {
-    pub fn new_empty(display: &Display) -> Self {
+    pub fn new_empty(display: &dyn glium::backend::Facade) -> Self {
         Mesh { vertex_buffer: VertexBuffer::new_empty(display) }
     }
 }

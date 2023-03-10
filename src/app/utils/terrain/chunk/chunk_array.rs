@@ -425,10 +425,10 @@ impl ChunkArray {
     }
 
     /// Generates mesh for each chunk.
-    pub fn generate_meshes(&mut self, lod: impl Fn(Int3) -> Lod, display: &gl::Display) {
+    pub fn generate_meshes(&mut self, lod: impl Fn(Int3) -> Lod, facade: &dyn gl::backend::Facade) {
         for (chunk, adj) in self.chunks_with_adj_mut() {
             let active_lod = lod(chunk.pos);
-            chunk.generate_mesh(active_lod, adj, display);
+            chunk.generate_mesh(active_lod, adj, facade);
             chunk.set_active_lod(active_lod);
         }
     }
@@ -437,8 +437,8 @@ impl ChunkArray {
     /// task that generates desired mesh. If task is incomplete then it will render active LOD
     /// of concrete chunk. If it can't then it will do nothing.
     pub async fn render(
-        &mut self, target: &mut gl::Frame, draw_bundle: &ChunkDrawBundle<'_>,
-        uniforms: &impl gl::uniforms::Uniforms, display: &gl::Display, cam: &Camera,
+        &mut self, target: &mut impl gl::Surface, draw_bundle: &ChunkDrawBundle<'_>,
+        uniforms: &impl gl::uniforms::Uniforms, facade: &dyn gl::backend::Facade, cam: &Camera,
     ) -> Result<(), ChunkRenderError>
     where
         Self: 'static,
@@ -446,7 +446,7 @@ impl ChunkArray {
         let sizes = self.sizes;
         if sizes == USize3::ZERO { return Ok(()) }
 
-        self.try_finish_all_tasks(display).await;
+        self.try_finish_all_tasks(facade).await;
 
         let mut chunks: Vec<_> = Self::chunks_with_adj_mut_inner(&mut self.chunks, sizes)
             .zip(Self::desired_lod_iter(sizes, cam.pos, self.lod_dist_threashold))
@@ -475,7 +475,7 @@ impl ChunkArray {
             let can_set_new_lod =
                 Self::is_mesh_task_running(&self.full_tasks, &self.low_tasks, chunk.pos, lod) &&
                 Self::try_finish_mesh_task(&mut self.full_tasks, &mut self.low_tasks,
-                    chunk.pos, lod, chunk, display).await.is_ok() ||
+                    chunk.pos, lod, chunk, facade).await.is_ok() ||
                 chunk.get_available_lods().contains(&lod);
 
             if can_set_new_lod {
@@ -536,7 +536,7 @@ impl ChunkArray {
         }
     }
 
-    pub async fn try_finish_full_tasks(&mut self, display: &gl::Display) {
+    pub async fn try_finish_full_tasks(&mut self, facade: &dyn gl::backend::Facade) {
         let full: Vec<_> = self.full_tasks.iter_mut()
             .filter(|(_, task)| match task.handle.as_ref() {
                 None => false,
@@ -557,11 +557,11 @@ impl ChunkArray {
 
             self.get_chunk_mut_by_pos(pos)
                 .expect("pos should be valid")
-                .upload_full_detail_vertices(&vertices, display);
+                .upload_full_detail_vertices(&vertices, facade);
         }
     }
 
-    pub async fn try_finish_low_tasks(&mut self, display: &gl::Display) {
+    pub async fn try_finish_low_tasks(&mut self, facade: &dyn gl::backend::Facade) {
         let low: Vec<_> = self.low_tasks.iter_mut()
             .filter(|(_, task)| match task.handle.as_ref() {
                 None => false,
@@ -582,7 +582,7 @@ impl ChunkArray {
 
             self.get_chunk_mut_by_pos(pos)
                 .expect("pos should be valid")
-                .upload_low_detail_vertices(&vertices, lod, display);
+                .upload_low_detail_vertices(&vertices, lod, facade);
         }
     }
 
@@ -609,9 +609,9 @@ impl ChunkArray {
         }
     }
 
-    pub async fn try_finish_all_tasks(&mut self, display: &gl::Display) {
-        self.try_finish_full_tasks(display).await;
-        self.try_finish_low_tasks(display).await;
+    pub async fn try_finish_all_tasks(&mut self, facade: &dyn gl::backend::Facade) {
+        self.try_finish_full_tasks(facade).await;
+        self.try_finish_low_tasks(facade).await;
         self.try_finish_gen_tasks().await;
     }
 
@@ -691,22 +691,22 @@ impl ChunkArray {
         full_tasks: &mut HashMap<Int3, FullTask>,
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
         pos: Int3, lod: Lod,
-        chunk: &mut Chunk, display: &gl::Display,
+        chunk: &mut Chunk, facade: &dyn gl::backend::Facade,
     ) -> Result<(), TaskError> {
         match lod {
-            0   => Self::try_finish_full_mesh_task(full_tasks, pos, chunk, display).await,
-            lod => Self::try_finish_low_mesh_task(low_tasks, pos, lod, chunk, display).await,
+            0   => Self::try_finish_full_mesh_task(full_tasks, pos, chunk, facade).await,
+            lod => Self::try_finish_low_mesh_task(low_tasks, pos, lod, chunk, facade).await,
         }
     }
 
     pub async fn try_finish_full_mesh_task(
         full_tasks: &mut HashMap<Int3, FullTask>,
-        pos: Int3, chunk: &mut Chunk, display: &gl::Display,
+        pos: Int3, chunk: &mut Chunk, facade: &dyn gl::backend::Facade,
     ) -> Result<(), TaskError> {
         match full_tasks.get_mut(&pos) {
             Some(task) => match task.try_take_result().await {
                 Some(vertices) => {
-                    chunk.upload_full_detail_vertices(&vertices, display);
+                    chunk.upload_full_detail_vertices(&vertices, facade);
                     let _ = full_tasks.remove(&pos)
                         .expect("there should be a task");
                     Ok(())
@@ -720,12 +720,12 @@ impl ChunkArray {
     pub async fn try_finish_low_mesh_task(
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
         pos: Int3, lod: Lod,
-        chunk: &mut Chunk, display: &gl::Display,
+        chunk: &mut Chunk, facade: &dyn gl::backend::Facade,
     ) -> Result<(), TaskError> {
         match low_tasks.get_mut(&(pos, lod)) {
             Some(task) => match task.try_take_result().await {
                 Some(vertices) => {
-                    chunk.upload_low_detail_vertices(&vertices, lod, display);
+                    chunk.upload_low_detail_vertices(&vertices, lod, facade);
                     let _ = low_tasks.remove(&(pos, lod))
                         .expect("there should be a task");
                     Ok(())

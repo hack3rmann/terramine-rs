@@ -3,20 +3,27 @@
 /* Vertex buffer inputs */
 in vec3 position;
 in vec2 tex_coords;
-in float light;
+in vec3 normal;
 
 /* Output compound */
-out vec2 a_Tex_Coords;
-out float u_light;
+out vec2 v_tex_coords;
+out vec3 v_normal;
+out vec3 v_position;
+out vec3 v_light_dir;
+out float v_time;
 
 uniform float time;
 uniform mat4 proj;
 uniform mat4 view;
+uniform vec3 light_dir;
 
 void main() {
-    /* Assempling output compound */
-    a_Tex_Coords = tex_coords;
-    u_light = light;
+    /* Assembling output compound */
+    v_tex_coords = tex_coords;
+    v_normal = normal;
+    v_time = time;
+    v_light_dir = light_dir;
+    v_position = position;
 
     /* Writing to gl_Position */
     gl_Position = proj * view * vec4(position, 1.0);

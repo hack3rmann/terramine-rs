@@ -27,7 +27,6 @@ use {
         self as gl,
         DrawError,
         uniforms::Uniforms,
-        Frame,
         index::PrimitiveType,
         implement_vertex,
     },
@@ -57,21 +56,21 @@ pub mod prelude {
 #[derive(Copy, Clone, Debug)]
 pub struct FullVertex {
     pub position: (f32, f32, f32),
+    pub normal: (f32, f32, f32),
     pub tex_coords: (f32, f32),
-    pub light: f32
 }
 
 /// Low-detailed vertex.
 #[derive(Copy, Clone, Debug)]
 pub struct LowVertex {
     pub position: (f32, f32, f32),
+    pub normal: (f32, f32, f32),
     pub color: (f32, f32, f32),
-    pub light: f32
 }
 
 /* Implement Vertex structs as glium intended */
-implement_vertex!(FullVertex, position, tex_coords, light);
-implement_vertex!(LowVertex, position, color, light);
+implement_vertex!(FullVertex, position, normal, tex_coords);
+implement_vertex!(LowVertex, position, normal, color);
 
 macro_rules! impl_chunk_with_refs {
     ($($impls:item)*) => {
@@ -478,37 +477,37 @@ impl Chunk {
     }
 
     /// Sets mesh to chunk.
-    pub fn upload_full_detail_vertices(&mut self, vertices: &[FullVertex], display: &gl::Display) {
-        let vbuffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
+    pub fn upload_full_detail_vertices(&mut self, vertices: &[FullVertex], facade: &dyn gl::backend::Facade) {
+        let vbuffer = VertexBuffer::no_indices(facade, vertices, PrimitiveType::TrianglesList);
         let mesh = Mesh::new(vbuffer);
         self.detailed_mesh.replace(mesh);
     }
 
     /// Sets mesh to chunk.
-    pub fn upload_low_detail_vertices(&mut self, vertices: &[LowVertex], lod: Lod, display: &gl::Display) {
-        let vbuffer = VertexBuffer::no_indices(display, vertices, PrimitiveType::TrianglesList);
+    pub fn upload_low_detail_vertices(&mut self, vertices: &[LowVertex], lod: Lod, facade: &dyn gl::backend::Facade) {
+        let vbuffer = VertexBuffer::no_indices(facade, vertices, PrimitiveType::TrianglesList);
         let mesh = Mesh::new(vbuffer);
         self.low_meshes[lod as usize - 1].replace(mesh);
     }
 
     /// Generates and sets mesh to chunk.
-    pub fn generate_mesh(&mut self, lod: Lod, chunk_adj: ChunkAdj, display: &gl::Display) {
+    pub fn generate_mesh(&mut self, lod: Lod, chunk_adj: ChunkAdj, facade: &dyn gl::backend::Facade) {
         match lod {
             0 => {
                 let vertices = self.make_vertices_detailed(chunk_adj);
-                self.upload_full_detail_vertices(&vertices, display);
+                self.upload_full_detail_vertices(&vertices, facade);
             },
             
             lod => {
                 let vertices = self.make_vertices_low(chunk_adj, lod);
-                self.upload_low_detail_vertices(&vertices, lod, display);
+                self.upload_low_detail_vertices(&vertices, lod, facade);
             }
         }
     }
 
     /// Renders a [`Chunk`].
     pub fn render(
-        &self, target: &mut Frame, draw_info: &ChunkDrawBundle<'_>,
+        &self, target: &mut impl glium::Surface, draw_info: &ChunkDrawBundle<'_>,
         uniforms: &impl Uniforms, lod: Lod,
     ) -> Result<(), ChunkRenderError> {
         if self.is_empty() { return Ok(()) }
@@ -690,7 +689,7 @@ pub struct ChunkDrawBundle<'s> {
 }
 
 impl<'s> ChunkDrawBundle<'s> {
-    pub fn new(display: &gl::Display) -> ChunkDrawBundle<'s> {
+    pub fn new(facade: &dyn gl::backend::Facade) -> ChunkDrawBundle<'s> {
         /* Chunk draw parameters */
         let draw_params = gl::DrawParameters {
             depth: gl::Depth {
@@ -703,8 +702,8 @@ impl<'s> ChunkDrawBundle<'s> {
         };
         
         /* Create shaders */
-        let full_shader = Shader::new("full_detail", "full_detail", &display);
-        let low_shader  = Shader::new("low_detail", "low_detail", &display);
+        let full_shader = Shader::new("full_detail", "full_detail", facade);
+        let low_shader  = Shader::new("low_detail", "low_detail", facade);
 
         ChunkDrawBundle { full_shader, low_shader, draw_params }
     }

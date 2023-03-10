@@ -19,7 +19,7 @@ use {
     },
     super::*,
     glium::{
-        Display, Depth, DepthTest, BackfaceCullingMode, Frame,
+        Depth, DepthTest, BackfaceCullingMode,
         index::PrimitiveType,
         uniforms::Uniforms,
     },
@@ -48,8 +48,8 @@ pub mod data {
         );
     }
 
-    pub fn get<'s>(display: &Display) -> DebugVisualsStatics<'s, ChunkArray> {
-        cond_init(display);
+    pub fn get<'s>(facade: &dyn glium::backend::Facade) -> DebugVisualsStatics<'s, ChunkArray> {
+        cond_init(facade);
         get_unchecked()
     }
 
@@ -67,17 +67,17 @@ pub mod data {
         }
     }
 
-    pub fn cond_init(display: &Display) {
+    pub fn cond_init(facade: &dyn glium::backend::Facade) {
         unsafe {
             /* Check if uninitialized */
             if SHADER.is_none() {
-                let shader = Shader::new("debug_lines", "debug_lines", display);
+                let shader = Shader::new("debug_lines", "debug_lines", facade);
                 SHADER.replace(ShaderWrapper(shader));
             }
         }
     }
 
-    pub fn construct_mesh(chunk_arr: &ChunkArray, display: &Display) -> UnindexedMesh<Vertex> {
+    pub fn construct_mesh(chunk_arr: &ChunkArray, facade: &dyn glium::backend::Facade) -> UnindexedMesh<Vertex> {
         let vertices: Vec<_> = chunk_arr.chunks()
             .flat_map(|chunk| {
                 let bias = cfg::topology::Z_FIGHTING_BIAS
@@ -156,32 +156,32 @@ pub mod data {
             })
             .collect();
 
-        let vbuffer = VertexBuffer::no_indices(display, &vertices, PrimitiveType::LinesList);
+        let vbuffer = VertexBuffer::no_indices(facade, &vertices, PrimitiveType::LinesList);
         UnindexedMesh::new(vbuffer)
     }
 }
 
 impl DebugVisualized<'_, ChunkArray> {
-    pub fn new_chunk_array(chunk_array: ChunkArray, display: &Display) -> Self {
-        let mesh = data::construct_mesh(&chunk_array, display);
-        Self { inner: chunk_array, mesh, static_data: data::get(display) }
+    pub fn new_chunk_array(chunk_array: ChunkArray, facade: &dyn glium::backend::Facade) -> Self {
+        let mesh = data::construct_mesh(&chunk_array, facade);
+        Self { inner: chunk_array, mesh, static_data: data::get(facade) }
     }
 
     #[profile]
     pub async fn render_chunk_array(
-        &mut self, target: &mut Frame, draw_bundle: &ChunkDrawBundle<'_>,
-        uniforms: &impl Uniforms, display: &Display, cam: &Camera,
+        &mut self, target: &mut impl glium::Surface, draw_bundle: &ChunkDrawBundle<'_>,
+        uniforms: &impl Uniforms, facade: &dyn glium::backend::Facade, cam: &Camera,
     ) -> Result<(), ChunkRenderError>
     where
         Self: 'static,
     {
-        self.render(target, draw_bundle, uniforms, display, cam).await?;
+        self.render(target, draw_bundle, uniforms, facade, cam).await?;
 
         if ENABLED.load(Ordering::Relaxed) {
-            self.mesh = data::construct_mesh(self, display);
+            self.mesh = data::construct_mesh(self, facade);
         
-            let shader = data::get(display).shader;
-            let draw_params = data::get(display).draw_params;
+            let shader = data::get(facade).shader;
+            let draw_params = data::get(facade).draw_params;
             self.mesh.render(target, shader, draw_params, uniforms)?;
         }
 

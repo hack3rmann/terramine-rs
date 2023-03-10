@@ -24,7 +24,7 @@ pub struct Shader {
 impl Shader {
     /// Returns new Shader object that contains shader source code from their path.
     /// It adds [`DIRECTORY`] before the name and special extention (a.g. `.vert` for vertex) after.
-    pub fn new(vertex_shader_name: &str, fragment_shader_name: &str, display: &glium::Display) -> Self {
+    pub fn new(vertex_shader_name: &str, fragment_shader_name: &str, display: &dyn glium::backend::Facade) -> Self {
         let vertex_shader_src = fs::read_to_string(
             format!("{DIRECTORY}{}.{VERTEX_FILE_EXTENTION}", vertex_shader_name)
         ).expect("Can't read vertex shader file!");

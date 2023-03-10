@@ -79,7 +79,7 @@ pub mod shader {
     pub const DIRECTORY: &str = "src/shaders/";
     pub const VERTEX_FILE_EXTENTION:   &str = "vert";
     pub const FRAGMENT_FILE_EXTENTION: &str = "frag";
-    pub const CLEAR_COLOR: (f32, f32, f32, f32) = (0.08, 0.08, 0.08, 1.0);
+    pub const CLEAR_COLOR: (f32, f32, f32, f32) = (0.02, 0.02, 0.02, 1.0);
     pub const CLEAR_DEPTH:   f32 = 1.0;
     pub const CLEAR_STENCIL: i32 = 0;
 

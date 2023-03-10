@@ -24,17 +24,19 @@ use {
 
     /* Glium includes */
     glium::{
+        Surface,
         glutin::{
             event::{Event, WindowEvent},
             event_loop::ControlFlow,
         },
-        Surface,
         uniform,
     },
+
+    math_linear::prelude::*,
+    std::sync::Mutex,
 };
 
 /// Struct that handles everything.
-#[derive(Debug)]
 pub struct App {
     input_manager: InputManager,
     graphics: Graphics,
@@ -57,16 +59,16 @@ impl App where Self: 'static {
             Camera::new()
                 .with_position(0.0, 16.0, 2.0)
                 .with_rotation(0.0, 0.0, std::f64::consts::PI),
-            &graphics.display,
+            graphics.display.as_ref().get_ref(),
         );
     
-        let texture_atlas = Texture::from_path("src/image/texture_atlas.png", &graphics.display)
+        let texture_atlas = Texture::from_path("src/image/texture_atlas.png", graphics.display.as_ref().get_ref())
             .expect("path should be valid and file is readable");
 
-        let chunk_draw_bundle = ChunkDrawBundle::new(&graphics.display);
+        let chunk_draw_bundle = ChunkDrawBundle::new(graphics.display.as_ref().get_ref());
         let chunk_arr = DebugVisualizedStatic::new_chunk_array(
             ChunkArray::new_empty(),
-            &graphics.display,
+            graphics.display.as_ref().get_ref(),
         );
 
         App {
@@ -109,8 +111,10 @@ impl App where Self: 'static {
                 },
 
                 WindowEvent::Resized(new_size) => {
-                    self.camera.aspect_ratio = new_size.height as f32
-                                             / new_size.width  as f32;
+                    let (width, height) = (new_size.width, new_size.height);
+                    self.camera.aspect_ratio = height as f32
+                                             / width  as f32;
+                    self.graphics.on_window_resize(UInt2::new(width, height));
                 },
 
                 _ => (),
@@ -131,13 +135,15 @@ impl App where Self: 'static {
 
     /// Main events cleared.
     async fn main_events_cleared(&mut self, control_flow: &mut ControlFlow) {
+        use glium::glutin::event::VirtualKeyCode as Key;
+        
         /* Close window is `escape` pressed */
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::APP_EXIT) {
             *control_flow = ControlFlow::Exit;
             self.chunk_arr.drop_tasks();
         }
 
-        if self.input_manager.keyboard.just_pressed(glium::glutin::event::VirtualKeyCode::Y) {
+        if self.input_manager.keyboard.just_pressed(Key::Y) {
             self.chunk_arr.drop_tasks();
         }
 
@@ -150,6 +156,11 @@ impl App where Self: 'static {
             }
 
             self.camera.grabbes_cursor = !self.camera.grabbes_cursor;
+        }
+
+        if self.input_manager.keyboard.just_pressed(Key::H) {
+            self.chunk_draw_bundle = ChunkDrawBundle::new(self.graphics.display.as_ref().get_ref());
+            self.graphics.refresh_postprocessing_shaders();
         }
 
         /* Update save/load tasks of `ChunkArray` */
@@ -173,6 +184,8 @@ impl App where Self: 'static {
 
     /// Prepares the frame.
     async fn redraw_requested(&mut self) {
+        static LIGHT_DIRECTION: Mutex<vec3> = Mutex::new(vecf!(1.0, -1.0, 1.0));
+
         /* InGui draw data */
         let draw_data = {
             /* Get UI frame renderer */
@@ -193,6 +206,24 @@ impl App where Self: 'static {
             /* Spawns loadings window */
             loading::spawn_info_window(ui);
 
+            {
+                // FIXME:
+                let mut light = LIGHT_DIRECTION
+                    .lock()
+                    .expect("mutex should be not poisoned");
+
+                ui.window("Light")
+                    .always_auto_resize(true)
+                    .movable(true)
+                    .build(|| {
+                        ui.slider("x", -1.0, 1.0, &mut light.x);
+                        ui.slider("y", -1.0, 1.0, &mut light.y);
+                        ui.slider("z", -1.0, 1.0, &mut light.z);
+                    });
+
+                *light = light.normalized();
+            }
+
             self.graphics.imguic.render()
         };
 
@@ -202,25 +233,41 @@ impl App where Self: 'static {
             time: self.timer.time(),
             proj: self.camera.get_proj(),
             view: self.camera.get_view(),
+            light_dir: LIGHT_DIRECTION
+                .lock()
+                .expect("mutex should be not poisoned")
+                .as_array(),
         };
 
-        /* Actual drawing */
-        graphics::draw!(
+        graphics::draw! {
+            self.graphics,
             self.graphics.display.draw(),
-            |mut target| {
+
+            |mut frame_buffer| {
                 self.chunk_arr.render_chunk_array(
-                    &mut target, &self.chunk_draw_bundle,
-                    &uniforms, &self.graphics.display, &self.camera
+                    &mut frame_buffer, &self.chunk_draw_bundle,
+                    &uniforms, self.graphics.display.as_ref().get_ref(), &self.camera
                 ).await
                     .expect("failed to render chunk array");
-
-                self.camera.render_camera(&self.graphics.display, &mut target, &uniforms)
+        
+                self.camera.render_camera(self.graphics.display.as_ref().get_ref(), &mut frame_buffer, &uniforms)
                     .expect("failed to render camera");
+            },
 
+            |mut target| {
                 self.graphics.imguir.render(&mut target, draw_data)
                     .expect("failed to render imgui");
             },
-        );
+
+            uniform! {
+                light_dir: LIGHT_DIRECTION
+                    .lock()
+                    .expect("mutex should be not poisoned")
+                    .as_array(),
+                time: self.timer.time(),
+                cam_pos: self.camera.pos.as_array(),
+            },
+        };
 
         self.timer.update();
         self.graphics.imguic
