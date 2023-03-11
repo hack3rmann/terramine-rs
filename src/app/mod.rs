@@ -47,6 +47,7 @@ pub struct App {
     chunk_draw_bundle: ChunkDrawBundle<'static>,
 
     texture_atlas: Texture,
+    normal_atlas: Texture,
 }
 
 impl App where Self: 'static {
@@ -65,6 +66,9 @@ impl App where Self: 'static {
         let texture_atlas = Texture::from_path("src/image/texture_atlas.png", graphics.display.as_ref().get_ref())
             .expect("path should be valid and file is readable");
 
+        let normal_atlas = Texture::from_path("src/image/normal_atlas.png", graphics.display.as_ref().get_ref())
+            .expect("path should be valid and file is readable");
+
         let chunk_draw_bundle = ChunkDrawBundle::new(graphics.display.as_ref().get_ref());
         let chunk_arr = DebugVisualizedStatic::new_chunk_array(
             ChunkArray::new_empty(),
@@ -77,6 +81,7 @@ impl App where Self: 'static {
             graphics,
             camera,
             texture_atlas,
+            normal_atlas,
             timer: Timer::new(),
             input_manager: InputManager::new(),
         }
@@ -161,6 +166,10 @@ impl App where Self: 'static {
         if self.input_manager.keyboard.just_pressed(Key::H) {
             self.chunk_draw_bundle = ChunkDrawBundle::new(self.graphics.display.as_ref().get_ref());
             self.graphics.refresh_postprocessing_shaders();
+
+            // FIXME:
+            self.normal_atlas = Texture::from_path("src/image/normal_atlas.png", self.graphics.display.as_ref().get_ref())
+                .expect("path should be valid and file is readable");
         }
 
         /* Update save/load tasks of `ChunkArray` */
@@ -192,29 +201,30 @@ impl App where Self: 'static {
             let ui = self.graphics.imguic.new_frame();
 
             /* Camera window */
-            self.camera.spawn_control_window(ui, &mut self.input_manager);
+            self.camera.spawn_control_window(ui, &self.input_manager.keyboard);
 
             /* Profiler window */
-            profiler::update_and_build_window(ui, &self.timer, &mut self.input_manager);
+            profiler::update_and_build_window(ui, &self.timer, &mut self.input_manager.keyboard);
 
             /* Render UI */
             self.graphics.imguiw.prepare_render(ui, self.graphics.display.gl_window().window());
 
             /* Chunk array control window */
-            self.chunk_arr.spawn_control_window(ui);
+            self.chunk_arr.spawn_control_window(ui, &self.input_manager.keyboard);
 
             /* Spawns loadings window */
-            loading::spawn_info_window(ui);
+            loading::spawn_info_window(ui, &self.input_manager.keyboard);
 
             {
+                use crate::app::utils::graphics::ui::imgui_constructor::make_window;
+
                 // FIXME:
                 let mut light = LIGHT_DIRECTION
                     .lock()
                     .expect("mutex should be not poisoned");
 
-                ui.window("Light")
+                make_window(ui, "Light", &self.input_manager.keyboard)
                     .always_auto_resize(true)
-                    .movable(true)
                     .build(|| {
                         ui.slider("x", -1.0, 1.0, &mut light.x);
                         ui.slider("y", -1.0, 1.0, &mut light.y);
@@ -229,7 +239,8 @@ impl App where Self: 'static {
 
         /* Uniforms set */
         let uniforms = uniform! {
-            tex:  self.texture_atlas.with_mips(),
+            texture_atlas: self.texture_atlas.with_mips(),
+            normal_atlas:  self.normal_atlas.with_mips(),
             time: self.timer.time(),
             proj: self.camera.get_proj(),
             view: self.camera.get_view(),

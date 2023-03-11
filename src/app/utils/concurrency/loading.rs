@@ -1,7 +1,10 @@
 #![allow(dead_code)]
 
 use {
-    crate::app::utils::cfg,
+    crate::app::utils::{
+        cfg,
+        user_io::Keyboard,
+    },
     std::{
         collections::HashMap,
         sync::Mutex,
@@ -69,12 +72,12 @@ impl Loadings {
         }
     }
 
-    pub fn spawn_info_window(&self, ui: &imgui::Ui) {
+    pub fn spawn_info_window(&self, ui: &imgui::Ui, keyboard: &Keyboard) {
+        use crate::app::utils::graphics::ui::imgui_constructor::make_window;
+
         if self.list.is_empty() { return }
 
-        ui.window("Loadings")
-            .movable(true)
-            .resizable(true)
+        make_window(ui, "Loadings", keyboard)
             .build(|| {
                 for (name, &value) in self.list.iter() {
                     imgui::ProgressBar::new(value)
@@ -85,11 +88,11 @@ impl Loadings {
     }
 }
 
-pub fn spawn_info_window(ui: &imgui::Ui) {
+pub fn spawn_info_window(ui: &imgui::Ui, keyboard: &Keyboard) {
     LOADINGS.lock()
         .expect("mutex should be not poisoned")
         .loads
-        .spawn_info_window(ui)
+        .spawn_info_window(ui, keyboard)
 }
 
 pub fn recv_all() -> Result<(), LoadingError> {

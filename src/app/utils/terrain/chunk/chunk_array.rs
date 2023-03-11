@@ -11,7 +11,7 @@ use {
         reinterpreter::*,
         graphics::camera::Camera,
         concurrency::loading::{self, Command},
-        user_io::InputManager,
+        user_io::{InputManager, Keyboard},
     },
     math_linear::prelude::*,
     std::{
@@ -746,11 +746,11 @@ impl ChunkArray {
         drop(mem::take(&mut self.voxels_gen_tasks));
     }
 
-    pub fn spawn_control_window(&mut self, ui: &imgui::Ui) {
-        ui.window("Chunk array")
+    pub fn spawn_control_window(&mut self, ui: &imgui::Ui, keyboard: &Keyboard) {
+        use crate::app::utils::graphics::ui::imgui_constructor::make_window;
+
+        make_window(ui, "Chunk array", keyboard)
             .always_auto_resize(true)
-            .collapsible(true)
-            .movable(true)
             .build(|| {
                 ui.text(format!(
                     "{n} chunk generation tasks.",

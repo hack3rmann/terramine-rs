@@ -6,7 +6,7 @@ pub use profiler_target_macro::profiler_target;
 use {
     crate::app::utils::{
         time::timer::Timer,
-        user_io::InputManager,
+        user_io::Keyboard,
         cfg,
     },
     std::{
@@ -126,8 +126,8 @@ pub fn start_capture(target_name: &str, id: Id) -> Measure {
 }
 
 /// Updates profiler and builds ImGui window.
-pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer, input: &mut InputManager) {
-    if input.keyboard.just_pressed(cfg::key_bindings::ENABLE_PROFILER_WINDOW) {
+pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer, keyboard: &mut Keyboard) {
+    if keyboard.just_pressed(cfg::key_bindings::ENABLE_PROFILER_WINDOW) {
         let mut guard = DRAWING_ENABLED.lock()
             .expect("DRAWING_ENABLED mutex shuold be not poisoned");
         *guard = !*guard;
@@ -157,7 +157,7 @@ pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer, input: &mut InputM
         })
         .collect();
     
-    build_window(ui, input, data);
+    build_window(ui, keyboard, data);
     drop(lock);
 
     update();
@@ -177,21 +177,13 @@ pub fn update() {
 }
 
 /// Builds ImGui window of capturing results
-pub fn build_window(ui: &imgui::Ui, input: &InputManager, profiler_result: DataSummary) {
+pub fn build_window(ui: &imgui::Ui, keyboard: &Keyboard, profiler_result: DataSummary) {
+    use crate::app::utils::graphics::ui::imgui_constructor::make_window;
+
     if profiler_result.len() != 0 && *DRAWING_ENABLED.lock().expect("mutex should be not poisoned") {
-        /* Create ImGui window */
-        let mut window = ui.window("Profiler").always_auto_resize(true);
-
-        /* Check if window can be moved or resized */
-        if !input.keyboard.is_pressed(cfg::key_bindings::ENABLE_DRAG_AND_RESIZE_WINDOWS) {
-            window = window
-                .resizable(false)
-                .movable(false)
-                .collapsible(false)
-        }
-
-        /* Ui building */
-        window.build(|| {
+        make_window(ui, "Profiler", keyboard)
+            .always_auto_resize(true)
+            .build(|| {
             /* Build all elements. Separate only existing lines. */
             for (i, data) in profiler_result.iter().enumerate() {
                 /* Target name */

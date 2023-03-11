@@ -57,6 +57,7 @@ pub mod prelude {
 pub struct FullVertex {
     pub position: (f32, f32, f32),
     pub normal: (f32, f32, f32),
+    pub tangent: (f32, f32, f32),
     pub tex_coords: (f32, f32),
 }
 
@@ -69,7 +70,7 @@ pub struct LowVertex {
 }
 
 /* Implement Vertex structs as glium intended */
-implement_vertex!(FullVertex, position, normal, tex_coords);
+implement_vertex!(FullVertex, position, normal, tangent, tex_coords);
 implement_vertex!(LowVertex, position, normal, color);
 
 macro_rules! impl_chunk_with_refs {

@@ -11,7 +11,7 @@ use {
             camera::default as cam_def,
             window::default as window_def,
         },
-        user_io::InputManager,
+        user_io::{Keyboard, InputManager},
     },
     math_linear::prelude::*,
     frustum::Frustum,
@@ -182,12 +182,19 @@ impl Camera {
 
     /// Returns view matrix.
     pub fn get_view(&self) -> [[f32; 4]; 4] {
-        mat4::look_at_lh(self.pos, self.pos + self.front, self.up).as_2d_array()
+        mat4::look_at_lh(self.pos, self.pos + self.front, self.up)
+            .as_2d_array()
     }
 
     /// Returns projection matrix with `aspect_ratio = height / width`
     pub fn get_proj(&self) -> [[f32; 4]; 4] {
-        mat4::perspective_fov_lh(self.fov.get_radians(), self.aspect_ratio, self.near_plane_dist, self.far_plane_dist).as_2d_array()
+        mat4::perspective_fov_lh(self.fov.get_radians(), self.aspect_ratio, self.near_plane_dist, self.far_plane_dist)
+            .as_2d_array()
+    }
+
+    pub fn get_ortho(&self, scale: f32) -> [[f32; 4]; 4] {
+        mat4::orthographic_lh(scale, self.aspect_ratio * scale, self.near_plane_dist, self.far_plane_dist)
+            .as_2d_array()
     }
 
     /// Checks if position is in camera frustum
@@ -218,20 +225,11 @@ impl Camera {
     pub fn get_z(&self) -> f32 { self.pos.z }
 
     /// Spawns camera control window.
-    pub fn spawn_control_window(&mut self, ui: &imgui::Ui, input: &mut InputManager) {
-        /* Camera control window */
-        let mut camera_window = ui.window("Camera");
-
-        /* Move and resize if pressed I key */
-        if !input.keyboard.is_pressed(cfg::key_bindings::ENABLE_DRAG_AND_RESIZE_WINDOWS) {
-            camera_window = camera_window
-                .resizable(false)
-                .movable(false)
-                .collapsible(false)
-        }
+    pub fn spawn_control_window(&mut self, ui: &imgui::Ui, keyboard: &Keyboard) {
+        use crate::app::utils::graphics::ui::imgui_constructor::make_window;
 
         /* UI building */
-        camera_window.build(|| {
+        make_window(ui, "Camera", keyboard).build(|| {
             ui.text("Position");
             ui.text(format!("x: {x:.3}, y: {y:.3}, z: {z:.3}", x = self.get_x(), y = self.get_y(), z = self.get_z()));
             ui.text("Rotation");

@@ -14,6 +14,6 @@ out vec3 out_position;
 
 void main() {
     out_albedo = v_color;
-    out_normal = v_normal * 0.5 + vec3(0.5);
+    out_normal = v_normal;
     out_position = v_position;
 }
