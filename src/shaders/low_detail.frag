@@ -11,9 +11,13 @@ in float v_time;
 out vec3 out_albedo;
 out vec3 out_normal;
 out vec3 out_position;
+out float out_light_depth;
+
+uniform vec3 light_pos;
 
 void main() {
     out_albedo = v_color;
     out_normal = v_normal;
     out_position = v_position;
+    out_light_depth = length(v_position - light_pos);
 }

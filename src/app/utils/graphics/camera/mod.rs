@@ -52,7 +52,7 @@ pub struct Camera {
 #[allow(dead_code)]
 impl Camera {
     /// Creates camera.
-    pub fn new() -> Self { Default::default() }
+    pub fn new() -> Self { Self::default() }
 
     /// Gives camera positioned to given coordinates
     pub fn with_position(mut self, x: f32, y: f32, z: f32) -> Self {
@@ -82,7 +82,7 @@ impl Camera {
         self.update_vectors();
     }
 
-    /// Sets rotation to [0.0, 0.0, 0.0].
+    /// Sets rotation to (0.0, 0.0, 0.0).
     pub fn reset_rotation(&mut self) {
         self.set_rotation(0.0, 0.0, 0.0);
     }
@@ -193,7 +193,8 @@ impl Camera {
     }
 
     pub fn get_ortho(&self, scale: f32) -> [[f32; 4]; 4] {
-        mat4::orthographic_lh(scale, self.aspect_ratio * scale, self.near_plane_dist, self.far_plane_dist)
+        // FIXME:
+        mat4::orthographic_lh(scale, self.aspect_ratio * scale, 1.0, 200.0)
             .as_2d_array()
     }
 

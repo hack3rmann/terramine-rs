@@ -12,22 +12,41 @@ out vec3 v_normal;
 out vec3 v_tangent;
 out vec3 v_bitangent;
 out vec3 v_position;
-out vec3 v_light_dir;
-out float v_time;
 
 uniform float time;
 uniform mat4 proj;
 uniform mat4 view;
 uniform vec3 light_dir;
+uniform vec3 light_pos;
+uniform mat4 light_proj;
+uniform mat4 light_view;
+uniform bool is_shadow_pass;
+
+void process_shadow();
+void shade_standart();
 
 void main() {
+    if (is_shadow_pass) {
+        process_shadow();
+    } else {
+        shade_standart();
+    }
+}
+
+void process_shadow() {
+    /* Assembling output compound */
+    v_position = position;
+
+    /* Writing to gl_Position */
+    gl_Position = light_proj * light_view * vec4(position, 1.0);
+}
+
+void shade_standart() {
     /* Assembling output compound */
     v_tex_coords = tex_coords;
     v_normal = normal;
     v_tangent = tangent;
     v_bitangent = cross(normal, tangent);
-    v_time = time;
-    v_light_dir = light_dir;
     v_position = position;
 
     /* Writing to gl_Position */

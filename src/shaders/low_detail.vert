@@ -16,6 +16,7 @@ uniform float time;
 uniform mat4 proj;
 uniform mat4 view;
 uniform vec3 light_dir;
+uniform vec3 light_pos;
 
 void main() {
     /* Assempling output compound */

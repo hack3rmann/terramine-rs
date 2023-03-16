@@ -7,6 +7,7 @@ use {
         concurrency::loading,
         user_io::InputManager,
         graphics::{
+            light::DirectionalLight,
             self,
             Graphics,
             camera::Camera,
@@ -33,7 +34,6 @@ use {
     },
 
     math_linear::prelude::*,
-    std::sync::Mutex,
 };
 
 /// Struct that handles everything.
@@ -41,6 +41,7 @@ pub struct App {
     input_manager: InputManager,
     graphics: Graphics,
     camera: DebugVisualizedStatic<Camera>,
+    light: DirectionalLight,
     timer: Timer,
 
     chunk_arr: DebugVisualizedStatic<ChunkArray>,
@@ -62,7 +63,7 @@ impl App where Self: 'static {
                 .with_rotation(0.0, 0.0, std::f64::consts::PI),
             graphics.display.as_ref().get_ref(),
         );
-    
+
         let texture_atlas = Texture::from_path("src/image/texture_atlas.png", graphics.display.as_ref().get_ref())
             .expect("path should be valid and file is readable");
 
@@ -80,6 +81,7 @@ impl App where Self: 'static {
             chunk_draw_bundle,
             graphics,
             camera,
+            light: Default::default(),
             texture_atlas,
             normal_atlas,
             timer: Timer::new(),
@@ -88,18 +90,18 @@ impl App where Self: 'static {
     }
 
     /// Runs app. Runs glium's `event_loop`.
-    pub fn run(mut self) {
+    pub fn run(mut self) -> ! {
         // TODO: rewrite `loop { async {} }` into `async { loop {} }`.
         self.graphics.take_event_loop().run(move |event, _, control_flow| {
             RUNTIME.block_on(async {
                 self.run_frame_loop(event, control_flow).await
             })
-        });
+        })
     }
 
     /// Event loop run function.
     pub async fn run_frame_loop(&mut self, event: Event<'_, ()>, control_flow: &mut ControlFlow) {
-        self.graphics.imguiw.handle_event(
+        self.graphics.imguip.handle_event(
             self.graphics.imguic.io_mut(),
             self.graphics.display.gl_window().window(),
             &event
@@ -119,6 +121,7 @@ impl App where Self: 'static {
                     let (width, height) = (new_size.width, new_size.height);
                     self.camera.aspect_ratio = height as f32
                                              / width  as f32;
+                    self.light.cam.aspect_ratio = self.camera.aspect_ratio;
                     self.graphics.on_window_resize(UInt2::new(width, height));
                 },
 
@@ -138,6 +141,7 @@ impl App where Self: 'static {
         }
     }
 
+    /// FIXME: truncate large chunk generation task list.
     /// Main events cleared.
     async fn main_events_cleared(&mut self, control_flow: &mut ControlFlow) {
         use glium::glutin::event::VirtualKeyCode as Key;
@@ -183,7 +187,7 @@ impl App where Self: 'static {
         window.set_title(&format!("Terramine: {0:.0} FPS", self.timer.fps()));
 
         /* Update ImGui stuff */
-        self.graphics.imguiw
+        self.graphics.imguip
             .prepare_frame(self.graphics.imguic.io_mut(), window)
             .expect("failed to prepare frame");
 
@@ -193,75 +197,58 @@ impl App where Self: 'static {
 
     /// Prepares the frame.
     async fn redraw_requested(&mut self) {
-        static LIGHT_DIRECTION: Mutex<vec3> = Mutex::new(vecf!(1.0, -1.0, 1.0));
-
         /* InGui draw data */
         let draw_data = {
             /* Get UI frame renderer */
             let ui = self.graphics.imguic.new_frame();
+            let keyboard = &mut self.input_manager.keyboard;
 
             /* Camera window */
-            self.camera.spawn_control_window(ui, &self.input_manager.keyboard);
+            self.camera.spawn_control_window(ui, keyboard);
 
             /* Profiler window */
-            profiler::update_and_build_window(ui, &self.timer, &mut self.input_manager.keyboard);
+            profiler::update_and_build_window(ui, &self.timer, keyboard);
 
             /* Render UI */
-            self.graphics.imguiw.prepare_render(ui, self.graphics.display.gl_window().window());
+            self.graphics.imguip.prepare_render(ui, self.graphics.display.gl_window().window());
 
             /* Chunk array control window */
-            self.chunk_arr.spawn_control_window(ui, &self.input_manager.keyboard);
+            self.chunk_arr.spawn_control_window(ui, keyboard);
 
-            /* Spawns loadings window */
-            loading::spawn_info_window(ui, &self.input_manager.keyboard);
+            /* Loadings window */
+            loading::spawn_info_window(ui, keyboard);
 
-            {
-                use crate::app::utils::graphics::ui::imgui_constructor::make_window;
-
-                // FIXME:
-                let mut light = LIGHT_DIRECTION
-                    .lock()
-                    .expect("mutex should be not poisoned");
-
-                make_window(ui, "Light", &self.input_manager.keyboard)
-                    .always_auto_resize(true)
-                    .build(|| {
-                        ui.slider("x", -1.0, 1.0, &mut light.x);
-                        ui.slider("y", -1.0, 1.0, &mut light.y);
-                        ui.slider("z", -1.0, 1.0, &mut light.z);
-                    });
-
-                *light = light.normalized();
-            }
+            /* Light control window */
+            self.light.spawn_control_window(ui, keyboard);
 
             self.graphics.imguic.render()
         };
 
-        /* Uniforms set */
         let uniforms = uniform! {
             texture_atlas: self.texture_atlas.with_mips(),
             normal_atlas:  self.normal_atlas.with_mips(),
             time: self.timer.time(),
             proj: self.camera.get_proj(),
             view: self.camera.get_view(),
-            light_dir: LIGHT_DIRECTION
-                .lock()
-                .expect("mutex should be not poisoned")
-                .as_array(),
+            light_proj: self.light.cam.get_ortho(256.0),
+            light_view: self.light.cam.get_view(),
+            light_dir: self.light.cam.front.as_array(),
+            light_pos: self.light.cam.pos.as_array(),
         };
 
         graphics::draw! {
             self.graphics,
             self.graphics.display.draw(),
+            uniforms,
 
-            |mut frame_buffer| {
-                self.chunk_arr.render_chunk_array(
-                    &mut frame_buffer, &self.chunk_draw_bundle,
-                    &uniforms, self.graphics.display.as_ref().get_ref(), &self.camera
-                ).await
+            |&mut frame_buffer| {
+                let display = self.graphics.display.as_ref().get_ref();
+
+                self.chunk_arr.render(frame_buffer, &self.chunk_draw_bundle, &uniforms, display, &self.camera)
+                    .await
                     .expect("failed to render chunk array");
         
-                self.camera.render_camera(self.graphics.display.as_ref().get_ref(), &mut frame_buffer, &uniforms)
+                self.camera.render_camera(display, frame_buffer, &uniforms)
                     .expect("failed to render camera");
             },
 
@@ -271,12 +258,14 @@ impl App where Self: 'static {
             },
 
             uniform! {
-                light_dir: LIGHT_DIRECTION
-                    .lock()
-                    .expect("mutex should be not poisoned")
-                    .as_array(),
+                light_proj: self.light.cam.get_ortho(256.0),
+                light_view: self.light.cam.get_view(),
+                light_dir: self.light.cam.front.as_array(),
+                light_pos: self.light.cam.pos.as_array(),
                 time: self.timer.time(),
                 cam_pos: self.camera.pos.as_array(),
+                proj: self.camera.get_proj(),
+                view: self.camera.get_view(),
             },
         };
 
@@ -290,6 +279,7 @@ impl App where Self: 'static {
     async fn new_events(&mut self) {
         /* Rotating camera */
         self.camera.update(&mut self.input_manager, self.timer.dt_as_f64());
+        self.light.update(self.camera.pos, self.camera.front);
 
         /* Debug visuals switcher */
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::DEBUG_VISUALS_SWITCH) {

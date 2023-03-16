@@ -505,7 +505,8 @@ impl ChunkArray {
                 chunk.try_set_best_fit_lod(lod);
             }
 
-            if chunk.can_render_active_lod() && chunk.is_visible_by_camera(cam) {
+            // FIXME:
+            if chunk.can_render_active_lod()/* && chunk.is_visible_by_camera(cam)*/ {
                 chunk.render(target, &draw_bundle, uniforms, chunk.info.active_lod)?
             }
         }
@@ -516,7 +517,7 @@ impl ChunkArray {
     pub fn drop_all_useless_tasks(
         full_tasks: &mut HashMap<Int3, FullTask>,
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
-        useful_lod: Lod, cur_pos: Int3
+        useful_lod: Lod, cur_pos: Int3,
     ) {
         for lod in Chunk::get_possible_lods() {
             if 2 < lod.abs_diff(useful_lod) {
@@ -528,11 +529,11 @@ impl ChunkArray {
     pub fn drop_task(
         full_tasks: &mut HashMap<Int3, FullTask>,
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
-        pos: Int3, lod: Lod
+        pos: Int3, lod: Lod,
     ) {
         match lod {
-            0 =>   { let _ = full_tasks.remove(&pos); },
-            lod => { let _ = low_tasks.remove(&(pos, lod)); },
+            0 =>   drop(full_tasks.remove(&pos)),
+            lod => drop(low_tasks.remove(&(pos, lod))),
         }
     }
 
@@ -645,7 +646,7 @@ impl ChunkArray {
     pub fn start_task_gen_vertices(
         full_tasks: &mut HashMap<Int3, FullTask>,
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
-        chunk: ChunkRef<'static>, adj: ChunkAdj<'static>, lod: Lod
+        chunk: ChunkRef<'static>, adj: ChunkAdj<'static>, lod: Lod,
     ) {
         let pos = chunk.pos.to_owned();
 
