@@ -51,7 +51,11 @@ float get_light_depth() {
     return linearize_depth(depth, 1.0, 200.0);
 }
 
-bool is_shadow(vec4 frag_pos, float current_depth) {
+float get_shadow_small(vec4 frag_pos, float current_depth) {
+    float shadow_brightness = 0.15;
+
+    frag_pos = floor(frag_pos * 8.0) * 0.125;
+
     vec4 frag_pos_light_space = light_proj * light_view * frag_pos;
     vec3 proj_coords = frag_pos_light_space.xyz / frag_pos_light_space.w;
     proj_coords = proj_coords * 0.5 + 0.5;
@@ -59,16 +63,35 @@ bool is_shadow(vec4 frag_pos, float current_depth) {
     if (proj_coords.x < 0.0 || 1.0 < proj_coords.x ||
         proj_coords.y < 0.0 || 1.0 < proj_coords.y ||
         proj_coords.z < 0.0 || 1.0 < proj_coords.z)
-    { return false; }
+    { return 1.0; }
 
     float closest_depth = texture(light_depth_texture, proj_coords.xy).r;
     closest_depth = linearize_depth(closest_depth, z_near, z_far);
     current_depth = linearize_depth(proj_coords.z, z_near, z_far);
-    bool is_shadow = current_depth - 0.003 > closest_depth;
+    bool is_shadow = current_depth - 0.0003 > closest_depth;
 
     color = vec4(vec3(closest_depth), 1.0);
 
-    return is_shadow;
+    return is_shadow
+        ? shadow_brightness
+        : 1.0;
+}
+
+float get_shadow(vec4 frag_pos, float current_depth) {
+    float nearby[6];
+    nearby[0] = get_shadow_small(frag_pos + vec4( 0.125,  0.0,  0.0, 0.0), current_depth);
+    nearby[1] = get_shadow_small(frag_pos + vec4(-0.125,  0.0,  0.0, 0.0), current_depth);
+    nearby[2] = get_shadow_small(frag_pos + vec4( 0.0,  0.0,  0.125, 0.0), current_depth);
+    nearby[3] = get_shadow_small(frag_pos + vec4( 0.0,  0.0, -0.125, 0.0), current_depth);
+    nearby[4] = get_shadow_small(frag_pos + vec4( 0.0,  0.125,  0.0, 0.0), current_depth);
+    nearby[5] = get_shadow_small(frag_pos + vec4( 0.0, -0.125,  0.0, 0.0), current_depth);
+
+    float shadow_summary = get_shadow_small(frag_pos, current_depth);
+
+    for (uint i = 0; i < 6; ++i)
+        shadow_summary += nearby[i];
+
+    return shadow_summary / 7.0;
 }
 
 void main() {
@@ -97,8 +120,8 @@ void main() {
     float fresnel_multiplier = 0.04;
     float fresnel = pow(1.0 - max(dot(to_cam, normal), 0.0), fresnel_power) * fresnel_multiplier;
 
-    bool is_shadow = is_shadow(vec4(position, 1.0), depth);
+    float shadow = get_shadow(vec4(position, 1.0), depth);
 
-    color = vec4(albedo * brightness + fresnel + specular, 1.0) * (is_shadow ? 0.2 : 1.0);
+    color = vec4(albedo * brightness + fresnel + specular, 1.0) * shadow * 4.0;
     //color = vec4(vec3(light_depth / 160.0), 1.0);
 }

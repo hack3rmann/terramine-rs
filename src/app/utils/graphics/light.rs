@@ -52,10 +52,8 @@ impl DirectionalLight {
             });
     }
 
-    pub fn update(&mut self, cam_pos: vec3, cam_view_dir: vec3) {
-        // FIXME:
-        const Y_PLANE: f32 = 32.0;
-        let interest_pos = cam_view_dir * ((Y_PLANE - cam_pos.y) / cam_view_dir.y) + cam_pos;
+    pub fn update(&mut self, cam_pos: vec3) {
+        let interest_pos = cam_pos;
         
         let height = self.relative_pos.y;
         let absolute_pos = self.cam.front * ((height - interest_pos.y) / self.cam.front.y) + interest_pos;

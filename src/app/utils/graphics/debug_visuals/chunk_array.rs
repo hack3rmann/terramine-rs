@@ -71,7 +71,8 @@ pub mod data {
         unsafe {
             /* Check if uninitialized */
             if SHADER.is_none() {
-                let shader = Shader::new("debug_lines", "debug_lines", facade);
+                let shader = Shader::new("debug_lines", "debug_lines", facade)
+                    .expect("failed to make shader");
                 SHADER.replace(ShaderWrapper(shader));
             }
         }

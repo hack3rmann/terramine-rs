@@ -703,8 +703,10 @@ impl<'s> ChunkDrawBundle<'s> {
         };
         
         /* Create shaders */
-        let full_shader = Shader::new("full_detail", "full_detail", facade);
-        let low_shader  = Shader::new("low_detail", "low_detail", facade);
+        let full_shader = Shader::new("full_detail", "full_detail", facade)
+            .expect("failed to make full detail shader for ChunkDrawBundle");
+        let low_shader  = Shader::new("low_detail", "low_detail", facade)
+            .expect("failed to make low detail shader for ChunkDrawBundle");
 
         ChunkDrawBundle { full_shader, low_shader, draw_params }
     }

@@ -30,7 +30,6 @@ use {
             event::{Event, WindowEvent},
             event_loop::ControlFlow,
         },
-        uniform,
     },
 
     math_linear::prelude::*,
@@ -41,7 +40,7 @@ pub struct App {
     input_manager: InputManager,
     graphics: Graphics,
     camera: DebugVisualizedStatic<Camera>,
-    light: DirectionalLight,
+    lights: [DirectionalLight; 3],
     timer: Timer,
 
     chunk_arr: DebugVisualizedStatic<ChunkArray>,
@@ -76,12 +75,12 @@ impl App where Self: 'static {
             graphics.display.as_ref().get_ref(),
         );
 
-        App {
+        Self {
             chunk_arr,
             chunk_draw_bundle,
             graphics,
             camera,
-            light: Default::default(),
+            lights: Default::default(),
             texture_atlas,
             normal_atlas,
             timer: Timer::new(),
@@ -92,11 +91,11 @@ impl App where Self: 'static {
     /// Runs app. Runs glium's `event_loop`.
     pub fn run(mut self) -> ! {
         // TODO: rewrite `loop { async {} }` into `async { loop {} }`.
-        self.graphics.take_event_loop().run(move |event, _, control_flow| {
-            RUNTIME.block_on(async {
-                self.run_frame_loop(event, control_flow).await
-            })
-        })
+        self.graphics.take_event_loop().run(move |event, _, control_flow|
+            RUNTIME.block_on(
+                self.run_frame_loop(event, control_flow)
+            )
+        )
     }
 
     /// Event loop run function.
@@ -121,7 +120,11 @@ impl App where Self: 'static {
                     let (width, height) = (new_size.width, new_size.height);
                     self.camera.aspect_ratio = height as f32
                                              / width  as f32;
-                    self.light.cam.aspect_ratio = self.camera.aspect_ratio;
+                    
+                    for light in self.lights.iter_mut() {
+                        light.cam.aspect_ratio = 1.0;//self.camera.aspect_ratio;
+                    }
+
                     self.graphics.on_window_resize(UInt2::new(width, height));
                 },
 
@@ -169,7 +172,8 @@ impl App where Self: 'static {
 
         if self.input_manager.keyboard.just_pressed(Key::H) {
             self.chunk_draw_bundle = ChunkDrawBundle::new(self.graphics.display.as_ref().get_ref());
-            self.graphics.refresh_postprocessing_shaders();
+            self.graphics.refresh_postprocessing_shaders()
+                .expect("failed to refresh postprocessing shaders");
 
             // FIXME:
             self.normal_atlas = Texture::from_path("src/image/normal_atlas.png", self.graphics.display.as_ref().get_ref())
@@ -219,27 +223,30 @@ impl App where Self: 'static {
             loading::spawn_info_window(ui, keyboard);
 
             /* Light control window */
-            self.light.spawn_control_window(ui, keyboard);
+            for light in self.lights.iter_mut() {
+                light.spawn_control_window(ui, keyboard);
+            }
 
             self.graphics.imguic.render()
-        };
-
-        let uniforms = uniform! {
-            texture_atlas: self.texture_atlas.with_mips(),
-            normal_atlas:  self.normal_atlas.with_mips(),
-            time: self.timer.time(),
-            proj: self.camera.get_proj(),
-            view: self.camera.get_view(),
-            light_proj: self.light.cam.get_ortho(256.0),
-            light_view: self.light.cam.get_view(),
-            light_dir: self.light.cam.front.as_array(),
-            light_pos: self.light.cam.pos.as_array(),
         };
 
         graphics::draw! {
             self.graphics,
             self.graphics.display.draw(),
-            uniforms,
+            let uniforms = {
+                texture_atlas: self.texture_atlas.with_mips(),
+                normal_atlas:  self.normal_atlas.with_mips(),
+
+                light_proj: self.lights[0].cam.get_ortho(64.0),
+                light_view: self.lights[0].cam.get_view(),
+                light_dir: self.lights[0].cam.front.as_array(),
+                light_pos: self.lights[0].cam.pos.as_array(),
+
+                time: self.timer.time(),
+                cam_pos: self.camera.pos.as_array(),
+                proj: self.camera.get_proj(),
+                view: self.camera.get_view(),
+            },
 
             |&mut frame_buffer| {
                 let display = self.graphics.display.as_ref().get_ref();
@@ -256,17 +263,6 @@ impl App where Self: 'static {
                 self.graphics.imguir.render(&mut target, draw_data)
                     .expect("failed to render imgui");
             },
-
-            uniform! {
-                light_proj: self.light.cam.get_ortho(256.0),
-                light_view: self.light.cam.get_view(),
-                light_dir: self.light.cam.front.as_array(),
-                light_pos: self.light.cam.pos.as_array(),
-                time: self.timer.time(),
-                cam_pos: self.camera.pos.as_array(),
-                proj: self.camera.get_proj(),
-                view: self.camera.get_view(),
-            },
         };
 
         self.timer.update();
@@ -279,7 +275,9 @@ impl App where Self: 'static {
     async fn new_events(&mut self) {
         /* Rotating camera */
         self.camera.update(&mut self.input_manager, self.timer.dt_as_f64());
-        self.light.update(self.camera.pos, self.camera.front);
+        for light in self.lights.iter_mut() {
+            light.update(self.camera.pos);
+        }
 
         /* Debug visuals switcher */
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::DEBUG_VISUALS_SWITCH) {

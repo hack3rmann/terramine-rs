@@ -12,9 +12,11 @@ use {
         cfg,
     },
     super::window::Window,
-    shader::Shader,
+    shader::{Shader, ShaderError},
     vertex_buffer::VertexBuffer,
     glium::{
+        vertex::BufferCreationError as VertexCreationError,
+        index::BufferCreationError as IndexCreationError,
         glutin::{
             event_loop::EventLoop,
             event::{
@@ -27,6 +29,7 @@ use {
             Texture2d,
             DepthTexture2d,
             UncompressedFloatFormat,
+            TextureCreationError,
             MipmapsOption,
             DepthFormat,
         },
@@ -125,6 +128,7 @@ impl Graphics {
 
         let render_textures = Box::pin(
             Self::make_render_textures(display.as_ref().get_ref(), UInt2::from(DEFAULT_SIZES))
+                .map_err(|err| GraphicsError::DeferredTextureCreation(err))?
         );
 
         let quad_draw_resources = {
@@ -133,15 +137,15 @@ impl Graphics {
                 QuadVertex { position: [-1.0,  1.0, 0.0, 1.0], texcoord: [0.0, 1.0] },
                 QuadVertex { position: [ 1.0,  1.0, 0.0, 1.0], texcoord: [1.0, 1.0] },
                 QuadVertex { position: [ 1.0, -1.0, 0.0, 1.0], texcoord: [1.0, 0.0] },
-            ]).expect("failed to create vertex buffer");
+            ]).map_err(|err| GraphicsError::VertexBufferCreation(err))?;
     
             let indices = glium::IndexBuffer::new(
                 display.as_ref().get_ref(),
                 glium::index::PrimitiveType::TrianglesList,
                 &[0_u16, 1, 2, 0, 2, 3],
-            ).expect("failed to create index buffer");
+            ).map_err(|err| GraphicsError::IndexBuffferCreation(err))?;
 
-            let shader = Shader::new("postprocessing", "postprocessing", display.as_ref().get_ref());
+            let shader = Shader::new("postprocessing", "postprocessing", display.as_ref().get_ref())?;
 
             QuadDrawResources { shader, vertices, indices }
         };
@@ -162,52 +166,61 @@ impl Graphics {
         })
     }
 
-    pub fn refresh_postprocessing_shaders(&mut self) {
-        self.quad_draw_resources.shader = Shader::new("postprocessing", "postprocessing", self.display.as_ref().get_ref());
+    pub fn refresh_postprocessing_shaders(&mut self) -> Result<(), ShaderError> {
+        self.quad_draw_resources.shader =
+            Shader::new("postprocessing", "postprocessing", self.display.as_ref().get_ref())?;
+
+        Ok(())
     }
 
-    pub fn make_render_textures(facade: &dyn glium::backend::Facade, window_size: UInt2) -> DeferredTextures {
+    pub fn make_render_textures(
+        facade: &dyn glium::backend::Facade,
+        window_size: UInt2
+    ) -> Result<DeferredTextures, TextureCreationError> {
+        const MSAA_LEVEL: u32 = 1;
+        const SHADOW_QUALITY_LEVEL: u32 = 4;
+
         let albedo = Texture2d::empty_with_format(
             facade,
             UncompressedFloatFormat::F11F11F10,
             MipmapsOption::NoMipmap,
-            window_size.x,
-            window_size.y,
-        ).expect("failed to create albedo texture");
+            window_size.x * MSAA_LEVEL,
+            window_size.y * MSAA_LEVEL,
+        )?;
 
         let normal = Texture2d::empty_with_format(
             facade,
             UncompressedFloatFormat::F32F32F32,
             MipmapsOption::NoMipmap,
-            window_size.x,
-            window_size.y,
-        ).expect("failed to create normal texture");
+            window_size.x * MSAA_LEVEL,
+            window_size.y * MSAA_LEVEL,
+        )?;
 
         let depth = DepthTexture2d::empty_with_format(
             facade,
             DepthFormat::F32,
             MipmapsOption::NoMipmap,
-            window_size.x,
-            window_size.y,
-        ).expect("failed to create depth texture");
+            window_size.x * MSAA_LEVEL,
+            window_size.y * MSAA_LEVEL,
+        )?;
 
         let position = Texture2d::empty_with_format(
             facade,
             UncompressedFloatFormat::F32F32F32,
             MipmapsOption::NoMipmap,
-            window_size.x,
-            window_size.y,
-        ).expect("failed to create position texture");
+            window_size.x * MSAA_LEVEL,
+            window_size.y * MSAA_LEVEL,
+        )?;
 
         let light_depth = DepthTexture2d::empty_with_format(
             facade,
             DepthFormat::F32,
             MipmapsOption::NoMipmap,
-            window_size.x * 2,
-            window_size.y * 2,
-        ).expect("failed to make light depth texture");
+            window_size.x * SHADOW_QUALITY_LEVEL,
+            window_size.y * SHADOW_QUALITY_LEVEL,
+        )?;
 
-        DeferredTextures { depth, albedo, normal, position, light_depth }
+        Ok(DeferredTextures { depth, albedo, normal, position, light_depth })
     }
 
     pub fn make_frame_buffer<'t, 'b>(
@@ -251,6 +264,7 @@ impl Graphics {
         
         self.render_textures.set(
             Self::make_render_textures(display, new_size)
+                .expect("failed to make deferred render textures")
         );
         
         let textures = self.render_textures.as_ref();
@@ -272,6 +286,18 @@ pub enum GraphicsError {
 
     #[error("opengl should be compatible: {0}")]
     IncompatibleOpenGl(#[from] glium::IncompatibleOpenGl),
+
+    #[error("failed to make deferred render textures: {0}")]
+    DeferredTextureCreation(TextureCreationError),
+
+    #[error("failed to create quad vertex buffer: {0}")]
+    VertexBufferCreation(VertexCreationError),
+
+    #[error("failed to create quad index buffer: {0}")]
+    IndexBuffferCreation(IndexCreationError),
+
+    #[error("failed to create shader: {0}")]
+    ShaderCreation(#[from] ShaderError),
 }
 
 #[derive(Deref)]
@@ -292,16 +318,14 @@ macro_rules! draw {
     (
         $graphics:expr,
         $make_target:expr,
-        $uniforms_name:ident,
-        |&mut $fb_name:ident $(:$FrameBufferType:ty|)?| $fb_draw_call:expr,
-        |mut $target_name:ident $(:$FrameType:ty)?| $target_draw_call:expr
-        $(
-            ,
-            uniform! {
+        let $uniforms_name:ident = {
+            $(
                 $($uniform_name:ident : $uniform_def:expr),+
                 $(,)?
-            }
-        )?
+            )?
+        },
+        |&mut $fb_name:ident $(:$FrameBufferType:ty|)?| $fb_draw_call:expr,
+        |mut $target_name:ident $(:$FrameType:ty)?| $target_draw_call:expr
         $(,)?
     ) => {{
         // TODO: check $FrameBufferType is actually a frame buffer.
@@ -313,6 +337,12 @@ macro_rules! draw {
         )?
 
         use $crate::app::utils::cfg::shader::{CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL};
+
+        let $uniforms_name = ::glium::uniform! {
+            $(
+                $($uniform_name : $uniform_def,)+
+            )?
+        };
 
         $graphics.shadow_buffer.clear_all(CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL);
         let result1 = {
@@ -329,7 +359,7 @@ macro_rules! draw {
         };
 
         let mut $target_name = { $make_target };
-            let quad_uniforms = uniform! {
+            let quad_uniforms = ::glium::uniform! {
                 depth_texture:  &$graphics.render_textures.depth,
                 albedo_texture: &$graphics.render_textures.albedo,
                 normal_texture: &$graphics.render_textures.normal,
