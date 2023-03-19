@@ -729,41 +729,42 @@ pub enum FillType {
 unsafe impl ReinterpretAsBytes for FillType {
     fn as_bytes(&self) -> Vec<u8> {
         match self {
-            Self::Default =>
-                vec![0; Self::static_size()],
-
-            Self::AllSame(id) => {
-                let mut result = Vec::with_capacity(Self::static_size());
-                result.push(1);
-                result.append(&mut id.as_bytes());
-
-                assert_eq!(result.capacity(), Self::static_size());
-
-                return result
-            },
+            Self::Default => vec![0],
+            Self::AllSame(id) => std::iter::once(1)
+                .chain(id.as_bytes())
+                .collect(),
         }
     }
 }
 
 unsafe impl ReinterpretFromBytes for FillType {
     fn from_bytes(source: &[u8]) -> Option<Self> {
-        match source[0] {
+        let variant = u8::from_bytes(source)?;
+        match variant {
             0 => Some(Self::Default),
             1 => {
-                let id = Id::from_bytes(&source[1..])?;
+                let id = Id::from_bytes(&source[u8::static_size()..])?;
                 Some(Self::AllSame(id))
             },
-            _ => None
+            _ => None,
+        }
+    }
+}
+
+unsafe impl DynamicSize for FillType {
+    fn dynamic_size(&self) -> usize {
+        u8::static_size() +
+        match self {
+            Self::Default => 0,
+            Self::AllSame(_) => Id::static_size(),
         }
     }
 }
 
 unsafe impl ReinterpretSize for FillType {
-    fn reinterpret_size(&self) -> usize { Self::static_size() }
-}
-
-unsafe impl StaticSize for FillType {
-    fn static_size() -> usize { u8::static_size() + Id::static_size() }
+    fn reinterpret_size(&self) -> usize {
+        self.dynamic_size()
+    }
 }
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]

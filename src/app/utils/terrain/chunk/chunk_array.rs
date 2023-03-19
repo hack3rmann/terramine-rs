@@ -201,7 +201,7 @@ impl ChunkArray {
 
                 let fill_type = FillType::from_bytes(&bytes)
                     .expect("failed to reinterpret bytes");
-                let bytes = &bytes[FillType::static_size()..];
+                let bytes = &bytes[fill_type.dynamic_size()..];
 
                 match fill_type {
                     FillType::Default => {

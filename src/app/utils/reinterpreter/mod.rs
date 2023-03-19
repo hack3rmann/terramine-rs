@@ -2,14 +2,23 @@
  * Provides some `type-byte` and `byte-type` reinterpretations to common types
  */
 
-use std::mem::transmute;
+use std::{mem::transmute, convert::TryInto};
 
-pub unsafe trait Reinterpret: ReinterpretAsBytes + ReinterpretFromBytes + ReinterpretSize { }
-
-unsafe impl<T> Reinterpret for T
-where
-    T: ReinterpretAsBytes + ReinterpretFromBytes + ReinterpretSize,
+pub unsafe trait Reinterpret:
+    ReinterpretAsBytes +
+    ReinterpretFromBytes +
+    ReinterpretSize +
+    StaticSizeHint +
+    DynamicSize
 { }
+
+unsafe impl<T:
+    ReinterpretAsBytes +
+    ReinterpretFromBytes +
+    ReinterpretSize +
+    StaticSizeHint +
+    DynamicSize
+> Reinterpret for T { }
 
 pub unsafe trait ReinterpretAsBytes {
     fn as_bytes(&self) -> Vec<u8>;
@@ -23,12 +32,29 @@ pub unsafe trait ReinterpretSize {
     fn reinterpret_size(&self) -> usize;
 }
 
-pub unsafe trait StaticSize
-where
-    Self: Sized
-{
+pub unsafe trait StaticSize: Sized {
     fn static_size() -> usize {
         std::mem::size_of::<Self>()
+    }
+}
+
+pub unsafe trait StaticSizeHint {
+    fn static_size_hint() -> Option<usize>;
+}
+
+unsafe impl<T: StaticSize> StaticSizeHint for T {
+    fn static_size_hint() -> Option<usize> {
+        Some(Self::static_size())
+    }
+}
+
+pub unsafe trait DynamicSize {
+    fn dynamic_size(&self) -> usize;
+}
+
+unsafe impl<T: StaticSize> DynamicSize for T {
+    fn dynamic_size(&self) -> usize {
+        Self::static_size()
     }
 }
 
@@ -72,10 +98,8 @@ unsafe impl StaticSize for i8 { }
 
 unsafe impl ReinterpretAsBytes for u16 {
     fn as_bytes(&self) -> Vec<u8> {
-        unsafe {
-            let bytes: [u8; 2] = transmute(*self);
-            vec![bytes[0], bytes[1]]
-        }
+        let bytes: [u8; 2] = unsafe { transmute(*self) };
+        bytes.into()
     }
 }
 
@@ -97,10 +121,8 @@ unsafe impl StaticSize for u16 { }
 
 unsafe impl ReinterpretAsBytes for i16 {
     fn as_bytes(&self) -> Vec<u8> {
-        unsafe {
-            let bytes: [u8; 2] = transmute(*self);
-            vec![bytes[0], bytes[1]]
-        }
+        let bytes: [u8; 2] = unsafe { transmute(*self) };
+        bytes.into()
     }
 }
 
@@ -122,10 +144,8 @@ unsafe impl StaticSize for i16 { }
 
 unsafe impl ReinterpretAsBytes for u32 {
     fn as_bytes(&self) -> Vec<u8> {
-        unsafe {
-            let bytes: [u8; 4] = transmute(*self);
-            vec![bytes[0], bytes[1], bytes[2], bytes[3]]
-        }
+        let bytes: [u8; 4] = unsafe { transmute(*self) };
+        bytes.into()
     }
 }
 
@@ -147,10 +167,8 @@ unsafe impl StaticSize for u32 { }
 
 unsafe impl ReinterpretAsBytes for i32 {
     fn as_bytes(&self) -> Vec<u8> {
-        unsafe {
-            let bytes: [u8; 4] = transmute(*self);
-            vec![bytes[0], bytes[1], bytes[2], bytes[3]]
-        }
+        let bytes: [u8; 4] = unsafe { transmute(*self) };
+        bytes.into()
     }
 }
 
@@ -172,10 +190,8 @@ unsafe impl StaticSize for i32 { }
 
 unsafe impl ReinterpretAsBytes for u64 {
     fn as_bytes(&self) -> Vec<u8> {
-        unsafe {
-            let bytes: [u8; 8] = transmute(*self);
-            vec![bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]]
-        }
+        let bytes: [u8; 8] = unsafe { transmute(*self) };
+        bytes.into()
     }
 }
 
@@ -197,10 +213,8 @@ unsafe impl StaticSize for u64 { }
 
 unsafe impl ReinterpretAsBytes for i64 {
     fn as_bytes(&self) -> Vec<u8> {
-        unsafe {
-            let bytes: [u8; 8] = transmute(*self);
-            vec![bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]]
-        }
+        let bytes: [u8; 8] = unsafe { transmute(*self) };
+        bytes.into()
     }
 }
 
@@ -222,11 +236,8 @@ unsafe impl StaticSize for i64 { }
 
 unsafe impl ReinterpretAsBytes for u128 {
     fn as_bytes(&self) -> Vec<u8> {
-        unsafe {
-            let bytes: [u8; 16] = transmute(*self);
-            vec![bytes[0], bytes[1], bytes[2],  bytes[3],  bytes[4],  bytes[5],  bytes[6],  bytes[7],
-                 bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]]
-        }
+        let bytes: [u8; 16] = unsafe { transmute(*self) };
+        bytes.into()
     }
 }
 
@@ -249,11 +260,8 @@ unsafe impl StaticSize for u128 { }
 
 unsafe impl ReinterpretAsBytes for i128 {
     fn as_bytes(&self) -> Vec<u8> {
-        unsafe {
-            let bytes: [u8; 16] = transmute(*self);
-            vec![bytes[0], bytes[1], bytes[2],  bytes[3],  bytes[4],  bytes[5],  bytes[6],  bytes[7],
-                 bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]]
-        }
+        let bytes: [u8; 16] = unsafe { transmute(*self) };
+        bytes.into()
     }
 }
 
@@ -276,10 +284,8 @@ unsafe impl StaticSize for i128 { }
 
 unsafe impl ReinterpretAsBytes for f32 {
     fn as_bytes(&self) -> Vec<u8> {
-        unsafe {
-            let bytes: [u8; 4] = transmute(*self);
-            vec![bytes[0], bytes[1], bytes[2], bytes[3]]
-        }
+        let bytes: [u8; 4] = unsafe { transmute(*self) };
+        bytes.into()
     }
 }
 
@@ -301,10 +307,8 @@ unsafe impl StaticSize for f32 { }
 
 unsafe impl ReinterpretAsBytes for f64 {
     fn as_bytes(&self) -> Vec<u8> {
-        unsafe {
-            let bytes: [u8; 8] = transmute(*self);
-            vec![bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7]]
-        }
+        let bytes: [u8; 8] = unsafe { transmute(*self) };
+        bytes.into()
     }
 }
 
@@ -376,88 +380,214 @@ unsafe impl StaticSize for isize {
 
 
 
-unsafe impl<T: ReinterpretAsBytes + StaticSize> ReinterpretAsBytes for Vec<T> {
+unsafe impl ReinterpretAsBytes for char {
     fn as_bytes(&self) -> Vec<u8> {
-        let mut result = Vec::with_capacity(self.reinterpret_size());
-
-        result.append(&mut self.len().as_bytes());
-
-        for elem in self {
-            result.append(&mut elem.as_bytes())
-        }
-
-        result
+        u32::from(*self).as_bytes()
     }
 }
 
-unsafe impl<T: ReinterpretFromBytes + StaticSize> ReinterpretFromBytes for Vec<T> {
-    fn from_bytes(mut source: &[u8]) -> Option<Self> {
-        let incompatible_len = source.len() < usize::static_size();
-        let bytes_not_divisible = (source.len() - usize::static_size()) % T::static_size() != 0;
-        if incompatible_len || bytes_not_divisible {
-            return None
-        }
+unsafe impl ReinterpretFromBytes for char {
+    fn from_bytes(source: &[u8]) -> Option<Self> {
+        let source = u32::from_bytes(source)?;
+        source.try_into().ok()
+    }
+}
 
+unsafe impl ReinterpretSize for char {
+    fn reinterpret_size(&self) -> usize { Self::static_size() }
+}
+
+unsafe impl StaticSize for char {
+    fn static_size() -> usize {
+        u32::static_size()
+    }
+}
+
+
+
+unsafe impl ReinterpretAsBytes for bool {
+    fn as_bytes(&self) -> Vec<u8> {
+        vec![*self as u8]
+    }
+}
+
+unsafe impl ReinterpretFromBytes for bool {
+    fn from_bytes(source: &[u8]) -> Option<Self> {
+        match source.get(0)? {
+            &0 => Some(false),
+            &1 => Some(true),
+            _ => None,
+        }
+    }
+}
+
+unsafe impl ReinterpretSize for bool {
+    fn reinterpret_size(&self) -> usize {
+        Self::static_size()
+    }
+}
+
+unsafe impl StaticSize for bool {
+    fn static_size() -> usize {
+        u8::static_size()
+    }
+}
+
+
+
+unsafe impl<T: ReinterpretAsBytes> ReinterpretAsBytes for Vec<T> {
+    fn as_bytes(&self) -> Vec<u8> {
+        self.len()
+            .as_bytes()
+            .into_iter()
+            .chain(self.iter()
+                .flat_map(ReinterpretAsBytes::as_bytes)
+            )
+            .collect()
+    }
+}
+
+unsafe impl<T: ReinterpretFromBytes + ReinterpretSize> ReinterpretFromBytes for Vec<T> {
+    fn from_bytes(mut source: &[u8]) -> Option<Self> {
         let len = usize::from_bytes(source)?;
         source = &source[usize::static_size()..];
 
         let mut result = Vec::with_capacity(len);
 
-        for chunk in source.chunks(T::static_size()) {
-            result.push(T::from_bytes(chunk)?)
+        for _ in 0..len {
+            let elem = T::from_bytes(source)?;
+            source = &source[elem.reinterpret_size()..];
+
+            result.push(elem);
         }
 
         Some(result)
     }
 }
 
-unsafe impl<T: StaticSize> ReinterpretSize for Vec<T> {
+unsafe impl<T: ReinterpretSize> ReinterpretSize for Vec<T> {
     fn reinterpret_size(&self) -> usize {
-        usize::static_size() + T::static_size() * self.len()
+        usize::static_size() +
+        self.iter()
+            .map(ReinterpretSize::reinterpret_size)
+            .sum::<usize>()
+    }
+}
+
+unsafe impl<T: StaticSize> DynamicSize for Vec<T> {
+    fn dynamic_size(&self) -> usize {
+        usize::static_size() + self.len() * T::static_size()
     }
 }
 
 
 
-unsafe impl<T: ReinterpretAsBytes + StaticSize + ReinterpretSize> ReinterpretAsBytes for Option<T> {
+unsafe impl<K, V> ReinterpretAsBytes for std::collections::HashMap<K, V>
+where
+    K: ReinterpretAsBytes,
+    V: ReinterpretAsBytes,
+{
+    fn as_bytes(&self) -> Vec<u8> {
+        self.len()
+            .as_bytes()
+            .into_iter()
+            .chain(self.iter()
+                .flat_map(|(key, value)| {
+                    key.as_bytes()
+                        .into_iter()
+                        .chain(value.as_bytes())
+                })
+            )
+            .collect()
+    }
+}
+
+unsafe impl<K, V> ReinterpretFromBytes for std::collections::HashMap<K, V>
+where
+    K: ReinterpretSize + ReinterpretFromBytes + Eq + std::hash::Hash,
+    V: ReinterpretSize + ReinterpretFromBytes,
+{
+    fn from_bytes(mut source: &[u8]) -> Option<Self> {
+        let len = usize::from_bytes(source)?;
+        source = &source[usize::static_size()..];
+
+        let mut result = Self::with_capacity(len);
+
+        while !source.is_empty() {
+            let key = K::from_bytes(source)?;
+            source = &source[key.reinterpret_size()..];
+
+            let value = V::from_bytes(source)?;
+            source = &source[value.reinterpret_size()..];
+
+            result.insert(key, value);
+        }
+
+        Some(result)
+    }
+}
+
+unsafe impl<K: ReinterpretSize, V: ReinterpretSize> ReinterpretSize for std::collections::HashMap<K, V> {
+    fn reinterpret_size(&self) -> usize {
+        usize::static_size() +
+        self.iter()
+            .map(|(key, value)|
+                key.reinterpret_size() + value.reinterpret_size()
+            )
+            .sum::<usize>()
+    }
+}
+
+unsafe impl<K: StaticSize, V: StaticSize> DynamicSize for std::collections::HashMap<K, V> {
+    fn dynamic_size(&self) -> usize {
+        usize::static_size() + self.len() * (K::static_size() + V::static_size())
+    }
+}
+
+
+
+unsafe impl<T: ReinterpretAsBytes> ReinterpretAsBytes for Option<T> {
     fn as_bytes(&self) -> Vec<u8> {
         match self {
-            None => {
-                let mut bytes = Vec::with_capacity(Self::static_size());
-                bytes.push(false as u8);
-                bytes.append(&mut vec![0; Self::static_size() - 1]);
+            None => false.as_bytes(),
 
-                return bytes;
-            },
-            Some(item) => {
-                let mut bytes = Vec::with_capacity(1 + item.reinterpret_size());
-                bytes.push(true as u8);
-                bytes.append(&mut item.as_bytes());
-
-                return bytes;
-            }
+            Some(inner) => true.as_bytes()
+                .into_iter()
+                .chain(inner.as_bytes())
+                .collect(),
         }
     }
 }
 
-unsafe impl<T: ReinterpretFromBytes + StaticSize> ReinterpretFromBytes for Option<T> {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        if source[0] == 0 {
-            Some(None)
-        } else {
-            Some(
-                Some(T::from_bytes(&source[u8::static_size()..Self::static_size()])?)
-            )
+unsafe impl<T: ReinterpretFromBytes> ReinterpretFromBytes for Option<T> {
+    fn from_bytes(mut source: &[u8]) -> Option<Self> {
+        let is_some = bool::from_bytes(source)?;
+        source = &source[bool::static_size()..];
+
+        match is_some {
+            false => Some(None),
+            true  => Some(Some(T::from_bytes(source)?))
         }
     }
 }
 
-unsafe impl<T: StaticSize> ReinterpretSize for Option<T> {
-    fn reinterpret_size(&self) -> usize { Self::static_size() }
+unsafe impl<T: ReinterpretSize> ReinterpretSize for Option<T> {
+    fn reinterpret_size(&self) -> usize {
+        match self {
+            None => bool::static_size(),
+            Some(inner) => bool::static_size() + inner.reinterpret_size(),
+        }
+    }
 }
 
-unsafe impl<T: StaticSize> StaticSize for Option<T> {
-    fn static_size() -> usize { u8::static_size() + T::static_size() }
+unsafe impl<T: DynamicSize> DynamicSize for Option<T> {
+    fn dynamic_size(&self) -> usize {
+        bool::static_size() + 
+        match self {
+            None => 0,
+            Some(inner) => inner.dynamic_size(),
+        }
+    }
 }
 
 
@@ -692,7 +822,6 @@ mod tests {
         let after = Option::<i32>::from_bytes(&before.as_bytes()).unwrap();
 
         assert_eq!(before, after);
-        assert_eq!(before.reinterpret_size(), Option::<i32>::static_size());
         assert_eq!(before.reinterpret_size(), i32::static_size() + 1);
     }
 
@@ -702,7 +831,6 @@ mod tests {
         let after = Option::<u128>::from_bytes(&before.as_bytes()).unwrap();
 
         assert_eq!(before, after);
-        assert_ne!(before.reinterpret_size(), Option::<u128>::static_size());
         assert_eq!(before.reinterpret_size(), 1);
     }
 
@@ -731,7 +859,23 @@ mod tests {
         let before: Vec<Option<i32>> = vec![Some(1), None, None, Some(12), None, Some(7327), Some(42)];
         let after: Vec<Option<i32>> = Vec::from_bytes(&before.as_bytes()).unwrap();
 
-        println!("Before: {:?}\nAfter: {:?}", before, after);
+        assert_eq!(before, after);
+    }
+
+    #[test]
+    fn reinterpret_hash_map() {
+        use std::collections::HashMap;
+
+        let before = HashMap::from([
+            ('a', vec![1, 2, 3, 4, 5]),
+            ('b', vec![6, 7, 8, 9, 1]),
+            ('c', vec![2, 4, 6, 8, 0]),
+            ('d', vec![1, 3, 5, 7, 9]),
+        ]);
+
+        let after = HashMap::<char, Vec<i32>>::from_bytes(
+            &before.as_bytes()
+        ).unwrap();
 
         assert_eq!(before, after);
     }

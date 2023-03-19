@@ -49,21 +49,24 @@ pub enum LoweredVoxel {
 
 unsafe impl ReinterpretAsBytes for Voxel {
     fn as_bytes(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(Self::static_size());
-
-        bytes.append(&mut self.data.id.as_bytes());
-        bytes.append(&mut self.pos.as_bytes());
-
-        return bytes;
+        self.data.id.as_bytes()
+            .into_iter()
+            .chain(self.pos.as_bytes())
+            .collect()
     }
 }
 
 unsafe impl ReinterpretFromBytes for Voxel {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        let id = u32::from_bytes(&source[0..4])?;
-        let pos = Int3::from_bytes(&source[4..16])?;
+    fn from_bytes(mut source: &[u8]) -> Option<Self> {
+        let id = Id::from_bytes(source)?;
+        source = &source[Id::static_size()..];
 
-        Some(Self::new(pos, &VOXEL_DATA[id as usize]))
+        let pos = Int3::from_bytes(source)?;
+
+        Some(Self {
+            pos,
+            data: &VOXEL_DATA[id as usize],
+        })
     }
 }
 
@@ -74,6 +77,8 @@ unsafe impl ReinterpretSize for Voxel {
 unsafe impl StaticSize for Voxel {
     fn static_size() -> usize { 16 }
 }
+
+
 
 #[cfg(test)]
 mod tests {
