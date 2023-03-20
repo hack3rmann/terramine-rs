@@ -41,6 +41,7 @@ pub struct App {
     graphics: Graphics,
     camera: DebugVisualizedStatic<Camera>,
     lights: [DirectionalLight; 3],
+    render_shadows: bool,
     timer: Timer,
 
     chunk_arr: DebugVisualizedStatic<ChunkArray>,
@@ -81,6 +82,7 @@ impl App where Self: 'static {
             graphics,
             camera,
             lights: Default::default(),
+            render_shadows: false,
             texture_atlas,
             normal_atlas,
             timer: Timer::new(),
@@ -170,7 +172,11 @@ impl App where Self: 'static {
             self.camera.grabbes_cursor = !self.camera.grabbes_cursor;
         }
 
-        if self.input_manager.keyboard.just_pressed(Key::H) {
+        if self.input_manager.keyboard.just_pressed(cfg::key_bindings::SWITCH_RENDER_SHADOWS) {
+            self.render_shadows = !self.render_shadows;
+        }
+
+        if self.input_manager.keyboard.just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
             self.chunk_draw_bundle = ChunkDrawBundle::new(self.graphics.display.as_ref().get_ref());
             self.graphics.refresh_postprocessing_shaders()
                 .expect("failed to refresh postprocessing shaders");
@@ -231,6 +237,7 @@ impl App where Self: 'static {
         };
 
         graphics::draw! {
+            render_shadows: self.render_shadows,
             self.graphics,
             self.graphics.display.draw(),
             let uniforms = {
@@ -275,9 +282,7 @@ impl App where Self: 'static {
     async fn new_events(&mut self) {
         /* Rotating camera */
         self.camera.update(&mut self.input_manager, self.timer.dt_as_f64());
-        for light in self.lights.iter_mut() {
-            light.update(self.camera.pos);
-        }
+        self.lights[0].update(self.camera.pos);
 
         /* Debug visuals switcher */
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::DEBUG_VISUALS_SWITCH) {

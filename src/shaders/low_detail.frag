@@ -11,13 +11,33 @@ in float v_time;
 out vec3 out_albedo;
 out vec3 out_normal;
 out vec3 out_position;
-out float out_light_depth;
 
+uniform sampler2D texture_atlas;
+uniform sampler2D normal_atlas;
 uniform vec3 light_pos;
+uniform vec3 light_dir;
+uniform bool is_shadow_pass;
+uniform float time;
+
+void process_shadow();
+void shade_standart();
 
 void main() {
+    if (is_shadow_pass) {
+        process_shadow();
+    } else {
+        shade_standart();
+    }
+}
+
+void shade_standart() {
     out_albedo = v_color;
     out_normal = v_normal;
     out_position = v_position;
-    out_light_depth = length(v_position - light_pos);
+}
+
+void process_shadow() {
+    out_position = v_position;
+    out_albedo = vec3(0.0);
+    out_normal = vec3(0.0);
 }

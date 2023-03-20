@@ -103,4 +103,6 @@ pub mod key_bindings {
     pub const MOUSE_CAPTURE:                  Key = Key::T;
     pub const ENABLE_DRAG_AND_RESIZE_WINDOWS: Key = Key::I;
     pub const ENABLE_PROFILER_WINDOW:         Key = Key::E;
+    pub const SWITCH_RENDER_SHADOWS:          Key = Key::U;
+    pub const RELOAD_RESOURCES:               Key = Key::H;
 }

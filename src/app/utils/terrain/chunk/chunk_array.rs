@@ -223,17 +223,16 @@ impl ChunkArray {
                     .await
                     .expect("failed to send a refresh command");
 
-                let fill_type = FillType::from_bytes(&bytes)
+                let mut reader = ByteReader::new(&bytes);
+                let fill_type: FillType = reader.read()
                     .expect("failed to reinterpret bytes");
-                let mut bytes = &bytes[fill_type.dynamic_size()..];
 
                 match fill_type {
                     FillType::Default => {
-                        let freqs = HashMap::<Id, usize>::from_bytes(bytes)
+                        let freqs: HashMap<Id, usize> = reader.read()
                             .expect("failed to read frequencies map from bytes");
-                        bytes = &bytes[freqs.dynamic_size()..];
 
-                        let bits = <BitVec as ReinterpretFromBytes>::from_bytes(bytes)
+                        let bits: BitVec = reader.read()
                             .expect("failed to read `BitVec` from bytes");
 
                         let (_, tree) = hc::CodeBuilder::from_iter(freqs).finish();
@@ -548,7 +547,7 @@ impl ChunkArray {
             }
 
             // FIXME:
-            if chunk.can_render_active_lod()/* && chunk.is_visible_by_camera(cam)*/ {
+            if chunk.can_render_active_lod() && chunk.is_visible_by_camera(cam) {
                 chunk.render(target, &draw_bundle, uniforms, chunk.info.active_lod)?
             }
         }

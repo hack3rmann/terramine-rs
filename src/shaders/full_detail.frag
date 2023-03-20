@@ -6,6 +6,7 @@ in vec3 v_normal;
 in vec3 v_tangent;
 in vec3 v_bitangent;
 in vec3 v_position;
+in mat3 to_world;
 
 /* Output */
 out vec3 out_albedo;
@@ -47,13 +48,6 @@ void shade_standart() {
         pow(local_normal_exp.y, 1.0 / 0.4545),
         pow(local_normal_exp.z, 1.0 / 0.4545)
     );
-
-    mat3 to_local = mat3(
-        v_bitangent.x, v_tangent.x, v_normal.x,
-        v_bitangent.y, v_tangent.y, v_normal.y,
-        v_bitangent.z, v_tangent.z, v_normal.z
-    );
-    mat3 to_world = inverse(to_local);
 
     if (tex_color.a < 0.001)
         discard;

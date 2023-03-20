@@ -316,6 +316,7 @@ pub use crate::draw;
 #[macro_export]
 macro_rules! draw {
     (
+        render_shadows: $render_shadows:expr,
         $graphics:expr,
         $make_target:expr,
         let $uniforms_name:ident = {
@@ -339,16 +340,21 @@ macro_rules! draw {
         use $crate::app::utils::cfg::shader::{CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL};
 
         let $uniforms_name = ::glium::uniform! {
+            render_shadows: $render_shadows,
             $(
                 $($uniform_name : $uniform_def,)+
             )?
         };
 
-        $graphics.shadow_buffer.clear_all(CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL);
-        let result1 = {
-            let $uniforms_name = $uniforms_name.add("is_shadow_pass", true);
-            let $fb_name = &mut $graphics.shadow_buffer;
-            $fb_draw_call
+        let result1 = if $render_shadows {
+            $graphics.shadow_buffer.clear_all(CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL);
+            {
+                let $uniforms_name = $uniforms_name.add("is_shadow_pass", true);
+                let $fb_name = &mut $graphics.shadow_buffer;
+                $fb_draw_call
+            }
+        } else {
+            ()
         };
         
         $graphics.frame_buffer.clear_all(CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL);
@@ -360,6 +366,7 @@ macro_rules! draw {
 
         let mut $target_name = { $make_target };
             let quad_uniforms = ::glium::uniform! {
+                render_shadows: $render_shadows,
                 depth_texture:  &$graphics.render_textures.depth,
                 albedo_texture: &$graphics.render_textures.albedo,
                 normal_texture: &$graphics.render_textures.normal,

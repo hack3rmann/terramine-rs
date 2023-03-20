@@ -12,6 +12,7 @@ out vec3 v_normal;
 out vec3 v_tangent;
 out vec3 v_bitangent;
 out vec3 v_position;
+out mat3 to_world;
 
 uniform float time;
 uniform mat4 proj;
@@ -48,6 +49,13 @@ void shade_standart() {
     v_tangent = tangent;
     v_bitangent = cross(normal, tangent);
     v_position = position;
+
+    mat3 to_local = mat3(
+        v_bitangent.x, v_tangent.x, v_normal.x,
+        v_bitangent.y, v_tangent.y, v_normal.y,
+        v_bitangent.z, v_tangent.z, v_normal.z
+    );
+    to_world = inverse(to_local);
 
     /* Writing to gl_Position */
     gl_Position = proj * view * vec4(position, 1.0);
