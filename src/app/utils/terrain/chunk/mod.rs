@@ -726,7 +726,9 @@ pub enum FillType {
     AllSame(Id),
 }
 
-unsafe impl ReinterpretAsBytes for FillType {
+
+
+unsafe impl AsBytes for FillType {
     fn as_bytes(&self) -> Vec<u8> {
         match self {
             Self::Default => vec![0],
@@ -737,7 +739,7 @@ unsafe impl ReinterpretAsBytes for FillType {
     }
 }
 
-unsafe impl ReinterpretFromBytes for FillType {
+unsafe impl FromBytes for FillType {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let mut reader = ByteReader::new(source);
         let variant: u8 = reader.read()?;
@@ -762,11 +764,7 @@ unsafe impl DynamicSize for FillType {
     }
 }
 
-unsafe impl ReinterpretSize for FillType {
-    fn reinterpret_size(&self) -> usize {
-        self.dynamic_size()
-    }
-}
+
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum ChunkOption<T> {

@@ -47,7 +47,7 @@ pub enum LoweredVoxel {
 
 
 
-unsafe impl ReinterpretAsBytes for Voxel {
+unsafe impl AsBytes for Voxel {
     fn as_bytes(&self) -> Vec<u8> {
         self.data.id.as_bytes()
             .into_iter()
@@ -56,7 +56,7 @@ unsafe impl ReinterpretAsBytes for Voxel {
     }
 }
 
-unsafe impl ReinterpretFromBytes for Voxel {
+unsafe impl FromBytes for Voxel {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let mut reader = ByteReader::new(source);
         let id: Id = reader.read()?;
@@ -64,10 +64,6 @@ unsafe impl ReinterpretFromBytes for Voxel {
 
         Ok(Self { pos, data: &VOXEL_DATA[id as usize] })
     }
-}
-
-unsafe impl ReinterpretSize for Voxel {
-    fn reinterpret_size(&self) -> usize { Self::static_size() }
 }
 
 unsafe impl StaticSize for Voxel {

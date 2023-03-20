@@ -132,7 +132,7 @@ impl StackHeap {
     }
 
     /// Reads value from stack.
-    pub async fn read_from_stack<T: ReinterpretFromBytes + StaticSize>(&mut self, offset: Offset) -> io::Result<T> {
+    pub async fn read_from_stack<T: FromBytes + StaticSize>(&mut self, offset: Offset) -> io::Result<T> {
         /* Read bytes */
         let mut buffer = vec![0; T::static_size()];
         Self::seek_read(&mut self.stack, &mut buffer, offset).await?;
@@ -161,7 +161,7 @@ impl StackHeap {
 
     /// Reads value from heap of file by offset on stack.
     #[allow(dead_code)]
-    pub async fn heap_read<T: ReinterpretFromBytes + StaticSize>(&mut self, stack_offset: Offset) -> StackHeapResult<T> {
+    pub async fn heap_read<T: FromBytes + StaticSize>(&mut self, stack_offset: Offset) -> StackHeapResult<T> {
         /* Read offset on heap from stack */
         let heap_offset: Offset = self.read_from_stack(stack_offset).await?;
 

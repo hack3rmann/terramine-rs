@@ -13,13 +13,16 @@ use {
     std::{fs, io},
     thiserror::Error,
     glium::ProgramCreationError,
+    derive_deref_rs::Deref,
 };
 
 /// Shader struct is container for shader source code.
-#[derive(Debug)]
+#[derive(Debug, Deref)]
 pub struct Shader {
     pub vertex_src: String,
     pub fragment_src: String,
+
+    #[deref]
     pub program: glium::Program,
 }
 
