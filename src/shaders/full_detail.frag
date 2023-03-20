@@ -41,12 +41,12 @@ void process_shadow() {
 void shade_standart() {
     vec4 tex_color = texture(texture_atlas, v_tex_coords);
 
-    /* load normal from normal map and unexpose it */
-    vec3 local_normal_exp = texture(normal_atlas, v_tex_coords).xyz;
-    vec3 local_normal = vec3(
-        pow(local_normal_exp.x, 1.0 / 0.4545),
-        pow(local_normal_exp.y, 1.0 / 0.4545),
-        pow(local_normal_exp.z, 1.0 / 0.4545)
+    /* load normal from normal map and unexponentiate it */
+    vec3 local_normal = texture(normal_atlas, v_tex_coords).xyz;
+    local_normal = vec3(
+        pow(local_normal.x, 1.0 / (0.4545 * 0.4545)),
+        pow(local_normal.y, 1.0 / (0.4545 * 0.4545)),
+        pow(local_normal.z, 1.0 / (0.4545 * 0.4545))
     );
 
     if (tex_color.a < 0.001)

@@ -124,10 +124,11 @@ impl App where Self: 'static {
                                              / width  as f32;
                     
                     for light in self.lights.iter_mut() {
-                        light.cam.aspect_ratio = 1.0;//self.camera.aspect_ratio;
+                        light.cam.aspect_ratio = 1.0;
                     }
 
-                    self.graphics.on_window_resize(UInt2::new(width, height));
+                    self.graphics.on_window_resize(UInt2::new(width, height))
+                        .expect("failed to update graphics with new window size");
                 },
 
                 _ => (),
@@ -146,7 +147,6 @@ impl App where Self: 'static {
         }
     }
 
-    /// FIXME: truncate large chunk generation task list.
     /// Main events cleared.
     async fn main_events_cleared(&mut self, control_flow: &mut ControlFlow) {
         use glium::glutin::event::VirtualKeyCode as Key;
@@ -229,7 +229,7 @@ impl App where Self: 'static {
             loading::spawn_info_window(ui, keyboard);
 
             /* Light control window */
-            for light in self.lights.iter_mut() {
+            for light in self.lights.iter_mut().take(1) {
                 light.spawn_control_window(ui, keyboard);
             }
 
@@ -244,7 +244,7 @@ impl App where Self: 'static {
                 texture_atlas: self.texture_atlas.with_mips(),
                 normal_atlas:  self.normal_atlas.with_mips(),
 
-                light_proj: self.lights[0].cam.get_ortho(64.0),
+                light_proj: self.lights[0].cam.get_ortho(64.0, 64.0),
                 light_view: self.lights[0].cam.get_view(),
                 light_dir: self.lights[0].cam.front.as_array(),
                 light_pos: self.lights[0].cam.pos.as_array(),
@@ -282,8 +282,9 @@ impl App where Self: 'static {
     async fn new_events(&mut self) {
         /* Rotating camera */
         self.camera.update(&mut self.input_manager, self.timer.dt_as_f64());
-        self.lights[0].update(self.camera.pos);
-
+        for light in self.lights.iter_mut() {
+            light.update(self.camera.pos);
+        }
         /* Debug visuals switcher */
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::DEBUG_VISUALS_SWITCH) {
             debug_visuals::switch_enable();

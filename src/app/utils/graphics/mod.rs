@@ -6,6 +6,7 @@ pub mod mesh;
 pub mod debug_visuals;
 pub mod ui;
 pub mod light;
+pub mod surface;
 
 use {
     crate::app::utils::{
@@ -14,6 +15,7 @@ use {
     super::window::Window,
     shader::{Shader, ShaderError},
     vertex_buffer::VertexBuffer,
+    surface::{Surface, SurfaceError},
     glium::{
         vertex::BufferCreationError as VertexCreationError,
         index::BufferCreationError as IndexCreationError,
@@ -25,15 +27,6 @@ use {
             },
             dpi,
         },
-        texture::{
-            Texture2d,
-            DepthTexture2d,
-            UncompressedFloatFormat,
-            TextureCreationError,
-            MipmapsOption,
-            DepthFormat,
-        },
-        framebuffer::{MultiOutputFrameBuffer, SimpleFrameBuffer},
     },
     std::{path::PathBuf, pin::Pin},
     derive_deref_rs::Deref,
@@ -45,22 +38,13 @@ use {
     },
 };
 
-#[derive(Debug)]
-pub struct DeferredTextures {
-    pub depth: DepthTexture2d,
-    pub albedo: Texture2d,
-    pub normal: Texture2d,
-    pub position: Texture2d,
-    pub light_depth: DepthTexture2d,
-}
-
 #[derive(Clone, Copy, Debug)]
 pub struct QuadVertex {
     pub position: [f32; 4],
     pub texcoord: [f32; 2],
 }
 
-glium::implement_vertex!(QuadVertex, position, texcoord);
+glium::implement_vertex! { QuadVertex, position, texcoord }
 
 #[derive(Debug)]
 pub struct QuadDrawResources {
@@ -83,9 +67,7 @@ pub struct Graphics {
     pub imguir: ImguiRendererWrapper,
 
     /* Deferred rendering stuff */
-    pub render_textures: Pin<Box<DeferredTextures>>,
-    pub frame_buffer: MultiOutputFrameBuffer<'static>,
-    pub shadow_buffer: SimpleFrameBuffer<'static>,
+    pub surface: Surface<'static>,
     pub quad_draw_resources: QuadDrawResources,
 }
 
@@ -126,11 +108,6 @@ impl Graphics {
         /* ImGui glium renderer setup. */
         let imgui_renderer = ImguiRenderer::init(&mut imgui_context, display.as_ref().get_ref())?;
 
-        let render_textures = Box::pin(
-            Self::make_render_textures(display.as_ref().get_ref(), UInt2::from(DEFAULT_SIZES))
-                .map_err(|err| GraphicsError::DeferredTextureCreation(err))?
-        );
-
         let quad_draw_resources = {
             let vertices = glium::VertexBuffer::new(display.as_ref().get_ref(), &[
                 QuadVertex { position: [-1.0, -1.0, 0.0, 1.0], texcoord: [0.0, 0.0] },
@@ -150,8 +127,7 @@ impl Graphics {
             QuadDrawResources { shader, vertices, indices }
         };
 
-        let frame_buffer = Self::make_frame_buffer(render_textures.as_ref(), display.as_ref().get_ref());
-        let shadow_buffer = Self::make_shadow_buffer(render_textures.as_ref(), display.as_ref().get_ref());
+        let surface = Surface::new(display.as_ref().get_ref(), UInt2::from(DEFAULT_SIZES))?;
 
         Ok(Self {
             display,
@@ -159,9 +135,7 @@ impl Graphics {
             imguir: ImguiRendererWrapper(imgui_renderer),
             imguip: winit_platform,
             event_loop: Some(event_loop),
-            render_textures,
-            frame_buffer,
-            shadow_buffer,
+            surface,
             quad_draw_resources,
         })
     }
@@ -173,103 +147,8 @@ impl Graphics {
         Ok(())
     }
 
-    pub fn make_render_textures(
-        facade: &dyn glium::backend::Facade,
-        window_size: UInt2
-    ) -> Result<DeferredTextures, TextureCreationError> {
-        const MSAA_LEVEL: u32 = 1;
-        const SHADOW_QUALITY_LEVEL: u32 = 4;
-
-        let albedo = Texture2d::empty_with_format(
-            facade,
-            UncompressedFloatFormat::F11F11F10,
-            MipmapsOption::NoMipmap,
-            window_size.x * MSAA_LEVEL,
-            window_size.y * MSAA_LEVEL,
-        )?;
-
-        let normal = Texture2d::empty_with_format(
-            facade,
-            UncompressedFloatFormat::F32F32F32,
-            MipmapsOption::NoMipmap,
-            window_size.x * MSAA_LEVEL,
-            window_size.y * MSAA_LEVEL,
-        )?;
-
-        let depth = DepthTexture2d::empty_with_format(
-            facade,
-            DepthFormat::F32,
-            MipmapsOption::NoMipmap,
-            window_size.x * MSAA_LEVEL,
-            window_size.y * MSAA_LEVEL,
-        )?;
-
-        let position = Texture2d::empty_with_format(
-            facade,
-            UncompressedFloatFormat::F32F32F32,
-            MipmapsOption::NoMipmap,
-            window_size.x * MSAA_LEVEL,
-            window_size.y * MSAA_LEVEL,
-        )?;
-
-        let light_depth = DepthTexture2d::empty_with_format(
-            facade,
-            DepthFormat::F32,
-            MipmapsOption::NoMipmap,
-            window_size.x * SHADOW_QUALITY_LEVEL,
-            window_size.y * SHADOW_QUALITY_LEVEL,
-        )?;
-
-        Ok(DeferredTextures { depth, albedo, normal, position, light_depth })
-    }
-
-    pub fn make_frame_buffer<'t, 'b>(
-        render_textures: Pin<&'t DeferredTextures>,
-        facade: &dyn glium::backend::Facade,
-    ) -> MultiOutputFrameBuffer<'b> {
-        let textures = render_textures.get_ref() as *const DeferredTextures;
-
-        // FIXME: add safety arg
-        let textures = unsafe { textures.as_ref().unwrap_unchecked() };
-
-        MultiOutputFrameBuffer::with_depth_buffer(
-            facade,
-            [
-                ("out_albedo",   &textures.albedo),
-                ("out_normal",   &textures.normal),
-                ("out_position", &textures.position),
-            ],
-            &textures.depth,
-        ).expect("failed to create frame buffer")
-    }
-
-    pub fn make_shadow_buffer<'t, 'b>(
-        render_textures: Pin<&'t DeferredTextures>,
-        facade: &dyn glium::backend::Facade,
-    ) -> SimpleFrameBuffer<'b> {
-        
-        let texture = &render_textures.light_depth as *const DepthTexture2d;
-
-        // FIXME: add safety arg
-        let texture = unsafe { texture.as_ref().unwrap_unchecked() };
-
-        SimpleFrameBuffer::depth_only(facade, texture)
-            .expect("failed to create frame buffer")
-    }
-
-    pub fn on_window_resize(&mut self, new_size: UInt2) {
-        let display = self.display.as_ref().get_ref();
-        
-        // TODO: make struct that allows that automatically.
-        
-        self.render_textures.set(
-            Self::make_render_textures(display, new_size)
-                .expect("failed to make deferred render textures")
-        );
-        
-        let textures = self.render_textures.as_ref();
-        self.frame_buffer = Self::make_frame_buffer(textures, display);
-        self.shadow_buffer = Self::make_shadow_buffer(textures, display);
+    pub fn on_window_resize(&mut self, new_size: UInt2) -> Result<(), SurfaceError> {
+        self.surface.on_window_resize(self.display.as_ref().get_ref(), new_size)
     }
 
     /// Gives event_loop and removes it from graphics struct.
@@ -287,9 +166,6 @@ pub enum GraphicsError {
     #[error("opengl should be compatible: {0}")]
     IncompatibleOpenGl(#[from] glium::IncompatibleOpenGl),
 
-    #[error("failed to make deferred render textures: {0}")]
-    DeferredTextureCreation(TextureCreationError),
-
     #[error("failed to create quad vertex buffer: {0}")]
     VertexBufferCreation(VertexCreationError),
 
@@ -298,6 +174,9 @@ pub enum GraphicsError {
 
     #[error("failed to create shader: {0}")]
     ShaderCreation(#[from] ShaderError),
+
+    #[error("failed to create surface: {0}")]
+    Surface(#[from] SurfaceError),
 }
 
 #[derive(Deref)]
@@ -325,18 +204,10 @@ macro_rules! draw {
                 $(,)?
             )?
         },
-        |&mut $fb_name:ident $(:$FrameBufferType:ty|)?| $fb_draw_call:expr,
-        |mut $target_name:ident $(:$FrameType:ty)?| $target_draw_call:expr
+        |&mut $fb_name:ident| $fb_draw_call:expr,
+        |mut $target_name:ident| $target_draw_call:expr
         $(,)?
     ) => {{
-        // TODO: check $FrameBufferType is actually a frame buffer.
-        $(
-            assert!(
-                ::types::is_same::<::glium::Frame, $FrameType>(),
-                "target type should be glium::Frame",
-            );
-        )?
-
         use $crate::app::utils::cfg::shader::{CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL};
 
         let $uniforms_name = ::glium::uniform! {
@@ -347,31 +218,31 @@ macro_rules! draw {
         };
 
         let result1 = if $render_shadows {
-            $graphics.shadow_buffer.clear_all(CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL);
+            $graphics.surface.shadow_buffer.clear_all(CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL);
             {
                 let $uniforms_name = $uniforms_name.add("is_shadow_pass", true);
-                let $fb_name = &mut $graphics.shadow_buffer;
+                let $fb_name = &mut $graphics.surface.shadow_buffer;
                 $fb_draw_call
             }
         } else {
             ()
         };
         
-        $graphics.frame_buffer.clear_all(CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL);
+        $graphics.surface.frame_buffer.clear_all(CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL);
         let result2 = {
             let $uniforms_name = $uniforms_name.add("is_shadow_pass", false);
-            let $fb_name = &mut $graphics.frame_buffer;
+            let $fb_name = &mut $graphics.surface.frame_buffer;
             $fb_draw_call
         };
 
         let mut $target_name = { $make_target };
             let quad_uniforms = ::glium::uniform! {
                 render_shadows: $render_shadows,
-                depth_texture:  &$graphics.render_textures.depth,
-                albedo_texture: &$graphics.render_textures.albedo,
-                normal_texture: &$graphics.render_textures.normal,
-                light_depth_texture: &$graphics.render_textures.light_depth,
-                position_texture: &$graphics.render_textures.position,
+                depth_texture:       &$graphics.surface.get_textures().depth,
+                albedo_texture:      &$graphics.surface.get_textures().albedo,
+                normal_texture:      &$graphics.surface.get_textures().normal,
+                light_depth_texture: &$graphics.surface.get_textures().light_depth,
+                position_texture:    &$graphics.surface.get_textures().position,
                 $(
                     $($uniform_name : $uniform_def,)+
                 )?

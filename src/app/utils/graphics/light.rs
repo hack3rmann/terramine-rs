@@ -15,9 +15,6 @@ pub struct DirectionalLight {
 }
 
 impl DirectionalLight {
-    #[allow(dead_code)]
-    pub fn new() -> Self { Self::default() }
-
     pub fn spawn_control_window(&mut self, ui: &imgui::Ui, keyboard: &Keyboard) {
         use {
             crate::app::utils::graphics::ui::imgui_constructor::make_window,
@@ -36,12 +33,6 @@ impl DirectionalLight {
                 ui.text("Rotation");
                 let h_edited = ui.slider("Horizontal", 0.0, 2.0 * PI, &mut horizontal);
                 let v_edited = ui.slider("Vertical",   0.0, 2.0 * PI, &mut vertical);
-
-                ui.separator();
-                ui.text("Position");
-                ui.slider("X", -128.0, 128.0, &mut self.relative_pos.x);
-                ui.slider("Y", -128.0, 128.0, &mut self.relative_pos.y);
-                ui.slider("Z", -128.0, 128.0, &mut self.relative_pos.z);
 
                 if h_edited || v_edited {
                     ANGLES.0.store(horizontal, Ordering::SeqCst);

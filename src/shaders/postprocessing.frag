@@ -19,11 +19,12 @@ uniform mat4 proj;
 uniform mat4 view;
 uniform bool render_shadows;
 
-// FIXME: make shared constants with the rust's cfg module
-vec3 light_color = vec3(0.4, 0.8, 0.2);
+/// These constants are shared. See cfg module.
 vec4 default_color = vec4(0.01, 0.01, 0.01, 1.0);
 float z_near = 0.5;
 float z_far = 10000.0;
+
+vec3 light_color = vec3(0.4, 0.8, 0.2);
 float shadow_brightness = 0.05;
 
 float linearize_depth(float d, float z_near, float z_far) {
@@ -38,10 +39,11 @@ float get_depth() {
 vec3 get_albedo() {
     vec3 albedo = texture(albedo_texture, v_frag_texcoord).rgb;
     return vec3(
-        pow(albedo.r, 1.0 / 0.4545),
-        pow(albedo.g, 1.0 / 0.4545),
-        pow(albedo.b, 1.0 / 0.4545)
+        pow(albedo.r, 1.0 / (0.4545 * 0.4545)),
+        pow(albedo.g, 1.0 / (0.4545 * 0.4545)),
+        pow(albedo.b, 1.0 / (0.4545 * 0.4545))
     );
+    return albedo;
 }
 
 vec3 get_normal() {

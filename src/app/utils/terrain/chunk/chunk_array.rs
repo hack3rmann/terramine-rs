@@ -1,5 +1,6 @@
 use {
     crate::app::utils::{
+        cfg,
         terrain::{
             chunk::{
                 prelude::*, Id,
@@ -68,7 +69,10 @@ impl Default for ChunkArray {
 
 impl ChunkArray {
     /// Generates new chunks.
+    /// # Panic
+    /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
     pub fn new(sizes: USize3) -> Self {
+        Self::validate_sizes(sizes);
         let (start_pos, end_pos) = Self::pos_bounds(sizes);
 
         let chunks = SpaceIter::new(start_pos..end_pos)
@@ -79,7 +83,10 @@ impl ChunkArray {
     }
 
     /// Constructs [`ChunkArray`] with passed in chunks.
+    /// # Panic
+    /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
     pub fn from_chunks(sizes: USize3, chunks: Vec<Chunk>) -> Self {
+        Self::validate_sizes(sizes);
         let volume = Self::volume(sizes);
         assert_eq!(
             chunks.len(), volume,
@@ -91,7 +98,10 @@ impl ChunkArray {
     }
 
     /// Constructs [`ChunkArray`] with empty chunks.
+    /// # Panic
+    /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
     pub fn new_empty_chunks(sizes: USize3) -> Self {
+        Self::validate_sizes(sizes);
         let (start_pos, end_pos) = Self::pos_bounds(sizes);
 
         let chunks = SpaceIter::new(start_pos..end_pos)
@@ -107,6 +117,17 @@ impl ChunkArray {
             Self::coord_idx_to_pos(sizes, USize3::ZERO),
             Self::coord_idx_to_pos(sizes, sizes),
         )
+    }
+
+    /// Checks that sizes is valid.
+    /// # Panic
+    /// Panics if `sizes.x * sizes.y * sizes.z` > `MAX_CHUNKS`.
+    pub fn validate_sizes(sizes: USize3) {
+        assert!(
+            Self::volume(sizes) <= cfg::terrain::MAX_CHUNKS,
+            "cannot allocate too many chunks: {volume}",
+            volume = Self::volume(sizes),
+        );
     }
 
     /// Gives empty [`ChunkArray`].
@@ -306,7 +327,7 @@ impl ChunkArray {
 
     /// Gives chunk count.
     pub fn volume(arr_sizes: USize3) -> usize {
-        arr_sizes.as_array().iter().product()
+        arr_sizes.x * arr_sizes.y * arr_sizes.z
     }
 
     /// Convertes 3d index into chunk pos.
@@ -546,7 +567,7 @@ impl ChunkArray {
                 chunk.try_set_best_fit_lod(lod);
             }
 
-            // FIXME:
+            // FIXME: make cam vis-check for light.
             if chunk.can_render_active_lod() && chunk.is_visible_by_camera(cam) {
                 chunk.render(target, &draw_bundle, uniforms, chunk.info.active_lod)?
             }
@@ -779,7 +800,8 @@ impl ChunkArray {
     }
 
     pub fn can_start_tasks(&self) -> bool {
-        self.saving_handle.is_none() && self.reading_handle.is_none()
+        self.saving_handle.is_none() && self.reading_handle.is_none() &&
+        self.low_tasks.len() + self.full_tasks.len() <= cfg::terrain::MAX_TASKS
     }
 
     pub fn drop_tasks(&mut self) {
@@ -812,7 +834,6 @@ impl ChunkArray {
 
                 ui.separator();
 
-                // TODO: chunk save/load window
                 ui.text("Generate new");
 
                 static SIZES: Mutex<[i32; 3]> = Mutex::new(Int3::ZERO.as_array());

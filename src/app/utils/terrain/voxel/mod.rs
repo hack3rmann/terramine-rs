@@ -96,22 +96,13 @@ mod tests {
 
 
 pub mod shape {
-    use super::{*, atlas::UV};
-
-    // TODO: move to cfg
-    pub const BACK_NORMAL:   (f32, f32, f32) = ( 1.0,  0.0,  0.0 );
-    pub const FRONT_NORMAL:  (f32, f32, f32) = (-1.0,  0.0,  0.0 );
-    pub const TOP_NORMAL:    (f32, f32, f32) = ( 0.0,  1.0,  0.0 );
-    pub const BOTTOM_NORMAL: (f32, f32, f32) = ( 0.0, -1.0,  0.0 );
-    pub const RIGHT_NORMAL:  (f32, f32, f32) = ( 0.0,  0.0,  1.0 );
-    pub const LEFT_NORMAL:   (f32, f32, f32) = ( 0.0,  0.0, -1.0 );
-
-    pub const BACK_TANGENT:   (f32, f32, f32) = ( 0.0,  1.0,  0.0 );
-    pub const FRONT_TANGENT:  (f32, f32, f32) = BACK_TANGENT;
-    pub const TOP_TANGENT:    (f32, f32, f32) = (-1.0,  0.0,  0.0 );
-    pub const BOTTOM_TANGENT: (f32, f32, f32) = TOP_TANGENT;
-    pub const RIGHT_TANGENT:  (f32, f32, f32) = BACK_TANGENT;
-    pub const LEFT_TANGENT:   (f32, f32, f32) = BACK_TANGENT;
+    use {
+        super::{*, atlas::UV},
+        cfg::terrain::{
+            BACK_NORMAL,  FRONT_NORMAL,  RIGHT_NORMAL,  LEFT_NORMAL,  TOP_NORMAL,  BOTTOM_NORMAL,
+            BACK_TANGENT, FRONT_TANGENT, RIGHT_TANGENT, LEFT_TANGENT, TOP_TANGENT, BOTTOM_TANGENT,
+        },
+    };
 
     #[derive(Debug)]
     pub struct CubeDetailed<'c> {

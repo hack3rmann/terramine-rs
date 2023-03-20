@@ -192,10 +192,12 @@ impl Camera {
             .as_2d_array()
     }
 
-    pub fn get_ortho(&self, scale: f32) -> [[f32; 4]; 4] {
-        // FIXME:
-        mat4::orthographic_lh(scale, self.aspect_ratio * scale, 1.0, 200.0)
-            .as_2d_array()
+    pub fn get_ortho(&self, width: f32, height: f32) -> [[f32; 4]; 4] {
+        mat4::orthographic_lh(
+            width, height,
+            cfg::camera::LIGHT_NEAR_PLANE,
+            cfg::camera::LIGHT_FAR_PLANE,
+        ).as_2d_array()
     }
 
     /// Checks if position is in camera frustum
@@ -232,19 +234,35 @@ impl Camera {
         /* UI building */
         make_window(ui, "Camera", keyboard).build(|| {
             ui.text("Position");
-            ui.text(format!("x: {x:.3}, y: {y:.3}, z: {z:.3}", x = self.get_x(), y = self.get_y(), z = self.get_z()));
+            ui.text(format!(
+                "x: {x:.3}, y: {y:.3}, z: {z:.3}",
+                x = self.get_x(),
+                y = self.get_y(),
+                z = self.get_z(),
+            ));
+
             ui.text("Rotation");
-            ui.text(format!("roll: {roll:.3}, pitch: {pitch:.3}, yaw: {yaw:.3}", roll = self.roll, pitch = self.pitch, yaw = self.yaw));
+            ui.text(format!(
+                "roll: {roll:.3}, pitch: {pitch:.3}, yaw: {yaw:.3}",
+                roll = self.roll,
+                pitch = self.pitch,
+                yaw = self.yaw,
+            ));
+
             ui.separator();
+
             ui.slider_config("Speed", 5.0, 300.0)
                 .display_format("%.1f")
                 .build(&mut self.speed_factor);
+
             ui.slider_config("Speed falloff", 0.0, 1.0)
                 .display_format("%.3f")
                 .build(&mut self.speed_falloff);
+
             ui.slider_config("FOV", 1.0, 180.0)
                 .display_format("%.0f")
                 .build(self.fov.get_degrees_mut());
+
             self.fov.update_from_degrees();
         });
     }
@@ -256,19 +274,27 @@ impl Default for Camera {
             roll: 0.0,
             pitch: 0.0,
             yaw: 0.0,
+
             fov: Angle::from_degrees(cam_def::FOV_IN_DEGREES),
+
             near_plane_dist: cam_def::NEAR_PLANE,
             far_plane_dist: cam_def::FAR_PLANE,
+
             grabbes_cursor: false,
+
             speed_factor: cam_def::SPEED,
             speed_falloff: cam_def::SPEED_FALLOFF,
+
             aspect_ratio: window_def::HEIGHT as f32 / window_def::WIDTH as f32,
-            pos:    vecf!(0, 0, -3),
-            speed:  vec3::zero(),
+
+            pos:      vecf!(0, 0, -3),
+            speed:    vec3::zero(),
+            rotation: Default::default(),
+
             up:     vecf!(0, 1, 0),
             front:  vecf!(0, 0, -1),
             right:  vecf!(1, 0, 0),
-            rotation: Default::default(),
+            
             frustum: None,
         };
         cam.update_vectors();
