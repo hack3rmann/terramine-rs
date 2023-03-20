@@ -57,16 +57,12 @@ unsafe impl ReinterpretAsBytes for Voxel {
 }
 
 unsafe impl ReinterpretFromBytes for Voxel {
-    fn from_bytes(mut source: &[u8]) -> Option<Self> {
-        let id = Id::from_bytes(source)?;
-        source = &source[Id::static_size()..];
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        let mut reader = ByteReader::new(source);
+        let id: Id = reader.read()?;
+        let pos = reader.read()?;
 
-        let pos = Int3::from_bytes(source)?;
-
-        Some(Self {
-            pos,
-            data: &VOXEL_DATA[id as usize],
-        })
+        Ok(Self { pos, data: &VOXEL_DATA[id as usize] })
     }
 }
 

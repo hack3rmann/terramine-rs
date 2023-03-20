@@ -450,12 +450,14 @@ unsafe impl ReinterpretAsBytes for Int3 {
 }
 
 unsafe impl ReinterpretFromBytes for Int3 {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        let x = i32::from_bytes(&source[0..4])?;
-        let y = i32::from_bytes(&source[4..8])?;
-        let z = i32::from_bytes(&source[8..12])?;
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        let mut reader = ByteReader::new(source);
 
-        Some(Self::new(x, y, z))
+        let x = reader.read()?;
+        let y = reader.read()?;
+        let z = reader.read()?;
+
+        Ok(Self::new(x, y, z))
     }
 }
 
@@ -483,13 +485,15 @@ unsafe impl ReinterpretAsBytes for Float4 {
 }
 
 unsafe impl ReinterpretFromBytes for Float4 {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        let x = f32::from_bytes(&source[0..4])?;
-        let y = f32::from_bytes(&source[4..8])?;
-        let z = f32::from_bytes(&source[8..12])?;
-        let w = f32::from_bytes(&source[12..16])?;
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        let mut reader = ByteReader::new(source);
 
-        Some(Self::new(x, y, z, w))
+        let x = reader.read()?;
+        let y = reader.read()?;
+        let z = reader.read()?;
+        let w = reader.read()?;
+
+        Ok(Self::new(x, y, z, w))
     }
 }
 

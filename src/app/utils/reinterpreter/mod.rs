@@ -2,7 +2,10 @@
  * Provides some `type-byte` and `byte-type` reinterpretations to common types
  */
 
-use std::{mem::transmute, convert::TryInto};
+use {
+    std::{mem::transmute, convert::TryInto},
+    thiserror::Error,
+};
 
 pub unsafe trait Reinterpret:
     ReinterpretAsBytes +
@@ -25,7 +28,7 @@ pub unsafe trait ReinterpretAsBytes {
 }
 
 pub unsafe trait ReinterpretFromBytes: Sized {
-    fn from_bytes(source: &[u8]) -> Option<Self>;
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError>;
 }
 
 pub unsafe trait ReinterpretSize {
@@ -60,13 +63,68 @@ unsafe impl<T: StaticSize> DynamicSize for T {
 
 
 
+#[derive(Error, Debug)]
+pub enum ReinterpretError {
+    #[error("not enough bytes, index is {idx} but source length is {len}")]
+    NotEnoughBytes {
+        idx: String,
+        len: usize,
+    },
+
+    #[error("failed to convert types: {0}")]
+    Conversion(String),
+}
+
+fn get<Idx, Out>(source: &[u8], idx: Idx) -> Result<&Out, ReinterpretError>
+where
+    Idx: std::slice::SliceIndex<[u8], Output = Out> + std::fmt::Debug + Clone,
+{
+    Ok(source.get(idx.clone())
+        .ok_or_else(||
+            ReinterpretError::NotEnoughBytes { 
+                idx: format!("{:?}", idx),
+                len: source.len(),
+            }
+        )?
+    )
+}
+
+#[repr(transparent)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub struct ByteReader<'s> {
+    pub bytes: &'s [u8],
+}
+
+impl<'s> ByteReader<'s> {
+    pub fn new(source: &'s [u8]) -> Self {
+        Self { bytes: source }
+    }
+    
+    pub fn read<T>(&mut self) -> Result<T, ReinterpretError>
+    where
+        T: ReinterpretFromBytes + DynamicSize,
+    {
+        let result = T::from_bytes(self.bytes)?;
+        let idx = result.dynamic_size()..;
+        self.bytes = self.bytes.get(idx.clone())
+            .ok_or_else(|| ReinterpretError::NotEnoughBytes {
+                idx: format!("{:?}", idx),
+                len: self.bytes.len()
+            })?;
+
+        Ok(result)
+    }
+}
+
+
+
 unsafe impl ReinterpretAsBytes for u8 {
     fn as_bytes(&self) -> Vec<u8> { vec![*self] }
 }
 
 unsafe impl ReinterpretFromBytes for u8 {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        Some(source[0])
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        Ok(*get(source, 0)?)
     }
 }
 
@@ -83,8 +141,8 @@ unsafe impl ReinterpretAsBytes for i8 {
 }
 
 unsafe impl ReinterpretFromBytes for i8 {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        Some(unsafe { transmute(source[0]) })
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        Ok(unsafe { transmute(*get(source, 0)?) })
     }
 }
 
@@ -104,9 +162,9 @@ unsafe impl ReinterpretAsBytes for u16 {
 }
 
 unsafe impl ReinterpretFromBytes for u16 {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        Some(unsafe {
-            transmute([source[0], source[1]])
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        Ok(unsafe {
+            transmute([*get(source, 0)?, *get(source, 1)?])
         })
     }
 }
@@ -127,9 +185,9 @@ unsafe impl ReinterpretAsBytes for i16 {
 }
 
 unsafe impl ReinterpretFromBytes for i16 {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        Some(unsafe {
-            transmute([source[0], source[1]])
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        Ok(unsafe {
+            transmute([*get(source, 0)?, *get(source, 1)?])
         })
     }
 }
@@ -150,9 +208,9 @@ unsafe impl ReinterpretAsBytes for u32 {
 }
 
 unsafe impl ReinterpretFromBytes for u32 {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        Some(unsafe {
-            transmute([source[0], source[1], source[2], source[3]])
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        Ok(unsafe {
+            transmute([*get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?])
         })
     }
 }
@@ -163,7 +221,7 @@ unsafe impl ReinterpretSize for u32 {
 
 unsafe impl StaticSize for u32 { }
 
-
+// TODO: replace all `source[i]` with `*source.get(i)?`
 
 unsafe impl ReinterpretAsBytes for i32 {
     fn as_bytes(&self) -> Vec<u8> {
@@ -173,9 +231,9 @@ unsafe impl ReinterpretAsBytes for i32 {
 }
 
 unsafe impl ReinterpretFromBytes for i32 {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        Some(unsafe {
-            transmute([source[0], source[1], source[2], source[3]])
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        Ok(unsafe {
+            transmute([*get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?])
         })
     }
 }
@@ -196,9 +254,12 @@ unsafe impl ReinterpretAsBytes for u64 {
 }
 
 unsafe impl ReinterpretFromBytes for u64 {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        Some(unsafe {
-            transmute([source[0], source[1], source[2], source[3], source[4], source[5], source[6], source[7]])
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        Ok(unsafe {
+            transmute([
+                *get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?,
+                *get(source, 4)?, *get(source, 5)?, *get(source, 6)?, *get(source, 7)?,
+            ])
         })
     }
 }
@@ -219,9 +280,12 @@ unsafe impl ReinterpretAsBytes for i64 {
 }
 
 unsafe impl ReinterpretFromBytes for i64 {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        Some(unsafe {
-            transmute([source[0], source[1], source[2], source[3], source[4], source[5], source[6], source[7]])
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        Ok(unsafe {
+            transmute([
+                *get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?,
+                *get(source, 4)?, *get(source, 5)?, *get(source, 6)?, *get(source, 7)?,
+            ])
         })
     }
 }
@@ -242,10 +306,14 @@ unsafe impl ReinterpretAsBytes for u128 {
 }
 
 unsafe impl ReinterpretFromBytes for u128 {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        Some(unsafe {
-            transmute([source[0], source[1], source[2],  source[3],  source[4],  source[5],  source[6],  source[7],
-                       source[8], source[9], source[10], source[11], source[12], source[13], source[14], source[15]])
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        Ok(unsafe {
+            transmute([
+                *get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?,
+                *get(source, 4)?, *get(source, 5)?, *get(source, 6)?, *get(source, 7)?,
+                *get(source, 8)?, *get(source, 9)?, *get(source, 10)?, *get(source, 11)?,
+                *get(source, 12)?, *get(source, 13)?, *get(source, 14)?, *get(source, 15)?,
+            ])
         })
     }
 }
@@ -266,10 +334,14 @@ unsafe impl ReinterpretAsBytes for i128 {
 }
 
 unsafe impl ReinterpretFromBytes for i128 {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        Some(unsafe {
-            transmute([source[0], source[1], source[2],  source[3],  source[4],  source[5],  source[6],  source[7],
-                       source[8], source[9], source[10], source[11], source[12], source[13], source[14], source[15]])
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        Ok(unsafe {
+            transmute([
+                *get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?,
+                *get(source, 4)?, *get(source, 5)?, *get(source, 6)?, *get(source, 7)?,
+                *get(source, 8)?, *get(source, 9)?, *get(source, 10)?, *get(source, 11)?,
+                *get(source, 12)?, *get(source, 13)?, *get(source, 14)?, *get(source, 15)?,
+            ])
         })
     }
 }
@@ -290,9 +362,9 @@ unsafe impl ReinterpretAsBytes for f32 {
 }
 
 unsafe impl ReinterpretFromBytes for f32 {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        Some(unsafe {
-            transmute([source[0], source[1], source[2], source[3]])
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        Ok(unsafe {
+            transmute([*get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?])
         })
     }
 }
@@ -313,9 +385,12 @@ unsafe impl ReinterpretAsBytes for f64 {
 }
 
 unsafe impl ReinterpretFromBytes for f64 {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        Some(unsafe {
-            transmute([source[0], source[1], source[2], source[3], source[4], source[5], source[6], source[7]])
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        Ok(unsafe {
+            transmute([
+                *get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?,
+                *get(source, 4)?, *get(source, 5)?, *get(source, 6)?, *get(source, 7)?,
+            ])
         })
     }
 }
@@ -336,9 +411,12 @@ unsafe impl ReinterpretAsBytes for usize {
 }
 
 unsafe impl ReinterpretFromBytes for usize {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let filled = u64::from_bytes(source)?;
-        Some(filled as Self)
+        filled.try_into()
+            .map_err(|_| ReinterpretError::Conversion(
+                format!("conversion of too large u64 ({filled}) to usize")
+            ))
     }
 }
 
@@ -362,9 +440,12 @@ unsafe impl ReinterpretAsBytes for isize {
 }
 
 unsafe impl ReinterpretFromBytes for isize {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let filled = i64::from_bytes(source)?;
-        Some(filled as Self)
+        filled.try_into()
+            .map_err(|_| ReinterpretError::Conversion(
+                format!("conversion of too large i64 ({filled}) to isize")
+            ))
     }
 }
 
@@ -387,9 +468,12 @@ unsafe impl ReinterpretAsBytes for char {
 }
 
 unsafe impl ReinterpretFromBytes for char {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let source = u32::from_bytes(source)?;
-        source.try_into().ok()
+        source.try_into()
+            .map_err(|_| ReinterpretError::Conversion(
+                format!("conversion of non-UTF-8 u32 ({source}) to char")
+            ))
     }
 }
 
@@ -412,11 +496,16 @@ unsafe impl ReinterpretAsBytes for bool {
 }
 
 unsafe impl ReinterpretFromBytes for bool {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        match source.get(0)? {
-            &0 => Some(false),
-            &1 => Some(true),
-            _ => None,
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        let mut reader = ByteReader::new(source);
+        let byte: u8 = reader.read()?;
+
+        match byte {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(ReinterpretError::Conversion(
+                "conversion of >1 byte to bool".into()
+            ))
         }
     }
 }
@@ -447,21 +536,18 @@ unsafe impl<T: ReinterpretAsBytes> ReinterpretAsBytes for Vec<T> {
     }
 }
 
-unsafe impl<T: ReinterpretFromBytes + ReinterpretSize> ReinterpretFromBytes for Vec<T> {
-    fn from_bytes(mut source: &[u8]) -> Option<Self> {
-        let len = usize::from_bytes(source)?;
-        source = &source[usize::static_size()..];
+unsafe impl<T: ReinterpretFromBytes + DynamicSize> ReinterpretFromBytes for Vec<T> {
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        let mut reader = ByteReader::new(source);
+        let len = reader.read()?;
 
-        let mut result = Vec::with_capacity(len);
+        let mut result = Self::with_capacity(len);
 
         for _ in 0..len {
-            let elem = T::from_bytes(source)?;
-            source = &source[elem.reinterpret_size()..];
-
-            result.push(elem);
+            result.push(reader.read()?)
         }
 
-        Some(result)
+        Ok(result)
     }
 }
 
@@ -477,6 +563,42 @@ unsafe impl<T: ReinterpretSize> ReinterpretSize for Vec<T> {
 unsafe impl<T: StaticSize> DynamicSize for Vec<T> {
     fn dynamic_size(&self) -> usize {
         usize::static_size() + self.len() * T::static_size()
+    }
+}
+
+
+
+unsafe impl ReinterpretAsBytes for bit_vec::BitVec {
+    fn as_bytes(&self) -> Vec<u8> {
+        self.len()
+            .as_bytes()
+            .into_iter()
+            .chain(self.to_bytes())
+            .collect()
+    }
+}
+
+unsafe impl ReinterpretFromBytes for bit_vec::BitVec {
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        let mut reader = ByteReader::new(source);
+        let len = reader.read()?;
+
+        let mut result = Self::from_bytes(reader.bytes);
+        result.truncate(len);
+
+        Ok(result)
+    }
+}
+
+unsafe impl DynamicSize for bit_vec::BitVec {
+    fn dynamic_size(&self) -> usize {
+        self.storage().len() + usize::static_size()
+    }
+}
+
+unsafe impl ReinterpretSize for bit_vec::BitVec {
+    fn reinterpret_size(&self) -> usize {
+        self.dynamic_size()
     }
 }
 
@@ -504,26 +626,23 @@ where
 
 unsafe impl<K, V> ReinterpretFromBytes for std::collections::HashMap<K, V>
 where
-    K: ReinterpretSize + ReinterpretFromBytes + Eq + std::hash::Hash,
-    V: ReinterpretSize + ReinterpretFromBytes,
+    K: DynamicSize + ReinterpretFromBytes + Eq + std::hash::Hash,
+    V: DynamicSize + ReinterpretFromBytes,
 {
-    fn from_bytes(mut source: &[u8]) -> Option<Self> {
-        let len = usize::from_bytes(source)?;
-        source = &source[usize::static_size()..];
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        let mut reader = ByteReader::new(source);
+        let len = reader.read()?;
 
         let mut result = Self::with_capacity(len);
 
-        while !source.is_empty() {
-            let key = K::from_bytes(source)?;
-            source = &source[key.reinterpret_size()..];
-
-            let value = V::from_bytes(source)?;
-            source = &source[value.reinterpret_size()..];
-
-            result.insert(key, value);
+        for _ in 0..len {
+            result.insert(
+                reader.read()?,
+                reader.read()?,
+            );
         }
 
-        Some(result)
+        Ok(result)
     }
 }
 
@@ -559,14 +678,14 @@ unsafe impl<T: ReinterpretAsBytes> ReinterpretAsBytes for Option<T> {
     }
 }
 
-unsafe impl<T: ReinterpretFromBytes> ReinterpretFromBytes for Option<T> {
-    fn from_bytes(mut source: &[u8]) -> Option<Self> {
-        let is_some = bool::from_bytes(source)?;
-        source = &source[bool::static_size()..];
+unsafe impl<T: ReinterpretFromBytes + DynamicSize> ReinterpretFromBytes for Option<T> {
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        let mut reader = ByteReader::new(source);
+        let is_some: bool = reader.read()?;
 
         match is_some {
-            false => Some(None),
-            true  => Some(Some(T::from_bytes(source)?))
+            false => Ok(None),
+            true  => Ok(Some(reader.read()?))
         }
     }
 }
@@ -609,14 +728,14 @@ macro_rules! reinterpret_3d_vectors {
         }
 
         unsafe impl ReinterpretFromBytes for $VecName {
-            fn from_bytes(source: &[u8]) -> Option<Self> {
-                let size = <$Type>::static_size();
+            fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+                let mut reader = ByteReader::new(source);
 
-                let x = <$Type>::from_bytes(&source[0..size])?;
-                let y = <$Type>::from_bytes(&source[size .. 2 * size])?;
-                let z = <$Type>::from_bytes(&source[2 * size .. 3 * size])?;
-
-                Some(Self::new(x, y, z))
+                Ok(Self::new(
+                    reader.read()?,
+                    reader.read()?,
+                    reader.read()?,
+                ))
             }
         }
 
@@ -665,13 +784,15 @@ unsafe impl ReinterpretAsBytes for Float4 {
 }
 
 unsafe impl ReinterpretFromBytes for Float4 {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        let x = f32::from_bytes(&source[0..4])?;
-        let y = f32::from_bytes(&source[4..8])?;
-        let z = f32::from_bytes(&source[8..12])?;
-        let w = f32::from_bytes(&source[12..16])?;
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        let mut reader = ByteReader::new(source);
 
-        Some(Self::new(x, y, z, w))
+        let x: f32 = reader.read()?;
+        let y: f32 = reader.read()?;
+        let z: f32 = reader.read()?;
+        let w: f32 = reader.read()?;
+
+        Ok(Self::new(x, y, z, w))
     }
 }
 
@@ -814,6 +935,17 @@ mod tests {
 
         assert_eq!(before, after);
         assert_eq!(before.reinterpret_size(), usize::static_size() + before.len() * i32::static_size());
+    }
+
+    #[test]
+    fn reinterpret_bit_vec() {
+        use bit_vec::BitVec;
+
+        let mut before = BitVec::from_bytes(&[0b01001010, 0b00011000]);
+        before.truncate(9);
+        let after = <BitVec as ReinterpretFromBytes>::from_bytes(&before.as_bytes()).unwrap();
+
+        assert_eq!(before, after);
     }
 
     #[test]

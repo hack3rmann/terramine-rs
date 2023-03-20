@@ -4,7 +4,8 @@ use {
         graphics::camera::Camera,
     },
     math_linear::prelude::*,
-    std::sync::Mutex,
+    portable_atomic::AtomicF32,
+    std::sync::atomic::Ordering,
 };
 
 #[derive(Debug, Default)]
@@ -25,14 +26,16 @@ impl DirectionalLight {
 
         make_window(ui, "Light", keyboard)
             .build(|| {
-                static ANGLES: Mutex<(f32, f32)> = Mutex::new((0.0, 0.0));
+                static ANGLES: (AtomicF32, AtomicF32) = (AtomicF32::new(0.0), AtomicF32::new(0.0));
 
-                let mut angles = ANGLES.lock()
-                    .expect("mutex should be not poisoned");
+                let (mut horizontal, mut vertical) = (
+                    ANGLES.0.load(Ordering::SeqCst),
+                    ANGLES.1.load(Ordering::SeqCst),
+                );
 
                 ui.text("Rotation");
-                let h_edited = ui.slider("Horizontal", 0.0, 2.0 * PI, &mut angles.0);
-                let v_edited = ui.slider("Vertical",   0.0, 2.0 * PI, &mut angles.1);
+                let h_edited = ui.slider("Horizontal", 0.0, 2.0 * PI, &mut horizontal);
+                let v_edited = ui.slider("Vertical",   0.0, 2.0 * PI, &mut vertical);
 
                 ui.separator();
                 ui.text("Position");
@@ -40,9 +43,10 @@ impl DirectionalLight {
                 ui.slider("Y", -128.0, 128.0, &mut self.relative_pos.y);
                 ui.slider("Z", -128.0, 128.0, &mut self.relative_pos.z);
 
-                let (horizontal, vertical) = *angles;
-
                 if h_edited || v_edited {
+                    ANGLES.0.store(horizontal, Ordering::SeqCst);
+                    ANGLES.1.store(vertical, Ordering::SeqCst);
+
                     self.cam.front = vec3::new(
                         f32::cos(vertical) * f32::cos(horizontal),
                         f32::sin(vertical),

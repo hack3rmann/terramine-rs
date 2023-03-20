@@ -138,6 +138,12 @@ impl ChunkArray {
                 let chunks = &chunks;
                 let loading_sender = loading_sender.clone();
                 async move {
+                    use {
+                        std::iter::FromIterator,
+                        bit_vec::BitVec,
+                        huffman_compress as hc,
+                    };
+
                     let loading_value = i as f32 / (volume - 1) as f32;
 
                     loading_sender.send(Command::Refresh(loading_name, loading_value))
@@ -155,10 +161,22 @@ impl ChunkArray {
                                 "cannot save unknown-sized chunk with size {n_voxels}",
                             );
 
+                            let freqs = Self::count_voxel_frequencies(chunks[i].voxel_ids.iter().copied());
+                            let (book, _) = hc::CodeBuilder::from_iter(
+                                freqs.iter().map(|(&k, &v)| (k, v))
+                            ).finish();
+                            let mut bits = BitVec::new();
+
+                            for &voxel_id in chunks[i].voxel_ids.iter() {
+                                book.encode(&mut bits, &voxel_id)
+                                    .expect(&format!("{voxel_id} should be in the book"));
+                            }
+
                             FillType::Default
                                 .as_bytes()
                                 .into_iter()
-                                .chain(chunks[i].voxel_ids.as_bytes())
+                                .chain(freqs.as_bytes())
+                                .chain(bits.as_bytes())
                                 .collect()
                         }
                     }
@@ -193,6 +211,12 @@ impl ChunkArray {
         let chunks = save.read_pointer_array(ChunkArrSaveType::Array, |i, bytes| {
             let loading = loading.clone();
             async move {
+                use {
+                    std::iter::FromIterator,
+                    bit_vec::BitVec,
+                    huffman_compress as hc,
+                };
+
                 let percent = i as f32 / (Self::volume(sizes) - 1) as f32;
 
                 loading.send(Command::Refresh(loading_name, percent))
@@ -201,18 +225,23 @@ impl ChunkArray {
 
                 let fill_type = FillType::from_bytes(&bytes)
                     .expect("failed to reinterpret bytes");
-                let bytes = &bytes[fill_type.dynamic_size()..];
+                let mut bytes = &bytes[fill_type.dynamic_size()..];
 
                 match fill_type {
                     FillType::Default => {
-                        use voxel::is_id_valid;
+                        let freqs = HashMap::<Id, usize>::from_bytes(bytes)
+                            .expect("failed to read frequencies map from bytes");
+                        bytes = &bytes[freqs.dynamic_size()..];
 
-                        let voxel_ids = Vec::<Id>::from_bytes(bytes)
-                            .expect("failed to reinterpret voxel ids vector from bytes");
+                        let bits = <BitVec as ReinterpretFromBytes>::from_bytes(bytes)
+                            .expect("failed to read `BitVec` from bytes");
+
+                        let (_, tree) = hc::CodeBuilder::from_iter(freqs).finish();
+                        let voxel_ids: Vec<Id> = tree.unbounded_decoder(bits).collect();
 
                         let is_id_valid = voxel_ids.iter()
                             .copied()
-                            .all(is_id_valid);
+                            .all(voxel::is_id_valid);
 
                         assert!(is_id_valid, "Voxel ids in voxel array should be valid");
                         assert_eq!(voxel_ids.len(), Chunk::VOLUME, "There's should be Chunk::VOLUME voxels");
@@ -231,6 +260,19 @@ impl ChunkArray {
             .expect("failed to send a finish command");
 
         Ok((sizes, chunks))
+    }
+
+    fn count_voxel_frequencies(voxel_ids: impl IntoIterator<Item = Id>) -> HashMap<Id, usize> {
+        let mut result = HashMap::new();
+
+        for id in voxel_ids.into_iter() {
+            match result.get_mut(&id) {
+                None => drop(result.insert(id, 1)),
+                Some(freq) => *freq += 1,
+            }
+        }
+
+        result
     }
 
     // FIXME: make unmodifiable flag on chunks.

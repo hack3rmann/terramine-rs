@@ -738,15 +738,16 @@ unsafe impl ReinterpretAsBytes for FillType {
 }
 
 unsafe impl ReinterpretFromBytes for FillType {
-    fn from_bytes(source: &[u8]) -> Option<Self> {
-        let variant = u8::from_bytes(source)?;
+    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+        let mut reader = ByteReader::new(source);
+        let variant: u8 = reader.read()?;
+
         match variant {
-            0 => Some(Self::Default),
-            1 => {
-                let id = Id::from_bytes(&source[u8::static_size()..])?;
-                Some(Self::AllSame(id))
-            },
-            _ => None,
+            0 => Ok(Self::Default),
+            1 => Ok(Self::AllSame(reader.read()?)),
+            _ => Err(ReinterpretError::Conversion(
+                format!("conversion of too large byte ({variant}) to FillType")
+            ))
         }
     }
 }
