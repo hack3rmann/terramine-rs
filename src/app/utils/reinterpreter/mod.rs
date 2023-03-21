@@ -1,8 +1,8 @@
 #![macro_use]
 
-/**
- * Provides some `type-byte` and `byte-type` reinterpretations to common types
- */
+//!
+//! Provides some `type-byte` and `byte-type` reinterpretations to common types
+//!
 
 use {
     std::{mem::transmute, convert::TryInto},

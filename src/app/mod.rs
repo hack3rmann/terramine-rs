@@ -92,7 +92,6 @@ impl App where Self: 'static {
 
     /// Runs app. Runs glium's `event_loop`.
     pub fn run(mut self) -> ! {
-        // TODO: rewrite `loop { async {} }` into `async { loop {} }`.
         self.graphics.take_event_loop().run(move |event, _, control_flow|
             RUNTIME.block_on(
                 self.run_frame_loop(event, control_flow)

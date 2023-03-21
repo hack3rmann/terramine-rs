@@ -48,8 +48,8 @@ pub struct ChunkArray {
 
     pub lod_dist_threashold: f32,
 
-    pub reading_handle: Option<JoinHandle<std::io::Result<(USize3, Vec<(Vec<Id>, FillType)>)>>>,
-    pub saving_handle: Option<JoinHandle<std::io::Result<()>>>,
+    pub reading_handle: Option<JoinHandle<io::Result<(USize3, Vec<(Vec<Id>, FillType)>)>>>,
+    pub saving_handle: Option<JoinHandle<io::Result<()>>>,
 }
 
 impl Default for ChunkArray {
@@ -105,7 +105,7 @@ impl ChunkArray {
         let (start_pos, end_pos) = Self::pos_bounds(sizes);
 
         let chunks = SpaceIter::new(start_pos..end_pos)
-            .map(|pos| Chunk::new_empty(pos))
+            .map(Chunk::new_empty)
             .collect();
 
         Self::from_chunks(sizes, chunks)
@@ -139,7 +139,7 @@ impl ChunkArray {
         sizes: USize3, chunks: Vec<ChunkRef<'static>>, save_name: impl Into<String>, save_path: &'static str,
     ) -> io::Result<()> {
         let is_all_generated = chunks.iter()
-            .all(|chunk| chunk.is_generated());
+            .all(ChunkRef::is_generated);
         assert!(is_all_generated, "Chunks should be generated to save them to file");
 
         let volume = Self::volume(sizes);
