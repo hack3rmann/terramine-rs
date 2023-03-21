@@ -49,18 +49,20 @@ pub enum LoweredVoxel {
 
 unsafe impl AsBytes for Voxel {
     fn as_bytes(&self) -> Vec<u8> {
-        self.data.id.as_bytes()
-            .into_iter()
-            .chain(self.pos.as_bytes())
-            .collect()
+        compose! {
+            self.data.id.as_bytes(),
+            self.pos.as_bytes(),
+        }.collect()
     }
 }
 
 unsafe impl FromBytes for Voxel {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-        let mut reader = ByteReader::new(source);
-        let id: Id = reader.read()?;
-        let pos = reader.read()?;
+        read! {
+            source,
+            let id: Id,
+            let pos,
+        }
 
         Ok(Self { pos, data: &VOXEL_DATA[id as usize] })
     }

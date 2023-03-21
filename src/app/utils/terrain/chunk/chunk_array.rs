@@ -193,12 +193,11 @@ impl ChunkArray {
                                     .expect(&format!("{voxel_id} should be in the book"));
                             }
 
-                            FillType::Default
-                                .as_bytes()
-                                .into_iter()
-                                .chain(freqs.as_bytes())
-                                .chain(bits.as_bytes())
-                                .collect()
+                            compose! {
+                                FillType::Default.as_bytes(),
+                                freqs.as_bytes(),
+                                bits.as_bytes(),
+                            }.collect()
                         }
                     }
                 }

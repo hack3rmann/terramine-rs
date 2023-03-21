@@ -1,3 +1,5 @@
+#![macro_use]
+
 /**
  * Provides some `type-byte` and `byte-type` reinterpretations to common types
  */
@@ -6,6 +8,41 @@ use {
     std::{mem::transmute, convert::TryInto},
     thiserror::Error,
 };
+
+/// Composes input list of `IntoIterator`s with `Item = u8`
+/// into one large iterator by sequetially calling `.chain()`,
+/// producing new `Iterator` with `Item = u8`.
+#[macro_export]
+macro_rules! compose {
+    () => {
+        Vec::<u8>::new()
+            .into_iter()
+    };
+
+    ($once:expr $(,)?) => {
+        $once.into_iter()
+    };
+
+    ($first:expr, $($next:expr),+ $(,)?) => {
+        $first
+            .into_iter()
+            $(
+                .chain($next)
+            )+
+    };
+}
+
+#[macro_export]
+macro_rules! read {
+    ($bytes:expr, $(let $var_name:ident $(:$VarType:ty)?),* $(,)?) => {
+        let mut reader = ByteReader::new($bytes);
+        $(
+            let $var_name $(:$VarType)? = reader.read()?;
+        )*
+    };
+}
+
+pub use crate::{compose, read};
 
 pub unsafe trait Reinterpret:
     AsBytes +
@@ -454,13 +491,11 @@ unsafe impl StaticSize for bool {
 
 unsafe impl<T: AsBytes> AsBytes for Vec<T> {
     fn as_bytes(&self) -> Vec<u8> {
-        self.len()
-            .as_bytes()
-            .into_iter()
-            .chain(self.iter()
-                .flat_map(AsBytes::as_bytes)
-            )
-            .collect()
+        compose! {
+            self.len().as_bytes(),
+            self.iter()
+                .flat_map(AsBytes::as_bytes),
+        }.collect()
     }
 }
 
@@ -489,11 +524,10 @@ unsafe impl<T: StaticSize> DynamicSize for Vec<T> {
 
 unsafe impl AsBytes for bit_vec::BitVec {
     fn as_bytes(&self) -> Vec<u8> {
-        self.len()
-            .as_bytes()
-            .into_iter()
-            .chain(self.to_bytes())
-            .collect()
+        compose! {
+            self.len().as_bytes(),
+            self.to_bytes(),
+        }.collect()
     }
 }
 
@@ -523,17 +557,14 @@ where
     V: AsBytes,
 {
     fn as_bytes(&self) -> Vec<u8> {
-        self.len()
-            .as_bytes()
-            .into_iter()
-            .chain(self.iter()
-                .flat_map(|(key, value)| {
-                    key.as_bytes()
-                        .into_iter()
-                        .chain(value.as_bytes())
+        compose! {
+            self.len().as_bytes(),
+            self.iter()
+                .flat_map(|(key, value)| compose! {
+                    key.as_bytes(),
+                    value.as_bytes(),
                 })
-            )
-            .collect()
+        }.collect()
     }
 }
 
@@ -572,10 +603,10 @@ unsafe impl<T: AsBytes> AsBytes for Option<T> {
         match self {
             None => false.as_bytes(),
 
-            Some(inner) => true.as_bytes()
-                .into_iter()
-                .chain(inner.as_bytes())
-                .collect(),
+            Some(inner) => compose! {
+                true.as_bytes(),
+                inner.as_bytes(),
+            }.collect(),
         }
     }
 }
@@ -610,13 +641,11 @@ macro_rules! reinterpret_3d_vectors {
     ($($VecName:ident = ($x:ident, $y:ident, $z:ident): $Type:ty);* $(;)?) => {$(
         unsafe impl AsBytes for $VecName {
             fn as_bytes(&self) -> Vec<u8> {
-                let mut out = Vec::with_capacity(Self::static_size());
-
-                out.append(&mut self.$x.as_bytes());
-                out.append(&mut self.$y.as_bytes());
-                out.append(&mut self.$z.as_bytes());
-
-                return out;
+                compose! {
+                    self.$x.as_bytes(),
+                    self.$y.as_bytes(),
+                    self.$z.as_bytes(),
+                }.collect()
             }
         }
 
@@ -661,14 +690,12 @@ reinterpret_3d_vectors! {
 
 unsafe impl AsBytes for Float4 {
     fn as_bytes(&self) -> Vec<u8> {
-        let mut out = Vec::with_capacity(Self::static_size());
-
-        out.append(&mut self.x().as_bytes());
-        out.append(&mut self.y().as_bytes());
-        out.append(&mut self.z().as_bytes());
-        out.append(&mut self.w().as_bytes());
-
-        return out;
+        compose! {
+            self.x().as_bytes(),
+            self.y().as_bytes(),
+            self.z().as_bytes(),
+            self.w().as_bytes(),
+        }.collect()
     }
 }
 

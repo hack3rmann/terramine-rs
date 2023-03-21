@@ -732,9 +732,10 @@ unsafe impl AsBytes for FillType {
     fn as_bytes(&self) -> Vec<u8> {
         match self {
             Self::Default => vec![0],
-            Self::AllSame(id) => std::iter::once(1)
-                .chain(id.as_bytes())
-                .collect(),
+            Self::AllSame(id) => compose! {
+                std::iter::once(1),
+                id.as_bytes(),
+            }.collect()
         }
     }
 }
