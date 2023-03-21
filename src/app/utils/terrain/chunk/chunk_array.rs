@@ -515,8 +515,11 @@ impl ChunkArray {
             .collect();
 
         chunks.sort_by(|((lhs, _), _), ((rhs, _), _)| {
-            let l_dist = vec3::len(cam.pos - lhs.pos.into());
-            let r_dist = vec3::len(cam.pos - rhs.pos.into());
+            let l_pos = Chunk::global_pos(lhs.pos);
+            let r_pos = Chunk::global_pos(rhs.pos);
+
+            let l_dist = vec3::sqr(cam.pos - l_pos.into());
+            let r_dist = vec3::sqr(cam.pos - r_pos.into());
 
             l_dist.partial_cmp(&r_dist)
                 .expect("distance to chunk should be a number")
