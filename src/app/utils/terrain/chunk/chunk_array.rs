@@ -495,6 +495,28 @@ impl ChunkArray {
         }
     }
 
+    fn get_targets_sorted<'r>(
+        chunks: &mut [Chunk], sizes: USize3, cam_pos: vec3, lod_threashold: f32,
+    ) -> Vec<(&'r mut Chunk, ChunkAdj<'r>, u32)> {
+        let mut result: Vec<_> = Self::chunks_with_adj_mut_inner(chunks, sizes)
+            .zip(Self::desired_lod_iter(sizes, cam_pos, lod_threashold))
+            .map(|((a, b), c)| (a, b, c))
+            .collect();
+
+        result.sort_by(|(lhs, _, _), (rhs, _, _)| {
+            let l_pos = Chunk::global_pos(lhs.pos);
+            let r_pos = Chunk::global_pos(rhs.pos);
+
+            let l_dist = vec3::sqr(cam_pos - l_pos.into());
+            let r_dist = vec3::sqr(cam_pos - r_pos.into());
+
+            l_dist.partial_cmp(&r_dist)
+                .expect("distance to chunk should be a number")
+        });
+
+        result
+    }
+
     /// Renders all chunks. If chunk should have another LOD then it will start async
     /// task that generates desired mesh. If task is incomplete then it will render active LOD
     /// of concrete chunk. If it can't then it will do nothing.
@@ -510,22 +532,9 @@ impl ChunkArray {
 
         self.try_finish_all_tasks(facade).await;
 
-        let mut chunks: Vec<_> = Self::chunks_with_adj_mut_inner(&mut self.chunks, sizes)
-            .zip(Self::desired_lod_iter(sizes, cam.pos, self.lod_dist_threashold))
-            .collect();
+        let chunks = Self::get_targets_sorted(&mut self.chunks, sizes, cam.pos, self.lod_dist_threashold);
 
-        chunks.sort_by(|((lhs, _), _), ((rhs, _), _)| {
-            let l_pos = Chunk::global_pos(lhs.pos);
-            let r_pos = Chunk::global_pos(rhs.pos);
-
-            let l_dist = vec3::sqr(cam.pos - l_pos.into());
-            let r_dist = vec3::sqr(cam.pos - r_pos.into());
-
-            l_dist.partial_cmp(&r_dist)
-                .expect("distance to chunk should be a number")
-        });
-
-        for ((chunk, chunk_adj), lod) in chunks {
+        for (chunk, chunk_adj, lod) in chunks {
             if !chunk.is_generated() {
                 if Self::is_voxels_gen_task_running(&self.voxels_gen_tasks, chunk.pos) {
                     Self::try_finish_voxels_gen_task(&mut self.voxels_gen_tasks, chunk.pos, chunk).await
@@ -535,13 +544,17 @@ impl ChunkArray {
                     Self::start_task_gen_voxels(&mut self.voxels_gen_tasks, chunk.pos);
                     continue;
                 }
+
+                else {
+                    continue;
+                }
             }
 
             let can_set_new_lod =
+                chunk.get_available_lods().contains(&lod) ||
                 Self::is_mesh_task_running(&self.full_tasks, &self.low_tasks, chunk.pos, lod) &&
                 Self::try_finish_mesh_task(&mut self.full_tasks, &mut self.low_tasks,
-                    chunk.pos, lod, chunk, facade).await.is_ok() ||
-                chunk.get_available_lods().contains(&lod);
+                    chunk.pos, lod, chunk, facade).await.is_ok();
 
             if can_set_new_lod {
                 chunk.set_active_lod(lod)
@@ -549,9 +562,9 @@ impl ChunkArray {
             
             else if self.can_start_tasks() {
                 // * Safety:
-                // * Safe because this function borrows chunk to mutate its meshes
-                // * but later it borrows for set new LOD value so mut references
-                // * are not aliasing. We can make reference static due to
+                // * Safe, because this function borrows chunk to mutate its meshes,
+                // * but later it borrows to set new LOD value, so mut references
+                // * are not aliasing. We can make reference `'static` due to
                 // * `Self`'s lifetime is `'static`.
                 unsafe {
                     Self::start_task_gen_vertices(
