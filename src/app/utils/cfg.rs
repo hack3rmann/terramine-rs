@@ -17,10 +17,14 @@ pub mod save {
 pub mod camera {
     pub const FRUSTUM_EDGE_LINE_LENGTH: f32 = 10_000.0;
     pub const VERTICAL_LOOK_EPS: f64 = 0.001;
+    pub const LIGHT_NEAR_PLANE: f32 = 1.0;
+    pub const LIGHT_FAR_PLANE:  f32 = 200.0;
 
     pub mod default {
+        /// These constants are shared with shader file. See `postprocessing.frag`.
         pub const NEAR_PLANE:     f32 = 0.5;
         pub const FAR_PLANE:      f32 = 10_000.0;
+
         pub const SPEED:	      f64 = 10.0;
         pub const SPEED_FALLOFF:  f32 = 0.88;
         pub const FOV_IN_DEGREES: f32 = 60.0;
@@ -47,6 +51,23 @@ pub mod terrain {
     pub const CHUNK_SIZE: usize = 64;
     pub const VOXEL_SIZE: f32   = 1.0;
 
+    pub const BACK_NORMAL:   (f32, f32, f32) = ( 1.0,  0.0,  0.0 );
+    pub const FRONT_NORMAL:  (f32, f32, f32) = (-1.0,  0.0,  0.0 );
+    pub const TOP_NORMAL:    (f32, f32, f32) = ( 0.0,  1.0,  0.0 );
+    pub const BOTTOM_NORMAL: (f32, f32, f32) = ( 0.0, -1.0,  0.0 );
+    pub const RIGHT_NORMAL:  (f32, f32, f32) = ( 0.0,  0.0,  1.0 );
+    pub const LEFT_NORMAL:   (f32, f32, f32) = ( 0.0,  0.0, -1.0 );
+
+    pub const BACK_TANGENT:   (f32, f32, f32) = ( 0.0,  1.0,  0.0 );
+    pub const FRONT_TANGENT:  (f32, f32, f32) = BACK_TANGENT;
+    pub const TOP_TANGENT:    (f32, f32, f32) = (-1.0,  0.0,  0.0 );
+    pub const BOTTOM_TANGENT: (f32, f32, f32) = TOP_TANGENT;
+    pub const RIGHT_TANGENT:  (f32, f32, f32) = BACK_TANGENT;
+    pub const LEFT_TANGENT:   (f32, f32, f32) = BACK_TANGENT;
+
+    pub const MAX_TASKS: usize = 10_000;
+    pub const MAX_CHUNKS: usize = 100_000;
+
     pub mod voxel_types {
         use {
             crate::app::utils::terrain::voxel::voxel_data::{VoxelData, TextureSides},
@@ -64,6 +85,14 @@ pub mod terrain {
         use math_linear::prelude::Int3;
         pub const WORLD_SIZES_IN_CHUNKS: Int3 = veci!(7, 1, 7);
     }
+
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        fn chunk_size_is_power_of_two() {
+            assert!(super::CHUNK_SIZE.is_power_of_two());
+        }
+    }
 }
 
 pub mod texture {
@@ -79,9 +108,11 @@ pub mod shader {
     pub const DIRECTORY: &str = "src/shaders/";
     pub const VERTEX_FILE_EXTENTION:   &str = "vert";
     pub const FRAGMENT_FILE_EXTENTION: &str = "frag";
-    pub const CLEAR_COLOR: (f32, f32, f32, f32) = (0.08, 0.08, 0.08, 1.0);
     pub const CLEAR_DEPTH:   f32 = 1.0;
     pub const CLEAR_STENCIL: i32 = 0;
+    
+    /// That constant is shared with shader. See `postprocessing.frag`.
+    pub const CLEAR_COLOR: (f32, f32, f32, f32) = (0.01, 0.01, 0.01, 1.0);
 
     pub mod voxel {
         pub mod light {
@@ -103,4 +134,6 @@ pub mod key_bindings {
     pub const MOUSE_CAPTURE:                  Key = Key::T;
     pub const ENABLE_DRAG_AND_RESIZE_WINDOWS: Key = Key::I;
     pub const ENABLE_PROFILER_WINDOW:         Key = Key::E;
+    pub const SWITCH_RENDER_SHADOWS:          Key = Key::U;
+    pub const RELOAD_RESOURCES:               Key = Key::H;
 }

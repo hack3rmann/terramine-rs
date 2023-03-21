@@ -6,8 +6,8 @@ use {
     crate::app::utils::{
         cfg::save::META_FILE_NAME,
         reinterpreter::{
-            ReinterpretAsBytes,
-            ReinterpretFromBytes,
+            AsBytes,
+            FromBytes,
             StaticSize
         },
     },
@@ -149,7 +149,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     }
 
     /// Writes enum-named value to stack file.
-    pub async fn write<T: ReinterpretAsBytes + StaticSize>(mut self, value: &T, enumerator: E) -> Self {
+    pub async fn write<T: AsBytes + StaticSize>(mut self, value: &T, enumerator: E) -> Self {
         /* Write value to file stack */
         let bytes = value.as_bytes();
         let offset = self.file.push(&bytes).await
@@ -164,7 +164,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
     /// Assigns enum-named value to value on stack.
     #[allow(dead_code)]
-    pub async fn assign<T: ReinterpretAsBytes + StaticSize>(&mut self, value: &T, enumerator: E) {
+    pub async fn assign<T: AsBytes + StaticSize>(&mut self, value: &T, enumerator: E) {
         /* Get bytes and offset */
         let bytes = value.as_bytes();
         let offset = self.load_offset(enumerator);
@@ -176,7 +176,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     }
 
     /// Reads enum-named value from stack file.
-    pub async fn read<T: ReinterpretFromBytes + StaticSize>(&mut self, enumerator: E) -> T {
+    pub async fn read<T: FromBytes + StaticSize>(&mut self, enumerator: E) -> T {
         self.file.read_from_stack(self.load_offset(enumerator))
             .await
             .expect("failed to read from stack")
@@ -186,7 +186,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     #[allow(dead_code)]
     pub async fn array<'t, T, F>(mut self, length: usize, enumerator: E, mut elem: F) -> Self
     where
-        T: ReinterpretAsBytes + StaticSize + 't,
+        T: AsBytes + StaticSize + 't,
         F: FnMut(usize) -> &'t T,
     {
         /* Write the array length and get offset */
@@ -214,7 +214,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     #[allow(dead_code)]
     pub async fn assign_array<'t, T: 't, F>(&mut self, enumerator: E, mut elem: F)
     where
-        T: ReinterpretAsBytes + StaticSize,
+        T: AsBytes + StaticSize,
         F: FnMut(usize) -> &'t T,
     {
         /* Load offset */
@@ -241,7 +241,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     #[allow(dead_code)]
     pub async fn assign_array_element<T>(&mut self, enumerator: E, elem: T, idx: usize) -> SaveResult<()>
     where
-        T: ReinterpretAsBytes + StaticSize,
+        T: AsBytes + StaticSize,
     {
         /* Load offset */
         let offset = self.load_offset(enumerator);
@@ -269,7 +269,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
     /// Reads enum-named array of values from stack file.
     #[allow(dead_code)]
-    pub async fn read_array<T: ReinterpretFromBytes + StaticSize>(&mut self, enumerator: E) -> Vec<T> {
+    pub async fn read_array<T: FromBytes + StaticSize>(&mut self, enumerator: E) -> Vec<T> {
         /* Getting offset of array length */
         let offset = self.load_offset(enumerator);
 
@@ -305,7 +305,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     #[allow(dead_code)]
     pub async fn read_array_element<T>(&mut self, enumerator: E, idx: usize) -> SaveResult<T>
     where
-        T: ReinterpretFromBytes + StaticSize,
+        T: FromBytes + StaticSize,
     {
         /* Load offset */
         let offset = self.load_offset(enumerator);

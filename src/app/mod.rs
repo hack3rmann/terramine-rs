@@ -7,6 +7,7 @@ use {
         concurrency::loading,
         user_io::InputManager,
         graphics::{
+            light::DirectionalLight,
             self,
             Graphics,
             camera::Camera,
@@ -24,31 +25,34 @@ use {
 
     /* Glium includes */
     glium::{
+        Surface,
         glutin::{
             event::{Event, WindowEvent},
             event_loop::ControlFlow,
         },
-        Surface,
-        uniform,
     },
+
+    math_linear::prelude::*,
 };
 
 /// Struct that handles everything.
-#[derive(Debug)]
 pub struct App {
     input_manager: InputManager,
     graphics: Graphics,
     camera: DebugVisualizedStatic<Camera>,
+    lights: [DirectionalLight; 3],
+    render_shadows: bool,
     timer: Timer,
 
     chunk_arr: DebugVisualizedStatic<ChunkArray>,
     chunk_draw_bundle: ChunkDrawBundle<'static>,
 
     texture_atlas: Texture,
+    normal_atlas: Texture,
 }
 
 impl App where Self: 'static {
-    /// Constructs app struct.
+    /// Constructs [`App`].
     pub fn new() -> Self {
         let graphics = Graphics::new()
             .expect("failed to create graphics");
@@ -57,42 +61,48 @@ impl App where Self: 'static {
             Camera::new()
                 .with_position(0.0, 16.0, 2.0)
                 .with_rotation(0.0, 0.0, std::f64::consts::PI),
-            &graphics.display,
+            graphics.display.as_ref().get_ref(),
         );
-    
-        let texture_atlas = Texture::from_path("src/image/texture_atlas.png", &graphics.display)
+
+        let texture_atlas = Texture::from_path("src/image/texture_atlas.png", graphics.display.as_ref().get_ref())
             .expect("path should be valid and file is readable");
 
-        let chunk_draw_bundle = ChunkDrawBundle::new(&graphics.display);
+        let normal_atlas = Texture::from_path("src/image/normal_atlas.png", graphics.display.as_ref().get_ref())
+            .expect("path should be valid and file is readable");
+
+        let chunk_draw_bundle = ChunkDrawBundle::new(graphics.display.as_ref().get_ref());
         let chunk_arr = DebugVisualizedStatic::new_chunk_array(
             ChunkArray::new_empty(),
-            &graphics.display,
+            graphics.display.as_ref().get_ref(),
         );
 
-        App {
+        Self {
             chunk_arr,
             chunk_draw_bundle,
             graphics,
             camera,
+            lights: Default::default(),
+            render_shadows: false,
             texture_atlas,
+            normal_atlas,
             timer: Timer::new(),
             input_manager: InputManager::new(),
         }
     }
 
     /// Runs app. Runs glium's `event_loop`.
-    pub fn run(mut self) {
+    pub fn run(mut self) -> ! {
         // TODO: rewrite `loop { async {} }` into `async { loop {} }`.
-        self.graphics.take_event_loop().run(move |event, _, control_flow| {
-            RUNTIME.block_on(async {
-                self.run_frame_loop(event, control_flow).await
-            })
-        });
+        self.graphics.take_event_loop().run(move |event, _, control_flow|
+            RUNTIME.block_on(
+                self.run_frame_loop(event, control_flow)
+            )
+        )
     }
 
     /// Event loop run function.
     pub async fn run_frame_loop(&mut self, event: Event<'_, ()>, control_flow: &mut ControlFlow) {
-        self.graphics.imguiw.handle_event(
+        self.graphics.imguip.handle_event(
             self.graphics.imguic.io_mut(),
             self.graphics.display.gl_window().window(),
             &event
@@ -109,8 +119,16 @@ impl App where Self: 'static {
                 },
 
                 WindowEvent::Resized(new_size) => {
-                    self.camera.aspect_ratio = new_size.height as f32
-                                             / new_size.width  as f32;
+                    let (width, height) = (new_size.width, new_size.height);
+                    self.camera.aspect_ratio = height as f32
+                                             / width  as f32;
+                    
+                    for light in self.lights.iter_mut() {
+                        light.cam.aspect_ratio = 1.0;
+                    }
+
+                    self.graphics.on_window_resize(UInt2::new(width, height))
+                        .expect("failed to update graphics with new window size");
                 },
 
                 _ => (),
@@ -131,13 +149,16 @@ impl App where Self: 'static {
 
     /// Main events cleared.
     async fn main_events_cleared(&mut self, control_flow: &mut ControlFlow) {
+        use glium::glutin::event::VirtualKeyCode as Key;
+        
         /* Close window is `escape` pressed */
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::APP_EXIT) {
             *control_flow = ControlFlow::Exit;
             self.chunk_arr.drop_tasks();
+            return;
         }
 
-        if self.input_manager.keyboard.just_pressed(glium::glutin::event::VirtualKeyCode::Y) {
+        if self.input_manager.keyboard.just_pressed(Key::Y) {
             self.chunk_arr.drop_tasks();
         }
 
@@ -152,6 +173,20 @@ impl App where Self: 'static {
             self.camera.grabbes_cursor = !self.camera.grabbes_cursor;
         }
 
+        if self.input_manager.keyboard.just_pressed(cfg::key_bindings::SWITCH_RENDER_SHADOWS) {
+            self.render_shadows = !self.render_shadows;
+        }
+
+        if self.input_manager.keyboard.just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
+            self.chunk_draw_bundle = ChunkDrawBundle::new(self.graphics.display.as_ref().get_ref());
+            self.graphics.refresh_postprocessing_shaders()
+                .expect("failed to refresh postprocessing shaders");
+
+            // FIXME:
+            self.normal_atlas = Texture::from_path("src/image/normal_atlas.png", self.graphics.display.as_ref().get_ref())
+                .expect("path should be valid and file is readable");
+        }
+
         /* Update save/load tasks of `ChunkArray` */
         self.chunk_arr.update(&mut self.input_manager).await
             .expect("failed to update chunk array");
@@ -163,7 +198,7 @@ impl App where Self: 'static {
         window.set_title(&format!("Terramine: {0:.0} FPS", self.timer.fps()));
 
         /* Update ImGui stuff */
-        self.graphics.imguiw
+        self.graphics.imguip
             .prepare_frame(self.graphics.imguic.io_mut(), window)
             .expect("failed to prepare frame");
 
@@ -177,50 +212,70 @@ impl App where Self: 'static {
         let draw_data = {
             /* Get UI frame renderer */
             let ui = self.graphics.imguic.new_frame();
+            let keyboard = &mut self.input_manager.keyboard;
 
             /* Camera window */
-            self.camera.spawn_control_window(ui, &mut self.input_manager);
+            self.camera.spawn_control_window(ui, keyboard);
 
             /* Profiler window */
-            profiler::update_and_build_window(ui, &self.timer, &mut self.input_manager);
+            profiler::update_and_build_window(ui, &self.timer, keyboard);
 
             /* Render UI */
-            self.graphics.imguiw.prepare_render(ui, self.graphics.display.gl_window().window());
+            self.graphics.imguip.prepare_render(ui, self.graphics.display.gl_window().window());
 
             /* Chunk array control window */
-            self.chunk_arr.spawn_control_window(ui);
+            self.chunk_arr.spawn_control_window(ui, keyboard);
 
-            /* Spawns loadings window */
-            loading::spawn_info_window(ui);
+            /* Loadings window */
+            loading::spawn_info_window(ui, keyboard);
+
+            /* Light control window */
+            for light in self.lights.iter_mut().take(1) {
+                light.spawn_control_window(ui, keyboard);
+            }
 
             self.graphics.imguic.render()
         };
 
-        /* Uniforms set */
-        let uniforms = uniform! {
-            tex:  self.texture_atlas.with_mips(),
-            time: self.timer.time(),
-            proj: self.camera.get_proj(),
-            view: self.camera.get_view(),
-        };
-
-        /* Actual drawing */
-        graphics::draw!(
+        graphics::draw! {
+            render_shadows: self.render_shadows,
+            self.graphics,
             self.graphics.display.draw(),
-            |mut target| {
-                self.chunk_arr.render_chunk_array(
-                    &mut target, &self.chunk_draw_bundle,
-                    &uniforms, &self.graphics.display, &self.camera
-                ).await
+
+            let uniforms = {
+                texture_atlas: self.texture_atlas.with_mips(),
+                normal_atlas:  self.normal_atlas.with_mips(),
+
+                light_proj: self.lights[0].cam.get_ortho(64.0, 64.0),
+                light_view: self.lights[0].cam.get_view(),
+                light_dir: self.lights[0].cam.front.as_array(),
+                light_pos: self.lights[0].cam.pos.as_array(),
+
+                time: self.timer.time(),
+                cam_pos: self.camera.pos.as_array(),
+                proj: self.camera.get_proj(),
+                view: self.camera.get_view(),
+            },
+
+            |&mut frame_buffer| {
+                let display = self.graphics.display.as_ref().get_ref();
+
+                self.chunk_arr.render(frame_buffer, &self.chunk_draw_bundle, &uniforms, display, &self.camera)
+                    .await
                     .expect("failed to render chunk array");
 
-                self.camera.render_camera(&self.graphics.display, &mut target, &uniforms)
+                self.chunk_arr.render_chunk_debug(display, frame_buffer, &uniforms)
+                    .expect("failed to render chunk array debug visuals");
+        
+                self.camera.render_camera_debug_visuals(display, frame_buffer, &uniforms)
                     .expect("failed to render camera");
+            },
 
+            |mut target| {
                 self.graphics.imguir.render(&mut target, draw_data)
                     .expect("failed to render imgui");
             },
-        );
+        };
 
         self.timer.update();
         self.graphics.imguic
@@ -232,7 +287,9 @@ impl App where Self: 'static {
     async fn new_events(&mut self) {
         /* Rotating camera */
         self.camera.update(&mut self.input_manager, self.timer.dt_as_f64());
-
+        for light in self.lights.iter_mut() {
+            light.update(self.camera.pos);
+        }
         /* Debug visuals switcher */
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::DEBUG_VISUALS_SWITCH) {
             debug_visuals::switch_enable();

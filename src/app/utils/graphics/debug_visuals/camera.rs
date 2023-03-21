@@ -9,7 +9,7 @@ use {
     },
     super::*,
     glium::{
-        Display, Depth, DepthTest, BackfaceCullingMode, Frame, DrawError,
+        Depth, DepthTest, BackfaceCullingMode, DrawError,
         index::PrimitiveType,
         uniforms::Uniforms,
     },
@@ -38,8 +38,8 @@ pub mod data {
         );
     }
 
-    pub fn get<'s>(display: &Display) -> DebugVisualsStatics<'s, Camera> {
-        cond_init(display);
+    pub fn get<'s>(facade: &dyn glium::backend::Facade) -> DebugVisualsStatics<'s, Camera> {
+        cond_init(facade);
         get_unchecked()
     }
 
@@ -53,17 +53,18 @@ pub mod data {
         }
     }
 
-    pub fn cond_init(display: &Display) {
+    pub fn cond_init(facade: &dyn glium::backend::Facade) {
         unsafe {
             /* Check if uninitialized */
             if SHADER.is_none() {
-                let shader = Shader::new("debug_lines", "debug_lines", display);
+                let shader = Shader::new("debug_lines", "debug_lines", facade)
+                    .expect("failed to make shader");
                 SHADER.replace(ShaderWrapper(shader));
             }
         }
     }
 
-    pub fn construct_mesh(camera: &Camera, display: &Display) -> UnindexedMesh<Vertex> {
+    pub fn construct_mesh(camera: &Camera, facade: &dyn glium::backend::Facade) -> UnindexedMesh<Vertex> {
         let color = [0.5; 4];
         let rays = camera.get_frustum().courner_rays;
         const LEN: f32 = cfg::camera::FRUSTUM_EDGE_LINE_LENGTH;
@@ -97,20 +98,25 @@ pub mod data {
             ], color },
         ];
 
-        let vbuffer = VertexBuffer::no_indices(display, &vertices, PrimitiveType::LinesList);
+        let vbuffer = VertexBuffer::no_indices(facade, &vertices, PrimitiveType::LinesList);
         UnindexedMesh::new(vbuffer)
     }
 }
 
 impl DebugVisualized<'_, Camera> {
-    pub fn new_camera(camera: Camera, display: &Display) -> Self {
-        let mesh = UnindexedMesh::new_empty(display);
-        Self { inner: camera, mesh, static_data: data::get(display) }
+    pub fn new_camera(camera: Camera, facade: &dyn glium::backend::Facade) -> Self {
+        let mesh = UnindexedMesh::new_empty(facade);
+        Self { inner: camera, mesh, static_data: data::get(facade) }
     }
 
-    pub fn render_camera(&self, display: &Display, target: &mut Frame, uniforms: &impl Uniforms) -> Result<(), DrawError> {
+    pub fn render_camera_debug_visuals(
+        &self,
+        facade: &dyn glium::backend::Facade,
+        target: &mut impl glium::Surface,
+        uniforms: &impl Uniforms
+    ) -> Result<(), DrawError> {
         if ENABLED.load(Ordering::Relaxed) {
-            let mesh = data::construct_mesh(&self.inner, display);
+            let mesh = data::construct_mesh(&self.inner, facade);
             mesh.render(target, &self.static_data.shader, &self.static_data.draw_params, uniforms)
         } else { Ok(()) }
     }

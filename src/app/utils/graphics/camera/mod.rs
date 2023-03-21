@@ -11,7 +11,7 @@ use {
             camera::default as cam_def,
             window::default as window_def,
         },
-        user_io::InputManager,
+        user_io::{Keyboard, InputManager},
     },
     math_linear::prelude::*,
     frustum::Frustum,
@@ -52,7 +52,7 @@ pub struct Camera {
 #[allow(dead_code)]
 impl Camera {
     /// Creates camera.
-    pub fn new() -> Self { Default::default() }
+    pub fn new() -> Self { Self::default() }
 
     /// Gives camera positioned to given coordinates
     pub fn with_position(mut self, x: f32, y: f32, z: f32) -> Self {
@@ -82,7 +82,7 @@ impl Camera {
         self.update_vectors();
     }
 
-    /// Sets rotation to [0.0, 0.0, 0.0].
+    /// Sets rotation to (0.0, 0.0, 0.0).
     pub fn reset_rotation(&mut self) {
         self.set_rotation(0.0, 0.0, 0.0);
     }
@@ -182,12 +182,22 @@ impl Camera {
 
     /// Returns view matrix.
     pub fn get_view(&self) -> [[f32; 4]; 4] {
-        mat4::look_at_lh(self.pos, self.pos + self.front, self.up).as_2d_array()
+        mat4::look_at_lh(self.pos, self.pos + self.front, self.up)
+            .as_2d_array()
     }
 
     /// Returns projection matrix with `aspect_ratio = height / width`
     pub fn get_proj(&self) -> [[f32; 4]; 4] {
-        mat4::perspective_fov_lh(self.fov.get_radians(), self.aspect_ratio, self.near_plane_dist, self.far_plane_dist).as_2d_array()
+        mat4::perspective_fov_lh(self.fov.get_radians(), self.aspect_ratio, self.near_plane_dist, self.far_plane_dist)
+            .as_2d_array()
+    }
+
+    pub fn get_ortho(&self, width: f32, height: f32) -> [[f32; 4]; 4] {
+        mat4::orthographic_lh(
+            width, height,
+            cfg::camera::LIGHT_NEAR_PLANE,
+            cfg::camera::LIGHT_FAR_PLANE,
+        ).as_2d_array()
     }
 
     /// Checks if position is in camera frustum
@@ -218,34 +228,41 @@ impl Camera {
     pub fn get_z(&self) -> f32 { self.pos.z }
 
     /// Spawns camera control window.
-    pub fn spawn_control_window(&mut self, ui: &imgui::Ui, input: &mut InputManager) {
-        /* Camera control window */
-        let mut camera_window = ui.window("Camera");
-
-        /* Move and resize if pressed I key */
-        if !input.keyboard.is_pressed(cfg::key_bindings::ENABLE_DRAG_AND_RESIZE_WINDOWS) {
-            camera_window = camera_window
-                .resizable(false)
-                .movable(false)
-                .collapsible(false)
-        }
+    pub fn spawn_control_window(&mut self, ui: &imgui::Ui, keyboard: &Keyboard) {
+        use crate::app::utils::graphics::ui::imgui_constructor::make_window;
 
         /* UI building */
-        camera_window.build(|| {
+        make_window(ui, "Camera", keyboard).build(|| {
             ui.text("Position");
-            ui.text(format!("x: {x:.3}, y: {y:.3}, z: {z:.3}", x = self.get_x(), y = self.get_y(), z = self.get_z()));
+            ui.text(format!(
+                "x: {x:.3}, y: {y:.3}, z: {z:.3}",
+                x = self.get_x(),
+                y = self.get_y(),
+                z = self.get_z(),
+            ));
+
             ui.text("Rotation");
-            ui.text(format!("roll: {roll:.3}, pitch: {pitch:.3}, yaw: {yaw:.3}", roll = self.roll, pitch = self.pitch, yaw = self.yaw));
+            ui.text(format!(
+                "roll: {roll:.3}, pitch: {pitch:.3}, yaw: {yaw:.3}",
+                roll = self.roll,
+                pitch = self.pitch,
+                yaw = self.yaw,
+            ));
+
             ui.separator();
+
             ui.slider_config("Speed", 5.0, 300.0)
                 .display_format("%.1f")
                 .build(&mut self.speed_factor);
+
             ui.slider_config("Speed falloff", 0.0, 1.0)
                 .display_format("%.3f")
                 .build(&mut self.speed_falloff);
+
             ui.slider_config("FOV", 1.0, 180.0)
                 .display_format("%.0f")
                 .build(self.fov.get_degrees_mut());
+
             self.fov.update_from_degrees();
         });
     }
@@ -257,19 +274,27 @@ impl Default for Camera {
             roll: 0.0,
             pitch: 0.0,
             yaw: 0.0,
+
             fov: Angle::from_degrees(cam_def::FOV_IN_DEGREES),
+
             near_plane_dist: cam_def::NEAR_PLANE,
             far_plane_dist: cam_def::FAR_PLANE,
+
             grabbes_cursor: false,
+
             speed_factor: cam_def::SPEED,
             speed_falloff: cam_def::SPEED_FALLOFF,
+
             aspect_ratio: window_def::HEIGHT as f32 / window_def::WIDTH as f32,
-            pos:    vecf!(0, 0, -3),
-            speed:  vec3::zero(),
+
+            pos:      vecf!(0, 0, -3),
+            speed:    vec3::zero(),
+            rotation: Default::default(),
+
             up:     vecf!(0, 1, 0),
             front:  vecf!(0, 0, -1),
             right:  vecf!(1, 0, 0),
-            rotation: Default::default(),
+            
             frustum: None,
         };
         cam.update_vectors();

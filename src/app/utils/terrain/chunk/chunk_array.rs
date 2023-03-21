@@ -1,5 +1,6 @@
 use {
     crate::app::utils::{
+        cfg,
         terrain::{
             chunk::{
                 prelude::*, Id,
@@ -11,7 +12,7 @@ use {
         reinterpreter::*,
         graphics::camera::Camera,
         concurrency::loading::{self, Command},
-        user_io::InputManager,
+        user_io::{InputManager, Keyboard},
     },
     math_linear::prelude::*,
     std::{
@@ -68,7 +69,10 @@ impl Default for ChunkArray {
 
 impl ChunkArray {
     /// Generates new chunks.
+    /// # Panic
+    /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
     pub fn new(sizes: USize3) -> Self {
+        Self::validate_sizes(sizes);
         let (start_pos, end_pos) = Self::pos_bounds(sizes);
 
         let chunks = SpaceIter::new(start_pos..end_pos)
@@ -79,7 +83,10 @@ impl ChunkArray {
     }
 
     /// Constructs [`ChunkArray`] with passed in chunks.
+    /// # Panic
+    /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
     pub fn from_chunks(sizes: USize3, chunks: Vec<Chunk>) -> Self {
+        Self::validate_sizes(sizes);
         let volume = Self::volume(sizes);
         assert_eq!(
             chunks.len(), volume,
@@ -91,7 +98,10 @@ impl ChunkArray {
     }
 
     /// Constructs [`ChunkArray`] with empty chunks.
+    /// # Panic
+    /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
     pub fn new_empty_chunks(sizes: USize3) -> Self {
+        Self::validate_sizes(sizes);
         let (start_pos, end_pos) = Self::pos_bounds(sizes);
 
         let chunks = SpaceIter::new(start_pos..end_pos)
@@ -107,6 +117,17 @@ impl ChunkArray {
             Self::coord_idx_to_pos(sizes, USize3::ZERO),
             Self::coord_idx_to_pos(sizes, sizes),
         )
+    }
+
+    /// Checks that sizes is valid.
+    /// # Panic
+    /// Panics if `sizes.x * sizes.y * sizes.z` > `MAX_CHUNKS`.
+    pub fn validate_sizes(sizes: USize3) {
+        assert!(
+            Self::volume(sizes) <= cfg::terrain::MAX_CHUNKS,
+            "cannot allocate too many chunks: {volume}",
+            volume = Self::volume(sizes),
+        );
     }
 
     /// Gives empty [`ChunkArray`].
@@ -138,6 +159,12 @@ impl ChunkArray {
                 let chunks = &chunks;
                 let loading_sender = loading_sender.clone();
                 async move {
+                    use {
+                        std::iter::FromIterator,
+                        bit_vec::BitVec,
+                        huffman_compress as hc,
+                    };
+
                     let loading_value = i as f32 / (volume - 1) as f32;
 
                     loading_sender.send(Command::Refresh(loading_name, loading_value))
@@ -155,10 +182,22 @@ impl ChunkArray {
                                 "cannot save unknown-sized chunk with size {n_voxels}",
                             );
 
+                            let freqs = Self::count_voxel_frequencies(chunks[i].voxel_ids.iter().copied());
+                            let (book, _) = hc::CodeBuilder::from_iter(
+                                freqs.iter().map(|(&k, &v)| (k, v))
+                            ).finish();
+                            let mut bits = BitVec::new();
+
+                            for &voxel_id in chunks[i].voxel_ids.iter() {
+                                book.encode(&mut bits, &voxel_id)
+                                    .expect(&format!("{voxel_id} should be in the book"));
+                            }
+
                             FillType::Default
                                 .as_bytes()
                                 .into_iter()
-                                .chain(chunks[i].voxel_ids.as_bytes())
+                                .chain(freqs.as_bytes())
+                                .chain(bits.as_bytes())
                                 .collect()
                         }
                     }
@@ -193,26 +232,36 @@ impl ChunkArray {
         let chunks = save.read_pointer_array(ChunkArrSaveType::Array, |i, bytes| {
             let loading = loading.clone();
             async move {
+                use {
+                    std::iter::FromIterator,
+                    bit_vec::BitVec,
+                    huffman_compress as hc,
+                };
+
                 let percent = i as f32 / (Self::volume(sizes) - 1) as f32;
 
                 loading.send(Command::Refresh(loading_name, percent))
                     .await
                     .expect("failed to send a refresh command");
 
-                let fill_type = FillType::from_bytes(&bytes)
+                let mut reader = ByteReader::new(&bytes);
+                let fill_type: FillType = reader.read()
                     .expect("failed to reinterpret bytes");
-                let bytes = &bytes[FillType::static_size()..];
 
                 match fill_type {
                     FillType::Default => {
-                        use voxel::is_id_valid;
+                        let freqs: HashMap<Id, usize> = reader.read()
+                            .expect("failed to read frequencies map from bytes");
 
-                        let voxel_ids = Vec::<Id>::from_bytes(bytes)
-                            .expect("failed to reinterpret voxel ids vector from bytes");
+                        let bits: BitVec = reader.read()
+                            .expect("failed to read `BitVec` from bytes");
+
+                        let (_, tree) = hc::CodeBuilder::from_iter(freqs).finish();
+                        let voxel_ids: Vec<Id> = tree.unbounded_decoder(bits).collect();
 
                         let is_id_valid = voxel_ids.iter()
                             .copied()
-                            .all(is_id_valid);
+                            .all(voxel::is_id_valid);
 
                         assert!(is_id_valid, "Voxel ids in voxel array should be valid");
                         assert_eq!(voxel_ids.len(), Chunk::VOLUME, "There's should be Chunk::VOLUME voxels");
@@ -231,6 +280,19 @@ impl ChunkArray {
             .expect("failed to send a finish command");
 
         Ok((sizes, chunks))
+    }
+
+    fn count_voxel_frequencies(voxel_ids: impl IntoIterator<Item = Id>) -> HashMap<Id, usize> {
+        let mut result = HashMap::new();
+
+        for id in voxel_ids.into_iter() {
+            match result.get_mut(&id) {
+                None => drop(result.insert(id, 1)),
+                Some(freq) => *freq += 1,
+            }
+        }
+
+        result
     }
 
     // FIXME: make unmodifiable flag on chunks.
@@ -265,7 +327,7 @@ impl ChunkArray {
 
     /// Gives chunk count.
     pub fn volume(arr_sizes: USize3) -> usize {
-        arr_sizes.as_array().iter().product()
+        arr_sizes.x * arr_sizes.y * arr_sizes.z
     }
 
     /// Convertes 3d index into chunk pos.
@@ -425,10 +487,10 @@ impl ChunkArray {
     }
 
     /// Generates mesh for each chunk.
-    pub fn generate_meshes(&mut self, lod: impl Fn(Int3) -> Lod, display: &gl::Display) {
+    pub fn generate_meshes(&mut self, lod: impl Fn(Int3) -> Lod, facade: &dyn gl::backend::Facade) {
         for (chunk, adj) in self.chunks_with_adj_mut() {
             let active_lod = lod(chunk.pos);
-            chunk.generate_mesh(active_lod, adj, display);
+            chunk.generate_mesh(active_lod, adj, facade);
             chunk.set_active_lod(active_lod);
         }
     }
@@ -437,8 +499,8 @@ impl ChunkArray {
     /// task that generates desired mesh. If task is incomplete then it will render active LOD
     /// of concrete chunk. If it can't then it will do nothing.
     pub async fn render(
-        &mut self, target: &mut gl::Frame, draw_bundle: &ChunkDrawBundle<'_>,
-        uniforms: &impl gl::uniforms::Uniforms, display: &gl::Display, cam: &Camera,
+        &mut self, target: &mut impl gl::Surface, draw_bundle: &ChunkDrawBundle<'_>,
+        uniforms: &impl gl::uniforms::Uniforms, facade: &dyn gl::backend::Facade, cam: &Camera,
     ) -> Result<(), ChunkRenderError>
     where
         Self: 'static,
@@ -446,7 +508,7 @@ impl ChunkArray {
         let sizes = self.sizes;
         if sizes == USize3::ZERO { return Ok(()) }
 
-        self.try_finish_all_tasks(display).await;
+        self.try_finish_all_tasks(facade).await;
 
         let mut chunks: Vec<_> = Self::chunks_with_adj_mut_inner(&mut self.chunks, sizes)
             .zip(Self::desired_lod_iter(sizes, cam.pos, self.lod_dist_threashold))
@@ -475,7 +537,7 @@ impl ChunkArray {
             let can_set_new_lod =
                 Self::is_mesh_task_running(&self.full_tasks, &self.low_tasks, chunk.pos, lod) &&
                 Self::try_finish_mesh_task(&mut self.full_tasks, &mut self.low_tasks,
-                    chunk.pos, lod, chunk, display).await.is_ok() ||
+                    chunk.pos, lod, chunk, facade).await.is_ok() ||
                 chunk.get_available_lods().contains(&lod);
 
             if can_set_new_lod {
@@ -505,6 +567,7 @@ impl ChunkArray {
                 chunk.try_set_best_fit_lod(lod);
             }
 
+            // FIXME: make cam vis-check for light.
             if chunk.can_render_active_lod() && chunk.is_visible_by_camera(cam) {
                 chunk.render(target, &draw_bundle, uniforms, chunk.info.active_lod)?
             }
@@ -516,7 +579,7 @@ impl ChunkArray {
     pub fn drop_all_useless_tasks(
         full_tasks: &mut HashMap<Int3, FullTask>,
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
-        useful_lod: Lod, cur_pos: Int3
+        useful_lod: Lod, cur_pos: Int3,
     ) {
         for lod in Chunk::get_possible_lods() {
             if 2 < lod.abs_diff(useful_lod) {
@@ -528,15 +591,15 @@ impl ChunkArray {
     pub fn drop_task(
         full_tasks: &mut HashMap<Int3, FullTask>,
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
-        pos: Int3, lod: Lod
+        pos: Int3, lod: Lod,
     ) {
         match lod {
-            0 =>   { let _ = full_tasks.remove(&pos); },
-            lod => { let _ = low_tasks.remove(&(pos, lod)); },
+            0 =>   drop(full_tasks.remove(&pos)),
+            lod => drop(low_tasks.remove(&(pos, lod))),
         }
     }
 
-    pub async fn try_finish_full_tasks(&mut self, display: &gl::Display) {
+    pub async fn try_finish_full_tasks(&mut self, facade: &dyn gl::backend::Facade) {
         let full: Vec<_> = self.full_tasks.iter_mut()
             .filter(|(_, task)| match task.handle.as_ref() {
                 None => false,
@@ -557,11 +620,11 @@ impl ChunkArray {
 
             self.get_chunk_mut_by_pos(pos)
                 .expect("pos should be valid")
-                .upload_full_detail_vertices(&vertices, display);
+                .upload_full_detail_vertices(&vertices, facade);
         }
     }
 
-    pub async fn try_finish_low_tasks(&mut self, display: &gl::Display) {
+    pub async fn try_finish_low_tasks(&mut self, facade: &dyn gl::backend::Facade) {
         let low: Vec<_> = self.low_tasks.iter_mut()
             .filter(|(_, task)| match task.handle.as_ref() {
                 None => false,
@@ -582,7 +645,7 @@ impl ChunkArray {
 
             self.get_chunk_mut_by_pos(pos)
                 .expect("pos should be valid")
-                .upload_low_detail_vertices(&vertices, lod, display);
+                .upload_low_detail_vertices(&vertices, lod, facade);
         }
     }
 
@@ -609,9 +672,9 @@ impl ChunkArray {
         }
     }
 
-    pub async fn try_finish_all_tasks(&mut self, display: &gl::Display) {
-        self.try_finish_full_tasks(display).await;
-        self.try_finish_low_tasks(display).await;
+    pub async fn try_finish_all_tasks(&mut self, facade: &dyn gl::backend::Facade) {
+        self.try_finish_full_tasks(facade).await;
+        self.try_finish_low_tasks(facade).await;
         self.try_finish_gen_tasks().await;
     }
 
@@ -645,7 +708,7 @@ impl ChunkArray {
     pub fn start_task_gen_vertices(
         full_tasks: &mut HashMap<Int3, FullTask>,
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
-        chunk: ChunkRef<'static>, adj: ChunkAdj<'static>, lod: Lod
+        chunk: ChunkRef<'static>, adj: ChunkAdj<'static>, lod: Lod,
     ) {
         let pos = chunk.pos.to_owned();
 
@@ -691,22 +754,22 @@ impl ChunkArray {
         full_tasks: &mut HashMap<Int3, FullTask>,
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
         pos: Int3, lod: Lod,
-        chunk: &mut Chunk, display: &gl::Display,
+        chunk: &mut Chunk, facade: &dyn gl::backend::Facade,
     ) -> Result<(), TaskError> {
         match lod {
-            0   => Self::try_finish_full_mesh_task(full_tasks, pos, chunk, display).await,
-            lod => Self::try_finish_low_mesh_task(low_tasks, pos, lod, chunk, display).await,
+            0   => Self::try_finish_full_mesh_task(full_tasks, pos, chunk, facade).await,
+            lod => Self::try_finish_low_mesh_task(low_tasks, pos, lod, chunk, facade).await,
         }
     }
 
     pub async fn try_finish_full_mesh_task(
         full_tasks: &mut HashMap<Int3, FullTask>,
-        pos: Int3, chunk: &mut Chunk, display: &gl::Display,
+        pos: Int3, chunk: &mut Chunk, facade: &dyn gl::backend::Facade,
     ) -> Result<(), TaskError> {
         match full_tasks.get_mut(&pos) {
             Some(task) => match task.try_take_result().await {
                 Some(vertices) => {
-                    chunk.upload_full_detail_vertices(&vertices, display);
+                    chunk.upload_full_detail_vertices(&vertices, facade);
                     let _ = full_tasks.remove(&pos)
                         .expect("there should be a task");
                     Ok(())
@@ -720,12 +783,12 @@ impl ChunkArray {
     pub async fn try_finish_low_mesh_task(
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
         pos: Int3, lod: Lod,
-        chunk: &mut Chunk, display: &gl::Display,
+        chunk: &mut Chunk, facade: &dyn gl::backend::Facade,
     ) -> Result<(), TaskError> {
         match low_tasks.get_mut(&(pos, lod)) {
             Some(task) => match task.try_take_result().await {
                 Some(vertices) => {
-                    chunk.upload_low_detail_vertices(&vertices, lod, display);
+                    chunk.upload_low_detail_vertices(&vertices, lod, facade);
                     let _ = low_tasks.remove(&(pos, lod))
                         .expect("there should be a task");
                     Ok(())
@@ -737,7 +800,8 @@ impl ChunkArray {
     }
 
     pub fn can_start_tasks(&self) -> bool {
-        self.saving_handle.is_none() && self.reading_handle.is_none()
+        self.saving_handle.is_none() && self.reading_handle.is_none() &&
+        self.low_tasks.len() + self.full_tasks.len() <= cfg::terrain::MAX_TASKS
     }
 
     pub fn drop_tasks(&mut self) {
@@ -746,11 +810,17 @@ impl ChunkArray {
         drop(mem::take(&mut self.voxels_gen_tasks));
     }
 
-    pub fn spawn_control_window(&mut self, ui: &imgui::Ui) {
-        ui.window("Chunk array")
+    pub fn any_task_running(&self) -> bool {
+        !self.low_tasks.is_empty() ||
+        !self.full_tasks.is_empty() ||
+        !self.voxels_gen_tasks.is_empty()
+    }
+
+    pub fn spawn_control_window(&mut self, ui: &imgui::Ui, keyboard: &Keyboard) {
+        use crate::app::utils::graphics::ui::imgui_constructor::make_window;
+
+        make_window(ui, "Chunk array", keyboard)
             .always_auto_resize(true)
-            .collapsible(true)
-            .movable(true)
             .build(|| {
                 ui.text(format!(
                     "{n} chunk generation tasks.",
@@ -770,7 +840,6 @@ impl ChunkArray {
 
                 ui.separator();
 
-                // TODO: chunk save/load window
                 ui.text("Generate new");
 
                 static SIZES: Mutex<[i32; 3]> = Mutex::new(Int3::ZERO.as_array());

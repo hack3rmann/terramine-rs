@@ -24,6 +24,10 @@ winit = "0.28.2"
 derive-deref-rs = "0.1.1"
 types = { version = "0.1.0", path = "../types" }
 lazy_static = "1.4.0"
+portable-atomic = { version = "1.0.1", features = ["float"] }
+huffman-compress = "0.6.1"
+bit-vec = "0.6.3"
+array-init = "2.1.0"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"

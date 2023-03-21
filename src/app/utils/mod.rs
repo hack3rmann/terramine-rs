@@ -8,7 +8,6 @@ pub extern crate tokio;
 pub mod window;
 pub mod graphics;
 pub mod user_io;
-pub mod math;
 pub mod terrain;
 pub mod time;
 pub mod profiler;

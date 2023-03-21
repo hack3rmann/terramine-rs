@@ -58,6 +58,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc7eb209b1518d6bb87b283c20095f5228ecda460da70b44f0802523dea6da04"
 
 [[package]]
+name = "array-init"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d62b7694a562cdf5a74227903507c56ab2cc8bdd1f781ed5cb4cf9c9f810bfc"
+
+[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -95,6 +101,12 @@ dependencies = [
  "object",
  "rustc-demangle",
 ]
+
+[[package]]
+name = "bit-vec"
+version = "0.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
 
 [[package]]
 name = "bit_field"
@@ -792,6 +804,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "huffman-compress"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd520ff992356191b9f0ed05d972cea191590c9f985468b6ed610894cfd17e77"
+dependencies = [
+ "bit-vec",
+ "num-traits",
+]
+
+[[package]]
 name = "ident_case"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1369,6 +1391,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "portable-atomic"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "39c00c8683a03bd4fe7db7dd64ab4abee6b42166bc81231da983486ce96be51a"
+
+[[package]]
 name = "ppv-lite86"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1706,16 +1734,20 @@ checksum = "36ae8932fcfea38b7d3883ae2ab357b0d57a02caaa18ebb4f5ece08beaec4aa0"
 name = "terramine"
 version = "0.0.2"
 dependencies = [
+ "array-init",
+ "bit-vec",
  "crossbeam",
  "derive-deref-rs",
  "directx_math",
  "glium",
+ "huffman-compress",
  "image",
  "imgui",
  "imgui-glium-renderer",
  "imgui-winit-support",
  "lazy_static",
  "math_linear",
+ "portable-atomic",
  "profiler",
  "rayon",
  "thiserror",
