@@ -31,7 +31,11 @@ void main() {
 }
 
 void shade_standart() {
-    out_albedo = v_color;
+    out_albedo = vec3(
+        pow(v_color.r, 0.4545),
+        pow(v_color.g, 0.4545),
+        pow(v_color.b, 0.4545)
+    );
     out_normal = v_normal;
     out_position = v_position;
 }

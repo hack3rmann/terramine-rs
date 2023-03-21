@@ -2,7 +2,6 @@ use {
     crate::app::utils::{
         cfg,
         graphics::{
-            camera::Camera,
             vertex_buffer::VertexBuffer,
             mesh::UnindexedMesh,
         },
@@ -10,12 +9,9 @@ use {
             chunk::{
                 Chunk,
                 chunk_array::ChunkArray,
-                ChunkDrawBundle,
-                ChunkRenderError,
             },
             voxel::Voxel,
         },
-        profiler::prelude::*,
     },
     super::*,
     glium::{
@@ -168,17 +164,11 @@ impl DebugVisualized<'_, ChunkArray> {
         Self { inner: chunk_array, mesh, static_data: data::get(facade) }
     }
 
-    #[profile]
-    pub async fn render_chunk_array(
-        &mut self, target: &mut impl glium::Surface, draw_bundle: &ChunkDrawBundle<'_>,
-        uniforms: &impl Uniforms, facade: &dyn glium::backend::Facade, cam: &Camera,
-    ) -> Result<(), ChunkRenderError>
-    where
-        Self: 'static,
-    {
-        self.render(target, draw_bundle, uniforms, facade, cam).await?;
-
-        if ENABLED.load(Ordering::Relaxed) {
+    pub fn render_chunk_debug(
+        &mut self, facade: &dyn glium::backend::Facade,
+        target: &mut impl glium::Surface, uniforms: &impl Uniforms,
+    ) -> Result<(), glium::DrawError> {
+        if ENABLED.load(Ordering::SeqCst) {
             self.mesh = data::construct_mesh(self, facade);
         
             let shader = data::get(facade).shader;

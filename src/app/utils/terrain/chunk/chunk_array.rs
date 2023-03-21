@@ -810,6 +810,12 @@ impl ChunkArray {
         drop(mem::take(&mut self.voxels_gen_tasks));
     }
 
+    pub fn any_task_running(&self) -> bool {
+        !self.low_tasks.is_empty() ||
+        !self.full_tasks.is_empty() ||
+        !self.voxels_gen_tasks.is_empty()
+    }
+
     pub fn spawn_control_window(&mut self, ui: &imgui::Ui, keyboard: &Keyboard) {
         use crate::app::utils::graphics::ui::imgui_constructor::make_window;
 

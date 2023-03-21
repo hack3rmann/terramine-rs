@@ -109,7 +109,7 @@ impl DebugVisualized<'_, Camera> {
         Self { inner: camera, mesh, static_data: data::get(facade) }
     }
 
-    pub fn render_camera(
+    pub fn render_camera_debug_visuals(
         &self,
         facade: &dyn glium::backend::Facade,
         target: &mut impl glium::Surface,

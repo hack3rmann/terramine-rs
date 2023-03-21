@@ -52,7 +52,7 @@ pub struct App {
 }
 
 impl App where Self: 'static {
-    /// Constructs app struct.
+    /// Constructs [`App`].
     pub fn new() -> Self {
         let graphics = Graphics::new()
             .expect("failed to create graphics");
@@ -155,6 +155,7 @@ impl App where Self: 'static {
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::APP_EXIT) {
             *control_flow = ControlFlow::Exit;
             self.chunk_arr.drop_tasks();
+            return;
         }
 
         if self.input_manager.keyboard.just_pressed(Key::Y) {
@@ -240,6 +241,7 @@ impl App where Self: 'static {
             render_shadows: self.render_shadows,
             self.graphics,
             self.graphics.display.draw(),
+
             let uniforms = {
                 texture_atlas: self.texture_atlas.with_mips(),
                 normal_atlas:  self.normal_atlas.with_mips(),
@@ -261,8 +263,11 @@ impl App where Self: 'static {
                 self.chunk_arr.render(frame_buffer, &self.chunk_draw_bundle, &uniforms, display, &self.camera)
                     .await
                     .expect("failed to render chunk array");
+
+                self.chunk_arr.render_chunk_debug(display, frame_buffer, &uniforms)
+                    .expect("failed to render chunk array debug visuals");
         
-                self.camera.render_camera(display, frame_buffer, &uniforms)
+                self.camera.render_camera_debug_visuals(display, frame_buffer, &uniforms)
                     .expect("failed to render camera");
             },
 
