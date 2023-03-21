@@ -10,3 +10,4 @@ pub mod concurrency;
 pub mod runtime;
 pub mod werror;
 pub mod cfg;
+pub mod logger;

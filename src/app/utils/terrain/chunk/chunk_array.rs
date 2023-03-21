@@ -1,6 +1,6 @@
 use {
     crate::app::utils::{
-        cfg,
+        cfg, logger,
         terrain::{
             chunk::{
                 prelude::*, Id,
@@ -76,7 +76,7 @@ impl ChunkArray {
         let (start_pos, end_pos) = Self::pos_bounds(sizes);
 
         let chunks = SpaceIter::new(start_pos..end_pos)
-            .map(|pos| Chunk::new(pos))
+            .map(Chunk::new)
             .collect();
 
         Self::from_chunks(sizes, chunks)
@@ -138,6 +138,10 @@ impl ChunkArray {
     pub async fn save_to_file(
         sizes: USize3, chunks: Vec<ChunkRef<'static>>, save_name: impl Into<String>, save_path: &'static str,
     ) -> io::Result<()> {
+        let save_name = save_name.into();
+
+        logger::log!(Info, "chunk array", format!("start saving to {save_name} in {save_path}"));
+
         let is_all_generated = chunks.iter()
             .all(ChunkRef::is_generated);
         assert!(is_all_generated, "Chunks should be generated to save them to file");
@@ -152,7 +156,7 @@ impl ChunkArray {
             .await
             .expect("failed to send loading command");
 
-        Save::new(save_name)
+        Save::new(save_name.clone())
             .create(save_path).await?
             .write(&sizes, ChunkArrSaveType::Sizes).await
             .pointer_array(volume, ChunkArrSaveType::Array, |i| {
@@ -208,6 +212,8 @@ impl ChunkArray {
         loading_sender.send(Command::Finish(loading_name))
             .await
             .expect("failed to send loading finish command");
+        
+        logger::log!(Info, "chunk array", format!("end saving to {save_name} in {save_path}"));
 
         Ok(())
     }
@@ -215,6 +221,8 @@ impl ChunkArray {
     pub async fn read_from_file(
         save_name: &str, save_path: &str,
     ) -> io::Result<(USize3, Vec<(Vec<Id>, FillType)>)> {
+        logger::log!(Info, "chunk array", format!("start reading chunks from {save_name} in {save_path}"));
+
         let loading = loading::make_sender();
 
         let loading_name = "Reading chunks from file";
@@ -277,6 +285,8 @@ impl ChunkArray {
         loading.send(Command::Finish(loading_name))
             .await
             .expect("failed to send a finish command");
+
+        logger::log!(Info, "chunk array", format!("end reading chunks from {save_name} in {save_path}"));
 
         Ok((sizes, chunks))
     }

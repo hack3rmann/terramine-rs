@@ -4,6 +4,7 @@ use {
     /* Other files */
     crate::app::utils::{
         cfg,
+        logger,
         concurrency::loading,
         user_io::InputManager,
         graphics::{
@@ -54,6 +55,8 @@ pub struct App {
 impl App where Self: 'static {
     /// Constructs [`App`].
     pub fn new() -> Self {
+        logger::log!(Info, "app", "start initialize");
+
         let graphics = Graphics::new()
             .expect("failed to create graphics");
 
@@ -75,6 +78,8 @@ impl App where Self: 'static {
             ChunkArray::new_empty(),
             graphics.display.as_ref().get_ref(),
         );
+
+        logger::log!(Info, "app", "end initialize");
 
         Self {
             chunk_arr,
@@ -178,12 +183,15 @@ impl App where Self: 'static {
 
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
             self.chunk_draw_bundle = ChunkDrawBundle::new(self.graphics.display.as_ref().get_ref());
-            self.graphics.refresh_postprocessing_shaders()
-                .expect("failed to refresh postprocessing shaders");
 
-            // FIXME:
-            self.normal_atlas = Texture::from_path("src/image/normal_atlas.png", self.graphics.display.as_ref().get_ref())
-                .expect("path should be valid and file is readable");
+            self.graphics.refresh_postprocessing_shaders().unwrap_or_else(|err|
+                logger::log!(Error, "app", format!("failed to reload postprocessing shaders: {err}"))
+            );
+
+            match Texture::from_path("src/image/normal_atlas.png", self.graphics.display.as_ref().get_ref()) {
+                Ok(normals) => self.normal_atlas = normals,
+                Err(err) => logger::log!(Error, "app", format!("failed to reload normal atlas: {err}")),
+            }
         }
 
         /* Update save/load tasks of `ChunkArray` */
@@ -227,6 +235,9 @@ impl App where Self: 'static {
 
             /* Loadings window */
             loading::spawn_info_window(ui, keyboard);
+
+            /* Logger window */
+            logger::spawn_window(ui, keyboard);
 
             /* Light control window */
             for light in self.lights.iter_mut().take(1) {
@@ -298,7 +309,11 @@ impl App where Self: 'static {
         self.input_manager.update(&self.graphics);		
 
         /* Loading recieve */
-        loading::recv_all()
-            .expect("failed to receive all loadings");
+        loading::recv_all().unwrap_or_else(|err|
+            logger::log!(Error, "app", format!("failed to receive all loadings: {err}"))
+        );
+
+        /* Log messages receive */
+        logger::recv_all();
     }
 }
