@@ -1,30 +1,19 @@
 #![macro_use]
 
 use {
-    crate::app::utils::{user_io::Keyboard, terrain::chunk::chunk_array::ChunkArray},
+    crate::app::utils::{
+        user_io::Keyboard,
+        concurrency::channel::Channel,
+    },
     std::{sync::Mutex, collections::VecDeque, borrow::Cow},
-    tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, self},
     lazy_static::lazy_static,
 };
 
 lazy_static! {
-    static ref CHANNEL: Mutex<Channel> = Mutex::new(Channel::default());
+    static ref CHANNEL: Mutex<Channel<Message>> = Mutex::new(Channel::default());
 }
 
 static LOG_MESSAGES: Mutex<VecDeque<Message>> = Mutex::new(VecDeque::new());
-
-#[derive(Debug)]
-struct Channel {
-    sender: UnboundedSender<Message>,
-    receiver: UnboundedReceiver<Message>,
-}
-
-impl Default for Channel {
-    fn default() -> Self {
-        let (sender, receiver) = mpsc::unbounded_channel();
-        Self { sender, receiver }
-    }
-}
 
 pub type MsgStr = Cow<'static, str>;
 
@@ -92,14 +81,12 @@ macro_rules! log {
 
 pub use crate::log;
 
-pub fn spawn_window(ui: &imgui::Ui, keyboard: &Keyboard, chunk_arr: &mut ChunkArray) {
+pub fn spawn_window(ui: &imgui::Ui, keyboard: &Keyboard) {
     use {
         crate::app::utils::{
             graphics::ui::imgui_constructor::make_window,
-            terrain::voxel::voxel_data::Id,
         },
-        cpython::{Python, PyResult, PyErr, py_fn, PyDict, PyString},
-        std::sync::atomic::{AtomicUsize, Ordering},
+        cpython::{Python, PyResult, py_fn, PyDict},
     };
 
     const ERROR_COLOR: [f32; 4] = [0.8, 0.1, 0.05, 1.0];
@@ -118,6 +105,8 @@ pub fn spawn_window(ui: &imgui::Ui, keyboard: &Keyboard, chunk_arr: &mut ChunkAr
         .position_pivot([0.0, 1.0])
         .size([width - 2.0 * PADDING, HEIGHT], imgui::Condition::Always)
         .build(|| {
+            use crate::app::utils::terrain::chunk::commands::{Command, command};
+
             let messages = LOG_MESSAGES.lock()
                 .expect("messages lock should be not poisoned");
 
@@ -129,29 +118,26 @@ pub fn spawn_window(ui: &imgui::Ui, keyboard: &Keyboard, chunk_arr: &mut ChunkAr
             let gil = Python::acquire_gil();
             let py = gil.python();
         
-            // FIXME:
+            let voxel_set = py_fn!(py, voxel_set(x: i32, y: i32, z: i32, new_id: u16) -> PyResult<i32> {
+                command(Command::SetVoxel { pos: veci!(x, y, z), new_id });
+                Ok(0)
+            });
 
-            static CHUNK_ARR_ADDR: AtomicUsize = AtomicUsize::new(0);
-            CHUNK_ARR_ADDR.store((chunk_arr as *const _) as usize, Ordering::SeqCst);
-
-            let voxel_set = py_fn!(py, voxel_set(x: i32, y: i32, z: i32, new_id: u16) -> PyResult<Id> {
-                let chunk_arr_addr = CHUNK_ARR_ADDR.load(Ordering::SeqCst);
-                let chunk_arr = unsafe {
-                    (chunk_arr_addr as *mut ChunkArray)
-                        .as_mut()
-                        .ok_or_else(|| PyErr::new::<PyString, _>(py, PyString::new(py, "chunk_arr ptr is null")))?
-                };
-
-                let old_id = chunk_arr.set_voxel(veci!(x, y, z), new_id)
-                    .map_err(|err| PyErr::new::<PyString, _>(py, PyString::new(py, &err.to_string())))?;
-
-                Ok(old_id)
+            let drop_all_meshes = py_fn!(py, drop_all_meshes() -> PyResult<i32> {
+                command(Command::DropAllMeshes);
+                Ok(0)
             });
 
             let locals = PyDict::new(py);
+
             locals.set_item(py, "voxel_set", voxel_set)
                 .unwrap_or_else(|err|
                     log!(Error, "logger", format!("failed to set 'voxel_set' item: {err:?}"))
+                );
+                
+            locals.set_item(py, "drop_all_meshes", drop_all_meshes)
+                .unwrap_or_else(|err|
+                    log!(Error, "logger", format!("failed to set 'drop_all_meshes' item: {err:?}"))
                 );
 
             if is_enter_pressed {

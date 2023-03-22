@@ -2,12 +2,6 @@
 
 #![allow(dead_code)]
 
-pub mod concurrency {
-    pub mod loadings {
-        pub const BUFFER_SIZE: usize = 128_000;
-    }
-}
-
 pub mod save {
     pub const META_FILE_NAME: &str = "meta.off";
     pub const STACK_FILE_EXTENTION: &str = "stk";

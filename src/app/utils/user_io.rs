@@ -1,6 +1,6 @@
-/*
- * Keyboard IO handler
- */
+//! 
+//! Keyboard IO handler
+//! 
 
 use {
     super::graphics::Graphics,
@@ -25,13 +25,18 @@ use {
 /// Keyboard handler.
 #[derive(Default, Debug)]
 pub struct Keyboard {
-    pub inputs: HashMap<KeyCode, ElementState>
+    pub inputs: HashMap<KeyCode, ElementState>,
+    pub is_input_captured: bool,
 }
 
 impl Keyboard {
     /// Constructs keyboard with no keys are pressed.
     #[allow(dead_code)]
     pub fn new() -> Self { Default::default() }
+
+    pub fn set_input_capture(&mut self, capture: bool) {
+        self.is_input_captured = capture;
+    }
 
     /// Presses key on virtual keyboard.
     pub fn press(&mut self, key: KeyCode) {
@@ -45,7 +50,7 @@ impl Keyboard {
 
     /// Checks virtual key is pressed.
     pub fn is_pressed(&self, key: KeyCode) -> bool {
-        self.inputs.contains_key(&key)
+        self.inputs.contains_key(&key) && !self.is_input_captured
     }
 
     /// Checks virtual is pressed then release it.
@@ -53,13 +58,15 @@ impl Keyboard {
         let is_pressed = self.inputs.contains_key(&key);
         self.release(key);
 
-        return is_pressed
+        return is_pressed && !self.is_input_captured
     }
 
     /// Checks combination is pressed.
     #[allow(dead_code)]
     pub fn is_pressed_combo(&self, keys: &[KeyCode]) -> bool {
-        keys.iter().all(|key| self.inputs.contains_key(key))
+        keys.iter()
+            .all(|key| self.inputs.contains_key(key))
+        && !self.is_input_captured
     }
 
     /// Checks combination just pressed.
@@ -67,7 +74,7 @@ impl Keyboard {
     pub fn just_pressed_combo(&mut self, keys: &[KeyCode]) -> bool {
         if keys.iter().all(|key| self.inputs.contains_key(key)) {
             keys.iter().for_each(|&key| self.release(key));
-            return true
+            return !self.is_input_captured
         } else { false }
     }
 }

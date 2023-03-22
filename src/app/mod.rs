@@ -154,6 +154,11 @@ impl App where Self: 'static {
     /// Main events cleared.
     async fn main_events_cleared(&mut self, control_flow: &mut ControlFlow) {
         use glium::glutin::event::VirtualKeyCode as Key;
+
+        // ImGui can capture keyboard, if needed.
+        self.input_manager.keyboard.set_input_capture(
+            self.graphics.imguic.io().want_capture_keyboard
+        );
         
         /* Close window is `escape` pressed */
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::APP_EXIT) {
@@ -237,7 +242,7 @@ impl App where Self: 'static {
             loading::spawn_info_window(ui, keyboard);
 
             /* Logger window */
-            logger::spawn_window(ui, keyboard, &mut self.chunk_arr.inner);
+            logger::spawn_window(ui, keyboard);
 
             /* Light control window */
             for light in self.lights.iter_mut().take(1) {

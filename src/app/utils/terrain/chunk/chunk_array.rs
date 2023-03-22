@@ -12,7 +12,7 @@ use {
         saves::Save,
         reinterpreter::*,
         graphics::camera::Camera,
-        concurrency::loading::{self, Command},
+        concurrency::loading,
         user_io::{InputManager, Keyboard},
     },
     math_linear::prelude::*,
@@ -150,70 +150,23 @@ impl ChunkArray {
         let volume = Self::volume(sizes);
         assert_eq!(volume, chunks.len(), "chunks should have same length as sizes volume");
 
-        let loading_sender = loading::make_sender();
-        
-        let loading_name = "Chunk saving";
-        loading_sender.send(Command::Add(loading_name.into()))
-            .await
-            .expect("failed to send loading command");
+        let loading = loading::start_new("chunk saving");
 
         Save::new(save_name.clone())
             .create(save_path).await?
             .write(&sizes, ChunkArrSaveType::Sizes).await
             .pointer_array(volume, ChunkArrSaveType::Array, |i| {
                 let chunks = &chunks;
-                let loading_sender = loading_sender.clone();
+                let loading = &loading;
+
                 async move {
-                    use {
-                        std::iter::FromIterator,
-                        bit_vec::BitVec,
-                        huffman_compress as hc,
-                    };
-
-                    let loading_value = i as f32 / (volume - 1) as f32;
-
-                    loading_sender.send(Command::Refresh(loading_name, loading_value))
-                        .await
-                        .expect("failed to send loading command");
-
-                    match chunks[i].info.fill_type {
-                        FillType::AllSame(id) =>
-                            FillType::AllSame(id).as_bytes(),
-
-                        FillType::Default => {
-                            let n_voxels = chunks[i].voxel_ids.len();
-                            assert_eq!(
-                                n_voxels, Chunk::VOLUME,
-                                "cannot save unknown-sized chunk with size {n_voxels}",
-                            );
-
-                            let freqs = Self::count_voxel_frequencies(chunks[i].voxel_ids.iter().copied());
-                            let (book, _) = hc::CodeBuilder::from_iter(
-                                freqs.iter().map(|(&k, &v)| (k, v))
-                            ).finish();
-                            let mut bits = BitVec::new();
-
-                            for &voxel_id in chunks[i].voxel_ids.iter() {
-                                book.encode(&mut bits, &voxel_id)
-                                    .expect(&format!("{voxel_id} should be in the book"));
-                            }
-
-                            compose! {
-                                FillType::Default.as_bytes(),
-                                freqs.as_bytes(),
-                                bits.as_bytes(),
-                            }.collect()
-                        }
-                    }
+                    loading.refresh(i as f32 / (volume - 1) as f32);
+                    Self::chunk_as_bytes(chunks[i])
                 }
             }).await
             .save()
             .await?;
 
-        loading_sender.send(Command::Finish(loading_name))
-            .await
-            .expect("failed to send loading finish command");
-        
         logger::log!(Info, "chunk array", format!("end saving to {save_name} in {save_path}"));
 
         Ok(())
@@ -224,12 +177,7 @@ impl ChunkArray {
     ) -> io::Result<(USize3, Vec<(Vec<Id>, FillType)>)> {
         logger::log!(Info, "chunk array", format!("start reading chunks from {save_name} in {save_path}"));
 
-        let loading = loading::make_sender();
-
-        let loading_name = "Reading chunks from file";
-        loading.send(Command::Add(loading_name.into()))
-            .await
-            .expect("failed to send an add command");
+        let loading = loading::start_new("Reading chunks from file");
 
         let mut save = Save::new(save_name)
             .open(save_path)
@@ -238,64 +186,92 @@ impl ChunkArray {
         let sizes = save.read(ChunkArrSaveType::Sizes).await;
 
         let chunks = save.read_pointer_array(ChunkArrSaveType::Array, |i, bytes| {
-            let loading = loading.clone();
+            let loading = &loading;
+
             async move {
-                use {
-                    std::iter::FromIterator,
-                    bit_vec::BitVec,
-                    huffman_compress as hc,
-                };
-
-                let percent = i as f32 / (Self::volume(sizes) - 1) as f32;
-
-                loading.send(Command::Refresh(loading_name, percent))
-                    .await
-                    .expect("failed to send a refresh command");
-
-                let mut reader = ByteReader::new(&bytes);
-                let fill_type: FillType = reader.read()
-                    .expect("failed to reinterpret bytes");
-
-                match fill_type {
-                    FillType::Default => {
-                        let freqs: HashMap<Id, usize> = reader.read()
-                            .expect("failed to read frequencies map from bytes");
-
-                        let bits: BitVec = reader.read()
-                            .expect("failed to read `BitVec` from bytes");
-
-                        let (_, tree) = hc::CodeBuilder::from_iter(freqs).finish();
-                        let voxel_ids: Vec<Id> = tree.unbounded_decoder(bits).collect();
-
-                        let is_id_valid = voxel_ids.iter()
-                            .copied()
-                            .all(voxel::is_id_valid);
-
-                        assert!(is_id_valid, "Voxel ids in voxel array should be valid");
-                        assert_eq!(voxel_ids.len(), Chunk::VOLUME, "There's should be Chunk::VOLUME voxels");
-
-                        (voxel_ids, FillType::Default)
-                    },
-
-                    FillType::AllSame(id) =>
-                        (vec![], FillType::AllSame(id)),
-                }
+                loading.refresh(i as f32 / (Self::volume(sizes) - 1) as f32);
+                Self::array_filltype_from_bytes(&bytes)
             }
         }).await;
-
-        loading.send(Command::Finish(loading_name))
-            .await
-            .expect("failed to send a finish command");
 
         logger::log!(Info, "chunk array", format!("end reading chunks from {save_name} in {save_path}"));
 
         Ok((sizes, chunks))
     }
 
+    /// Reinterprets [chunk][Chunk] as bytes. It uses Huffman's compresstion.
+    pub fn chunk_as_bytes(chunk: ChunkRef<'_>) -> Vec<u8> {
+        use { std::iter::FromIterator, bit_vec::BitVec, huffman_compress as hc };
+
+        match chunk.info.fill_type {
+            FillType::AllSame(id) =>
+                FillType::AllSame(id).as_bytes(),
+
+            FillType::Default => {
+                let n_voxels = chunk.voxel_ids.len();
+                assert_eq!(
+                    n_voxels, Chunk::VOLUME,
+                    "cannot save unknown-sized chunk with size {n_voxels}",
+                );
+
+                let freqs = Self::count_voxel_frequencies(chunk.voxel_ids.iter().copied());
+                let (book, _) = hc::CodeBuilder::from_iter(
+                    freqs.iter().map(|(&k, &v)| (k, v))
+                ).finish();
+                let mut bits = BitVec::new();
+
+                for &voxel_id in chunk.voxel_ids.iter() {
+                    book.encode(&mut bits, &voxel_id)
+                        .expect("voxel id should be in the book");
+                }
+
+                compose! {
+                    FillType::Default.as_bytes(),
+                    freqs.as_bytes(),
+                    bits.as_bytes(),
+                }.collect()
+            }
+        }
+    }
+
+    /// Reinterprets bytes as [chunk][Chunk] and reads [id][Id] array and [fill type][FillType] from it.
+    pub fn array_filltype_from_bytes(bytes: &[u8]) -> (Vec<Id>, FillType) {
+        use { std::iter::FromIterator, bit_vec::BitVec, huffman_compress as hc };
+
+        let mut reader = ByteReader::new(bytes);
+        let fill_type: FillType = reader.read()
+            .expect("failed to reinterpret bytes");
+
+        match fill_type {
+            FillType::Default => {
+                let freqs: HashMap<Id, usize> = reader.read()
+                    .expect("failed to read frequencies map from bytes");
+
+                let bits: BitVec = reader.read()
+                    .expect("failed to read `BitVec` from bytes");
+
+                let (_, tree) = hc::CodeBuilder::from_iter(freqs).finish();
+                let voxel_ids: Vec<Id> = tree.unbounded_decoder(bits).collect();
+
+                let is_id_valid = voxel_ids.iter()
+                    .copied()
+                    .all(voxel::is_id_valid);
+
+                assert!(is_id_valid, "Voxel ids in voxel array should be valid");
+                assert_eq!(voxel_ids.len(), Chunk::VOLUME, "There's should be Chunk::VOLUME voxels");
+
+                (voxel_ids, FillType::Default)
+            },
+
+            FillType::AllSame(id) =>
+                (vec![], FillType::AllSame(id)),
+        }
+    }
+
     /// Sets voxel's id with position `pos` to `new_id` and returns old [`Id`]. If voxel is 
     /// set then this function should drop all its meshes and the neighbor ones.
     /// # Error
-    /// Returns `Err` if `new_id` is not valid or `pos` is not in this [`ChunkArray`].
+    /// Returns [`Err`] if `new_id` is not valid or `pos` is not in this [chunk array][ChunkArray].
     pub fn set_voxel(&mut self, pos: Int3, new_id: Id) -> Result<Id, EditError> {
         let chunk_pos = Chunk::local_pos(pos);
         let chunk_idx = Self::pos_to_idx(self.sizes, chunk_pos)
@@ -314,6 +290,13 @@ impl ChunkArray {
         }
 
         Ok(old_id)
+    }
+
+    /// Drops all meshes from each [chunk][Chunk].
+    pub fn drop_all_meshes(&mut self) {
+        for chunk in self.chunks.iter_mut() {
+            chunk.drop_all_meshes();
+        }
     }
 
     fn count_voxel_frequencies(voxel_ids: impl IntoIterator<Item = Id>) -> HashMap<Id, usize> {
@@ -388,7 +371,7 @@ impl ChunkArray {
         sdex::get_index(&coord_idx.as_array(), &sizes.as_array())
     }
 
-    /// Convertes chunk pos to an array index.
+    /// Convertes [chunk][Chunk] pos to an array index.
     pub fn pos_to_idx(sizes: USize3, pos: Int3) -> Option<usize> {
         let coord_idx = Self::pos_to_coord_idx(sizes, pos)?;
         Some(Self::coord_idx_to_idx(sizes, coord_idx))
@@ -909,8 +892,32 @@ impl ChunkArray {
             });
     }
 
+    pub fn process_commands(&mut self) {
+        use crate::app::utils::terrain::chunk::commands::*;
+
+        let mut commands = COMMAND_CHANNEL  
+            .lock()
+            .expect("mutex should be not poisoned");
+
+        while let Ok(command) = commands.receiver.try_recv() {
+            match command {
+                Command::SetVoxel { pos, new_id } => {
+                    let _old_id = self.set_voxel(pos, new_id)
+                        .unwrap_or_else(|err| {
+                            logger::log!(Error, "chunk array", format!("failed to set voxel: {err}"));
+                            return 0;
+                        });
+                },
+
+                Command::DropAllMeshes => self.drop_all_meshes(),
+            }
+        }
+    }
+
     pub async fn update(&mut self, input: &mut InputManager) -> Result<(), UpdateError> {
         use glium::glutin::event::VirtualKeyCode as Key;
+
+        self.process_commands();
 
         if input.keyboard.just_pressed_combo(&[Key::LControl, Key::S]) {
             let handle = tokio::spawn(
