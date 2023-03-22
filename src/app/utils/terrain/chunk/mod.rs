@@ -3,6 +3,7 @@
 pub mod iterator;
 pub mod chunk_array;
 pub mod tasks;
+pub mod commands;
 
 use {
     crate::app::utils::{
@@ -16,6 +17,7 @@ use {
         reinterpreter::*,
     },
     super::voxel::{
+        self,
         Voxel,
         LoweredVoxel,
         shape::{CubeDetailed, CubeLowered},
@@ -304,7 +306,9 @@ impl_chunk_with_refs! {
 
         match self.info.fill_type {
             FillType::Default => {
-                let id = self.voxel_ids[Chunk::voxel_pos_to_idx(local_pos)] as usize;
+                let idx = Chunk::voxel_pos_to_idx(local_pos)
+                    .expect("local_pos should be local");
+                let id = self.voxel_ids[idx] as usize;
 
                 assert!(
                     (0..VOXEL_DATA.len()).contains(&id),
@@ -418,6 +422,43 @@ impl Chunk {
         }.as_optimized()
     }
 
+    /// Sets voxel's id with position `pos` to `new_id` and returns old [`Id`]. If voxel is 
+    /// set then this function should drop all its meshes.
+    /// # Error
+    /// Returns `Err` if `new_id` is not valid or `pos` is not in this [`Chunk`].
+    pub fn set_voxel(&mut self, pos: Int3, new_id: Id) -> Result<Id, EditError> {
+        if !voxel::is_id_valid(new_id) {
+            return Err(EditError::InvalidId(new_id));
+        }
+
+        let local_pos = Self::global_to_local_pos(self.pos, pos);
+        let idx = Self::voxel_pos_to_idx(local_pos)
+            .ok_or_else(|| EditError::PosIdConversion(pos))?;
+
+        // We know that idx is valid so we can get-by-index.
+        let old_id = self.voxel_ids[idx];
+        if self.voxel_ids[idx] != new_id {
+            self.voxel_ids[idx] = new_id;
+            self.drop_all_meshes();
+
+            // Chunk may be overoptimized and needs to be optimized again.
+            self.optimize();
+        }
+
+        Ok(old_id)
+    }
+
+    /// Drops all generated meshes, if they exist.
+    pub fn drop_all_meshes(&mut self) {
+        if let Some(mesh) = self.detailed_mesh.take() {
+            drop(mesh)
+        }
+
+        for mesh in self.low_meshes.iter_mut().filter_map(|m| m.take()) {
+            drop(mesh)
+        }        
+    }
+
     /// Gives iterator over all id-vectors in chunk (or relative to chunk voxel positions).
     pub fn local_pos_iter() -> SpaceIter {
         SpaceIter::new(Int3::ZERO..Self::SIZES.into())
@@ -439,7 +480,18 @@ impl Chunk {
 
     /// Applies storage optimizations to voxel array.
     pub fn as_optimized(mut self) -> Self {
-        if !self.is_generated() { return self }
+        self.optimize();
+        self
+    }
+
+    /// Applies storage optimizations to voxel array.
+    pub fn optimize(&mut self) {
+        if !self.is_generated() { return }
+        
+        self.info = Info {
+            active_lod: self.info.active_lod,
+            ..Default::default()
+        };
 
         /* All-same pass */
         let sample_id = self.voxel_ids[0];
@@ -453,13 +505,16 @@ impl Chunk {
         let is_all_not_air = self.voxel_ids.iter()
             .all(|&voxel_id| voxel_id != AIR_VOXEL_DATA.id);
         self.info.is_filled = is_all_not_air;
-
-        return self
     }
 
     /// Converts chunk position to world position.
     pub fn global_pos(chunk_pos: Int3) -> Int3 {
         chunk_pos * Self::SIZE as i32
+    }
+
+    /// Converts all in-chunk world positions to that chunk position.
+    pub fn local_pos(world_pos: Int3) -> Int3 {
+        world_pos / Self::SIZE as i32
     }
 
     /// Computes global position from relative to chunk position.
@@ -473,8 +528,14 @@ impl Chunk {
     }
 
     /// Gives index in voxel array by it's 3D-index (or relative to chunk position)
-    pub fn voxel_pos_to_idx(pos: Int3) -> usize {
-        sdex::get_index(&USize3::from(pos).as_array(), &[Self::SIZE; 3])
+    pub fn voxel_pos_to_idx(pos: Int3) -> Option<usize> {
+        if pos.x < 0 || pos.y < 0 || pos.z < 0 {
+            return None;
+        }
+
+        let idx = sdex::get_index(&USize3::from(pos).as_array(), &[Self::SIZE; 3]);
+
+        (idx < Self::VOLUME).then(|| idx)
     }
 
     /// Sets mesh to chunk.
@@ -815,3 +876,12 @@ impl ChunkAdj<'_> {
 }
 
 pub type Lod = u32;
+
+#[derive(Debug, Error)]
+pub enum EditError {
+    #[error("failed to convert voxel position to array index {0}")]
+    PosIdConversion(Int3),
+
+    #[error("invalid id {0}")]
+    InvalidId(Id),
+}

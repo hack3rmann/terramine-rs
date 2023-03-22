@@ -237,7 +237,7 @@ impl App where Self: 'static {
             loading::spawn_info_window(ui, keyboard);
 
             /* Logger window */
-            logger::spawn_window(ui, keyboard);
+            logger::spawn_window(ui, keyboard, &mut self.chunk_arr.inner);
 
             /* Light control window */
             for light in self.lights.iter_mut().take(1) {

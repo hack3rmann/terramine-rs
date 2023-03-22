@@ -267,15 +267,19 @@ impl SpaceIter {
             })
     }
 
-    pub fn adj_iter(pos: Int3) -> impl Iterator<Item = Int3> + ExactSizeIterator {
-        vec![
+    pub fn adj_iter(pos: Int3) -> smallvec::IntoIter<[Int3; 6]> {
+        use smallvec::{smallvec, SmallVec};
+
+        let vals: SmallVec<[Int3; 6]> = smallvec![
             pos + veci!( 1,  0,  0),
             pos + veci!(-1,  0,  0),
             pos + veci!( 0,  1,  0),
             pos + veci!( 0, -1,  0),
             pos + veci!( 0,  0,  1),
             pos + veci!( 0,  0, -1),
-        ].into_iter()
+        ];
+
+        vals.into_iter()
     }
 
     fn coord_idx_from_idx(idx: usize, sizes: USize3) -> USize3 {
@@ -416,6 +420,21 @@ pub struct Sides<T> {
     /// Adjacent chunks in order: `back[0] -> front[1] -> top[2] -> 
     /// bottom[3] -> right[4] -> left[5]`.
     pub inner: [T; 6],
+}
+
+impl<T> std::iter::FromIterator<T> for Sides<T> {
+    fn from_iter<Iter: IntoIterator<Item = T>>(iter: Iter) -> Self {
+        let mut iter = iter.into_iter();
+
+        let arr = array_init::array_init(|_|
+            iter.next()
+                .expect("iterator should have exactly 6 elements")
+        );
+
+        assert!(iter.next().is_none(), "iterator should have exactly 6 elements");
+
+        Self { inner: arr }
+    }
 }
 
 impl<T: Copy> Copy for Sides<T> { }

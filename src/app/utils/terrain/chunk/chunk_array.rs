@@ -3,6 +3,7 @@ use {
         cfg, logger,
         terrain::{
             chunk::{
+                EditError, Sides,
                 prelude::*, Id,
                 tasks::{FullTask, LowTask, Task, GenTask}
             },
@@ -291,6 +292,30 @@ impl ChunkArray {
         Ok((sizes, chunks))
     }
 
+    /// Sets voxel's id with position `pos` to `new_id` and returns old [`Id`]. If voxel is 
+    /// set then this function should drop all its meshes and the neighbor ones.
+    /// # Error
+    /// Returns `Err` if `new_id` is not valid or `pos` is not in this [`ChunkArray`].
+    pub fn set_voxel(&mut self, pos: Int3, new_id: Id) -> Result<Id, EditError> {
+        let chunk_pos = Chunk::local_pos(pos);
+        let chunk_idx = Self::pos_to_idx(self.sizes, chunk_pos)
+            .ok_or(EditError::PosIdConversion(pos))?;
+
+        // We know that `chunk_idx` is valid so we can get-by-index.
+        let old_id = self.chunks[chunk_idx].set_voxel(pos, new_id)?;
+        let is_changed = old_id != new_id;
+
+        if is_changed {
+            for idx in Self::get_adj_chunks_idxs(self.sizes, pos).as_array() {
+                if let Some(idx) = idx {
+                    self.chunks[idx].drop_all_meshes();
+                }
+            }
+        }
+
+        Ok(old_id)
+    }
+
     fn count_voxel_frequencies(voxel_ids: impl IntoIterator<Item = Id>) -> HashMap<Id, usize> {
         let mut result = HashMap::new();
 
@@ -403,18 +428,19 @@ impl ChunkArray {
 
     /// Gives adjacent chunks references by center chunk position.
     fn get_adj_chunks_inner(chunks: &[Chunk], sizes: USize3, pos: Int3) -> ChunkAdj<'_> {
-        let mut adj = ChunkAdj::none();
-        let adjs = SpaceIter::adj_iter(Int3::ZERO)
-            .filter_map(|off|
-                Some((off, Self::get_chunk_by_pos_inner(chunks, sizes, pos + off)?))
-            );
+        let sides = Self::get_adj_chunks_idxs(sizes, pos)
+            .map(|opt| opt.map(|idx|
+                chunks[idx].make_ref()
+            ));
 
-        for (offset, chunk) in adjs {
-            adj.sides.set(offset, Some(chunk))
-                .expect("offset should be adjacent (see SpaceIter::adj_iter())");
-        }
+        ChunkAdj { sides }
+    }
 
-        adj
+    /// Gives '`iterator`' over adjacent to `pos` array indices.
+    pub fn get_adj_chunks_idxs(sizes: USize3, pos: Int3) -> Sides<Option<usize>> {
+        SpaceIter::adj_iter(pos)
+            .map(|pos| Self::pos_to_idx(sizes, pos))
+            .collect()
     }
 
     /// Gives iterator over chunk coordinates.

@@ -1,7 +1,7 @@
 #![macro_use]
 
 use {
-    crate::app::utils::user_io::Keyboard,
+    crate::app::utils::{user_io::Keyboard, terrain::chunk::chunk_array::ChunkArray},
     std::{sync::Mutex, collections::VecDeque, borrow::Cow},
     tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, self},
     lazy_static::lazy_static,
@@ -92,8 +92,15 @@ macro_rules! log {
 
 pub use crate::log;
 
-pub fn spawn_window(ui: &imgui::Ui, keyboard: &Keyboard) {
-    use crate::app::utils::graphics::ui::imgui_constructor::make_window;
+pub fn spawn_window(ui: &imgui::Ui, keyboard: &Keyboard, chunk_arr: &mut ChunkArray) {
+    use {
+        crate::app::utils::{
+            graphics::ui::imgui_constructor::make_window,
+            terrain::voxel::voxel_data::Id,
+        },
+        cpython::{Python, PyResult, PyErr, py_fn, PyDict, PyString},
+        std::sync::atomic::{AtomicUsize, Ordering},
+    };
 
     const ERROR_COLOR: [f32; 4] = [0.8, 0.1, 0.05, 1.0];
     const INFO_COLOR:  [f32; 4] = [1.0, 1.0, 1.0,  1.0];
@@ -113,6 +120,44 @@ pub fn spawn_window(ui: &imgui::Ui, keyboard: &Keyboard) {
         .build(|| {
             let messages = LOG_MESSAGES.lock()
                 .expect("messages lock should be not poisoned");
+
+            let mut buf = String::with_capacity(256);
+            let is_enter_pressed = ui.input_text("Console", &mut buf)
+                .enter_returns_true(true)
+                .build();
+
+            let gil = Python::acquire_gil();
+            let py = gil.python();
+        
+            // FIXME:
+
+            static CHUNK_ARR_ADDR: AtomicUsize = AtomicUsize::new(0);
+            CHUNK_ARR_ADDR.store((chunk_arr as *const _) as usize, Ordering::SeqCst);
+
+            let voxel_set = py_fn!(py, voxel_set(x: i32, y: i32, z: i32, new_id: u16) -> PyResult<Id> {
+                let chunk_arr_addr = CHUNK_ARR_ADDR.load(Ordering::SeqCst);
+                let chunk_arr = unsafe {
+                    (chunk_arr_addr as *mut ChunkArray)
+                        .as_mut()
+                        .ok_or_else(|| PyErr::new::<PyString, _>(py, PyString::new(py, "chunk_arr ptr is null")))?
+                };
+
+                let old_id = chunk_arr.set_voxel(veci!(x, y, z), new_id)
+                    .map_err(|err| PyErr::new::<PyString, _>(py, PyString::new(py, &err.to_string())))?;
+
+                Ok(old_id)
+            });
+
+            let locals = PyDict::new(py);
+            locals.set_item(py, "voxel_set", voxel_set)
+                .unwrap_or_else(|err|
+                    log!(Error, "logger", format!("failed to set 'voxel_set' item: {err:?}"))
+                );
+
+            if is_enter_pressed {
+                py.run(&buf, None, Some(&locals))
+                    .unwrap_or_else(|err| log!(Error, "logger", format!("{err:?}")));
+            }
 
             for msg in messages.iter().rev() {
                 let color = match msg.msg_type {
