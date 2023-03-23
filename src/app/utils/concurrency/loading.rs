@@ -80,7 +80,7 @@ impl Loadings {
             .build(|| {
                 for (name, &value) in self.list.iter() {
                     imgui::ProgressBar::new(value)
-                        .overlay_text(name)
+                        .overlay_text(&format!("{name}: {percent:.1}%", percent = 100.0 * value))
                         .build(ui);
                 }
             });

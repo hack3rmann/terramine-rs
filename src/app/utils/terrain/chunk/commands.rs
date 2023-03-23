@@ -19,6 +19,12 @@ pub enum Command {
         new_id: Id,
     },
 
+    FillVoxels {
+        pos_from: Int3,
+        pos_to: Int3,
+        new_id: Id,
+    },
+
     DropAllMeshes,
 }
 

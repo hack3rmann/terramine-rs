@@ -200,7 +200,7 @@ impl App where Self: 'static {
         }
 
         /* Update save/load tasks of `ChunkArray` */
-        self.chunk_arr.update(&mut self.input_manager).await
+        self.chunk_arr.update(&mut self.input_manager, self.graphics.display.as_ref().get_ref()).await
             .expect("failed to update chunk array");
 
         let window = self.graphics.display.gl_window();

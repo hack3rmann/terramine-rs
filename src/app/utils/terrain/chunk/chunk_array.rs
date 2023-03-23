@@ -18,11 +18,11 @@ use {
     math_linear::prelude::*,
     std::{
         slice::{Iter, IterMut},
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         io, mem,
         sync::Mutex,
     },
-    glium as gl,
+    glium::{self as gl, backend::Facade},
     thiserror::Error,
     tokio::task::{JoinHandle, JoinError},
 };
@@ -150,7 +150,7 @@ impl ChunkArray {
         let volume = Self::volume(sizes);
         assert_eq!(volume, chunks.len(), "chunks should have same length as sizes volume");
 
-        let loading = loading::start_new("chunk saving");
+        let loading = loading::start_new("Chunks saving");
 
         Save::new(save_name.clone())
             .create(save_path).await?
@@ -177,7 +177,7 @@ impl ChunkArray {
     ) -> io::Result<(USize3, Vec<(Vec<Id>, FillType)>)> {
         logger::log!(Info, "chunk array", format!("start reading chunks from {save_name} in {save_path}"));
 
-        let loading = loading::start_new("Reading chunks from file");
+        let loading = loading::start_new("Chunks reading");
 
         let mut save = Save::new(save_name)
             .open(save_path)
@@ -892,32 +892,64 @@ impl ChunkArray {
             });
     }
 
-    pub fn process_commands(&mut self) {
+    pub fn process_commands(&mut self, facade: &dyn Facade) {
         use crate::app::utils::terrain::chunk::commands::*;
 
         let mut commands = COMMAND_CHANNEL  
             .lock()
             .expect("mutex should be not poisoned");
 
+        let mut change_tracker = ChangeTracker::new(self.sizes);
+
         while let Ok(command) = commands.receiver.try_recv() {
             match command {
                 Command::SetVoxel { pos, new_id } => {
-                    let _old_id = self.set_voxel(pos, new_id)
+                    let old_id = self.set_voxel(pos, new_id)
                         .unwrap_or_else(|err| {
                             logger::log!(Error, "chunk array", format!("failed to set voxel: {err}"));
                             return 0;
                         });
+
+                    if old_id != new_id {
+                        change_tracker.track_voxel(pos);
+                    }
                 },
+
+                Command::FillVoxels { pos_from, pos_to, new_id } => {
+                    todo!("fill_voxels() impl")
+                }
 
                 Command::DropAllMeshes => self.drop_all_meshes(),
             }
         }
+
+        let n_changed = change_tracker.idxs.len();
+        self.reload_chunks_by_indices(change_tracker.idxs, facade);
+
+        if n_changed != 0 {
+            logger::log!(Info, "chunk array", format!("{n_changed} chunks were updated!"));
+        }
     }
 
-    pub async fn update(&mut self, input: &mut InputManager) -> Result<(), UpdateError> {
+    pub fn reload_chunks_by_indices(&mut self, indices: impl IntoIterator<Item = usize>, facade: &dyn Facade) {
+        for idx in indices.into_iter() {
+            let chunk_pos = Self::idx_to_pos(idx, self.sizes);
+
+            // * It is safe, because current chunk mutable reference is not aliasing
+            // * adjacent chunks shared references.
+            let adj = unsafe { self.get_adj_chunks(chunk_pos).as_static() };
+
+            match self.chunks.get_mut(idx) {
+                Some(chunk) => chunk.generate_mesh(0, adj, facade),
+                None => continue,
+            }
+        }
+    }
+
+    pub async fn update(&mut self, input: &mut InputManager, facade: &dyn Facade) -> Result<(), UpdateError> {
         use glium::glutin::event::VirtualKeyCode as Key;
 
-        self.process_commands();
+        self.process_commands(facade);
 
         if input.keyboard.just_pressed_combo(&[Key::LControl, Key::S]) {
             let handle = tokio::spawn(
@@ -965,4 +997,40 @@ pub enum TaskError {
         lod: Lod,
         pos: Int3,
     },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChangeTracker {
+    pub sizes: USize3,
+    pub idxs: HashSet<usize>,
+}
+
+impl ChangeTracker {
+    pub fn new(sizes: USize3) -> Self {
+        Self { sizes, idxs: HashSet::new() }
+    }
+
+    pub fn track_voxel(&mut self, voxel_pos: Int3) {
+        use smallvec::SmallVec;
+
+        let chunk_pos = Chunk::local_pos(voxel_pos);
+
+        let idx = match ChunkArray::pos_to_idx(self.sizes, chunk_pos) {
+            Some(idx) => idx,
+            None => return,
+        };
+
+        let adj: SmallVec<[usize; 6]> = SpaceIter::adj_iter(chunk_pos)
+            .filter_map(|pos| ChunkArray::pos_to_idx(self.sizes, pos))
+            .collect();
+
+        self.idxs.insert(idx);
+        for idx in adj {
+            self.idxs.insert(idx);
+        }
+    }
+
+    pub fn track_voxels_range(&mut self, pos_from: Int3, pos_to: Int3) {
+        todo!()
+    }
 }

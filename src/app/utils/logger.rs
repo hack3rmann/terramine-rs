@@ -81,7 +81,7 @@ macro_rules! log {
 
 pub use crate::log;
 
-pub fn spawn_window(ui: &imgui::Ui, keyboard: &Keyboard) {
+pub fn spawn_window(ui: &imgui::Ui, keyboard: &mut Keyboard) {
     use {
         crate::app::utils::{
             graphics::ui::imgui_constructor::make_window,
@@ -110,10 +110,15 @@ pub fn spawn_window(ui: &imgui::Ui, keyboard: &Keyboard) {
             let messages = LOG_MESSAGES.lock()
                 .expect("messages lock should be not poisoned");
 
-            let mut buf = String::with_capacity(256);
-            let is_enter_pressed = ui.input_text("Console", &mut buf)
+            static INPUT: Mutex<String> = Mutex::new(String::new());
+            let mut input = INPUT.lock()
+                .expect("mutex should be not poisoned");
+
+            let is_enter_pressed = ui.input_text("Console", &mut input)
                 .enter_returns_true(true)
                 .build();
+
+            let buf = input.replace("^;", "\n");
 
             let gil = Python::acquire_gil();
             let py = gil.python();
