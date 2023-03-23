@@ -128,6 +128,14 @@ pub fn spawn_window(ui: &imgui::Ui, keyboard: &mut Keyboard) {
                 Ok(0)
             });
 
+            let voxel_fill = py_fn!(py, voxel_fill(
+                sx: i32, sy: i32, sz: i32,
+                ex: i32, ey: i32, ez: i32, new_id: u16
+            ) -> PyResult<i32> {
+                command(Command::FillVoxels { pos_from: veci!(sx, sy, sz), pos_to: veci!(ex, ey, ez), new_id });
+                Ok(0)
+            });
+
             let drop_all_meshes = py_fn!(py, drop_all_meshes() -> PyResult<i32> {
                 command(Command::DropAllMeshes);
                 Ok(0)
@@ -138,6 +146,11 @@ pub fn spawn_window(ui: &imgui::Ui, keyboard: &mut Keyboard) {
             locals.set_item(py, "voxel_set", voxel_set)
                 .unwrap_or_else(|err|
                     log!(Error, "logger", format!("failed to set 'voxel_set' item: {err:?}"))
+                );
+
+            locals.set_item(py, "voxel_fill", voxel_fill)
+                .unwrap_or_else(|err|
+                    log!(Error, "logger", format!("failed to set 'voxel_fill' item: {err:?}"))
                 );
                 
             locals.set_item(py, "drop_all_meshes", drop_all_meshes)

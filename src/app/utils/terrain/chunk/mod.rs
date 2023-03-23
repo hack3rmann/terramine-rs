@@ -474,7 +474,9 @@ impl Chunk {
         }
 
         let local_pos_from = Self::global_to_local_pos_checked(self.pos, pos_from)?;
-        let local_pos_to   = Self::global_to_local_pos_checked(self.pos, pos_to)?;
+
+        Self::global_to_local_pos_checked(self.pos, pos_to - Int3::ONE)?;
+        let local_pos_to = Self::global_to_local_pos(self.pos, pos_to);
 
         let mut is_changed = false;
 
@@ -485,8 +487,6 @@ impl Chunk {
             let old_id = self.get_id(idx).expect("idx should be valid");
             if old_id != new_id {
                 is_changed = true;
-
-                // We can just get-by-index due to previous check.
                 self.set_id(idx, new_id);
             }
         }

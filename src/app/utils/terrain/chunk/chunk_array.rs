@@ -292,6 +292,53 @@ impl ChunkArray {
         Ok(old_id)
     }
 
+    /// Fills volume of voxels to same [id][Id] and returnes `is_changed`.
+    pub fn fill_voxels(&mut self, pos_from: Int3, pos_to: Int3, new_id: Id) -> Result<bool, EditError> {
+        let chunk_pos_from = Chunk::local_pos(pos_from);
+        let chunk_pos_to   = Chunk::local_pos(pos_to + Int3::from(Chunk::SIZES) - Int3::ONE);
+
+        Self::pos_to_idx(self.sizes, chunk_pos_from)
+            .ok_or(EditError::PosIdConversion(chunk_pos_from))?;
+
+        Self::pos_to_idx(self.sizes, chunk_pos_to - Int3::ONE)
+            .ok_or(EditError::PosIdConversion(chunk_pos_to - Int3::ONE))?;
+
+        let mut is_changed = false;
+
+        for chunk_pos in SpaceIter::new(chunk_pos_from..chunk_pos_to) {
+            let idx = Self::pos_to_idx(self.sizes, chunk_pos)
+                .expect("chunk_pos already valid");
+
+            let min_voxel_pos = Chunk::global_pos(chunk_pos);
+            let end_voxel_pos = min_voxel_pos + Int3::from(Chunk::SIZES);
+
+            let pos_from = Int3::new(
+                Ord::max(pos_from.x, min_voxel_pos.x),
+                Ord::max(pos_from.y, min_voxel_pos.y),
+                Ord::max(pos_from.z, min_voxel_pos.z),
+            );
+
+            let pos_to = Int3::new(
+                Ord::min(pos_to.x, end_voxel_pos.x),
+                Ord::min(pos_to.y, end_voxel_pos.y),
+                Ord::min(pos_to.z, end_voxel_pos.z),
+            );
+
+            let chunk_changed = self.chunks[idx].fill_voxels(pos_from, pos_to, new_id)?;
+            if chunk_changed {
+                is_changed = true;
+                
+                for idx in Self::get_adj_chunks_idxs(self.sizes, chunk_pos).as_array() {
+                    if let Some(idx) = idx {
+                        self.chunks[idx].drop_all_meshes();
+                    }
+                }
+            }
+        }
+
+        Ok(is_changed)
+    }
+
     /// Drops all meshes from each [chunk][Chunk].
     pub fn drop_all_meshes(&mut self) {
         for chunk in self.chunks.iter_mut() {
@@ -916,7 +963,11 @@ impl ChunkArray {
                 },
 
                 Command::FillVoxels { pos_from, pos_to, new_id } => {
-                    todo!("fill_voxels() impl")
+                    let _is_changed = self.fill_voxels(pos_from, pos_to, new_id)
+                        .unwrap_or_else(|err| {
+                            logger::log!(Error, "chunk array", format!("failed to fill voxels: {err}"));
+                            return false;
+                        });
                 }
 
                 Command::DropAllMeshes => self.drop_all_meshes(),
@@ -1028,9 +1079,5 @@ impl ChangeTracker {
         for idx in adj {
             self.idxs.insert(idx);
         }
-    }
-
-    pub fn track_voxels_range(&mut self, pos_from: Int3, pos_to: Int3) {
-        todo!()
     }
 }
