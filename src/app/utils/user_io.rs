@@ -140,8 +140,8 @@ pub mod mouse {
 
     pub fn get_x() -> f32 { X.load(Ordering::Relaxed) }
     pub fn get_y() -> f32 { Y.load(Ordering::Relaxed) }
-    pub fn get_dx() -> f32 { DX.load(Ordering::Relaxed) }
-    pub fn get_dy() -> f32 { DY.load(Ordering::Relaxed) }
+    pub fn get_dx_dt() -> f32 { DX.load(Ordering::Relaxed) }
+    pub fn get_dy_dt() -> f32 { DY.load(Ordering::Relaxed) }
 
     pub fn press(button: MouseButton) {
         INPUTS.write()
@@ -205,7 +205,7 @@ pub mod mouse {
 
             let mut inputs = INPUTS.write()
                 .expect("rwlock should be not poisoned");
-            
+
             for key in released_keys.iter() {
                 inputs.remove(key);
             }
@@ -241,14 +241,14 @@ pub mod mouse {
     }
 
     /// Gives cursor position in screen cordinates.
-    pub fn get_cursor_screen_pos() -> Result<vec2, MouseError> {
+    pub fn get_cursor_screen_pos() -> Result<Int2, MouseError> {
         // Point cordinates struct
         let mut pt = POINT { x: 0, y: 0 };
         
         // Checks if WinAPI `GetCursorPos()` success then return cursor position else error
         let result = unsafe { GetCursorPos(&mut pt) };
         if result != 0 {
-            Ok(vecf!(pt.x as f32, pt.y as f32))
+            Ok(veci!(pt.x, pt.y))
         } else {
             // `GetCursorPos()` returned `false` for some reason
             Err(MouseError::GetCursorPos(result))
@@ -257,7 +257,7 @@ pub mod mouse {
 
     /// Gives cursor position in window cordinates.
     pub fn get_cursor_pos(window: &glium::glutin::window::Window) -> Result<vec2, MouseError> {
-        let (x, y) = get_cursor_screen_pos()?.as_tuple();
+        let (x, y) = vec2::from(get_cursor_screen_pos()?).as_tuple();
         let window_pos = window.inner_position()?;
 
         Ok(vecf!(x - window_pos.x as f32, y - window_pos.y as f32))

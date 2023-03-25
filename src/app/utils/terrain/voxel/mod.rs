@@ -11,10 +11,12 @@ use {
     },
     voxel_data::*,
     math_linear::prelude::*,
+    parse_display::Display,
 };
 
 /// Represents voxel.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Display)]
+#[display("{data.name} with id = {data.id} in {pos}")]
 pub struct Voxel {
     pub data: &'static VoxelData,
     pub pos: Int3,

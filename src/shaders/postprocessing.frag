@@ -18,6 +18,7 @@ uniform vec3 cam_pos;
 uniform mat4 proj;
 uniform mat4 view;
 uniform bool render_shadows;
+uniform float aspect_ratio;
 
 /// These constants are shared. See cfg module.
 vec4 default_color = vec4(0.01, 0.01, 0.01, 1.0);
@@ -103,6 +104,14 @@ float get_shadow(vec4 frag_pos, float current_depth) {
     return shadow_summary / 7.0;
 }
 
+bool is_cross() {
+    vec2 pos = v_frag_texcoord.xy * 2.0 - 1.0;
+    pos.y *= aspect_ratio;
+
+    return abs(pos.x) <= 0.002 && abs(pos.y) <= 0.010 ||
+           abs(pos.x) <= 0.010 && abs(pos.y) <= 0.002;
+}
+
 void main() {
     float depth = get_depth();
     vec3 albedo = get_albedo();
@@ -115,6 +124,10 @@ void main() {
 
     if (normal == vec3(0.0) || depth > z_far * 0.5) {
         color = default_color;
+        if (is_cross()) {
+            color = (1.0 - color) * 0.5;
+            color.a = 1.0;
+        }
         return;
     }
 
@@ -145,4 +158,9 @@ void main() {
         pow(color.b, 0.4545),
         1.0
     );
+
+    if (is_cross()) {
+        color = (1.0 - color) * 0.5;
+        color.a = 1.0;
+    }
 }

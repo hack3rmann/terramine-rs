@@ -5,6 +5,7 @@
 use {
     math_linear::prelude::*,
     std::ops::Range,
+    smallvec::SmallVec,
 };
 
 /// Iterator over chunk border.
@@ -268,7 +269,7 @@ impl SpaceIter {
     }
 
     pub fn adj_iter(pos: Int3) -> smallvec::IntoIter<[Int3; 6]> {
-        use smallvec::{smallvec, SmallVec};
+        use smallvec::smallvec;
 
         let vals: SmallVec<[Int3; 6]> = smallvec![
             pos + veci!( 1,  0,  0),
@@ -318,6 +319,7 @@ impl ExactSizeIterator for SpaceIter {
 }
 
 impl DoubleEndedIterator for SpaceIter {
+    // FIXME: wrong next_back() impl
     fn next_back(&mut self) -> Option<Self::Item> {
         match self.idx < self.size {
             true if 0 < self.size => {
@@ -524,10 +526,17 @@ impl<T> std::ops::IndexMut<usize> for Sides<T> {
 }
 
 #[allow(dead_code)]
-pub fn is_bordered(pos: Int3, bounds: Range<Int3>) -> bool {
-    pos.x == bounds.start.x || pos.x == bounds.end.x - 1 ||
-    pos.y == bounds.start.y || pos.y == bounds.end.y - 1 ||
-    pos.z == bounds.start.z || pos.z == bounds.end.z - 1
+pub fn offsets_from_border(pos: Int3, bounds: Range<Int3>) -> SmallVec<[Int3; 6]> {
+    let mut result = SmallVec::new();
+
+    if pos.x == bounds.start.x { result.push(veci!(-1, 0, 0)) }
+    if pos.y == bounds.start.y { result.push(veci!(0, -1, 0)) }
+    if pos.z == bounds.start.z { result.push(veci!(0, 0, -1)) }
+    if pos.x == bounds.end.x - 1 { result.push(veci!(1, 0, 0)) }
+    if pos.y == bounds.end.y - 1 { result.push(veci!(0, 1, 0)) }
+    if pos.z == bounds.end.z - 1 { result.push(veci!(0, 0, 1)) }
+
+    result
 }
 
 #[cfg(test)]

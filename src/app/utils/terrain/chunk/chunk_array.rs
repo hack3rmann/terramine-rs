@@ -1,3 +1,5 @@
+use crate::app::utils::terrain::chunk::commands;
+
 use {
     crate::app::utils::{
         cfg, logger,
@@ -13,8 +15,9 @@ use {
         reinterpreter::*,
         graphics::camera::Camera,
         concurrency::loading,
+        user_io::{Key, keyboard, mouse},
     },
-    math_linear::prelude::*,
+    math_linear::{prelude::*, math::ray::space_3d::Line},
     std::{
         slice::{Iter, IterMut},
         collections::{HashMap, HashSet},
@@ -274,17 +277,19 @@ impl ChunkArray {
 
         // We know that `chunk_idx` is valid so we can get-by-index.
         let old_id = self.chunks[chunk_idx].set_voxel(pos, new_id)?;
-        let is_changed = old_id != new_id;
-
-        if is_changed {
-            for idx in Self::get_adj_chunks_idxs(self.sizes, pos).as_array() {
-                if let Some(idx) = idx {
-                    self.chunks[idx].drop_all_meshes();
-                }
-            }
-        }
 
         Ok(old_id)
+    }
+
+    /// Gives voxel if it is in the [array][ChunkArray].
+    pub fn get_voxel(&self, pos: Int3) -> Option<Voxel> {
+        let chunk_pos = Chunk::local_pos(pos);
+        let chunk_idx = Self::pos_to_idx(self.sizes, chunk_pos)?;
+
+        match self.chunks[chunk_idx].get_voxel_global(pos) {
+            ChunkOption::Item(voxel) => Some(voxel),
+            ChunkOption::OutsideChunk => unreachable!("pos {} is indeed in that chunk", pos),
+        }
     }
 
     /// Fills volume of voxels to same [id][Id] and returnes `is_changed`.
@@ -969,8 +974,9 @@ impl ChunkArray {
             }
         }
 
-        let n_changed = change_tracker.idxs.len();
-        self.reload_chunks_by_indices(change_tracker.idxs, facade);
+        let idxs_to_reload = change_tracker.idxs_to_reload();
+        let n_changed = idxs_to_reload.len();
+        self.reload_chunks_by_indices(idxs_to_reload, facade);
 
         if n_changed != 0 {
             logger::log!(Info, "chunk array", format!("{n_changed} chunks were updated!"));
@@ -992,9 +998,45 @@ impl ChunkArray {
         }
     }
 
-    pub async fn update(&mut self, facade: &dyn Facade) -> Result<(), UpdateError> {
-        use crate::app::utils::user_io::{Key, keyboard};
+    pub fn trace_ray(&self, ray: Line, max_steps: usize) -> impl Iterator<Item = Voxel> + '_ {
+        (0..max_steps)
+            .filter_map(move |i| {
+                let pos = ray.point_along(i as f32 * 0.125);
+                let pos = Int3::new(
+                    pos.x.round() as i32,
+                    pos.y.round() as i32,
+                    pos.z.round() as i32,
+                );
 
+                self.get_voxel(pos)
+            })
+    }
+
+    pub fn proccess_camera_input(&mut self, cam: &Camera) {
+        const MAX_STEPS: usize = 1024;
+
+        let first_voxel = self.trace_ray(Line::new(cam.pos, cam.front), MAX_STEPS)
+            .filter(|voxel| !voxel.is_air())
+            .next();
+
+        match first_voxel {
+            Some(voxel) => {
+                use {
+                    commands::{command, Command},
+                    crate::app::utils::terrain::voxel::voxel_data::AIR_VOXEL_DATA
+                };
+
+                if mouse::just_left_pressed() {
+                    command(Command::SetVoxel { pos: voxel.pos, new_id: AIR_VOXEL_DATA.id })
+                }
+            },
+
+            None => (),
+        }
+    }
+
+    pub async fn update(&mut self, facade: &dyn Facade, cam: &Camera) -> Result<(), UpdateError> {
+        self.proccess_camera_input(cam);
         self.process_commands(facade);
 
         if keyboard::just_pressed_combo([Key::LControl, Key::S]) {
@@ -1048,31 +1090,40 @@ pub enum TaskError {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChangeTracker {
     pub sizes: USize3,
-    pub idxs: HashSet<usize>,
+    pub voxel_poses: HashSet<Int3>,
 }
 
 impl ChangeTracker {
     pub fn new(sizes: USize3) -> Self {
-        Self { sizes, idxs: HashSet::new() }
+        Self { sizes, voxel_poses: HashSet::new() }
     }
 
     pub fn track_voxel(&mut self, voxel_pos: Int3) {
-        use smallvec::SmallVec;
+        self.voxel_poses.insert(voxel_pos);
+    }
 
-        let chunk_pos = Chunk::local_pos(voxel_pos);
+    pub fn idxs_to_reload(&self) -> HashSet<usize> {
+        let mut result = HashSet::new();
 
-        let idx = match ChunkArray::pos_to_idx(self.sizes, chunk_pos) {
-            Some(idx) => idx,
-            None => return,
-        };
+        for &voxel_pos in self.voxel_poses.iter() {
+            let chunk_pos = Chunk::local_pos(voxel_pos);
+            let local_pos = Chunk::global_to_local_pos(chunk_pos, voxel_pos);
 
-        let adj: SmallVec<[usize; 6]> = SpaceIter::adj_iter(chunk_pos)
-            .filter_map(|pos| ChunkArray::pos_to_idx(self.sizes, pos))
-            .collect();
+            let chunk_idx = match ChunkArray::pos_to_idx(self.sizes, chunk_pos) {
+                Some(idx) => idx,
+                None => continue,
+            };
 
-        self.idxs.insert(idx);
-        for idx in adj {
-            self.idxs.insert(idx);
+            for offset in iterator::offsets_from_border(local_pos, Int3::ZERO..Int3::from(Chunk::SIZES)) {
+                match ChunkArray::pos_to_idx(self.sizes, chunk_pos + offset) {
+                    Some(idx) => { result.insert(idx); },
+                    None => continue,
+                }
+            }
+
+            result.insert(chunk_idx);
         }
+
+        result
     }
 }

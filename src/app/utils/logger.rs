@@ -106,6 +106,7 @@ pub fn spawn_window(ui: &imgui::Ui) {
     let [width, height] = ui.io().display_size;
 
     make_window(ui, "Log list")
+        .collapsed(true, imgui::Condition::Appearing)
         .save_settings(false)
         .collapsible(true)
         .bg_alpha(0.8)

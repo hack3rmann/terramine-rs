@@ -175,8 +175,8 @@ impl Camera {
         if self.grabbes_cursor {
             self.rotate(
                  0.0,
-                -mouse::get_dy() as f64 * dt * 0.2,
-                 mouse::get_dx() as f64 * dt * 0.2,
+                -mouse::get_dy_dt() as f64 * dt * 0.2,
+                 mouse::get_dx_dt() as f64 * dt * 0.2,
             );
         }
     }

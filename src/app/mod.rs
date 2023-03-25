@@ -194,7 +194,7 @@ impl App where Self: 'static {
         }
 
         /* Update save/load tasks of `ChunkArray` */
-        self.chunk_arr.update(self.graphics.display.as_ref().get_ref())
+        self.chunk_arr.update(self.graphics.display.as_ref().get_ref(), &self.camera)
             .await
             .expect("failed to update chunk array");
 
@@ -261,6 +261,7 @@ impl App where Self: 'static {
                 light_pos: self.lights[0].cam.pos.as_array(),
 
                 time: self.timer.time(),
+                aspect_ratio: self.camera.aspect_ratio,
                 cam_pos: self.camera.pos.as_array(),
                 proj: self.camera.get_proj(),
                 view: self.camera.get_view(),
