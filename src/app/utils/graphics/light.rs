@@ -23,7 +23,7 @@ impl DirectionalLight {
 
         make_window(ui, "Light", keyboard)
             .build(|| {
-                static ANGLES: (AtomicF32, AtomicF32) = (AtomicF32::new(0.0), AtomicF32::new(0.0));
+                static ANGLES: (AtomicF32, AtomicF32) = (AtomicF32::new(0.3), AtomicF32::new(5.7));
 
                 let (mut horizontal, mut vertical) = (
                     ANGLES.0.load(Ordering::SeqCst),
@@ -31,19 +31,17 @@ impl DirectionalLight {
                 );
 
                 ui.text("Rotation");
-                let h_edited = ui.slider("Horizontal", 0.0, 2.0 * PI, &mut horizontal);
-                let v_edited = ui.slider("Vertical",   0.0, 2.0 * PI, &mut vertical);
+                ui.slider("Horizontal", 0.0, 2.0 * PI, &mut horizontal);
+                ui.slider("Vertical",   0.0, 2.0 * PI, &mut vertical);
 
-                if h_edited || v_edited {
-                    ANGLES.0.store(horizontal, Ordering::SeqCst);
-                    ANGLES.1.store(vertical, Ordering::SeqCst);
+                ANGLES.0.store(horizontal, Ordering::SeqCst);
+                ANGLES.1.store(vertical, Ordering::SeqCst);
 
-                    self.cam.front = vec3::new(
-                        f32::cos(vertical) * f32::cos(horizontal),
-                        f32::sin(vertical),
-                        f32::cos(vertical) * f32::sin(horizontal),
-                    );
-                }
+                self.cam.front = vec3::new(
+                    f32::cos(vertical) * f32::cos(horizontal),
+                    f32::sin(vertical),
+                    f32::cos(vertical) * f32::sin(horizontal),
+                );
             });
     }
 

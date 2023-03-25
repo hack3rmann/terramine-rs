@@ -4,8 +4,9 @@ use {
     /* Other files */
     crate::app::utils::{
         cfg,
+        logger,
         concurrency::loading,
-        user_io::InputManager,
+        user_io::{InputManager, Key},
         graphics::{
             light::DirectionalLight,
             self,
@@ -54,6 +55,8 @@ pub struct App {
 impl App where Self: 'static {
     /// Constructs [`App`].
     pub fn new() -> Self {
+        let _work_guard = logger::work("app", "initialize");
+
         let graphics = Graphics::new()
             .expect("failed to create graphics");
 
@@ -148,7 +151,10 @@ impl App where Self: 'static {
 
     /// Main events cleared.
     async fn main_events_cleared(&mut self, control_flow: &mut ControlFlow) {
-        use glium::glutin::event::VirtualKeyCode as Key;
+        // ImGui can capture keyboard, if needed.
+        self.input_manager.keyboard.set_input_capture(
+            self.graphics.imguic.io().want_capture_keyboard
+        );
         
         /* Close window is `escape` pressed */
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::APP_EXIT) {
@@ -178,16 +184,19 @@ impl App where Self: 'static {
 
         if self.input_manager.keyboard.just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
             self.chunk_draw_bundle = ChunkDrawBundle::new(self.graphics.display.as_ref().get_ref());
-            self.graphics.refresh_postprocessing_shaders()
-                .expect("failed to refresh postprocessing shaders");
 
-            // FIXME:
-            self.normal_atlas = Texture::from_path("src/image/normal_atlas.png", self.graphics.display.as_ref().get_ref())
-                .expect("path should be valid and file is readable");
+            self.graphics.refresh_postprocessing_shaders().unwrap_or_else(|err|
+                logger::log!(Error, "app", format!("failed to reload postprocessing shaders: {err}"))
+            );
+
+            match Texture::from_path("src/image/normal_atlas.png", self.graphics.display.as_ref().get_ref()) {
+                Ok(normals) => self.normal_atlas = normals,
+                Err(err) => logger::log!(Error, "app", format!("failed to reload normal atlas: {err}")),
+            }
         }
 
         /* Update save/load tasks of `ChunkArray` */
-        self.chunk_arr.update(&mut self.input_manager).await
+        self.chunk_arr.update(&mut self.input_manager, self.graphics.display.as_ref().get_ref()).await
             .expect("failed to update chunk array");
 
         let window = self.graphics.display.gl_window();
@@ -227,6 +236,9 @@ impl App where Self: 'static {
 
             /* Loadings window */
             loading::spawn_info_window(ui, keyboard);
+
+            /* Logger window */
+            logger::spawn_window(ui, keyboard);
 
             /* Light control window */
             for light in self.lights.iter_mut().take(1) {
@@ -298,7 +310,11 @@ impl App where Self: 'static {
         self.input_manager.update(&self.graphics);		
 
         /* Loading recieve */
-        loading::recv_all()
-            .expect("failed to receive all loadings");
+        loading::recv_all().unwrap_or_else(|err|
+            logger::log!(Error, "app", format!("failed to receive all loadings: {err}"))
+        );
+
+        /* Log messages receive */
+        logger::recv_all();
     }
 }

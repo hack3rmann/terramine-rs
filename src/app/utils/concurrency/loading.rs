@@ -2,14 +2,13 @@
 
 use {
     crate::app::utils::{
-        cfg,
         user_io::Keyboard,
     },
     std::{
         collections::HashMap,
         sync::Mutex,
     },
-    tokio::sync::mpsc::{self, Receiver, Sender},
+    tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
     thiserror::Error,
     lazy_static::lazy_static,
 };
@@ -81,7 +80,7 @@ impl Loadings {
             .build(|| {
                 for (name, &value) in self.list.iter() {
                     imgui::ProgressBar::new(value)
-                        .overlay_text(name)
+                        .overlay_text(&format!("{name}: {percent:.1}%", percent = 100.0 * value))
                         .build(ui);
                 }
             });
@@ -110,18 +109,16 @@ pub enum Command<'s> {
 
 #[derive(Debug)]
 pub struct ChannelLoadings<'s> {
-    pub rx: Receiver<Command<'s>>,
-    pub tx: Sender<Command<'s>>,
+    pub rx: UnboundedReceiver<Command<'s>>,
+    pub tx: UnboundedSender<Command<'s>>,
     pub loads: Loadings,
 }
 
-pub type CommandSender<'s> = mpsc::Sender<Command<'s>>;
+pub type CommandSender<'s> = UnboundedSender<Command<'s>>;
 
 lazy_static! {
     pub static ref LOADINGS: Mutex<ChannelLoadings<'static>> = Mutex::new(ChannelLoadings::new());
 }
-
-pub const BUFFER_SIZE: usize = cfg::concurrency::loadings::BUFFER_SIZE;
 
 pub fn make_sender() -> CommandSender<'static> {
     LOADINGS.lock()
@@ -130,9 +127,17 @@ pub fn make_sender() -> CommandSender<'static> {
         .clone()
 }
 
+pub fn start_new(name: &'static str) -> LoadingGuard {
+    let sender = make_sender();
+    sender.send(Command::Add(name.to_owned()))
+        .expect("failed to send add command to loading");
+
+    LoadingGuard { name, sender }
+}
+
 impl<'s> ChannelLoadings<'s> {
     pub fn new() -> Self {
-        let (tx, rx) = mpsc::channel(BUFFER_SIZE);
+        let (tx, rx) = mpsc::unbounded_channel();
         Self { rx, tx, loads: Loadings::new() }
     }
 
@@ -151,5 +156,25 @@ impl<'s> ChannelLoadings<'s> {
         }
 
         Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct LoadingGuard {
+    name: &'static str,
+    sender: UnboundedSender<Command<'static>>,
+}
+
+impl Drop for LoadingGuard {
+    fn drop(&mut self) {
+        self.sender.send(Command::Finish(self.name))
+            .expect("failed to send finish command to loading");
+    }
+}
+
+impl LoadingGuard {
+    pub fn refresh(&self, value: f32) {
+        self.sender.send(Command::Refresh(self.name, value))
+            .expect("failed to send refresh command to loading");
     }
 }

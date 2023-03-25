@@ -11,11 +11,10 @@ use {
             camera::default as cam_def,
             window::default as window_def,
         },
-        user_io::{Keyboard, InputManager},
+        user_io::{Keyboard, InputManager, Key as KeyCode},
     },
     math_linear::prelude::*,
     frustum::Frustum,
-    glium::glutin::event::VirtualKeyCode as KeyCode,
 };
 
 /// Camera handler.

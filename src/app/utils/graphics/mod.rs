@@ -9,9 +9,7 @@ pub mod light;
 pub mod surface;
 
 use {
-    crate::app::utils::{
-        cfg,
-    },
+    crate::app::utils::{logger, cfg},
     super::window::Window,
     shader::{Shader, ShaderError},
     vertex_buffer::VertexBuffer,
@@ -74,6 +72,8 @@ pub struct Graphics {
 impl Graphics {
     /// Creates new [`Graphics`] that holds some renderer stuff.
     pub fn new() -> Result<Self, GraphicsError> {
+        logger::log!(Info, "graphics", "start initialization");
+
         /* Glutin event loop */
         let event_loop = EventLoop::new();
 
@@ -128,6 +128,8 @@ impl Graphics {
         };
 
         let surface = Surface::new(display.as_ref().get_ref(), UInt2::from(DEFAULT_SIZES))?;
+
+        logger::log!(Info, "graphics", "end initialization");
 
         Ok(Self {
             display,

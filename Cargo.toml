@@ -28,6 +28,9 @@ portable-atomic = { version = "1.0.1", features = ["float"] }
 huffman-compress = "0.6.1"
 bit-vec = "0.6.3"
 array-init = "2.1.0"
+cpython = { version = "0.7.1", features = ["extension-module"] }
+smallvec = { version = "1.10.0", features = ["const_generics"] }
+parse-display = "0.8.0"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"

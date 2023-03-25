@@ -3,6 +3,7 @@
 pub mod iterator;
 pub mod chunk_array;
 pub mod tasks;
+pub mod commands;
 
 use {
     crate::app::utils::{
@@ -16,6 +17,7 @@ use {
         reinterpreter::*,
     },
     super::voxel::{
+        self,
         Voxel,
         LoweredVoxel,
         shape::{CubeDetailed, CubeLowered},
@@ -281,6 +283,17 @@ impl_chunk_with_refs! {
             .collect()
     }
 
+    /// Gives [voxel id][Id] by it's index in array.
+    /// Returns [`Some`] with [id][Id] or [`None`] if `idx` is invalid.
+    pub fn get_id(&self, idx: usize) -> Option<Id> {
+        if Chunk::VOLUME <= idx { return None }
+
+        match self.info.fill_type {
+            FillType::AllSame(id) => Some(id),
+            FillType::Default => Some(self.voxel_ids[idx])
+        }
+    }
+
     /// Givex voxel from global position.
     pub fn get_voxel_global(&self, global_pos: Int3) -> ChunkOption<Voxel> {
         let local_pos = Chunk::global_to_local_pos(self.pos.to_owned(), global_pos);
@@ -296,27 +309,18 @@ impl_chunk_with_refs! {
     /// Gives voxel from local position (relative to chunk).
     /// 
     /// # Panic
-    /// Panics if [`Chunk`] is not already been generated.
+    /// Panics if [chunk][Chunk] is not already had been generated or `local_pos` is not local.
     pub fn get_voxel_local(&self, local_pos: Int3) -> Voxel {
         assert!(self.is_generated(), "chunk should be generated before it can provide voxels");
+        
+        let idx = Chunk::voxel_pos_to_idx(local_pos)
+            .expect("`local_pos` should be local to do conversion to idx");
+
+        let id = self.get_id(idx)
+            .expect("local_pos is local");
 
         let global_pos = Chunk::local_to_global_pos(self.pos.to_owned(), local_pos);
-
-        match self.info.fill_type {
-            FillType::Default => {
-                let id = self.voxel_ids[Chunk::voxel_pos_to_idx(local_pos)] as usize;
-
-                assert!(
-                    (0..VOXEL_DATA.len()).contains(&id),
-                    "Invalid voxel ID",
-                );
-
-                Voxel::new(global_pos, &VOXEL_DATA[id])
-            },
-
-            FillType::AllSame(id) =>
-                Voxel::new(global_pos, &VOXEL_DATA[id as usize]),
-        }
+        Voxel::new(global_pos, &VOXEL_DATA[id as usize])
     }
 
     /// Tests that chunk is visible by camera.
@@ -418,6 +422,89 @@ impl Chunk {
         }.as_optimized()
     }
 
+    /// Sets [voxel id][Id] to `new_id` by it's index in array.
+    /// Note that it does not drop all meshes that can possibly hold old id.
+    /// And note that it may unoptimize chunk even if it can be.
+    /// # Panic
+    /// Panics if `idx` is invalid.
+    pub fn set_id(&mut self, idx: usize, new_id: Id) {
+        assert!(idx < Self::VOLUME, "idx should be valid");
+
+        match self.info.fill_type {
+            FillType::Default => if self.voxel_ids[idx] != new_id {
+                self.voxel_ids[idx] = new_id;
+                self.optimize();
+            },
+
+            FillType::AllSame(id) => if id != new_id {
+                self.unoptimyze();
+                self.voxel_ids[idx] = new_id;
+            },
+        }
+    }
+
+    /// Sets voxel's id with position `pos` to `new_id` and returns old [id][Id]. If voxel is 
+    /// set then this function should drop all its meshes.
+    /// # Error
+    /// Returns `Err` if `new_id` is not valid or `pos` is not in this [`Chunk`].
+    pub fn set_voxel(&mut self, pos: Int3, new_id: Id) -> Result<Id, EditError> {
+        if !voxel::is_id_valid(new_id) {
+            return Err(EditError::InvalidId(new_id));
+        }
+
+        let local_pos = Self::global_to_local_pos_checked(self.pos, pos)?;
+        let idx = Self::voxel_pos_to_idx_unchecked(local_pos);
+
+        // We know that idx is valid so we can get-by-index.
+        let old_id = self.get_id(idx).expect("idx should be valid");
+        if old_id != new_id {
+            self.set_id(idx, new_id);
+            self.optimize();
+
+            self.drop_all_meshes();
+        }
+
+        Ok(old_id)
+    }
+
+    /// Sets voxel's ids in range `pos_from..pos_to` to index [`new_id`][Id].
+    pub fn fill_voxels(&mut self, pos_from: Int3, pos_to: Int3, new_id: Id) -> Result<bool, EditError> {
+        if !voxel::is_id_valid(new_id) {
+            return Err(EditError::InvalidId(new_id));
+        }
+
+        let local_pos_from = Self::global_to_local_pos_checked(self.pos, pos_from)?;
+
+        Self::global_to_local_pos_checked(self.pos, pos_to - Int3::ONE)?;
+        let local_pos_to = Self::global_to_local_pos(self.pos, pos_to);
+
+        let mut is_changed = false;
+
+        for local_pos in SpaceIter::new(local_pos_from..local_pos_to) {
+            // We can safely not to check idx due to previous check.
+            let idx = Self::voxel_pos_to_idx_unchecked(local_pos);
+            
+            let old_id = self.get_id(idx).expect("idx should be valid");
+            if old_id != new_id {
+                is_changed = true;
+                self.set_id(idx, new_id);
+            }
+        }
+
+        if is_changed {
+            self.optimize();
+            self.drop_all_meshes();
+        }
+
+        Ok(is_changed)
+    }
+
+    /// Drops all generated meshes, if they exist.
+    pub fn drop_all_meshes(&mut self) {
+        if let Some(_) = self.detailed_mesh.take() { }
+        for _ in self.low_meshes.iter_mut().filter_map(|m| m.take()) { }        
+    }
+
     /// Gives iterator over all id-vectors in chunk (or relative to chunk voxel positions).
     pub fn local_pos_iter() -> SpaceIter {
         SpaceIter::new(Int3::ZERO..Self::SIZES.into())
@@ -439,7 +526,20 @@ impl Chunk {
 
     /// Applies storage optimizations to voxel array.
     pub fn as_optimized(mut self) -> Self {
-        if !self.is_generated() { return self }
+        self.optimize();
+        self
+    }
+
+    /// Applies storage optimizations to [voxel array][Chunk].
+    pub fn optimize(&mut self) {
+        self.unoptimyze();
+
+        if !self.is_generated() { return }
+        
+        self.info = Info {
+            active_lod: self.info.active_lod,
+            ..Default::default()
+        };
 
         /* All-same pass */
         let sample_id = self.voxel_ids[0];
@@ -453,13 +553,34 @@ impl Chunk {
         let is_all_not_air = self.voxel_ids.iter()
             .all(|&voxel_id| voxel_id != AIR_VOXEL_DATA.id);
         self.info.is_filled = is_all_not_air;
-
-        return self
     }
+
+    /// Disapplies storage optimizations.
+    pub fn unoptimyze(&mut self) {
+        match self.info.fill_type {
+            FillType::Default => (),
+            FillType::AllSame(id) =>
+                self.voxel_ids = vec![id; Self::VOLUME],
+        }
+
+        self.info.fill_type = FillType::Default;
+    }
+
+    
 
     /// Converts chunk position to world position.
     pub fn global_pos(chunk_pos: Int3) -> Int3 {
         chunk_pos * Self::SIZE as i32
+    }
+
+    /// Converts all in-chunk world positions to that chunk position.
+    pub fn local_pos(world_pos: Int3) -> Int3 {
+        let size = Self::SIZE as i32;
+        Int3::new(
+            world_pos.x.div_euclid(size),
+            world_pos.y.div_euclid(size),
+            world_pos.z.div_euclid(size),
+        )
     }
 
     /// Computes global position from relative to chunk position.
@@ -472,8 +593,39 @@ impl Chunk {
         global_voxel_pos - Self::global_pos(chunk_pos)
     }
 
+    /// Computes local (relative to chunk) position from global position.
+    /// # Error
+    /// Returns [`Err`] if local position is out of [chunk][Chunk] bounds.
+    pub fn global_to_local_pos_checked(chunk_pos: Int3, global_voxel_pos: Int3) -> Result<Int3, EditError> {
+        let local_pos = Self::global_to_local_pos(chunk_pos, global_voxel_pos);
+
+        let is_out_of_bounds =
+            local_pos.x < 0 || Self::SIZES.x as i32 <= local_pos.x ||
+            local_pos.y < 0 || Self::SIZES.y as i32 <= local_pos.y ||
+            local_pos.z < 0 || Self::SIZES.z as i32 <= local_pos.z;
+
+        match is_out_of_bounds {
+            true => Err(EditError::OutOfBounds { pos: global_voxel_pos, chunk_pos }),
+            false => Ok(local_pos),
+        }
+    }
+
     /// Gives index in voxel array by it's 3D-index (or relative to chunk position)
-    pub fn voxel_pos_to_idx(pos: Int3) -> usize {
+    /// # Error
+    /// Returns [`None`] if `pos` < [`Int3::ZERO`][Int3] or `pos` >= [`Chunk::SIZES`][Chunk].
+    pub fn voxel_pos_to_idx(pos: Int3) -> Option<usize> {
+        if pos.x < 0 || pos.y < 0 || pos.z < 0 {
+            return None;
+        }
+
+        let idx = sdex::get_index(&USize3::from(pos).as_array(), &[Self::SIZE; 3]);
+
+        (idx < Self::VOLUME).then(|| idx)
+    }
+
+    /// Gives index in voxel array by it's 3D-index (or relative to chunk position)
+    /// without idx-safe ckeck.
+    pub fn voxel_pos_to_idx_unchecked(pos: Int3) -> usize {
         sdex::get_index(&USize3::from(pos).as_array(), &[Self::SIZE; 3])
     }
 
@@ -815,3 +967,18 @@ impl ChunkAdj<'_> {
 }
 
 pub type Lod = u32;
+
+#[derive(Debug, Error)]
+pub enum EditError {
+    #[error("failed to convert voxel position to array index {0}")]
+    PosIdConversion(Int3),
+
+    #[error("position is out of chunk bounds")]
+    OutOfBounds {
+        pos: Int3,
+        chunk_pos: Int3,
+    },
+
+    #[error("invalid id {0}")]
+    InvalidId(Id),
+}
