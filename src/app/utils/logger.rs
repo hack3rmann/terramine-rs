@@ -2,7 +2,6 @@
 
 use {
     crate::app::utils::{
-        user_io::Keyboard,
         concurrency::channel::Channel,
     },
     std::{sync::Mutex, collections::VecDeque, borrow::Cow},
@@ -90,7 +89,7 @@ macro_rules! log {
 
 pub use crate::log;
 
-pub fn spawn_window(ui: &imgui::Ui, keyboard: &mut Keyboard) {
+pub fn spawn_window(ui: &imgui::Ui) {
     use {
         crate::app::utils::{
             graphics::ui::imgui_constructor::make_window,
@@ -106,7 +105,7 @@ pub fn spawn_window(ui: &imgui::Ui, keyboard: &mut Keyboard) {
 
     let [width, height] = ui.io().display_size;
 
-    make_window(ui, "Log list", keyboard)
+    make_window(ui, "Log list")
         .save_settings(false)
         .collapsible(true)
         .bg_alpha(0.8)

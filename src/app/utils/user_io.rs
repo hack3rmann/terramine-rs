@@ -1,311 +1,355 @@
 //! 
-//! Keyboard IO handler
+//! IO handler
 //! 
 
 use {
-    super::graphics::Graphics,
     winapi::{
         um::winuser::GetCursorPos,
-        shared::windef::{LPPOINT, POINT},
+        shared::windef::POINT,
     },
-    std::{collections::HashMap, sync::Mutex},
+    std::{collections::{HashMap, HashSet}, sync::{RwLock, Mutex, atomic::{AtomicBool, Ordering}}},
     glium::glutin::{
         event::{
             ElementState,
-            VirtualKeyCode as KeyCode,
             MouseButton,
             Event,
             WindowEvent
         },
         window::CursorGrabMode,
         dpi::PhysicalPosition,
-    }
+    },
+    lazy_static::lazy_static,
+    math_linear::prelude::*,
+    thiserror::Error,
 };
 
 pub use glium::glutin::event::VirtualKeyCode as Key;
 
-/// Keyboard handler.
-#[derive(Default, Debug)]
-pub struct Keyboard {
-    pub inputs: HashMap<KeyCode, ElementState>,
-    pub is_input_captured: bool,
+pub mod keyboard {
+    #![allow(dead_code)]
+
+    use super::*;
+
+    lazy_static! {
+        pub static ref INPUTS: RwLock<HashMap<Key, ElementState>> = RwLock::new(HashMap::new());
+        pub static ref RELEASED_KEYS: Mutex<HashSet<Key>> = Mutex::new(HashSet::new());
+    }
+
+    pub static IS_INPUT_CAPTURED: AtomicBool = AtomicBool::new(false);
+
+    pub fn set_input_capture(capture: bool) {
+        IS_INPUT_CAPTURED.store(capture, Ordering::SeqCst);
+    }
+
+    pub fn press(key: Key) {
+        INPUTS.write()
+            .expect("mutex should be not poisoned")
+            .insert(key, ElementState::Pressed);
+    }
+
+    pub fn release(key: Key) {
+        INPUTS.write()
+            .expect("mutex should be not poisoned")
+            .remove(&key);
+    }
+
+    pub fn is_pressed(key: Key) -> bool {
+        let is_pressed = INPUTS.read()
+            .expect("mutex should be not poisoned")
+            .contains_key(&key);
+        let is_captured = IS_INPUT_CAPTURED.load(Ordering::Relaxed);
+
+        is_pressed && !is_captured
+    }
+
+    pub fn just_pressed(key: Key) -> bool {
+        let inputs = INPUTS.read()
+            .expect("mutex should be not poisoned");
+
+        let is_pressed = inputs.contains_key(&key);
+        if is_pressed && !IS_INPUT_CAPTURED.load(Ordering::Relaxed) {
+            RELEASED_KEYS.lock()
+                .expect("mutex should be not poisoned")
+                .insert(key);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn is_pressed_combo(keys: impl IntoIterator<Item = Key>) -> bool {
+        keys.into_iter()
+            .all(is_pressed)
+    }
+
+    pub fn just_pressed_combo<Iter>(keys: Iter) -> bool
+    where
+        Iter: IntoIterator<Item = Key>,
+        Iter::IntoIter: Clone,
+    {
+        let keys = keys.into_iter();
+        let is_pressed = is_pressed_combo(keys.clone());
+        let is_captured = IS_INPUT_CAPTURED.load(Ordering::SeqCst);
+
+        if is_pressed && !is_captured {
+            let mut released_keys = RELEASED_KEYS.lock()
+                .expect("mutex should be not poisoned");
+
+            for key in keys {
+                released_keys.insert(key);
+            }
+        }
+
+        is_pressed && !is_captured
+    }
+
+    pub fn update_input() {
+        let mut input = INPUTS.write()
+            .expect("mutex should be not poisoned");
+
+        let mut released_keys = RELEASED_KEYS.lock()
+            .expect("mutex should be not poisoned");
+
+        for key in released_keys.iter() {
+            input.remove(key);
+        }
+
+        released_keys.clear();
+    }
 }
 
-impl Keyboard {
-    /// Constructs keyboard with no keys are pressed.
-    #[allow(dead_code)]
-    pub fn new() -> Self { Default::default() }
+pub mod mouse {
+    #![allow(dead_code)]
 
-    pub fn set_input_capture(&mut self, capture: bool) {
-        self.is_input_captured = capture;
+    use {
+        super::*,
+        portable_atomic::AtomicF32,
+    };
+
+    lazy_static! {
+        pub(super) static ref INPUTS: RwLock<HashSet<MouseButton>> = RwLock::new(HashSet::new());
+        pub(super) static ref RELEASED_KEYS: Mutex<HashSet<MouseButton>> = Mutex::new(HashSet::new());
     }
 
-    /// Presses key on virtual keyboard.
-    pub fn press(&mut self, key: KeyCode) {
-        self.inputs.insert(key, ElementState::Pressed);
+    pub(super) static DX: AtomicF32 = AtomicF32::new(0.0);
+    pub(super) static DY: AtomicF32 = AtomicF32::new(0.0);
+    pub(super) static X: AtomicF32 = AtomicF32::new(0.0);
+    pub(super) static Y: AtomicF32 = AtomicF32::new(0.0);
+    pub(super) static IS_ON_WINDOW: AtomicBool = AtomicBool::new(false);
+    pub(super) static IS_GRABBED: AtomicBool = AtomicBool::new(false);
+
+    pub fn get_x() -> f32 { X.load(Ordering::Relaxed) }
+    pub fn get_y() -> f32 { Y.load(Ordering::Relaxed) }
+    pub fn get_dx() -> f32 { DX.load(Ordering::Relaxed) }
+    pub fn get_dy() -> f32 { DY.load(Ordering::Relaxed) }
+
+    pub fn press(button: MouseButton) {
+        INPUTS.write()
+            .expect("mutex should be not poisoned")
+            .insert(button);
     }
 
-    /// Releases key on virtual keyboard.
-    pub fn release(&mut self, key: KeyCode) {
-        self.inputs.remove(&key);
+    pub fn release(button: MouseButton) {
+        INPUTS.write()
+            .expect("mutex should be not poisoned")
+            .remove(&button);
     }
 
-    /// Checks virtual key is pressed.
-    pub fn is_pressed(&self, key: KeyCode) -> bool {
-        self.inputs.contains_key(&key) && !self.is_input_captured
+    pub fn is_pressed(button: MouseButton) -> bool {
+        INPUTS.read()
+            .expect("mutex should be not poisoned")
+            .contains(&button)
     }
 
-    /// Checks virtual is pressed then release it.
-    pub fn just_pressed(&mut self, key: KeyCode) -> bool {
-        let is_pressed = self.inputs.contains_key(&key);
-        self.release(key);
+    pub fn just_pressed(button: MouseButton) -> bool {
+        let is_pressed = is_pressed(button);
 
-        return is_pressed && !self.is_input_captured
+        if is_pressed {
+            RELEASED_KEYS.lock()
+                .expect("mutex should be not poisoned")
+                .insert(button);
+        }
+
+        is_pressed
     }
 
-    /// Checks combination is pressed.
-    #[allow(dead_code)]
-    pub fn is_pressed_combo(&self, keys: &[KeyCode]) -> bool {
-        keys.iter()
-            .all(|key| self.inputs.contains_key(key))
-        && !self.is_input_captured
+    pub fn is_left_pressed() -> bool {
+        is_pressed(MouseButton::Left)
     }
 
-    /// Checks combination just pressed.
-    #[allow(dead_code)]
-    pub fn just_pressed_combo(&mut self, keys: &[KeyCode]) -> bool {
-        if keys.iter().all(|key| self.inputs.contains_key(key)) {
-            keys.iter().for_each(|&key| self.release(key));
-            return !self.is_input_captured
-        } else { false }
-    }
-}
-
-#[derive(Default, Debug)]
-pub struct Mouse {
-    pub inputs: HashMap<MouseButton, ElementState>,
-    pub dx: f64,
-    pub dy: f64,
-    pub x: f64,
-    pub y: f64,
-    pub on_window: bool,
-    pub is_grabbed: bool,
-}
-
-#[allow(dead_code)]
-impl Mouse {
-    /// Constructs Mouse with no buttons are pressed.
-    pub fn new() -> Self { Default::default() }
-
-    /// Presses virtual mouse button.
-    pub fn press(&mut self, button: MouseButton) {
-        self.inputs.insert(button, ElementState::Pressed);
+    pub fn is_right_pressed() -> bool {
+        is_pressed(MouseButton::Right)
     }
 
-    /// Releases virtual mouse button.
-    pub fn release(&mut self, button: MouseButton) {
-        self.inputs.remove(&button);
+    pub fn is_middle_pressed() -> bool {
+        is_pressed(MouseButton::Middle)
     }
 
-    /// Checks if left mouse button pressed.
-    pub fn is_left_pressed(&self) -> bool {
-        self.inputs.contains_key(&MouseButton::Left)
+    pub fn just_left_pressed() -> bool {
+        just_pressed(MouseButton::Left)
     }
 
-    /// Cheks if right mouse button pressed.
-    pub fn is_right_pressed(&self) -> bool {
-        self.inputs.contains_key(&MouseButton::Right)
+    pub fn just_right_pressed() -> bool {
+        just_pressed(MouseButton::Right)
     }
 
-    /// Checks if middle mouse button pressed.
-    pub fn is_middle_pressed(&self) -> bool {
-        self.inputs.contains_key(&MouseButton::Middle)
-    }
-
-    /// Checks if left mouse button pressed then releases it.
-    pub fn just_left_pressed(&mut self) -> bool {
-        let pressed = self.inputs.contains_key(&MouseButton::Left);
-        self.release(MouseButton::Left);
-        return pressed;
-    }
-
-    /// Cheks if right mouse button pressed.
-    pub fn just_right_pressed(&mut self) -> bool {
-        let pressed = self.inputs.contains_key(&MouseButton::Right);
-        self.release(MouseButton::Right);
-        return pressed;
-    }
-
-    /// Checks if middle mouse button pressed.
-    pub fn just_middle_pressed(&mut self) -> bool {
-        let pressed = self.inputs.contains_key(&MouseButton::Middle);
-        self.release(MouseButton::Middle);
-        return pressed;
+    pub fn just_middle_pressed() -> bool {
+        just_pressed(MouseButton::Middle)
     }
 
     /// Update mouse delta.
-    pub fn update(&mut self, graphics: &Graphics) {
+    pub fn update(window: &glium::glutin::window::Window) -> Result<(), MouseError> {
+        {
+            let mut released_keys = RELEASED_KEYS.lock()
+                .expect("mutex should be not poisoned");
+
+            let mut inputs = INPUTS.write()
+                .expect("rwlock should be not poisoned");
+            
+            for key in released_keys.iter() {
+                inputs.remove(key);
+            }
+
+            released_keys.clear();
+        }
+
         /* Get cursor position from WinAPI */
-        let (x, y) = Self::get_cursor_pos(graphics)
-            .expect("failed to get cursir pos");
+        let (x, y) = get_cursor_pos(window)?.as_tuple();
+        let prev_x = X.load(Ordering::SeqCst);
+        let prev_y = Y.load(Ordering::SeqCst);
 
         /* Update struct */
-        self.dx = x - self.x;
-        self.dy = y - self.y;
-        self.x = x;
-        self.y = y;
+        X.store(x, Ordering::SeqCst);
+        Y.store(y, Ordering::SeqCst);
+        DX.store(x - prev_x, Ordering::SeqCst);
+        DY.store(y - prev_y, Ordering::SeqCst);
 
         /* Get window size */
-        let wsize = graphics.display.gl_window().window().inner_size();
+        let wsize = window.inner_size();
 
         /* If cursor grabbed then not change mouse position and put cursor on center */
-        if self.is_grabbed {
-            graphics.display.gl_window().window().set_cursor_position(
+        if IS_GRABBED.load(Ordering::SeqCst) {
+            window.set_cursor_position(
                 PhysicalPosition::new(wsize.width / 2, wsize.height / 2)
             ).expect("failed to set cursor position");
             
-            self.x = (wsize.width  / 2) as f64;
-            self.y = (wsize.height / 2) as f64;
+            X.store((wsize.width  / 2) as f32, Ordering::SeqCst);
+            Y.store((wsize.height / 2) as f32, Ordering::SeqCst);
         }
+
+        Ok(())
     }
 
     /// Gives cursor position in screen cordinates.
-    pub fn get_cursor_screen_pos() -> Result<(f64, f64), &'static str> {
-        /* Point cordinates struct */
-        let pt: LPPOINT = &mut POINT { x: 0, y: 0 };
+    pub fn get_cursor_screen_pos() -> Result<vec2, MouseError> {
+        // Point cordinates struct
+        let mut pt = POINT { x: 0, y: 0 };
         
-        /* Checks if WinAPI `GetCursorPos()` success then return cursor position else error */
-        if unsafe { GetCursorPos(pt) } != 0 {
-            /* Safe because unwraping pointers after checking result */
-            let x = unsafe { (*pt).x as f64 };
-            let y = unsafe { (*pt).y as f64 };
-            Ok((x, y))
-        }
-        
-        else {
-            /* `GetCursorPos()` returned `false` for some reason */
-            Err("Can't get cursor position!")
+        // Checks if WinAPI `GetCursorPos()` success then return cursor position else error
+        let result = unsafe { GetCursorPos(&mut pt) };
+        if result != 0 {
+            Ok(vecf!(pt.x as f32, pt.y as f32))
+        } else {
+            // `GetCursorPos()` returned `false` for some reason
+            Err(MouseError::GetCursorPos(result))
         }
     }
 
     /// Gives cursor position in window cordinates.
-    pub fn get_cursor_pos(graphics: &Graphics) -> Result<(f64, f64), &'static str> {
-        let (x, y) = Self::get_cursor_screen_pos()?;
-        let window_pos = graphics.display
-            .gl_window()
-            .window()
-            .inner_position()
-            .expect("failed to get inner position");
+    pub fn get_cursor_pos(window: &glium::glutin::window::Window) -> Result<vec2, MouseError> {
+        let (x, y) = get_cursor_screen_pos()?.as_tuple();
+        let window_pos = window.inner_position()?;
 
-        Ok((x - window_pos.x as f64, y - window_pos.y as f64))
+        Ok(vecf!(x - window_pos.x as f32, y - window_pos.y as f32))
     }
 
     /// Grabs the cursor for camera control.
-    pub fn grab_cursor(&mut self, graphics: &Graphics) {
-        let window = graphics.display.gl_window();
-        let window = window.window();
-
+    pub fn grab_cursor(window: &glium::glutin::window::Window) {
         window.set_cursor_grab(CursorGrabMode::Confined)
             .or_else(|_| window.set_cursor_grab(CursorGrabMode::Locked))
             .expect("failed to set cursor grab");
         window.set_cursor_visible(false);
 
-        self.is_grabbed = true;
+        IS_GRABBED.store(true, Ordering::Relaxed);
     }
 
     /// Releases cursor for standart input.
-    pub fn release_cursor(&mut self, graphics: &Graphics) {
-        let window = graphics.display.gl_window();
-        let window = window.window();
-
+    pub fn release_cursor(window: &glium::glutin::window::Window) {
         window.set_cursor_grab(CursorGrabMode::None)
             .expect("failed to release cursor");
         window.set_cursor_visible(true);
 
-        self.is_grabbed = false;
+        IS_GRABBED.store(false, Ordering::Relaxed);
+    }
+
+    #[derive(Debug, Error)]
+    pub enum MouseError {
+        #[error("failed to get cursor position, error code: {0}")]
+        GetCursorPos(i32),
+
+        #[error("not supported: {0}")]
+        NotSupported(#[from] glium::glutin::error::NotSupportedError),
     }
 }
 
-/// Contains both input types: `keyboard` and `mouse`.
-#[derive(Default, Debug)]
-pub struct InputManager {
-    pub keyboard: Keyboard,
-    pub mouse: Mouse
-}
+pub fn handle_event(event: &Event<()>, window: &glium::glutin::window::Window) {
+    static CURSOR_REGRABBED: Mutex<bool> = Mutex::new(false);
+    
+    match event {
+        /* Window events */
+        Event::WindowEvent { event, .. } => match event {
+            /* Close event */
+            WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
+                /* Key matching */
+                Some(key) => match key {
+                    _ => {
+                        /* If key is pressed then press it on virtual keyboard, if not then release it. */
+                        match input.state {
+                            ElementState::Pressed =>
+                                keyboard::press(key),
 
-impl InputManager {
-    /// Constructs manager with default values.
-    pub fn new() -> Self { Default::default() }
-
-    pub fn handle_event(&mut self, event: &Event<()>, graphics: &Graphics) {
-        static CURSOR_REGRABBED: Mutex<bool> = Mutex::new(false);
-        
-        match event {
-            /* Window events */
-            Event::WindowEvent { event, .. } => match event {
-                 /* Close event */
-                WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
-                     /* Key matching */
-                     Some(key) => match key {
-                         _ => {
-                             /* If key is pressed then press it on virtual keyboard, if not then release it. */
-                             match input.state {
-                                 ElementState::Pressed => {
-                                     self.keyboard.press(key);
-                                 },
-                                 ElementState::Released => {
-                                     self.keyboard.release(key);
-                                 }
-                             }
-                         }
-                     }
-                     _ => ()
-                 },
-
-                 /* Mouse buttons match. */
-                 WindowEvent::MouseInput { button, state, .. } => match state {
-                     /* If button is pressed then press it on virtual mouse, if not then release it. */
-                     ElementState::Pressed => {
-                         self.mouse.press(*button);
-                     },
-
-                     ElementState::Released => {
-                         self.mouse.release(*button);
-                     }
-                 },
-
-                 /* Cursor entered the window event. */
-                 WindowEvent::CursorEntered { .. } => {
-                     self.mouse.on_window = true;
-                 },
-
-                 /* Cursor left the window. */
-                 WindowEvent::CursorLeft { .. } => {
-                     self.mouse.on_window = false;
-                 },
-
-                WindowEvent::Focused(focused) => {
-                    /* If window has unfocused then release cursor. */
-                    let mut lock_is_grabbed = CURSOR_REGRABBED.lock()
-                        .expect("mutex should be not poisoned");
-
-                    if *focused && *lock_is_grabbed && !self.mouse.is_grabbed {
-                        self.mouse.grab_cursor(graphics);
-                        *lock_is_grabbed = false;
-                    }
-                    
-                    else if self.mouse.is_grabbed {
-                        self.mouse.release_cursor(graphics);
-                        *lock_is_grabbed = true;
+                            ElementState::Released =>
+                                keyboard::release(key),
+                        }
                     }
                 }
-                _ => (),
+                 _ => ()
             },
-            _ => ()
-        }
-    }
 
-    pub fn update(&mut self, graphics: &Graphics) {
-        self.mouse.update(graphics);
+            /* Mouse buttons match. */
+            WindowEvent::MouseInput { button, state, .. } => match state {
+                /* If button is pressed then press it on virtual mouse, if not then release it. */
+                ElementState::Pressed =>
+                    mouse::press(*button),
+
+                ElementState::Released =>
+                    mouse::release(*button),
+            },
+
+            /* Cursor entered the window event. */
+            WindowEvent::CursorEntered { .. } =>
+                mouse::IS_ON_WINDOW.store(true, Ordering::Relaxed),
+
+            /* Cursor left the window. */
+            WindowEvent::CursorLeft { .. } =>
+                mouse::IS_ON_WINDOW.store(false, Ordering::Relaxed),
+
+            WindowEvent::Focused(focused) => {
+                /* If window has unfocused then release cursor. */
+                let mut is_regrabbed = CURSOR_REGRABBED.lock()
+                    .expect("mutex should be not poisoned");
+
+                let is_grabbed = mouse::IS_GRABBED.load(Ordering::SeqCst);
+                if *focused && *is_regrabbed && !is_grabbed {
+                    mouse::grab_cursor(window);
+                    *is_regrabbed = false;
+                } else if is_grabbed {
+                    mouse::release_cursor(window);
+                    *is_regrabbed = true;
+                }
+            }
+            _ => (),
+        },
+        _ => ()
     }
 }

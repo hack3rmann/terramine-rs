@@ -13,7 +13,6 @@ use {
         reinterpreter::*,
         graphics::camera::Camera,
         concurrency::loading,
-        user_io::{InputManager, Keyboard},
     },
     math_linear::prelude::*,
     std::{
@@ -893,10 +892,10 @@ impl ChunkArray {
         !self.voxels_gen_tasks.is_empty()
     }
 
-    pub fn spawn_control_window(&mut self, ui: &imgui::Ui, keyboard: &Keyboard) {
+    pub fn spawn_control_window(&mut self, ui: &imgui::Ui) {
         use crate::app::utils::graphics::ui::imgui_constructor::make_window;
 
-        make_window(ui, "Chunk array", keyboard)
+        make_window(ui, "Chunk array")
             .always_auto_resize(true)
             .build(|| {
                 ui.text(format!(
@@ -993,12 +992,12 @@ impl ChunkArray {
         }
     }
 
-    pub async fn update(&mut self, input: &mut InputManager, facade: &dyn Facade) -> Result<(), UpdateError> {
-        use crate::app::utils::user_io::Key;
+    pub async fn update(&mut self, facade: &dyn Facade) -> Result<(), UpdateError> {
+        use crate::app::utils::user_io::{Key, keyboard};
 
         self.process_commands(facade);
 
-        if input.keyboard.just_pressed_combo(&[Key::LControl, Key::S]) {
+        if keyboard::just_pressed_combo([Key::LControl, Key::S]) {
             let handle = tokio::spawn(
                 ChunkArray::save_to_file(self.sizes, self.make_static_refs(), "world", "world")
             );
@@ -1010,7 +1009,7 @@ impl ChunkArray {
             handle.await??;
         }
 
-        if input.keyboard.just_pressed_combo(&[Key::LControl, Key::O]) {
+        if keyboard::just_pressed_combo([Key::LControl, Key::O]) {
             let handle = tokio::spawn(ChunkArray::read_from_file("world", "world"));
             self.reading_handle = Some(handle);
         }

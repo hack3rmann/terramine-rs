@@ -1,6 +1,5 @@
 use {
     crate::app::utils::{
-        user_io::Keyboard,
         graphics::camera::Camera,
     },
     math_linear::prelude::*,
@@ -15,34 +14,33 @@ pub struct DirectionalLight {
 }
 
 impl DirectionalLight {
-    pub fn spawn_control_window(&mut self, ui: &imgui::Ui, keyboard: &Keyboard) {
+    pub fn spawn_control_window(&mut self, ui: &imgui::Ui) {
         use {
             crate::app::utils::graphics::ui::imgui_constructor::make_window,
             std::f32::consts::PI,
         };
 
-        make_window(ui, "Light", keyboard)
-            .build(|| {
-                static ANGLES: (AtomicF32, AtomicF32) = (AtomicF32::new(0.3), AtomicF32::new(5.7));
+        make_window(ui, "Light").build(|| {
+            static ANGLES: (AtomicF32, AtomicF32) = (AtomicF32::new(0.3), AtomicF32::new(5.7));
 
-                let (mut horizontal, mut vertical) = (
-                    ANGLES.0.load(Ordering::SeqCst),
-                    ANGLES.1.load(Ordering::SeqCst),
-                );
+            let (mut horizontal, mut vertical) = (
+                ANGLES.0.load(Ordering::SeqCst),
+                ANGLES.1.load(Ordering::SeqCst),
+            );
 
-                ui.text("Rotation");
-                ui.slider("Horizontal", 0.0, 2.0 * PI, &mut horizontal);
-                ui.slider("Vertical",   0.0, 2.0 * PI, &mut vertical);
+            ui.text("Rotation");
+            ui.slider("Horizontal", 0.0, 2.0 * PI, &mut horizontal);
+            ui.slider("Vertical",   0.0, 2.0 * PI, &mut vertical);
 
-                ANGLES.0.store(horizontal, Ordering::SeqCst);
-                ANGLES.1.store(vertical, Ordering::SeqCst);
+            ANGLES.0.store(horizontal, Ordering::SeqCst);
+            ANGLES.1.store(vertical, Ordering::SeqCst);
 
-                self.cam.front = vec3::new(
-                    f32::cos(vertical) * f32::cos(horizontal),
-                    f32::sin(vertical),
-                    f32::cos(vertical) * f32::sin(horizontal),
-                );
-            });
+            self.cam.front = vec3::new(
+                f32::cos(vertical) * f32::cos(horizontal),
+                f32::sin(vertical),
+                f32::cos(vertical) * f32::sin(horizontal),
+            );
+        });
     }
 
     pub fn update(&mut self, cam_pos: vec3) {

@@ -1,9 +1,6 @@
 #![allow(dead_code)]
 
 use {
-    crate::app::utils::{
-        user_io::Keyboard,
-    },
     std::{
         collections::HashMap,
         sync::Mutex,
@@ -71,27 +68,26 @@ impl Loadings {
         }
     }
 
-    pub fn spawn_info_window(&self, ui: &imgui::Ui, keyboard: &Keyboard) {
+    pub fn spawn_info_window(&self, ui: &imgui::Ui) {
         use crate::app::utils::graphics::ui::imgui_constructor::make_window;
 
         if self.list.is_empty() { return }
 
-        make_window(ui, "Loadings", keyboard)
-            .build(|| {
-                for (name, &value) in self.list.iter() {
-                    imgui::ProgressBar::new(value)
-                        .overlay_text(&format!("{name}: {percent:.1}%", percent = 100.0 * value))
-                        .build(ui);
-                }
-            });
+        make_window(ui, "Loadings").build(|| {
+            for (name, &value) in self.list.iter() {
+                imgui::ProgressBar::new(value)
+                    .overlay_text(&format!("{name}: {percent:.1}%", percent = 100.0 * value))
+                    .build(ui);
+            }
+        });
     }
 }
 
-pub fn spawn_info_window(ui: &imgui::Ui, keyboard: &Keyboard) {
+pub fn spawn_info_window(ui: &imgui::Ui) {
     LOADINGS.lock()
         .expect("mutex should be not poisoned")
         .loads
-        .spawn_info_window(ui, keyboard)
+        .spawn_info_window(ui)
 }
 
 pub fn recv_all() -> Result<(), LoadingError> {

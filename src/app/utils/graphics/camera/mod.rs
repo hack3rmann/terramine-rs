@@ -11,7 +11,7 @@ use {
             camera::default as cam_def,
             window::default as window_def,
         },
-        user_io::{Keyboard, InputManager, Key as KeyCode},
+        user_io::Key as KeyCode,
     },
     math_linear::prelude::*,
     frustum::Frustum,
@@ -133,17 +133,19 @@ impl Camera {
     }
 
     /// Updates camera (key press checking, etc).
-    pub fn update(&mut self, input: &mut InputManager, dt: f64) {
+    pub fn update(&mut self, dt: f64) {
+        use crate::app::utils::user_io::{keyboard, mouse};
+
         /* Camera move vector */
         let mut new_speed = vec3::all(0.0);
 
         /* Movement controls */
-        if input.keyboard.is_pressed(KeyCode::W)		{ new_speed += vecf!(self.front.x, 0, self.front.z).normalized() }
-        if input.keyboard.is_pressed(KeyCode::S)		{ new_speed -= vecf!(self.front.x, 0, self.front.z).normalized() }
-        if input.keyboard.is_pressed(KeyCode::A)		{ new_speed += self.right.normalized() }
-        if input.keyboard.is_pressed(KeyCode::D)		{ new_speed -= self.right.normalized() }
-        if input.keyboard.is_pressed(KeyCode::Space)	{ new_speed += vecf!(0, 1, 0) }
-        if input.keyboard.is_pressed(KeyCode::LShift)	{ new_speed -= vecf!(0, 1, 0) }
+        if keyboard::is_pressed(KeyCode::W)      { new_speed += vecf!(self.front.x, 0, self.front.z).normalized() }
+        if keyboard::is_pressed(KeyCode::S)      { new_speed -= vecf!(self.front.x, 0, self.front.z).normalized() }
+        if keyboard::is_pressed(KeyCode::A)      { new_speed += self.right.normalized() }
+        if keyboard::is_pressed(KeyCode::D)      { new_speed -= self.right.normalized() }
+        if keyboard::is_pressed(KeyCode::Space)  { new_speed += vecf!(0, 1, 0) }
+        if keyboard::is_pressed(KeyCode::LShift) { new_speed -= vecf!(0, 1, 0) }
 
         /* Calculate new speed */
         new_speed = new_speed.normalized() * self.speed_factor as f32;
@@ -164,7 +166,7 @@ impl Camera {
         self.move_absolute(self.speed * dt as f32);
 
         /* Reset */
-        if input.keyboard.just_pressed(KeyCode::P) {
+        if keyboard::just_pressed(KeyCode::P) {
             self.set_position(0.0, 0.0, 2.0);
             self.reset_rotation();
         }
@@ -173,8 +175,8 @@ impl Camera {
         if self.grabbes_cursor {
             self.rotate(
                  0.0,
-                -input.mouse.dy * dt * 0.2,
-                 input.mouse.dx * dt * 0.2,
+                -mouse::get_dy() as f64 * dt * 0.2,
+                 mouse::get_dx() as f64 * dt * 0.2,
             );
         }
     }
@@ -227,11 +229,11 @@ impl Camera {
     pub fn get_z(&self) -> f32 { self.pos.z }
 
     /// Spawns camera control window.
-    pub fn spawn_control_window(&mut self, ui: &imgui::Ui, keyboard: &Keyboard) {
+    pub fn spawn_control_window(&mut self, ui: &imgui::Ui) {
         use crate::app::utils::graphics::ui::imgui_constructor::make_window;
 
         /* UI building */
-        make_window(ui, "Camera", keyboard).build(|| {
+        make_window(ui, "Camera").build(|| {
             ui.text("Position");
             ui.text(format!(
                 "x: {x:.3}, y: {y:.3}, z: {z:.3}",

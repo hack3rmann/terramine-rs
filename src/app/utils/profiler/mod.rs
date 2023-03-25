@@ -6,7 +6,6 @@ pub use profiler_target_macro::profiler_target;
 use {
     crate::app::utils::{
         time::timer::Timer,
-        user_io::Keyboard,
         cfg,
     },
     std::{
@@ -126,8 +125,10 @@ pub fn start_capture(target_name: &str, id: Id) -> Measure {
 }
 
 /// Updates profiler and builds ImGui window.
-pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer, keyboard: &mut Keyboard) {
-    if keyboard.just_pressed(cfg::key_bindings::ENABLE_PROFILER_WINDOW) {
+pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer) {
+    use crate::app::utils::user_io::keyboard;
+
+    if keyboard::just_pressed(cfg::key_bindings::ENABLE_PROFILER_WINDOW) {
         let mut guard = DRAWING_ENABLED.lock()
             .expect("DRAWING_ENABLED mutex shuold be not poisoned");
         *guard = !*guard;
@@ -157,7 +158,7 @@ pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer, keyboard: &mut Key
         })
         .collect();
     
-    build_window(ui, keyboard, data);
+    build_window(ui, data);
     drop(lock);
 
     update();
@@ -177,11 +178,11 @@ pub fn update() {
 }
 
 /// Builds ImGui window of capturing results
-pub fn build_window(ui: &imgui::Ui, keyboard: &Keyboard, profiler_result: DataSummary) {
+pub fn build_window(ui: &imgui::Ui, profiler_result: DataSummary) {
     use crate::app::utils::graphics::ui::imgui_constructor::make_window;
 
     if profiler_result.len() != 0 && *DRAWING_ENABLED.lock().expect("mutex should be not poisoned") {
-        make_window(ui, "Profiler", keyboard)
+        make_window(ui, "Profiler")
             .always_auto_resize(true)
             .build(|| {
             /* Build all elements. Separate only existing lines. */

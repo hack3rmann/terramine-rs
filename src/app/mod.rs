@@ -6,10 +6,10 @@ use {
         cfg,
         logger,
         concurrency::loading,
-        user_io::{InputManager, Key},
+        user_io::{self, Key, keyboard, mouse},
         graphics::{
-            light::DirectionalLight,
             self,
+            light::DirectionalLight,
             Graphics,
             camera::Camera,
             texture::Texture,
@@ -38,7 +38,6 @@ use {
 
 /// Struct that handles everything.
 pub struct App {
-    input_manager: InputManager,
     graphics: Graphics,
     camera: DebugVisualizedStatic<Camera>,
     lights: [DirectionalLight; 3],
@@ -89,7 +88,6 @@ impl App where Self: 'static {
             texture_atlas,
             normal_atlas,
             timer: Timer::new(),
-            input_manager: InputManager::new(),
         }
     }
 
@@ -109,7 +107,7 @@ impl App where Self: 'static {
             self.graphics.display.gl_window().window(),
             &event
         );
-        self.input_manager.handle_event(&event, &self.graphics);
+        user_io::handle_event(&event, self.graphics.display.gl_window().window());
 
         match event {
             /* Window events */
@@ -152,37 +150,37 @@ impl App where Self: 'static {
     /// Main events cleared.
     async fn main_events_cleared(&mut self, control_flow: &mut ControlFlow) {
         // ImGui can capture keyboard, if needed.
-        self.input_manager.keyboard.set_input_capture(
+        keyboard::set_input_capture(
             self.graphics.imguic.io().want_capture_keyboard
         );
         
         /* Close window is `escape` pressed */
-        if self.input_manager.keyboard.just_pressed(cfg::key_bindings::APP_EXIT) {
+        if keyboard::just_pressed(cfg::key_bindings::APP_EXIT) {
             *control_flow = ControlFlow::Exit;
             self.chunk_arr.drop_tasks();
             return;
         }
 
-        if self.input_manager.keyboard.just_pressed(Key::Y) {
+        if keyboard::just_pressed(Key::Y) {
             self.chunk_arr.drop_tasks();
         }
 
         /* Control camera by user input */
-        if self.input_manager.keyboard.just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
+        if keyboard::just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
             if self.camera.grabbes_cursor {
-                self.input_manager.mouse.release_cursor(&self.graphics);
+                mouse::release_cursor(self.graphics.display.gl_window().window());
             } else {
-                self.input_manager.mouse.grab_cursor(&self.graphics);
+                mouse::grab_cursor(self.graphics.display.gl_window().window());
             }
 
             self.camera.grabbes_cursor = !self.camera.grabbes_cursor;
         }
 
-        if self.input_manager.keyboard.just_pressed(cfg::key_bindings::SWITCH_RENDER_SHADOWS) {
+        if keyboard::just_pressed(cfg::key_bindings::SWITCH_RENDER_SHADOWS) {
             self.render_shadows = !self.render_shadows;
         }
 
-        if self.input_manager.keyboard.just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
+        if keyboard::just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
             self.chunk_draw_bundle = ChunkDrawBundle::new(self.graphics.display.as_ref().get_ref());
 
             self.graphics.refresh_postprocessing_shaders().unwrap_or_else(|err|
@@ -196,7 +194,8 @@ impl App where Self: 'static {
         }
 
         /* Update save/load tasks of `ChunkArray` */
-        self.chunk_arr.update(&mut self.input_manager, self.graphics.display.as_ref().get_ref()).await
+        self.chunk_arr.update(self.graphics.display.as_ref().get_ref())
+            .await
             .expect("failed to update chunk array");
 
         let window = self.graphics.display.gl_window();
@@ -220,29 +219,28 @@ impl App where Self: 'static {
         let draw_data = {
             /* Get UI frame renderer */
             let ui = self.graphics.imguic.new_frame();
-            let keyboard = &mut self.input_manager.keyboard;
 
             /* Camera window */
-            self.camera.spawn_control_window(ui, keyboard);
+            self.camera.spawn_control_window(ui);
 
             /* Profiler window */
-            profiler::update_and_build_window(ui, &self.timer, keyboard);
+            profiler::update_and_build_window(ui, &self.timer);
 
             /* Render UI */
             self.graphics.imguip.prepare_render(ui, self.graphics.display.gl_window().window());
 
             /* Chunk array control window */
-            self.chunk_arr.spawn_control_window(ui, keyboard);
+            self.chunk_arr.spawn_control_window(ui);
 
             /* Loadings window */
-            loading::spawn_info_window(ui, keyboard);
+            loading::spawn_info_window(ui);
 
             /* Logger window */
-            logger::spawn_window(ui, keyboard);
+            logger::spawn_window(ui);
 
             /* Light control window */
             for light in self.lights.iter_mut().take(1) {
-                light.spawn_control_window(ui, keyboard);
+                light.spawn_control_window(ui);
             }
 
             self.graphics.imguic.render()
@@ -296,25 +294,27 @@ impl App where Self: 'static {
 
     /// Updates things.
     async fn new_events(&mut self) {
-        /* Rotating camera */
-        self.camera.update(&mut self.input_manager, self.timer.dt_as_f64());
+        // Rotating camera.
+        self.camera.update(self.timer.dt_as_f64());
         for light in self.lights.iter_mut() {
             light.update(self.camera.pos);
         }
-        /* Debug visuals switcher */
-        if self.input_manager.keyboard.just_pressed(cfg::key_bindings::DEBUG_VISUALS_SWITCH) {
+        // Debug visuals switcher.
+        if keyboard::just_pressed(cfg::key_bindings::DEBUG_VISUALS_SWITCH) {
             debug_visuals::switch_enable();
         }
 
-        /* Input update */
-        self.input_manager.update(&self.graphics);		
-
-        /* Loading recieve */
+        // Loading recieve.
         loading::recv_all().unwrap_or_else(|err|
             logger::log!(Error, "app", format!("failed to receive all loadings: {err}"))
         );
 
-        /* Log messages receive */
+        // Log messages receive.
         logger::recv_all();
+
+        // Update keyboard inputs.
+        keyboard::update_input();
+        mouse::update(self.graphics.display.gl_window().window())
+            .expect("failed to update mouse input");
     }
 }
