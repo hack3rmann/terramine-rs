@@ -22,6 +22,8 @@ use {
     }
 };
 
+pub use glium::glutin::event::VirtualKeyCode as Key;
+
 /// Keyboard handler.
 #[derive(Default, Debug)]
 pub struct Keyboard {

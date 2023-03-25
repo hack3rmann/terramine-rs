@@ -141,7 +141,7 @@ impl ChunkArray {
     ) -> io::Result<()> {
         let save_name = save_name.into();
 
-        logger::log!(Info, "chunk array", format!("start saving to {save_name} in {save_path}"));
+        let _work_guard = logger::work("chunk array", format!("saving to {save_name} in {save_path}"));
 
         let is_all_generated = chunks.iter()
             .all(ChunkRef::is_generated);
@@ -167,15 +167,13 @@ impl ChunkArray {
             .save()
             .await?;
 
-        logger::log!(Info, "chunk array", format!("end saving to {save_name} in {save_path}"));
-
         Ok(())
     }
 
     pub async fn read_from_file(
         save_name: &str, save_path: &str,
     ) -> io::Result<(USize3, Vec<(Vec<Id>, FillType)>)> {
-        logger::log!(Info, "chunk array", format!("start reading chunks from {save_name} in {save_path}"));
+        let _work_guard = logger::work("chunk array", format!("reading chunks from {save_name} in {save_path}"));
 
         let loading = loading::start_new("Chunks reading");
 
@@ -193,8 +191,6 @@ impl ChunkArray {
                 Self::array_filltype_from_bytes(&bytes)
             }
         }).await;
-
-        logger::log!(Info, "chunk array", format!("end reading chunks from {save_name} in {save_path}"));
 
         Ok((sizes, chunks))
     }
@@ -998,7 +994,7 @@ impl ChunkArray {
     }
 
     pub async fn update(&mut self, input: &mut InputManager, facade: &dyn Facade) -> Result<(), UpdateError> {
-        use glium::glutin::event::VirtualKeyCode as Key;
+        use crate::app::utils::user_io::Key;
 
         self.process_commands(facade);
 

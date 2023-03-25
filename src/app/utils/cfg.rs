@@ -121,7 +121,7 @@ pub mod shader {
 }
 
 pub mod key_bindings {
-    use glium::glutin::event::VirtualKeyCode as Key;
+    use crate::app::utils::user_io::Key;
 
     pub const DEBUG_VISUALS_SWITCH:           Key = Key::F3;
     pub const APP_EXIT:                       Key = Key::Escape;

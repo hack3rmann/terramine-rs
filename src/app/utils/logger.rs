@@ -7,6 +7,7 @@ use {
     },
     std::{sync::Mutex, collections::VecDeque, borrow::Cow},
     lazy_static::lazy_static,
+    parse_display::Display,
 };
 
 lazy_static! {
@@ -15,40 +16,22 @@ lazy_static! {
 
 static LOG_MESSAGES: Mutex<VecDeque<Message>> = Mutex::new(VecDeque::new());
 
-pub type MsgStr = Cow<'static, str>;
+pub type CowStr = Cow<'static, str>;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default, Display)]
+#[display("[{msg_type}]-[{from}]: {content}")]
 pub struct Message {
-    pub content: MsgStr,
-    pub from: MsgStr,
+    pub content: CowStr,
+    pub from: CowStr,
     pub msg_type: MsgType,
 }
 
-impl std::fmt::Display for Message {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f, "[{msg_type}]-[{from}]: {content}",
-            msg_type = self.msg_type,
-            from = self.from,
-            content = self.content,
-        )
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default, Display)]
+#[display(style = "UPPERCASE")]
 pub enum MsgType {
     #[default]
     Info,
     Error,
-}
-
-impl std::fmt::Display for MsgType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Info => write!(f, "INFO"),
-            Self::Error => write!(f, "ERROR"),
-        }
-    }
 }
 
 pub fn recv_all() {
@@ -63,19 +46,45 @@ pub fn recv_all() {
     }
 }
 
-pub fn log(msg_type: MsgType, from: MsgStr, content: MsgStr) {
+pub fn log(msg_type: MsgType, from: impl Into<CowStr>, content: impl Into<CowStr>) {
     CHANNEL.lock()
         .expect("channel mutex should be not poisoned")
         .sender
-        .send(Message { msg_type, from, content })
+        .send(Message { msg_type, from: from.into(), content: content.into() })
         .expect("failed to send message");
+}
+
+pub fn work(from: impl Into<CowStr>, work: impl Into<CowStr>) -> WorkLogGuard {
+    WorkLogGuard::new(from, work)
+}
+
+#[must_use]
+#[derive(Debug)]
+pub struct WorkLogGuard {
+    pub from: CowStr,
+    pub work: CowStr,
+}
+
+impl WorkLogGuard {
+    pub fn new(from: impl Into<CowStr>, work: impl Into<CowStr>) -> Self {
+        let (from, work) = (from.into(), work.into());
+        log!(Info, from.clone(), format!("Start {work}"));
+        Self { from, work }
+    }
+}
+
+impl Drop for WorkLogGuard {
+    fn drop(&mut self) {
+        let from = std::mem::take(&mut self.from);
+        log!(Info, from, format!("End {work}", work = self.work));
+    }
 }
 
 #[macro_export]
 macro_rules! log {
     ($msg_type:ident, $from:expr, $content:expr) => {{
-        use $crate::app::utils::logger::{self, MsgType, MsgStr};
-        logger::log(MsgType::$msg_type, MsgStr::from($from), MsgStr::from($content));
+        use $crate::app::utils::logger::{log, MsgType::*};
+        log($msg_type, $from, $content);
     }};
 }
 

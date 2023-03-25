@@ -6,7 +6,7 @@ use {
         cfg,
         logger,
         concurrency::loading,
-        user_io::InputManager,
+        user_io::{InputManager, Key},
         graphics::{
             light::DirectionalLight,
             self,
@@ -55,7 +55,7 @@ pub struct App {
 impl App where Self: 'static {
     /// Constructs [`App`].
     pub fn new() -> Self {
-        logger::log!(Info, "app", "start initialize");
+        let _work_guard = logger::work("app", "initialize");
 
         let graphics = Graphics::new()
             .expect("failed to create graphics");
@@ -78,8 +78,6 @@ impl App where Self: 'static {
             ChunkArray::new_empty(),
             graphics.display.as_ref().get_ref(),
         );
-
-        logger::log!(Info, "app", "end initialize");
 
         Self {
             chunk_arr,
@@ -153,8 +151,6 @@ impl App where Self: 'static {
 
     /// Main events cleared.
     async fn main_events_cleared(&mut self, control_flow: &mut ControlFlow) {
-        use glium::glutin::event::VirtualKeyCode as Key;
-
         // ImGui can capture keyboard, if needed.
         self.input_manager.keyboard.set_input_capture(
             self.graphics.imguic.io().want_capture_keyboard
