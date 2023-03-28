@@ -287,8 +287,9 @@ impl ChunkArray {
         let chunk_idx = Self::pos_to_idx(self.sizes, chunk_pos)?;
 
         match self.chunks[chunk_idx].get_voxel_global(pos) {
-            ChunkOption::Item(voxel) => Some(voxel),
+            ChunkOption::Voxel(voxel) => Some(voxel),
             ChunkOption::OutsideChunk => unreachable!("pos {} is indeed in that chunk", pos),
+            ChunkOption::Failed => None,
         }
     }
 
@@ -948,9 +949,10 @@ impl ChunkArray {
 
         let mut change_tracker = ChangeTracker::new(self.sizes);
 
+        use Command::*;
         while let Ok(command) = commands.receiver.try_recv() {
             match command {
-                Command::SetVoxel { pos, new_id } => {
+                SetVoxel { pos, new_id } => {
                     let old_id = self.set_voxel(pos, new_id)
                         .unwrap_or_else(|err| {
                             logger::log!(Error, "chunk array", format!("failed to set voxel: {err}"));
@@ -962,7 +964,7 @@ impl ChunkArray {
                     }
                 },
 
-                Command::FillVoxels { pos_from, pos_to, new_id } => {
+                FillVoxels { pos_from, pos_to, new_id } => {
                     let _is_changed = self.fill_voxels(pos_from, pos_to, new_id)
                         .unwrap_or_else(|err| {
                             logger::log!(Error, "chunk array", format!("failed to fill voxels: {err}"));
@@ -970,31 +972,54 @@ impl ChunkArray {
                         });
                 }
 
-                Command::DropAllMeshes => self.drop_all_meshes(),
+                DropAllMeshes => self.drop_all_meshes(),
             }
         }
 
-        let idxs_to_reload = change_tracker.idxs_to_reload();
+        let idxs_to_reload = change_tracker.idxs_to_reload_partitioning();
         let n_changed = idxs_to_reload.len();
-        self.reload_chunks_by_indices(idxs_to_reload, facade);
+        for (idx, partition_idx) in idxs_to_reload {
+            self.reload_chunk_partitioning(idx, partition_idx, facade);
+        }
 
         if n_changed != 0 {
             logger::log!(Info, "chunk array", format!("{n_changed} chunks were updated!"));
         }
     }
 
-    pub fn reload_chunks_by_indices(&mut self, indices: impl IntoIterator<Item = usize>, facade: &dyn Facade) {
-        for idx in indices.into_iter() {
-            let chunk_pos = Self::idx_to_pos(idx, self.sizes);
+    pub fn reload_chunk(&mut self, idx: usize, facade: &dyn Facade) {
+        let chunk_pos = Self::idx_to_pos(idx, self.sizes);
 
-            // * It is safe, because current chunk mutable reference is not aliasing
-            // * adjacent chunks shared references.
-            let adj = unsafe { self.get_adj_chunks(chunk_pos).as_static() };
+        // * It is safe, because current chunk mutable reference is not aliasing
+        // * adjacent chunks shared references.
+        let adj = unsafe { self.get_adj_chunks(chunk_pos).as_static() };
 
-            match self.chunks.get_mut(idx) {
-                Some(chunk) => chunk.generate_mesh(0, adj, facade),
-                None => continue,
-            }
+        match self.chunks.get_mut(idx) {
+            Some(chunk) => chunk.generate_mesh(0, adj, facade),
+            None => return,
+        }
+    }
+
+    pub fn reload_chunk_partitioning(
+        &mut self, chunk_idx: usize, partition_idx: usize, facade: &dyn Facade,
+    ) {
+        let chunk_pos = Self::idx_to_pos(chunk_idx, self.sizes);
+
+        // * It is safe, because current chunk mutable reference is not aliasing
+        // * adjacent chunks shared references.
+        let adj = unsafe { self.get_adj_chunks(chunk_pos).as_static() };
+
+        match self.chunks.get_mut(chunk_idx) {
+            Some(chunk) => {
+                if chunk.is_partitioned() {
+                    let partial_vertices = chunk.make_partition(adj, partition_idx);
+                    chunk.upload_partition(&partial_vertices, partition_idx, facade);
+                } else {
+                    chunk.partition_mesh(adj, facade);
+                }
+            },
+
+            None => return,
         }
     }
 
@@ -1026,7 +1051,7 @@ impl ChunkArray {
                     crate::app::utils::terrain::voxel::voxel_data::AIR_VOXEL_DATA
                 };
 
-                if mouse::just_left_pressed() {
+                if mouse::just_left_pressed() && cam.grabbes_cursor {
                     command(Command::SetVoxel { pos: voxel.pos, new_id: AIR_VOXEL_DATA.id })
                 }
             },
@@ -1122,6 +1147,48 @@ impl ChangeTracker {
             }
 
             result.insert(chunk_idx);
+        }
+
+        result
+    }
+
+    pub fn idxs_to_reload_partitioning(&self) -> HashSet<(usize, usize)> {
+        let mut result = HashSet::new();
+
+        for &voxel_pos in self.voxel_poses.iter() {
+            let chunk_pos = Chunk::local_pos(voxel_pos);
+            let local_pos = Chunk::global_to_local_pos(chunk_pos, voxel_pos);
+            let voxel_coord_idx = USize3::from(local_pos);
+            let partition_idx = ChunkArray::coord_idx_to_idx(
+                USize3::all(2),
+                voxel_coord_idx / (Chunk::SIZES / 2),
+            );
+
+            let chunk_idx = match ChunkArray::pos_to_idx(self.sizes, chunk_pos) {
+                Some(idx) => idx,
+                None => continue,
+            };
+
+            result.insert((chunk_idx, partition_idx));
+
+            for offset in iterator::offsets_from_border(local_pos, Int3::ZERO..Int3::from(Chunk::SIZES)) {
+                let adj_voxel_global_pos = voxel_pos + offset;
+                let adj_chunk_pos = chunk_pos + offset;
+                let local_adj_voxel_pos = Chunk::global_to_local_pos(
+                    adj_chunk_pos,
+                    adj_voxel_global_pos
+                );
+                let voxel_coord_idx = USize3::from(local_adj_voxel_pos);
+                let partition_idx = ChunkArray::coord_idx_to_idx(
+                    USize3::all(2),
+                    voxel_coord_idx / (Chunk::SIZE / 2),
+                );
+
+                match ChunkArray::pos_to_idx(self.sizes, adj_chunk_pos) {
+                    Some(idx) => { result.insert((idx, partition_idx)); },
+                    None => continue,
+                }
+            }
         }
 
         result

@@ -12,6 +12,7 @@ use {
     voxel_data::*,
     math_linear::prelude::*,
     parse_display::Display,
+    smallvec::SmallVec,
 };
 
 /// Represents voxel.
@@ -132,7 +133,7 @@ pub mod shape {
             return self
         }
 
-        pub fn by_offset(&self, offset: Int3, position: vec3, vertices: &mut Vec<FullVertex>) {
+        pub fn by_offset<const N: usize>(&self, offset: Int3, position: vec3, vertices: &mut SmallVec<[FullVertex; N]>) {
             let position = 2.0 * self.half_size * position;
             match offset.as_tuple() {
                 ( 1,  0,  0) => self.back(position, vertices),
@@ -146,7 +147,7 @@ pub mod shape {
         }
 
         /// Cube front face vertex array.
-        pub fn front(&self, position: vec3, vertices: &mut Vec<FullVertex>) {
+        pub fn front<const N: usize>(&self, position: vec3, vertices: &mut SmallVec<[FullVertex; N]>) {
             /* UVs for front face */
             let uv = UV::new(self.data.textures.front);
             
@@ -164,7 +165,7 @@ pub mod shape {
         }
 
         /// Cube back face vertex array.
-        pub fn back(&self, position: vec3, vertices: &mut Vec<FullVertex>) {
+        pub fn back<const N: usize>(&self, position: vec3, vertices: &mut SmallVec<[FullVertex; N]>) {
             /* UVs for back face */
             let uv = UV::new(self.data.textures.back);
             
@@ -182,7 +183,7 @@ pub mod shape {
         }
 
         /// Cube top face vertex array.
-        pub fn top(&self, position: vec3, vertices: &mut Vec<FullVertex>) {
+        pub fn top<const N: usize>(&self, position: vec3, vertices: &mut SmallVec<[FullVertex; N]>) {
             /* UVs for top face */
             let uv = UV::new(self.data.textures.top);
             
@@ -200,7 +201,7 @@ pub mod shape {
         }
 
         /// Cube bottom face vertex array.
-        pub fn bottom(&self, position: vec3, vertices: &mut Vec<FullVertex>) {
+        pub fn bottom<const N: usize>(&self, position: vec3, vertices: &mut SmallVec<[FullVertex; N]>) {
             /* UVs for bottom face */
             let uv = UV::new(self.data.textures.bottom);
             
@@ -218,7 +219,7 @@ pub mod shape {
         }
 
         /// Cube left face vertex array.
-        pub fn left(&self, position: vec3, vertices: &mut Vec<FullVertex>) {
+        pub fn left<const N: usize>(&self, position: vec3, vertices: &mut SmallVec<[FullVertex; N]>) {
             /* UVs for left face */
             let uv = UV::new(self.data.textures.left);
             
@@ -236,7 +237,7 @@ pub mod shape {
         }
 
         /// Cube right face vertex array.
-        pub fn right(&self, position: vec3, vertices: &mut Vec<FullVertex>) {
+        pub fn right<const N: usize>(&self, position: vec3, vertices: &mut SmallVec<[FullVertex; N]>) {
             /* UVs for right face */
             let uv = UV::new(self.data.textures.right);
             
@@ -255,7 +256,7 @@ pub mod shape {
 
         /// Cube all sides.
         #[allow(dead_code)]
-        pub fn all(&self, position: vec3, vertices: &mut Vec<FullVertex>) {
+        pub fn all<const N: usize>(&self, position: vec3, vertices: &mut SmallVec<[FullVertex; N]>) {
             self.left(position, vertices);
             self.right(position, vertices);
             self.front(position, vertices);

@@ -4,7 +4,7 @@
 
 use {
     math_linear::prelude::*,
-    std::ops::Range,
+    std::ops::{Range, RangeBounds},
     smallvec::SmallVec,
 };
 
@@ -227,18 +227,33 @@ pub struct SpaceIter {
 }
 
 impl SpaceIter {
-    pub fn new(range: Range<Int3>) -> Self {
-        let diff = range.end - range.start;
+    pub fn new(range: impl RangeBounds<Int3>) -> Self {
+        use std::ops::Bound::*;
+
+        let start = match range.start_bound() {
+            Included(&bound) => bound,
+            Excluded(&bound) => bound + Int3::ONE,
+            Unbounded => panic!("unbounded SpaceIter can't be implemented"),
+        };
+
+        let end = match range.end_bound() {
+            Included(&bound) => bound + Int3::ONE,
+            Excluded(&bound) => bound,
+            Unbounded => panic!("unbounded SpaceIter can't be implemented"),
+        };
+
+        let diff = end - start;
         assert!(
             0 <= diff.x && 0 <= diff.y && 0 <= diff.z,
-            "start position should be not greater by each coordinate than end. Range: {:?}",
-            range,
+            "start position should be not greater by each coordinate than end. Range: {}..{}",
+            start,
+            end,
         );
 
         let sizes = USize3::from(diff);
         let size = sizes.x * sizes.y * sizes.z;
 
-        Self { sizes, size, idx: 0, back_shift: range.start }
+        Self { sizes, size, idx: 0, back_shift: start }
     }
 
     pub fn new_cubed(range: Range<i32>) -> Self {

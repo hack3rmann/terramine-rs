@@ -15,6 +15,7 @@ use {
             camera::Camera,
         },
         reinterpreter::*,
+        logger,
     },
     super::voxel::{
         self,
@@ -34,6 +35,7 @@ use {
     },
     iterator::{CubeBorder, SpaceIter, Sides},
     thiserror::Error,
+    smallvec::SmallVec,
 };
 
 pub mod prelude {
@@ -84,12 +86,46 @@ macro_rules! impl_chunk_with_refs {
 }
 
 #[derive(Debug)]
+pub enum ChunkDetailedMesh {
+    Standart(UnindexedMesh<FullVertex>),
+    Partial([UnindexedMesh<FullVertex>; 8]),
+}
+
+impl ChunkDetailedMesh {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Self::Standart(mesh) => mesh.is_empty(),
+            Self::Partial(meshes) => meshes.iter()
+                .all(|mesh| mesh.is_empty())
+        }
+    }
+
+    pub fn render(
+        &self, target: &mut impl glium::Surface, shader: &Shader,
+        draw_params: &gl::DrawParameters<'_>, uniforms: &impl Uniforms,
+    ) -> Result<(), DrawError> {
+        match self {
+            Self::Standart(mesh) =>
+                mesh.render(target, shader, draw_params, uniforms),
+
+            Self::Partial(meshes) => {
+                for mesh in meshes {
+                    mesh.render(target, shader, draw_params, uniforms)?;
+                }
+
+                Ok(())
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Chunk {
     pub pos: Int3,
     pub voxel_ids: Vec<Id>,
     pub info: Info,
 
-    pub detailed_mesh: Option<UnindexedMesh<FullVertex>>,
+    pub detailed_mesh: Option<ChunkDetailedMesh>,
     pub low_meshes: [Option<UnindexedMesh<LowVertex>>; Self::N_LODS],
 }
 
@@ -109,7 +145,13 @@ impl_chunk_with_refs! {
         Chunk::chunked_pos_iter(sub_chunk_size as usize)
             .map(move |chunk_iter| {
                 let (color_sum, n_colors) = chunk_iter
-                    .map(|pos| self.get_voxel_local(pos))
+                    .filter_map(|pos| match self.get_voxel_local(pos) {
+                        None => {
+                            logger::log!(Error, "chunk", format!("failed to get voxel by {pos}"));
+                            None
+                        },
+                        some @ Some(_) => some,
+                    })
                     .filter(|voxel| !voxel.is_air())
                     .map(|voxel| voxel.data.avarage_color)
                     .fold((Color::ZERO, 0_usize), |(col_acc, n_acc), col|
@@ -171,28 +213,49 @@ impl_chunk_with_refs! {
         };
 
         pos_iter
-            .map(|pos| self.get_voxel_local(pos))
+            .filter_map(|pos| match self.get_voxel_local(pos) {
+                some @ Some(_) => some,
+                None => {
+                    logger::log!(Error, "chunk", "failed to get voxel from pos {pos}");
+                    None
+                },
+            })
             .filter(|voxel| !voxel.is_air())
             .flat_map(|voxel| {
                 let side_iter = SpaceIter::adj_iter(Int3::ZERO)
                     .filter(|&offset| {
                         let adj = chunk_adj.sides.by_offset(offset);
                         match self.get_voxel_global(voxel.pos + offset) {
-                            ChunkOption::Item(voxel) => voxel.is_air(),
+                            ChunkOption::Voxel(voxel) => voxel.is_air(),
 
                             ChunkOption::OutsideChunk => match adj {
                                 None => true,
 
                                 Some(chunk) => match chunk.get_voxel_global(voxel.pos + offset) {
-                                    ChunkOption::Item(voxel) => voxel.is_air(),
+                                    ChunkOption::Voxel(voxel) => voxel.is_air(),
                                     ChunkOption::OutsideChunk => true,
+                                    ChunkOption::Failed => {
+                                        logger::log!(Error, "chunk", format!(
+                                            "caught on failed chunk voxel in {pos}",
+                                            pos = voxel.pos + offset,
+                                        ));
+                                        true
+                                    },
                                 }
+                            },
+
+                            ChunkOption::Failed => {
+                                logger::log!(Error, "chunk", format!(
+                                    "caught on failed chunk voxel in {pos}",
+                                    pos = voxel.pos + offset,
+                                ));
+                                true
                             },
                         }
                     });
 
                 const N_CUBE_VERTICES: usize = 36;
-                let mut vertices = Vec::with_capacity(N_CUBE_VERTICES);
+                let mut vertices = SmallVec::<[_; N_CUBE_VERTICES]>::new();
 
                 let mesh_builder = CubeDetailed::new(voxel.data);
                 for offset in side_iter {
@@ -202,6 +265,97 @@ impl_chunk_with_refs! {
                 vertices
             })
             .collect()
+    }
+
+    fn optimize_chunk_adj_for_partitioning(mut chunk_adj: ChunkAdj<'_>, partition_coord: USize3) -> ChunkAdj<'_> {
+        chunk_adj.sides.set(
+            veci!(1 - partition_coord.x as i32 * 2, 0, 0),
+            None,
+        ).expect("failed to set side");
+
+        chunk_adj.sides.set(
+            veci!(0, 1 - partition_coord.y as i32 * 2, 0),
+            None,
+        ).expect("failed to set side");
+
+        chunk_adj.sides.set(
+            veci!(0, 0, 1 - partition_coord.z as i32 * 2),
+            None,
+        ).expect("failed to set side");
+
+        chunk_adj
+    }
+
+    pub fn make_partition(&self, chunk_adj: ChunkAdj, partition_idx: usize) -> Vec<FullVertex> {
+        let coord_idx = iterator::idx_to_coord_idx(partition_idx, USize3::all(2));
+        let chunk_adj = Self::optimize_chunk_adj_for_partitioning(chunk_adj, coord_idx);
+
+        let start_pos = Int3::from(coord_idx * (Chunk::SIZES / 2));
+        let end_pos   = start_pos + Int3::from(Chunk::SIZES / 2);
+
+        SpaceIter::new(start_pos..end_pos)
+            .filter_map(|pos| match self.get_voxel_local(pos) {
+                some @ Some(_) => some,
+                None => {
+                    logger::log!(Error, "chunk", "failed to get voxel from pos {pos}");
+                    None
+                },
+            })
+            .filter(|voxel| !voxel.is_air())
+            .flat_map(|voxel| {
+                let offset_iter = SpaceIter::adj_iter(Int3::ZERO)
+                    .filter(|&offset| {
+                        let adj = chunk_adj.sides.by_offset(offset);
+                        match self.get_voxel_global(voxel.pos + offset) {
+                            ChunkOption::Voxel(voxel) => voxel.is_air(),
+
+                            ChunkOption::OutsideChunk => match adj {
+                                None => true,
+
+                                Some(chunk) => match chunk.get_voxel_global(voxel.pos + offset) {
+                                    ChunkOption::Voxel(voxel) => voxel.is_air(),
+                                    ChunkOption::OutsideChunk => true,
+                                    ChunkOption::Failed => {
+                                        logger::log!(Error, "chunk", format!(
+                                            "caught on failed chunk voxel in {pos}",
+                                            pos = voxel.pos + offset,
+                                        ));
+                                        true
+                                    },
+                                }
+                            },
+
+                            ChunkOption::Failed => {
+                                logger::log!(Error, "chunk", format!(
+                                    "caught on failed chunk voxel in {pos}",
+                                    pos = voxel.pos + offset,
+                                ));
+                                true
+                            },
+                        }
+                    });
+
+                const N_CUBE_VERTICES: usize = 36;
+                let mut vertices = SmallVec::<[_; N_CUBE_VERTICES]>::new();
+
+                let mesh_builder = CubeDetailed::new(voxel.data);
+                for offset in offset_iter {
+                    mesh_builder.by_offset(offset, voxel.pos.into(), &mut vertices);
+                }
+
+                vertices
+            })
+            .collect()
+    }
+
+    /// Gives [`Vec`] with full detail vertices mesh of [`Chunk`].
+    pub fn make_partitioned_vertices(&self, chunk_adj: ChunkAdj) -> [Vec<FullVertex>; 8] {
+        let is_filled_and_blocked = self.is_filled() && chunk_adj.is_filled();
+        if self.is_empty() || is_filled_and_blocked {
+            return array_init::array_init(|_| vec![])
+        }
+
+        array_init::array_init(|partition_idx| self.make_partition(chunk_adj, partition_idx))
     }
 
     /// Makes vertices for *low detail* mesh from voxel array.
@@ -234,12 +388,21 @@ impl_chunk_with_refs! {
                             
                             Some(chunk) => match chunk.get_voxel_global(pos) {
                                 ChunkOption::OutsideChunk => unreachable!("Can't fall out of an adjacent chunk"),
-                                ChunkOption::Item(voxel) => !voxel.is_air(),
+                                ChunkOption::Voxel(voxel) => !voxel.is_air(),
+                                ChunkOption::Failed => {
+                                    logger::log!(Error, "chunk", format!("caught failed chunk voxel in {pos}"));
+                                    false
+                                },
                             }
                         }
                     },
-                    
-                    ChunkOption::Item(voxel) => !voxel.is_air(),
+
+                    ChunkOption::Voxel(voxel) => !voxel.is_air(),
+
+                    ChunkOption::Failed => {
+                        logger::log!(Error, "chunk", format!("caught failed chunk voxel in {pos}"));
+                        false
+                    },
                 };
 
                 let is_blocked_subchunk = |offset: Int3| -> bool {
@@ -303,24 +466,28 @@ impl_chunk_with_refs! {
            local_pos.z < 0 || local_pos.z >= Chunk::SIZE as i32
         { return ChunkOption::OutsideChunk }
 
-        ChunkOption::Item(self.get_voxel_local(local_pos))
+        let voxel = match self.get_voxel_local(local_pos) {
+            Some(voxel) => voxel,
+            None => return ChunkOption::Failed,
+        };
+        
+        ChunkOption::Voxel(voxel)
     }
 
     /// Gives voxel from local position (relative to chunk).
     /// 
     /// # Panic
     /// Panics if [chunk][Chunk] is not already had been generated or `local_pos` is not local.
-    pub fn get_voxel_local(&self, local_pos: Int3) -> Voxel {
-        assert!(self.is_generated(), "chunk should be generated before it can provide voxels");
+    pub fn get_voxel_local(&self, local_pos: Int3) -> Option<Voxel> {
+        if !self.is_generated() { return None }
         
-        let idx = Chunk::voxel_pos_to_idx(local_pos)
-            .expect("`local_pos` should be local to do conversion to idx");
+        let idx = Chunk::voxel_pos_to_idx(local_pos)?;
 
         let id = self.get_id(idx)
             .expect("local_pos is local");
 
         let global_pos = Chunk::local_to_global_pos(self.pos.to_owned(), local_pos);
-        Voxel::new(global_pos, &VOXEL_DATA[id as usize])
+        Some(Voxel::new(global_pos, &VOXEL_DATA[id as usize]))
     }
 
     /// Tests that chunk is visible by camera.
@@ -412,19 +579,43 @@ impl Chunk {
         }
     }
 
+    /// Makes a [chunk][Chunk] out of voxel_ids.
+    /// 
+    /// # Panic
+    /// Panics if `voxel_ids.len()` is not equal to `Chunk::VOLUME` or `0`.
     pub fn from_voxels(voxel_ids: Vec<Id>, chunk_pos: Int3) -> Self {
+        let len = voxel_ids.len();
+        assert!(
+            len == Chunk::VOLUME || len == 0,
+            "`voxel_ids.len()` should be equal to `Chunk::VOLUME` or `0`, but it's {}",
+            len,
+        );
+
         Self {
             pos: chunk_pos,
             voxel_ids,
             info: Default::default(),
             detailed_mesh: None,
-            low_meshes: [None, None, None, None, None, None],
+            low_meshes: array_init::array_init(|_| None),
         }.as_optimized()
+    }
+
+    /// Checks if [chunk][Chunk]'s mesh is partitioned.
+    pub fn is_partitioned(&self) -> bool {
+        match self.detailed_mesh {
+            Some(ref mesh) => match mesh {
+                ChunkDetailedMesh::Partial(_) => true,
+                ChunkDetailedMesh::Standart(_) => false,
+            },
+
+            None => false,
+        }
     }
 
     /// Sets [voxel id][Id] to `new_id` by it's index in array.
     /// Note that it does not drop all meshes that can possibly hold old id.
     /// And note that it may unoptimize chunk even if it can be.
+    /// 
     /// # Panic
     /// Panics if `idx` is invalid.
     pub fn set_id(&mut self, idx: usize, new_id: Id) {
@@ -629,11 +820,39 @@ impl Chunk {
         sdex::get_index(&USize3::from(pos).as_array(), &[Self::SIZE; 3])
     }
 
+    pub fn upload_partition(
+        &mut self, partition: &[FullVertex],
+        partition_idx: usize, facade: &dyn gl::backend::Facade
+    ) {
+        match self.detailed_mesh {
+            None => panic!("cannot upload only one partition"),
+            Some(ref mut mesh) => match mesh {
+                ChunkDetailedMesh::Standart(_) =>
+                    panic!("cannot upload only one partititon"),
+
+                ChunkDetailedMesh::Partial(ref mut meshes) => {
+                    let vbuffer = VertexBuffer::no_indices(facade, partition, PrimitiveType::TrianglesList);
+                    let mesh = Mesh::new(vbuffer);
+                    meshes[partition_idx] = mesh;
+                },
+            }
+        }
+    }
+
+    /// Sets mesh to chunk.
+    pub fn upload_partitioned_vertices(&mut self, vertices: [&[FullVertex]; 8], facade: &dyn gl::backend::Facade) {
+        let partitions = array_init::array_init(|i| {
+            let vbuffer = VertexBuffer::no_indices(facade, vertices[i], PrimitiveType::TrianglesList);
+            Mesh::new(vbuffer)
+        });
+        self.detailed_mesh.replace(ChunkDetailedMesh::Partial(partitions));
+    }
+
     /// Sets mesh to chunk.
     pub fn upload_full_detail_vertices(&mut self, vertices: &[FullVertex], facade: &dyn gl::backend::Facade) {
         let vbuffer = VertexBuffer::no_indices(facade, vertices, PrimitiveType::TrianglesList);
         let mesh = Mesh::new(vbuffer);
-        self.detailed_mesh.replace(mesh);
+        self.detailed_mesh.replace(ChunkDetailedMesh::Standart(mesh));
     }
 
     /// Sets mesh to chunk.
@@ -643,8 +862,17 @@ impl Chunk {
         self.low_meshes[lod as usize - 1].replace(mesh);
     }
 
-    /// Generates and sets mesh to chunk.
-    pub fn generate_mesh(&mut self, lod: Lod, chunk_adj: ChunkAdj, facade: &dyn gl::backend::Facade) {
+    /// Partitions [mesh][Mesh] of this [chunk][Chunk].
+    pub fn partition_mesh(&mut self, chunk_adj: ChunkAdj<'_>, facade: &dyn gl::backend::Facade) {
+        let vertices = self.make_partitioned_vertices(chunk_adj);
+        self.upload_partitioned_vertices(
+            array_init::array_init(|i| vertices[i].as_slice()),
+            facade,
+        );
+    }
+
+    /// Generates and sets [mesh][Mesh] to [chunk][Chunk].
+    pub fn generate_mesh(&mut self, lod: Lod, chunk_adj: ChunkAdj<'_>, facade: &dyn gl::backend::Facade) {
         match lod {
             0 => {
                 let vertices = self.make_vertices_detailed(chunk_adj);
@@ -783,7 +1011,7 @@ impl From<ChunkRef<'_>> for Chunk {
             voxel_ids: other.voxel_ids.clone(),
             info: other.info.clone(),
             detailed_mesh: None,
-            low_meshes: [None, None, None, None, None, None],
+            low_meshes: array_init::array_init(|_| None),
         }
     }
 }
@@ -795,7 +1023,7 @@ impl From<ChunkMut<'_>> for Chunk {
             voxel_ids: other.voxel_ids.clone(),
             info: other.info.clone(),
             detailed_mesh: None,
-            low_meshes: [None, None, None, None, None, None],
+            low_meshes: array_init::array_init(|_| None),
         }
     }
 }
@@ -922,7 +1150,8 @@ unsafe impl DynamicSize for FillType {
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 pub enum ChunkOption<T> {
     OutsideChunk,
-    Item(T),
+    Voxel(T),
+    Failed,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]

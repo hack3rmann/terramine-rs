@@ -1,6 +1,6 @@
 use {
     crate::app::utils::{
-        cfg::save::{HEAP_FILE_EXTENTION, STACK_FILE_EXTENTION},
+        cfg::save::{HEAP_FILE_EXTENSION, STACK_FILE_EXTENSION},
         reinterpreter::*,
     },
     super::{Offset, Size},
@@ -72,14 +72,14 @@ impl StackHeap {
             .write(true)
             .read(true)
             .create(true)
-            .open(format!("{path}/{name}.{STACK_FILE_EXTENTION}"))
+            .open(format!("{path}/{name}.{STACK_FILE_EXTENSION}"))
             .await?;
 
         let heap = OpenOptions::new()
             .write(true)
             .read(true)
             .create(true)
-            .open(format!("{path}/{name}.{HEAP_FILE_EXTENTION}"))
+            .open(format!("{path}/{name}.{HEAP_FILE_EXTENSION}"))
             .await?;
         
         Ok(Self {

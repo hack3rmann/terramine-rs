@@ -87,7 +87,17 @@ macro_rules! log {
     }};
 }
 
-pub use crate::log;
+#[macro_export]
+macro_rules! log_dbg {
+    ($expr:expr) => {{
+        use $crate::app::utils::logger::log;
+        let result = $expr;
+        log!(Info, "dbg", format!("{} = {:?}", stringify!($expr), result));
+        result
+    }};
+}
+
+pub use crate::{log, log_dbg};
 
 pub fn spawn_window(ui: &imgui::Ui) {
     use {

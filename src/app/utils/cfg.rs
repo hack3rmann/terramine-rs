@@ -4,8 +4,8 @@
 
 pub mod save {
     pub const META_FILE_NAME: &str = "meta.off";
-    pub const STACK_FILE_EXTENTION: &str = "stk";
-    pub const HEAP_FILE_EXTENTION:  &str = "hp";
+    pub const STACK_FILE_EXTENSION: &str = "stk";
+    pub const HEAP_FILE_EXTENSION:  &str = "hp";
 }
 
 pub mod camera {
