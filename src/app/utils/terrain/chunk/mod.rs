@@ -612,6 +612,35 @@ impl Chunk {
         }
     }
 
+    /// Connects mesh partitions into one mesh. If [chunk][Chunk] is not
+    /// partitioned then it will do nothing.
+    pub fn connect_mesh_partitions(&mut self, facade: &dyn gl::backend::Facade) {
+        use ChunkDetailedMesh::*;
+        let mesh = match self.detailed_mesh {
+            Some(ref mut mesh) => match mesh {
+                Partial(ref meshes) => {
+                    let vertices: Vec<_> = meshes.iter()
+                        .flat_map(|submesh| submesh
+                            .vertices
+                            .inner
+                            .as_slice()
+                            .read()
+                            .expect("failed to read vertex buffer subbuffer")
+                        )
+                        .collect();
+                    let vbuffer = VertexBuffer::no_indices(facade, &vertices, PrimitiveType::TrianglesList);
+                    Mesh::new(vbuffer)
+                },
+
+                _ => return,
+            },
+
+            None => return,
+        };
+
+        self.detailed_mesh.replace(ChunkDetailedMesh::Standart(mesh));
+    }
+
     /// Sets [voxel id][Id] to `new_id` by it's index in array.
     /// Note that it does not drop all meshes that can possibly hold old id.
     /// And note that it may unoptimize chunk even if it can be.

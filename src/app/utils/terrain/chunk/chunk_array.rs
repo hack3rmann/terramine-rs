@@ -7,7 +7,7 @@ use {
             chunk::{
                 EditError, Sides,
                 prelude::*, Id,
-                tasks::{FullTask, LowTask, Task, GenTask}
+                tasks::{FullTask, LowTask, Task, GenTask, PartitionTask}
             },
             voxel::{Voxel, self},
         },
@@ -48,6 +48,7 @@ pub struct ChunkArray {
     pub full_tasks: HashMap<Int3, FullTask>,
     pub low_tasks: HashMap<(Int3, Lod), LowTask>,
     pub voxels_gen_tasks: HashMap<Int3, GenTask>,
+    pub partition_tasks: HashMap<Int3, PartitionTask>,
 
     pub lod_dist_threashold: f32,
 
@@ -62,6 +63,7 @@ impl Default for ChunkArray {
             sizes: Default::default(),
             full_tasks: Default::default(),
             low_tasks: Default::default(),
+            partition_tasks: Default::default(),
             voxels_gen_tasks: Default::default(),
             lod_dist_threashold: 5.8,
             reading_handle: None,
@@ -616,6 +618,28 @@ impl ChunkArray {
                 }
             }
 
+            const CHUNK_MESH_PARTITION_DIST: f32 = 128.0;
+
+            let chunk_is_close_to_be_partitioned = vec3::len(
+                vec3::from(Chunk::global_pos(chunk.pos))
+                - cam.pos + vec3::from(Chunk::SIZES / 2)
+            ) <= CHUNK_MESH_PARTITION_DIST;
+
+            if chunk_is_close_to_be_partitioned && !self.partition_tasks.contains_key(&chunk.pos) && !chunk.is_partitioned() {
+                // FIXME: add safety arg.
+                let chunk = unsafe { chunk.make_ref().as_static() };
+                Self::start_task_partitioning(&mut self.partition_tasks, chunk, chunk_adj);
+            }
+
+            let chunnk_can_be_connected =
+                lod == 0 &&
+                chunk.is_partitioned() &&
+                !chunk_is_close_to_be_partitioned;
+
+            if chunnk_can_be_connected {
+                chunk.connect_mesh_partitions(facade);
+            }
+
             let can_set_new_lod =
                 chunk.get_available_lods().contains(&lod) ||
                 Self::is_mesh_task_running(&self.full_tasks, &self.low_tasks, chunk.pos, lod) &&
@@ -681,23 +705,11 @@ impl ChunkArray {
         }
     }
 
-    pub async fn try_finish_full_tasks(&mut self, facade: &dyn gl::backend::Facade) {
-        let full: Vec<_> = self.full_tasks.iter_mut()
-            .filter(|(_, task)| match task.handle.as_ref() {
-                None => false,
-                Some(handle) => handle.is_finished()
-            })
-            .map(|(&pos, task)|
-                (pos, task.take_result())
-            )
-            .collect();
+    pub async fn try_finish_full_tasks(&mut self, facade: &dyn Facade) {
+        let iter = self.full_tasks.iter_mut()
+            .map(|(&pos, task)| (pos, task));
 
-        let mut new_full = Vec::with_capacity(full.len());
-        for (pos, fut) in full {
-            new_full.push((pos, fut.await));
-        }
-
-        for (pos, vertices) in new_full {
+        for (pos, vertices) in Task::try_take_results(iter).await {
             self.full_tasks.remove(&pos);
 
             self.get_chunk_mut_by_pos(pos)
@@ -706,23 +718,11 @@ impl ChunkArray {
         }
     }
 
-    pub async fn try_finish_low_tasks(&mut self, facade: &dyn gl::backend::Facade) {
-        let low: Vec<_> = self.low_tasks.iter_mut()
-            .filter(|(_, task)| match task.handle.as_ref() {
-                None => false,
-                Some(handle) => handle.is_finished()
-            })
-            .map(|(&(pos, lod), task)|
-                (pos, lod, task.take_result())
-            )
-            .collect();
+    pub async fn try_finish_low_tasks(&mut self, facade: &dyn Facade) {
+        let iter = self.low_tasks.iter_mut()
+            .map(|(&idx, task)| (idx, task));
 
-        let mut new_low = Vec::with_capacity(low.len());
-        for (pos, lod, fut) in low {
-            new_low.push((pos, lod, fut.await));
-        }
-
-        for (pos, lod, vertices) in new_low {
+        for ((pos, lod), vertices) in Task::try_take_results(iter).await {
             self.low_tasks.remove(&(pos, lod));
 
             self.get_chunk_mut_by_pos(pos)
@@ -732,20 +732,10 @@ impl ChunkArray {
     }
 
     pub async fn try_finish_gen_tasks(&mut self) {
-        let voxel_futs: Vec<_> = self.voxels_gen_tasks.iter_mut()
-            .filter(|(_, task)| match task.handle {
-                None => false,
-                Some(ref handle) => handle.is_finished(),
-            })
-            .map(|(&pos, task)| (pos, task.take_result()))
-            .collect();
+        let iter = self.voxels_gen_tasks.iter_mut()
+            .map(|(&pos, task)| (pos, task));
 
-        let mut voxel_vecs = Vec::with_capacity(voxel_futs.len());
-        for (pos, fut) in voxel_futs {
-            voxel_vecs.push((pos, fut.await));
-        }
-
-        for (pos, voxels) in voxel_vecs {
+        for (pos, voxels) in Task::try_take_results(iter).await {
             self.voxels_gen_tasks.remove(&pos);
 
             let chunk = self.get_chunk_mut_by_pos(pos)
@@ -754,10 +744,26 @@ impl ChunkArray {
         }
     }
 
-    pub async fn try_finish_all_tasks(&mut self, facade: &dyn gl::backend::Facade) {
+    pub async fn try_finish_partition_tasks(&mut self, facade: &dyn Facade) {
+        let iter = self.partition_tasks.iter_mut()
+            .map(|(&pos, task)| (pos, task));
+
+        for (pos, partitions) in Task::try_take_results(iter).await {
+            self.partition_tasks.remove(&pos);
+
+            let partitions = array_init::array_init(|i| partitions[i].as_slice());
+
+            self.get_chunk_mut_by_pos(pos)
+                .expect("pos should be valid")
+                .upload_partitioned_vertices(partitions, facade);
+        }
+    }
+
+    pub async fn try_finish_all_tasks(&mut self, facade: &dyn Facade) {
         self.try_finish_full_tasks(facade).await;
         self.try_finish_low_tasks(facade).await;
         self.try_finish_gen_tasks().await;
+        self.try_finish_partition_tasks(facade).await;
     }
 
     pub fn is_voxels_gen_task_running(tasks: &HashMap<Int3, GenTask>, pos: Int3) -> bool {
@@ -819,6 +825,17 @@ impl ChunkArray {
 
             _ => (),
         }
+    }
+
+    pub fn start_task_partitioning(
+        tasks: &mut HashMap<Int3, PartitionTask>,
+        chunk: ChunkRef<'static>, adj: ChunkAdj<'static>,
+    ) {
+        let pos = chunk.pos.to_owned();
+        let prev_value = tasks.insert(pos, Task::spawn(async move {
+            chunk.make_partitioned_vertices(adj)
+        }));
+        assert!(prev_value.is_none(), "there should be only one task");
     }
 
     pub async fn try_finish_voxels_gen_task(tasks: &mut HashMap<Int3, GenTask>, pos: Int3, chunk: &mut Chunk) {
@@ -890,12 +907,14 @@ impl ChunkArray {
         drop(mem::take(&mut self.full_tasks));
         drop(mem::take(&mut self.low_tasks));
         drop(mem::take(&mut self.voxels_gen_tasks));
+        drop(mem::take(&mut self.partition_tasks));
     }
 
     pub fn any_task_running(&self) -> bool {
         !self.low_tasks.is_empty() ||
         !self.full_tasks.is_empty() ||
-        !self.voxels_gen_tasks.is_empty()
+        !self.voxels_gen_tasks.is_empty() ||
+        !self.partition_tasks.is_empty()
     }
 
     pub fn spawn_control_window(&mut self, ui: &imgui::Ui) {
@@ -906,12 +925,17 @@ impl ChunkArray {
             .build(|| {
                 ui.text(format!(
                     "{n} chunk generation tasks.",
-                    n = self.voxels_gen_tasks.len()
+                    n = self.voxels_gen_tasks.len(),
                 ));
 
                 ui.text(format!(
                     "{n} mesh generation tasks.",
-                    n = self.low_tasks.len() + self.full_tasks.len()
+                    n = self.low_tasks.len() + self.full_tasks.len(),
+                ));
+
+                ui.text(format!(
+                    "{n} partition generation tasks.",
+                    n = self.partition_tasks.len(),
                 ));
 
                 ui.slider(

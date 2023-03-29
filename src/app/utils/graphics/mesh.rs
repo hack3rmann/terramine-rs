@@ -18,7 +18,7 @@ pub type UnindexedMesh<Vertex> = Mesh<NoIndices, Vertex>;
 /// Handles vertex_buffer and shader.
 #[derive(Debug)]
 pub struct Mesh<Idx, Vertex: Copy> {
-    vertices: VertexBuffer<Idx, Vertex>,
+    pub vertices: VertexBuffer<Idx, Vertex>,
 }
 
 impl<Idx, Vertex: Copy> Mesh<Idx, Vertex> {

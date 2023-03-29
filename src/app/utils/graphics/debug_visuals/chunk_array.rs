@@ -95,6 +95,8 @@ pub mod data {
 
                 let color = if !chunk.is_generated() {
                     [0.1, 0.0, 0.0, 0.5]
+                } else if chunk.is_partitioned() {
+                    [0.1, 0.5, 0.0, 0.5]
                 } else if chunk.is_empty() {
                     [0.5, 0.1, 0.1, 0.5]
                 } else if chunk.is_same_filled() {
