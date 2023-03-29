@@ -60,22 +60,21 @@ pub mod prelude {
 #[derive(Copy, Clone, Debug)]
 pub struct FullVertex {
     pub position: (f32, f32, f32),
-    pub normal: (f32, f32, f32),
-    pub tangent: (f32, f32, f32),
     pub tex_coords: (f32, f32),
+    pub face_idx: u8,
 }
 
 /// Low-detailed vertex.
 #[derive(Copy, Clone, Debug)]
 pub struct LowVertex {
     pub position: (f32, f32, f32),
-    pub normal: (f32, f32, f32),
     pub color: (f32, f32, f32),
+    pub face_idx: u8,
 }
 
 /* Implement Vertex structs as glium intended */
-implement_vertex!(FullVertex, position, normal, tangent, tex_coords);
-implement_vertex!(LowVertex, position, normal, color);
+implement_vertex!(FullVertex, position, tex_coords, face_idx);
+implement_vertex!(LowVertex, position, color, face_idx);
 
 macro_rules! impl_chunk_with_refs {
     ($($impls:item)*) => {

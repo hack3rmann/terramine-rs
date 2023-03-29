@@ -533,7 +533,7 @@ impl ChunkArray {
 
     /// Gives iterator over all voxels in [`ChunkArray`].
     pub fn voxels(&self) -> impl Iterator<Item = Voxel> + '_ {
-        self.chunks().flat_map(|chunk| chunk.voxels())
+        self.chunks().flat_map(Chunk::voxels)
     }
 
     /// Gives iterator over mutable chunks and their adjacents.

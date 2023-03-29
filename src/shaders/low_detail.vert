@@ -3,7 +3,7 @@
 /* Vertex buffer inputs */
 in vec3 position;
 in vec3 color;
-in vec3 normal;
+in uint face_idx;
 
 /* Output compound */
 out vec3 v_color;
@@ -24,6 +24,8 @@ uniform bool is_shadow_pass;
 void process_shadow();
 void shade_standart();
 
+vec3 get_normal(uint face_idx);
+
 void main() {
     if (is_shadow_pass) {
         process_shadow();
@@ -40,11 +42,26 @@ void process_shadow() {
 void shade_standart() {
     /* Assempling output compound */
     v_color = color;
-    v_normal = normal;
+    v_normal = get_normal(face_idx);
     v_position = position;
     v_time = time;
     v_light_dir = light_dir;
 
     /* Writing to gl_Position */
     gl_Position = proj * view * vec4(position, 1.0);
+}
+
+
+vec3 get_normal(uint face_idx) {
+    switch (face_idx) {
+        case 0: return vec3(1, 0, 0);
+        case 1: return vec3(-1, 0, 0);
+        case 2: return vec3(0, 1, 0);
+        case 3: return vec3(0, -1, 0);
+        case 4: return vec3(0, 0, 1);
+        case 5: return vec3(0, 0, -1);
+        
+        default:
+            return vec3(-1, -1, -1);
+    }
 }

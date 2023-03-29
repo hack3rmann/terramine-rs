@@ -59,6 +59,13 @@ pub mod terrain {
     pub const RIGHT_TANGENT:  (f32, f32, f32) = BACK_TANGENT;
     pub const LEFT_TANGENT:   (f32, f32, f32) = BACK_TANGENT;
 
+    pub const BACK_IDX:   usize = 0;
+    pub const FRONT_IDX:  usize = 1;
+    pub const TOP_IDX:    usize = 2;
+    pub const BOTTOM_IDX: usize = 3;
+    pub const RIGHT_IDX:  usize = 4;
+    pub const LEFT_IDX:   usize = 5;
+
     pub const MAX_TASKS: usize = 10_000;
     pub const MAX_CHUNKS: usize = 100_000;
 
