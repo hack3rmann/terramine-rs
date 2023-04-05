@@ -31,6 +31,13 @@ array-init = "2.1.0"
 cpython = { version = "0.7.1", features = ["extension-module"] }
 smallvec = { version = "1.10.0", features = ["const_generics"] }
 parse-display = "0.8.0"
+noise = "0.8.2"
+futures = "0.3.28"
+user-error = "1.2.8"
+itertools = "0.10.5"
+atomic = "0.5.1"
+ordered-float = "3.6.0"
+rand = "0.8.5"
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"

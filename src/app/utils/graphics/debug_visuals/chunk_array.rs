@@ -1,6 +1,6 @@
 use {
-    crate::app::utils::{
-        cfg,
+    crate::{
+        prelude::*,
         graphics::{
             vertex_buffer::VertexBuffer,
             mesh::UnindexedMesh,
@@ -19,8 +19,6 @@ use {
         index::PrimitiveType,
         uniforms::Uniforms,
     },
-    math_linear::prelude::*,
-    lazy_static::lazy_static,
 };
 
 pub mod data {
@@ -74,104 +72,114 @@ pub mod data {
         }
     }
 
-    pub fn construct_mesh(chunk_arr: &ChunkArray, facade: &dyn glium::backend::Facade) -> UnindexedMesh<Vertex> {
-        let vertices: Vec<_> = chunk_arr.chunks()
-            .flat_map(|chunk| {
-                let bias = cfg::topology::Z_FIGHTING_BIAS
-                         * (chunk.info.active_lod as f32 * 80.0 + 1.0);
-                let size = Chunk::GLOBAL_SIZE as f32 + bias;
+    pub async fn construct_mesh(chunk_arr: &ChunkArray, facade: &dyn glium::backend::Facade) -> UnindexedMesh<Vertex> {
+        let mut vertices = SmallVec::<[_; 24]>::new();
 
-                let pos = vec3::from(Chunk::global_pos(chunk.pos)) * Voxel::SIZE
-                        - vec3::all(0.5 * Voxel::SIZE);
-                        
-                let lll = [ pos.x - bias, pos.y - bias, pos.z - bias ];
-                let llh = [ pos.x - bias, pos.y - bias, pos.z + size ];
-                let lhl = [ pos.x - bias, pos.y + size, pos.z - bias ];
-                let lhh = [ pos.x - bias, pos.y + size, pos.z + size ];
-                let hll = [ pos.x + size, pos.y - bias, pos.z - bias ];
-                let hlh = [ pos.x + size, pos.y - bias, pos.z + size ];
-                let hhl = [ pos.x + size, pos.y + size, pos.z - bias ];
-                let hhh = [ pos.x + size, pos.y + size, pos.z + size ];
+        for (chunk, chunk_mesh) in chunk_arr.chunks.iter().zip(chunk_arr.meshes.iter()) {
+            let active_lod = chunk.info.load(Relaxed).active_lod.unwrap_or(0);
+            let chunk_pos = chunk.pos.load(Relaxed);
+            let is_generated = chunk.is_generated();
+            let is_partitioned = chunk_mesh.borrow().is_partitioned();
+            let is_empty = chunk.is_empty();
+            let is_same_filled = chunk.is_same_filled();
+            drop(chunk);
 
-                let color = if !chunk.is_generated() {
-                    [0.1, 0.0, 0.0, 0.5]
-                } else if chunk.is_partitioned() {
-                    [0.1, 0.5, 0.0, 0.5]
-                } else if chunk.is_empty() {
-                    [0.5, 0.1, 0.1, 0.5]
-                } else if chunk.is_same_filled() {
-                    [0.1, 0.1, 0.5, 0.5]
-                } else {
-                    [0.3, 0.3, 0.3, 0.5]
-                };
+            let bias = cfg::topology::Z_FIGHTING_BIAS
+                     * (active_lod as f32 * 80.0 + 1.0);
+            let size = Chunk::GLOBAL_SIZE as f32 + bias;
 
-                let color = color.map(|c| {
-                    let lod_coef = 1.0
-                                 - chunk.info.active_lod as f32
-                                     / Chunk::N_LODS as f32
-                                 + 0.001;
-                    c * (lod_coef * 0.7 + 0.3)
-                });
+            let pos = vec3::from(Chunk::global_pos(chunk_pos)) * Voxel::SIZE
+                    - vec3::all(0.5 * Voxel::SIZE);
+                    
+            let lll = [ pos.x - bias, pos.y - bias, pos.z - bias ];
+            let llh = [ pos.x - bias, pos.y - bias, pos.z + size ];
+            let lhl = [ pos.x - bias, pos.y + size, pos.z - bias ];
+            let lhh = [ pos.x - bias, pos.y + size, pos.z + size ];
+            let hll = [ pos.x + size, pos.y - bias, pos.z - bias ];
+            let hlh = [ pos.x + size, pos.y - bias, pos.z + size ];
+            let hhl = [ pos.x + size, pos.y + size, pos.z - bias ];
+            let hhh = [ pos.x + size, pos.y + size, pos.z + size ];
 
-                [
-                    Vertex { pos: lll, color },
-                    Vertex { pos: lhl, color },
-                    
-                    Vertex { pos: llh, color },
-                    Vertex { pos: lhh, color },
-                    
-                    Vertex { pos: hlh, color },
-                    Vertex { pos: hhh, color },
-                    
-                    Vertex { pos: hll, color },
-                    Vertex { pos: hhl, color },
-                    
+            let color = if !is_generated {
+                [0.1, 0.0, 0.0, 0.5]
+            } else if is_partitioned {
+                [0.1, 0.5, 0.0, 0.5]
+            } else if is_empty {
+                [0.5, 0.1, 0.1, 0.5]
+            } else if is_same_filled {
+                [0.1, 0.1, 0.5, 0.5]
+            } else {
+                [0.3, 0.3, 0.3, 0.5]
+            };
 
-                    Vertex { pos: lll, color },
-                    Vertex { pos: hll, color },
-                    
-                    Vertex { pos: lhl, color },
-                    Vertex { pos: hhl, color },
-                    
-                    Vertex { pos: lhh, color },
-                    Vertex { pos: hhh, color },
-                    
-                    Vertex { pos: llh, color },
-                    Vertex { pos: hlh, color },
-                    
-                    
-                    Vertex { pos: lll, color },
-                    Vertex { pos: llh, color },
-                    
-                    Vertex { pos: hll, color },
-                    Vertex { pos: hlh, color },
-                    
-                    Vertex { pos: hhl, color },
-                    Vertex { pos: hhh, color },
-                    
-                    Vertex { pos: lhl, color },
-                    Vertex { pos: lhh, color },
-                ]
-            })
-            .collect();
+            let color = color.map(|c| {
+                let lod_coef = 1.0
+                                - active_lod as f32 / Chunk::N_LODS as f32
+                                + 0.001;
+                c * (lod_coef * 0.7 + 0.3)
+            });
+
+            vertices.append(&mut smallvec![
+                Vertex { pos: lll, color },
+                Vertex { pos: lhl, color },
+                
+                Vertex { pos: llh, color },
+                Vertex { pos: lhh, color },
+                
+                Vertex { pos: hlh, color },
+                Vertex { pos: hhh, color },
+                
+                Vertex { pos: hll, color },
+                Vertex { pos: hhl, color },
+                
+
+                Vertex { pos: lll, color },
+                Vertex { pos: hll, color },
+                
+                Vertex { pos: lhl, color },
+                Vertex { pos: hhl, color },
+                
+                Vertex { pos: lhh, color },
+                Vertex { pos: hhh, color },
+                
+                Vertex { pos: llh, color },
+                Vertex { pos: hlh, color },
+                
+                
+                Vertex { pos: lll, color },
+                Vertex { pos: llh, color },
+                
+                Vertex { pos: hll, color },
+                Vertex { pos: hlh, color },
+                
+                Vertex { pos: hhl, color },
+                Vertex { pos: hhh, color },
+                
+                Vertex { pos: lhl, color },
+                Vertex { pos: lhh, color },
+            ] as &mut SmallVec<[_; 24]>);
+        }
 
         let vbuffer = VertexBuffer::no_indices(facade, &vertices, PrimitiveType::LinesList);
         UnindexedMesh::new(vbuffer)
     }
 }
 
-impl DebugVisualized<'_, ChunkArray> {
-    pub fn new_chunk_array(chunk_array: ChunkArray, facade: &dyn glium::backend::Facade) -> Self {
-        let mesh = data::construct_mesh(&chunk_array, facade);
+impl<'s> DebugVisualized<'s, ChunkArray> {
+    pub async fn new_chunk_array(
+        chunk_array: ChunkArray,
+        facade: &dyn glium::backend::Facade
+    ) -> DebugVisualized<'s, ChunkArray> {
+        let mesh = data::construct_mesh(&chunk_array, facade).await;
         Self { inner: chunk_array, mesh, static_data: data::get(facade) }
     }
 
-    pub fn render_chunk_debug(
+    pub async fn render_chunk_debug(
         &mut self, facade: &dyn glium::backend::Facade,
         target: &mut impl glium::Surface, uniforms: &impl Uniforms,
     ) -> Result<(), glium::DrawError> {
         if ENABLED.load(Ordering::SeqCst) {
-            self.mesh = data::construct_mesh(self, facade);
+            self.mesh = data::construct_mesh(self, facade).await;
         
             let shader = data::get(facade).shader;
             let draw_params = data::get(facade).draw_params;

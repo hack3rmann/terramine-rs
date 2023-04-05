@@ -20,11 +20,11 @@ pub mod prelude {
     pub use super::{
         profiler_target as profile,
         super::profiler,
-        Id,
+        MeasureId,
     };
 }
 
-pub type Id = u64;
+pub type MeasureId = u64;
 pub type DataSummary<'s> = Vec<Data<'s>>;
 
 #[derive(Debug, Clone, Copy)]
@@ -60,11 +60,11 @@ impl Profile {
 pub struct Measure {
     pub value: f64,
     pub now: Instant,
-    pub id: Id,
+    pub id: MeasureId,
 }
 
 impl Measure {
-    pub fn new(id: Id) -> Self {
+    pub fn new(id: MeasureId) -> Self {
         Self { value: 0.0, now: Instant::now(), id }
     }
 }
@@ -79,7 +79,7 @@ impl Drop for Measure {
 /// Handles all profiles.
 #[derive(Debug)]
 pub struct Profiler {
-    pub profiles: HashMap<Id, Profile>,
+    pub profiles: HashMap<MeasureId, Profile>,
 }
 
 static DRAWING_ENABLED: Mutex<bool> = Mutex::new(false);
@@ -91,7 +91,7 @@ lazy_static! {
 }
 
 /// Adds profile
-pub fn add_profile(profile: Profile, id: Id) {
+pub fn add_profile(profile: Profile, id: MeasureId) {
     PROFILER.lock()
         .expect("mutex should be not poisoned")
         .profiles
@@ -110,7 +110,7 @@ pub fn upload_measure(measure: &Measure) {
 }
 
 /// Starting capturing to to profile under given `id`.
-pub fn start_capture(target_name: &str, id: Id) -> Measure {
+pub fn start_capture(target_name: &str, id: MeasureId) -> Measure {
     let is_already_captured = PROFILER.lock()
         .expect("mutex should be not poisoned")
         .profiles

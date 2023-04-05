@@ -1,33 +1,24 @@
-use crate::app::utils::terrain::chunk::commands;
-
 use {
-    crate::app::utils::{
-        cfg, logger,
+    crate::{
+        prelude::*,
         terrain::{
             chunk::{
-                EditError, Sides,
-                prelude::*, Id,
-                tasks::{FullTask, LowTask, Task, GenTask, PartitionTask}
+                prelude::*, EditError, Sides, Id,
+                tasks::{FullTask, LowTask, Task, GenTask, PartitionTask},
+                mesh::ChunkMesh,
             },
-            voxel::{Voxel, self},
+            voxel::{self, Voxel, voxel_data::data::*},
         },
         saves::Save,
-        reinterpreter::*,
         graphics::camera::Camera,
-        concurrency::loading,
-        user_io::{Key, keyboard, mouse},
     },
-    math_linear::{prelude::*, math::ray::space_3d::Line},
-    std::{
-        slice::{Iter, IterMut},
-        collections::{HashMap, HashSet},
-        io, mem,
-        sync::Mutex,
-    },
+    math_linear::math::ray::space_3d::Line,
+    std::{io, mem, sync::Mutex, slice::IterMut},
     glium::{self as gl, backend::Facade},
-    thiserror::Error,
     tokio::task::{JoinHandle, JoinError},
 };
+
+pub static GENERATOR_SIZES: Mutex<[usize; 3]> = Mutex::new(USize3::ZERO.as_array());
 
 #[derive(Clone, Copy, Debug)]
 enum ChunkArrSaveType {
@@ -42,7 +33,8 @@ impl From<ChunkArrSaveType> for u64 {
 /// Represents 3d array of [`Chunk`]s. Can control their mesh generation, etc.
 #[derive(Debug)]
 pub struct ChunkArray {
-    pub chunks: Vec<Chunk>,
+    pub chunks: Vec<ChunkRef>,
+    pub meshes: Vec<MeshRef>,
     pub sizes: USize3,
 
     pub full_tasks: HashMap<Int3, FullTask>,
@@ -50,9 +42,9 @@ pub struct ChunkArray {
     pub voxels_gen_tasks: HashMap<Int3, GenTask>,
     pub partition_tasks: HashMap<Int3, PartitionTask>,
 
-    pub lod_dist_threashold: f32,
+    pub lod_threashold: f32,
 
-    pub reading_handle: Option<JoinHandle<io::Result<(USize3, Vec<(Vec<Id>, FillType)>)>>>,
+    pub reading_handle: Option<JoinHandle<io::Result<(USize3, Vec<(Vec<Atomic<Id>>, FillType)>)>>>,
     pub saving_handle: Option<JoinHandle<io::Result<()>>>,
 }
 
@@ -60,12 +52,13 @@ impl Default for ChunkArray {
     fn default() -> Self {
         Self {
             chunks: Default::default(),
+            meshes: Default::default(),
             sizes: Default::default(),
             full_tasks: Default::default(),
             low_tasks: Default::default(),
             partition_tasks: Default::default(),
             voxels_gen_tasks: Default::default(),
-            lod_dist_threashold: 5.8,
+            lod_threashold: 5.8,
             reading_handle: None,
             saving_handle: None,
         }
@@ -73,6 +66,8 @@ impl Default for ChunkArray {
 }
 
 impl ChunkArray {
+    const MAX_TRACE_STEPS: usize = 1024;
+
     /// Generates new chunks.
     /// # Panic
     /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
@@ -81,7 +76,8 @@ impl ChunkArray {
         let (start_pos, end_pos) = Self::pos_bounds(sizes);
 
         let chunks = SpaceIter::new(start_pos..end_pos)
-            .map(Chunk::new)
+            .map(move |pos| Chunk::new(pos, sizes))
+            .map(Arc::new)
             .collect();
 
         Self::from_chunks(sizes, chunks)
@@ -90,7 +86,7 @@ impl ChunkArray {
     /// Constructs [`ChunkArray`] with passed in chunks.
     /// # Panic
     /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
-    pub fn from_chunks(sizes: USize3, chunks: Vec<Chunk>) -> Self {
+    pub fn from_chunks(sizes: USize3, chunks: Vec<Arc<Chunk>>) -> Self {
         Self::validate_sizes(sizes);
         let volume = Self::volume(sizes);
         assert_eq!(
@@ -98,8 +94,12 @@ impl ChunkArray {
             "passed in chunk `Vec` should have same size as passed in sizes, but sizes: {sizes}, len: {len}",
             len = chunks.len(),
         );
+
+        let meshes = (0..chunks.len())
+            .map(|_| Rc::new(RefCell::new(ChunkMesh::default())))
+            .collect();
         
-        Self { chunks, sizes, ..Default::default() }
+        Self { chunks, sizes, meshes, ..Default::default() }
     }
 
     /// Constructs [`ChunkArray`] with empty chunks.
@@ -111,6 +111,7 @@ impl ChunkArray {
 
         let chunks = SpaceIter::new(start_pos..end_pos)
             .map(Chunk::new_empty)
+            .map(Arc::new)
             .collect();
 
         Self::from_chunks(sizes, chunks)
@@ -141,14 +142,23 @@ impl ChunkArray {
     }
 
     pub async fn save_to_file(
-        sizes: USize3, chunks: Vec<ChunkRef<'static>>, save_name: impl Into<String>, save_path: &'static str,
+        sizes: USize3, chunks: Vec<ChunkRef>, save_name: impl Into<String>, save_path: &'static str,
     ) -> io::Result<()> {
         let save_name = save_name.into();
 
-        let _work_guard = logger::work("chunk array", format!("saving to {save_name} in {save_path}"));
+        let _work_guard = logger::work("chunk-array", format!("saving to {save_name} in {save_path}"));
 
-        let is_all_generated = chunks.iter()
-            .all(ChunkRef::is_generated);
+        let is_all_generated = {
+            let mut result = true;
+            for chunk in chunks.iter() {
+                if !chunk.is_generated() {
+                    result = false;
+                    break
+                }
+            }
+            result
+        };
+
         assert!(is_all_generated, "Chunks should be generated to save them to file");
 
         let volume = Self::volume(sizes);
@@ -165,7 +175,7 @@ impl ChunkArray {
 
                 async move {
                     loading.refresh(i as f32 / (volume - 1) as f32);
-                    Self::chunk_as_bytes(chunks[i])
+                    Self::chunk_as_bytes(&*chunks[i])
                 }
             }).await
             .save()
@@ -176,8 +186,8 @@ impl ChunkArray {
 
     pub async fn read_from_file(
         save_name: &str, save_path: &str,
-    ) -> io::Result<(USize3, Vec<(Vec<Id>, FillType)>)> {
-        let _work_guard = logger::work("chunk array", format!("reading chunks from {save_name} in {save_path}"));
+    ) -> io::Result<(USize3, Vec<(Vec<Atomic<Id>>, FillType)>)> {
+        let _work_guard = logger::work("chunk-array", format!("reading chunks from {save_name} in {save_path}"));
 
         let loading = loading::start_new("Chunks reading");
 
@@ -200,10 +210,10 @@ impl ChunkArray {
     }
 
     /// Reinterprets [chunk][Chunk] as bytes. It uses Huffman's compresstion.
-    pub fn chunk_as_bytes(chunk: ChunkRef<'_>) -> Vec<u8> {
+    pub fn chunk_as_bytes(chunk: &Chunk) -> Vec<u8> {
         use { std::iter::FromIterator, bit_vec::BitVec, huffman_compress as hc };
 
-        match chunk.info.fill_type {
+        match chunk.info.load(Relaxed).fill_type {
             FillType::AllSame(id) =>
                 FillType::AllSame(id).as_bytes(),
 
@@ -214,18 +224,23 @@ impl ChunkArray {
                     "cannot save unknown-sized chunk with size {n_voxels}",
                 );
 
-                let freqs = Self::count_voxel_frequencies(chunk.voxel_ids.iter().copied());
+                let freqs = Self::count_voxel_frequencies(
+                    chunk.voxel_ids.iter()
+                        .map(|id| id.load(Relaxed))
+                );
+
                 let (book, _) = hc::CodeBuilder::from_iter(
                     freqs.iter().map(|(&k, &v)| (k, v))
                 ).finish();
                 let mut bits = BitVec::new();
 
-                for &voxel_id in chunk.voxel_ids.iter() {
+                for voxel_id in chunk.voxel_ids.iter() {
+                    let voxel_id = voxel_id.load(Relaxed);
                     book.encode(&mut bits, &voxel_id)
                         .expect("voxel id should be in the book");
                 }
 
-                compose! {
+                itertools::chain! {
                     FillType::Default.as_bytes(),
                     freqs.as_bytes(),
                     bits.as_bytes(),
@@ -235,7 +250,7 @@ impl ChunkArray {
     }
 
     /// Reinterprets bytes as [chunk][Chunk] and reads [id][Id] array and [fill type][FillType] from it.
-    pub fn array_filltype_from_bytes(bytes: &[u8]) -> (Vec<Id>, FillType) {
+    pub fn array_filltype_from_bytes(bytes: &[u8]) -> (Vec<Atomic<Id>>, FillType) {
         use { std::iter::FromIterator, bit_vec::BitVec, huffman_compress as hc };
 
         let mut reader = ByteReader::new(bytes);
@@ -251,10 +266,12 @@ impl ChunkArray {
                     .expect("failed to read `BitVec` from bytes");
 
                 let (_, tree) = hc::CodeBuilder::from_iter(freqs).finish();
-                let voxel_ids: Vec<Id> = tree.unbounded_decoder(bits).collect();
+                let voxel_ids: Vec<_> = tree.unbounded_decoder(bits)
+                    .map(Atomic::new)
+                    .collect();
 
                 let is_id_valid = voxel_ids.iter()
-                    .copied()
+                    .map(|id| id.load(Relaxed))
                     .all(voxel::is_id_valid);
 
                 assert!(is_id_valid, "Voxel ids in voxel array should be valid");
@@ -278,7 +295,10 @@ impl ChunkArray {
             .ok_or(EditError::PosIdConversion(pos))?;
 
         // We know that `chunk_idx` is valid so we can get-by-index.
-        let old_id = self.chunks[chunk_idx].set_voxel(pos, new_id)?;
+        let old_id = unsafe {
+            Arc::get_mut_unchecked(&mut self.chunks[chunk_idx])
+                .set_voxel(pos, new_id)?
+        };
 
         Ok(old_id)
     }
@@ -327,13 +347,17 @@ impl ChunkArray {
                 Ord::min(pos_to.z, end_voxel_pos.z),
             );
 
-            let chunk_changed = self.chunks[idx].fill_voxels(pos_from, pos_to, new_id)?;
+            let chunk_changed = unsafe {
+                Arc::get_mut_unchecked(&mut self.chunks[idx])
+                    .fill_voxels(pos_from, pos_to, new_id)?
+            };
+
             if chunk_changed {
                 is_changed = true;
                 
                 for idx in Self::get_adj_chunks_idxs(self.sizes, chunk_pos).as_array() {
                     if let Some(idx) = idx {
-                        self.chunks[idx].drop_all_meshes();
+                        self.meshes[idx].borrow_mut().drop_all();
                     }
                 }
             }
@@ -343,9 +367,9 @@ impl ChunkArray {
     }
 
     /// Drops all meshes from each [chunk][Chunk].
-    pub fn drop_all_meshes(&mut self) {
-        for chunk in self.chunks.iter_mut() {
-            chunk.drop_all_meshes();
+    pub fn drop_all_meshes(&self) {
+        for mesh in self.meshes.iter() {
+            mesh.borrow_mut().drop_all();
         }
     }
 
@@ -362,23 +386,12 @@ impl ChunkArray {
         result
     }
 
-    // FIXME: make unmodifiable flag on chunks.
-    pub fn make_static_refs(&self) -> Vec<ChunkRef<'static>>
-    where
-        Self: 'static,
-    {
-        self.chunks()
-            .map(|chunk| unsafe { chunk.make_ref().as_static() })
-            .collect()
-    }
-
-    pub fn apply_new(&mut self, sizes: USize3, chunk_arr: Vec<(Vec<Id>, FillType)>) {
-        assert_eq!(Self::volume(sizes), chunk_arr.len(), "chunk array should have same len as sizes");
+    pub fn apply_new(&mut self, sizes: USize3, chunk_arr: Vec<(Vec<Atomic<Id>>, FillType)>) {
+        assert_eq!(Self::volume(sizes), chunk_arr.len(), "chunk-array should have same len as sizes");
 
         self.drop_tasks();
 
-        self.sizes = sizes;
-        self.chunks = chunk_arr.into_iter()
+        let chunks = chunk_arr.into_iter()
             .enumerate()
             .map(|(idx, (voxel_ids, fill_type))| {
                 let chunk_pos = Self::idx_to_pos(idx, sizes);
@@ -389,12 +402,25 @@ impl ChunkArray {
                         Chunk::new_same_filled(chunk_pos, id),
                 }
             })
+            .map(Arc::new)
             .collect();
+
+        let _ = std::mem::replace(self, ChunkArray::from_chunks(sizes, chunks));
     }
 
     /// Gives chunk count.
     pub fn volume(arr_sizes: USize3) -> usize {
         arr_sizes.x * arr_sizes.y * arr_sizes.z
+    }
+
+    pub fn voxel_pos_to_coord_idx(voxel_pos: Int3, chunk_array_sizes: USize3) -> Option<USize3> {
+        let chunk_pos = Chunk::local_pos(voxel_pos);
+        let local_voxel_pos = Chunk::global_to_local_pos(chunk_pos, voxel_pos);
+
+        let chunk_coord_idx = Self::pos_to_coord_idx(chunk_array_sizes, chunk_pos)?;
+        let voxel_offset_by_chunk: USize3 = Chunk::global_pos(chunk_coord_idx.into()).into();
+
+        Some(voxel_offset_by_chunk + USize3::from(local_voxel_pos))
     }
 
     /// Convertes 3d index into chunk pos.
@@ -439,34 +465,24 @@ impl ChunkArray {
     }
 
     /// Gives reference to chunk by its position.
-    pub fn get_chunk_by_pos(&self, pos: Int3) -> Option<ChunkRef<'_>> {
-        Self::get_chunk_by_pos_inner(&self.chunks, self.sizes, pos)
+    pub fn get_chunk_by_pos(&self, pos: Int3) -> Option<Arc<Chunk>> {
+        Self::get_chunk_by_pos_unbounded(&self.chunks, self.sizes, pos)
     }
 
-    fn get_chunk_by_pos_inner(chunks: &[Chunk], sizes: USize3, pos: Int3) -> Option<ChunkRef<'_>> {
+    fn get_chunk_by_pos_unbounded(chunks: &[Arc<Chunk>], sizes: USize3, pos: Int3) -> Option<Arc<Chunk>> {
         let idx = Self::pos_to_idx(sizes, pos)?;
-        Some(chunks[idx].make_ref())
-    }
-
-    /// Gives reference to chunk by its position.
-    pub fn get_chunk_mut_by_pos(&mut self, pos: Int3) -> Option<&mut Chunk> {
-        let idx = Self::pos_to_idx(self.sizes, pos)?;
-        Some(&mut self.chunks[idx])
+        Some(Arc::clone(&chunks[idx]))
     }
 
     /// Gives adjacent chunks references by center chunk position.
-    pub fn get_adj_chunks(&self, pos: Int3) -> ChunkAdj<'_> {
-        Self::get_adj_chunks_inner(&self.chunks, self.sizes, pos)
+    pub fn get_adj_chunks(&self, pos: Int3) -> ChunkAdj {
+        Self::get_adj_chunks_unbounded(&self.chunks, self.sizes, pos)
     }
 
     /// Gives adjacent chunks references by center chunk position.
-    fn get_adj_chunks_inner(chunks: &[Chunk], sizes: USize3, pos: Int3) -> ChunkAdj<'_> {
-        let sides = Self::get_adj_chunks_idxs(sizes, pos)
-            .map(|opt| opt.map(|idx|
-                chunks[idx].make_ref()
-            ));
-
-        ChunkAdj { sides }
+    fn get_adj_chunks_unbounded(chunks: &[ChunkRef], sizes: USize3, pos: Int3) -> ChunkAdj {
+        Self::get_adj_chunks_idxs(sizes, pos)
+            .map(|opt| opt.map(|idx| Arc::clone(&chunks[idx])))
     }
 
     /// Gives '`iterator`' over adjacent to `pos` array indices.
@@ -483,40 +499,33 @@ impl ChunkArray {
     }
 
     /// Gives iterator over all chunk's adjacents.
-    pub fn adj_iter(&self) -> impl Iterator<Item = ChunkAdj<'_>> {
-        Self::adj_iter_inner(&self.chunks, self.sizes)
+    pub fn adj_iter(&self) -> impl Iterator<Item = ChunkAdj> + '_ {
+        Self::adj_iter_unbounded(&self.chunks, self.sizes)
     }
 
     /// Gives iterator over all chunk's adjacents.
-    fn adj_iter_inner(chunks: &[Chunk], sizes: USize3) -> impl Iterator<Item = ChunkAdj<'_>> {
+    fn adj_iter_unbounded(chunks: &[ChunkRef], sizes: USize3) -> impl Iterator<Item = ChunkAdj> + '_ {
         Self::pos_iter(sizes)
-            .map(move |pos| Self::get_adj_chunks_inner(chunks, sizes, pos))
+            .map(move |pos| Self::get_adj_chunks_unbounded(chunks, sizes, pos))
+    }
+
+    /// Gives desired [LOD][Lod] value for chunk positioned in `chunk_pos`.
+    pub fn desired_lod_at(chunk_pos: Int3, cam_pos: vec3, threashold: f32) -> Lod {
+        let chunk_size = Chunk::GLOBAL_SIZE;
+        let cam_pos_in_chunks = cam_pos / chunk_size;
+        let chunk_pos = vec3::from(chunk_pos);
+
+        let dist = (chunk_pos - cam_pos_in_chunks + vec3::all(0.5)).len();
+        Lod::min(
+            (dist / threashold).floor() as Lod,
+            Chunk::SIZE.ilog2() as Lod,
+        )
     }
 
     /// Gives iterator over desired LOD for each chunk.
     pub fn desired_lod_iter(chunk_array_sizes: USize3, cam_pos: vec3, threashold: f32) -> impl Iterator<Item = Lod> {
         Self::pos_iter(chunk_array_sizes)
-            .map(move |chunk_pos| {
-                let chunk_size = Chunk::GLOBAL_SIZE;
-                let cam_pos_in_chunks = cam_pos / chunk_size;
-                let chunk_pos = vec3::from(chunk_pos);
-
-                let dist = (chunk_pos - cam_pos_in_chunks + vec3::all(0.5)).len();
-                Lod::min(
-                    (dist / threashold).floor() as Lod,
-                    Chunk::SIZE.ilog2() as Lod,
-                )
-            })
-    }
-
-    /// Gives iterator over chunks.
-    pub fn chunks(&self) -> Iter<'_, Chunk> {
-        self.chunks.iter()
-    }
-
-    /// Gives mutable iterator over chunks.
-    pub fn chunks_mut(&mut self) -> IterMut<'_, Chunk> {
-        self.chunks.iter_mut()
+            .map(move |chunk_pos| Self::desired_lod_at(chunk_pos, cam_pos, threashold))
     }
 
     /// Gives mutable iterator over chunks through shared reference.
@@ -533,61 +542,52 @@ impl ChunkArray {
 
     /// Gives iterator over all voxels in [`ChunkArray`].
     pub fn voxels(&self) -> impl Iterator<Item = Voxel> + '_ {
-        self.chunks().flat_map(Chunk::voxels)
+        self.chunks.iter()
+            .flat_map(|chunk| chunk.voxels())
     }
 
     /// Gives iterator over mutable chunks and their adjacents.
-    pub fn chunks_with_adj_mut(&mut self) -> impl Iterator<Item = (&mut Chunk, ChunkAdj<'_>)> + '_ {
-        Self::chunks_with_adj_mut_inner(&mut self.chunks, self.sizes)
+    pub fn chunks_with_adj(&self) -> impl Iterator<Item = (ChunkRef, ChunkAdj)> + '_ {
+        Self::chunks_with_adj_unbounded(&self.chunks, self.sizes)
     }
 
     /// Gives iterator over mutable chunks and their adjacents.
-    pub fn chunks_with_adj_mut_inner<'a>(
-        chunks: &mut [Chunk], sizes: USize3,
-    ) -> impl Iterator<Item = (&'a mut Chunk, ChunkAdj<'a>)> + 'a {
-        let chunks = unsafe { (chunks as *const [Chunk]).as_ref().unwrap_unchecked() };
-
-        // * Safe bacause shared adjacent chunks are not aliasing current mutable chunk.
-        unsafe {
-            Self::chunks_mut_shared(chunks)
-                .zip(Self::adj_iter_inner(chunks, sizes))
-        }
+    pub fn chunks_with_adj_unbounded(
+        chunks: &[ChunkRef], sizes: USize3,
+    ) -> impl Iterator<Item = (ChunkRef, ChunkAdj)> + '_ {
+        chunks.iter()
+            .map(Arc::clone)
+            .zip(Self::adj_iter_unbounded(chunks, sizes))
     }
 
-    /// Generates mesh for each chunk.
-    pub fn generate_meshes(&mut self, lod: impl Fn(Int3) -> Lod, facade: &dyn gl::backend::Facade) {
-        for (chunk, adj) in self.chunks_with_adj_mut() {
-            let active_lod = lod(chunk.pos);
-            chunk.generate_mesh(active_lod, adj, facade);
-            chunk.set_active_lod(active_lod);
-        }
-    }
-
-    fn get_targets_sorted<'r>(
-        chunks: &mut [Chunk], sizes: USize3, cam_pos: vec3, lod_threashold: f32,
-    ) -> Vec<(&'r mut Chunk, ChunkAdj<'r>, u32)> {
-        let mut result: Vec<_> = Self::chunks_with_adj_mut_inner(chunks, sizes)
-            .zip(Self::desired_lod_iter(sizes, cam_pos, lod_threashold))
-            .map(|((a, b), c)| (a, b, c))
+    /// Gives [`Vec`] with [`ChunkRef`]s [`ChunkAdj`]s desired [lod][Lod].
+    fn get_targets_sorted(&self, cam_pos: vec3) -> Vec<(ChunkRef, ChunkAdj, MeshRef, Lod)> {
+        let mut result: Vec<_> = self.chunks_with_adj()
+            .zip(self.meshes.iter().cloned())
+            .zip(Self::desired_lod_iter(self.sizes, cam_pos, self.lod_threashold))
+            .map(|(((a, b), c), d)| (a, b, c, d))
             .collect();
 
-        result.sort_by(|(lhs, _, _), (rhs, _, _)| {
-            let l_pos = Chunk::global_pos(lhs.pos);
-            let r_pos = Chunk::global_pos(rhs.pos);
-
-            let l_dist = vec3::sqr(cam_pos - l_pos.into());
-            let r_dist = vec3::sqr(cam_pos - r_pos.into());
-
-            l_dist.partial_cmp(&r_dist)
-                .expect("distance to chunk should be a number")
+        result.sort_by_key(|(chunk, _, _, _)| {
+            let pos = Chunk::global_pos(chunk.pos.load(Relaxed));
+            let dot = vec3::sqr(cam_pos - pos.into());
+            
+            match NotNan::new(dot) {
+                Ok(result) => result,
+                Err(err) => {
+                    logger::log!(Error, "chunk-array", err.to_string());
+                    NotNan::default()
+                }
+            }
         });
 
         result
     }
 
-    /// Renders all chunks. If chunk should have another LOD then it will start async
-    /// task that generates desired mesh. If task is incomplete then it will render active LOD
-    /// of concrete chunk. If it can't then it will do nothing.
+    /// Renders all [chunk][Chunk]s. If [chunk][Chunk] should have another
+    /// [LOD][Lod] then it will start async task that generates desired mesh.
+    /// If task is incomplete then it will render active [LOD][Lod]
+    /// of concrete [chunk][Chunk]. If it can't then it will do nothing.
     pub async fn render(
         &mut self, target: &mut impl gl::Surface, draw_bundle: &ChunkDrawBundle<'_>,
         uniforms: &impl gl::uniforms::Uniforms, facade: &dyn gl::backend::Facade, cam: &Camera,
@@ -600,16 +600,23 @@ impl ChunkArray {
 
         self.try_finish_all_tasks(facade).await;
 
-        let chunks = Self::get_targets_sorted(&mut self.chunks, sizes, cam.pos, self.lod_dist_threashold);
+        let targets = self.get_targets_sorted(cam.pos);
 
-        for (chunk, chunk_adj, lod) in chunks {
+        for (mut chunk, chunk_adj, mesh, lod) in targets {
+            let chunk_pos = chunk.pos.load(Relaxed);
+
             if !chunk.is_generated() {
-                if Self::is_voxels_gen_task_running(&self.voxels_gen_tasks, chunk.pos) {
-                    Self::try_finish_voxels_gen_task(&mut self.voxels_gen_tasks, chunk.pos, chunk).await
+                if Self::is_voxels_gen_task_running(&self.voxels_gen_tasks, chunk_pos) {
+                    if let Some(new_chunk) = Self::try_finish_voxels_gen_task(&mut self.voxels_gen_tasks, chunk_pos).await {
+                        // FIXME:
+                        unsafe {
+                            let _ = std::mem::replace(Arc::get_mut_unchecked(&mut chunk), new_chunk);
+                        }
+                    }
                 }
                 
                 else if self.can_start_tasks() {
-                    Self::start_task_gen_voxels(&mut self.voxels_gen_tasks, chunk.pos);
+                    Self::start_task_gen_voxels(&mut self.voxels_gen_tasks, chunk_pos, sizes);
                     continue;
                 }
 
@@ -621,61 +628,58 @@ impl ChunkArray {
             const CHUNK_MESH_PARTITION_DIST: f32 = 128.0;
 
             let chunk_is_close_to_be_partitioned = vec3::len(
-                vec3::from(Chunk::global_pos(chunk.pos))
+                vec3::from(Chunk::global_pos(chunk_pos))
                 - cam.pos + vec3::from(Chunk::SIZES / 2)
             ) <= CHUNK_MESH_PARTITION_DIST;
 
-            if chunk_is_close_to_be_partitioned && !self.partition_tasks.contains_key(&chunk.pos) && !chunk.is_partitioned() {
-                // FIXME: add safety arg.
-                let chunk = unsafe { chunk.make_ref().as_static() };
-                Self::start_task_partitioning(&mut self.partition_tasks, chunk, chunk_adj);
+            if chunk_is_close_to_be_partitioned &&
+               !self.partition_tasks.contains_key(&chunk_pos) &&
+               !mesh.borrow().is_partitioned()
+            {
+                Self::start_task_partitioning(&mut self.partition_tasks, Arc::clone(&chunk), chunk_adj.clone());
             }
 
             let chunnk_can_be_connected =
                 lod == 0 &&
-                chunk.is_partitioned() &&
+                mesh.borrow().is_partitioned() &&
                 !chunk_is_close_to_be_partitioned;
 
             if chunnk_can_be_connected {
-                chunk.connect_mesh_partitions(facade);
+                mesh.borrow_mut().connect_partitions(facade);
             }
 
             let can_set_new_lod =
-                chunk.get_available_lods().contains(&lod) ||
-                Self::is_mesh_task_running(&self.full_tasks, &self.low_tasks, chunk.pos, lod) &&
-                Self::try_finish_mesh_task(&mut self.full_tasks, &mut self.low_tasks,
-                    chunk.pos, lod, chunk, facade).await.is_ok();
+                mesh.borrow().get_available_lods().contains(&lod) ||
+                Self::is_mesh_task_running(&self.full_tasks, &self.low_tasks, chunk_pos, lod) &&
+                Self::try_finish_mesh_task(
+                    &mut self.full_tasks, &mut self.low_tasks,
+                    chunk_pos, lod, &mut *mesh.borrow_mut(), facade,
+                ).await.is_ok();
 
             if can_set_new_lod {
-                chunk.set_active_lod(lod)
+                chunk.set_active_lod(&*mesh.borrow(), lod);
             }
             
             else if self.can_start_tasks() {
-                // * Safety:
-                // * Safe, because this function borrows chunk to mutate its meshes,
-                // * but later it borrows to set new LOD value, so mut references
-                // * are not aliasing. We can make reference `'static` due to
-                // * `Self`'s lifetime is `'static`.
-                unsafe {
-                    Self::start_task_gen_vertices(
-                        &mut self.full_tasks,
-                        &mut self.low_tasks,
-                        chunk.make_ref().as_static(),
-                        chunk_adj,
-                        lod,
-                    );
-                }
+                Self::start_task_gen_vertices(
+                    &mut self.full_tasks,
+                    &mut self.low_tasks,
+                    Arc::clone(&chunk),
+                    chunk_adj.clone(),
+                    lod,
+                ).await;
             }
 
-            Self::drop_all_useless_tasks(&mut self.full_tasks, &mut self.low_tasks, lod, chunk.pos);
+            Self::drop_all_useless_tasks(&mut self.full_tasks, &mut self.low_tasks, lod, chunk_pos);
 
-            if !chunk.can_render_active_lod() {
-                chunk.try_set_best_fit_lod(lod);
+            if !chunk.can_render_active_lod(&*mesh.borrow()) {
+                chunk.try_set_best_fit_lod(&*mesh.borrow(), lod);
             }
 
             // FIXME: make cam vis-check for light.
-            if chunk.can_render_active_lod() && chunk.is_visible_by_camera(cam) {
-                chunk.render(target, &draw_bundle, uniforms, chunk.info.active_lod)?
+            if chunk.can_render_active_lod(&*mesh.borrow()) && chunk.is_visible_by_camera(cam) {
+                let active_lod = chunk.info.load(Relaxed).active_lod.unwrap();
+                chunk.render(&mut *mesh.borrow_mut(), target, &draw_bundle, uniforms, active_lod)?
             }
         }
 
@@ -712,8 +716,10 @@ impl ChunkArray {
         for (pos, vertices) in Task::try_take_results(iter).await {
             self.full_tasks.remove(&pos);
 
-            self.get_chunk_mut_by_pos(pos)
-                .expect("pos should be valid")
+            let idx = Self::pos_to_idx(self.sizes, pos)
+                .expect("pos should be valid");
+
+            self.meshes[idx].borrow_mut()
                 .upload_full_detail_vertices(&vertices, facade);
         }
     }
@@ -725,8 +731,10 @@ impl ChunkArray {
         for ((pos, lod), vertices) in Task::try_take_results(iter).await {
             self.low_tasks.remove(&(pos, lod));
 
-            self.get_chunk_mut_by_pos(pos)
-                .expect("pos should be valid")
+            let idx = Self::pos_to_idx(self.sizes, pos)
+                .expect("pos should be valid");
+
+            self.meshes[idx].borrow_mut()
                 .upload_low_detail_vertices(&vertices, lod, facade);
         }
     }
@@ -738,9 +746,13 @@ impl ChunkArray {
         for (pos, voxels) in Task::try_take_results(iter).await {
             self.voxels_gen_tasks.remove(&pos);
 
-            let chunk = self.get_chunk_mut_by_pos(pos)
+            let mut chunk = self.get_chunk_by_pos(pos)
                 .expect("pos should be valid");
-            *chunk = Chunk::from_voxels(voxels, pos);
+
+            // FIXME:
+            unsafe {
+                let _ = std::mem::replace(Arc::get_mut_unchecked(&mut chunk), Chunk::from_voxels(voxels, pos));
+            }
         }
     }
 
@@ -751,10 +763,12 @@ impl ChunkArray {
         for (pos, partitions) in Task::try_take_results(iter).await {
             self.partition_tasks.remove(&pos);
 
-            let partitions = array_init::array_init(|i| partitions[i].as_slice());
+            let partitions = array_init(|i| partitions[i].as_slice());
 
-            self.get_chunk_mut_by_pos(pos)
-                .expect("pos should be valid")
+            let idx = Self::pos_to_idx(self.sizes, pos)
+                .expect("pos should be valid");
+
+            self.meshes[idx].borrow_mut()
                 .upload_partitioned_vertices(partitions, facade);
         }
     }
@@ -777,74 +791,76 @@ impl ChunkArray {
         pos: Int3, lod: Lod
     ) -> bool {
         match lod {
-            0 =>
-                full_tasks.contains_key(&pos),
-            lod =>
-                low_tasks.contains_key(&(pos, lod)),
+            0  => full_tasks.contains_key(&pos),
+            lod => low_tasks.contains_key(&(pos, lod)),
         }
     }
 
-    pub fn start_task_gen_voxels(tasks: &mut HashMap<Int3, GenTask>, pos: Int3) {
+    pub fn start_task_gen_voxels(tasks: &mut HashMap<Int3, GenTask>, pos: Int3, sizes: USize3) {
         let prev_value = tasks.insert(pos, Task::spawn(async move {
-            Chunk::generate_voxels(pos)
+            Chunk::generate_voxels(pos, sizes)
         }));
 
         assert!(prev_value.is_none(), "threre should be only one task");
     }
 
+    /// Checks that [chunk][Chunk] [adjacent][ChunkAdj] are generated.
+    pub async fn is_adj_generated(adj: &ChunkAdj) -> bool {
+        adj.inner.iter()
+            .map(Option::as_ref)
+            .filter_map(std::convert::identity)
+            .all(|chunk| chunk.is_generated())
+    }
+
     /// Starts new generate vertices task.
-    pub fn start_task_gen_vertices(
+    pub async fn start_task_gen_vertices(
         full_tasks: &mut HashMap<Int3, FullTask>,
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
-        chunk: ChunkRef<'static>, adj: ChunkAdj<'static>, lod: Lod,
+        chunk: ChunkRef, adj: ChunkAdj, lod: Lod,
     ) {
-        let pos = chunk.pos.to_owned();
-
-        let is_adj_generated = adj.sides.inner
-            .iter()
-            .copied()
-            .filter_map(std::convert::identity)
-            .all(|chunk| chunk.is_generated());
-
-        if !chunk.is_generated() || !is_adj_generated { return }
+        let chunk_pos = chunk.pos.load(Relaxed);
+        if lod == 0 && full_tasks.contains_key(&chunk_pos) ||
+           lod != 0 && low_tasks.contains_key(&(chunk_pos, lod)) ||
+           !chunk.is_generated() ||
+           !Self::is_adj_generated(&adj).await
+        { return }
 
         match lod {
-            0 => if !full_tasks.contains_key(&pos) {
-                let prev = full_tasks.insert(pos, Task::spawn(async move {
+            0 => {
+                let prev = full_tasks.insert(chunk_pos, Task::spawn(async move {
                     chunk.make_vertices_detailed(adj)
                 }));
                 assert!(prev.is_none(), "there should be only one task");
             },
 
-            lod if !low_tasks.contains_key(&(pos, lod)) => {
-                let prev = low_tasks.insert((pos, lod), Task::spawn(async move {
+            lod => {
+                let prev = low_tasks.insert((chunk_pos, lod), Task::spawn(async move {
                     chunk.make_vertices_low(adj, lod)
                 }));
                 assert!(prev.is_none(), "there should be only one task");
             },
-
-            _ => (),
         }
     }
 
     pub fn start_task_partitioning(
         tasks: &mut HashMap<Int3, PartitionTask>,
-        chunk: ChunkRef<'static>, adj: ChunkAdj<'static>,
+        chunk: ChunkRef, adj: ChunkAdj,
     ) {
-        let pos = chunk.pos.to_owned();
-        let prev_value = tasks.insert(pos, Task::spawn(async move {
+        let prev_value = tasks.insert(chunk.pos.load(Relaxed), Task::spawn(async move {
             chunk.make_partitioned_vertices(adj)
         }));
         assert!(prev_value.is_none(), "there should be only one task");
     }
 
-    pub async fn try_finish_voxels_gen_task(tasks: &mut HashMap<Int3, GenTask>, pos: Int3, chunk: &mut Chunk) {
+    pub async fn try_finish_voxels_gen_task(tasks: &mut HashMap<Int3, GenTask>, pos: Int3) -> Option<Chunk> {
         if let Some(task) = tasks.get_mut(&pos) {
             if let Some(voxel_ids) = task.try_take_result().await {
-                *chunk = Chunk::from_voxels(voxel_ids, pos);
                 tasks.remove(&pos);
+                return Some(Chunk::from_voxels(voxel_ids, pos))
             }
         }
+
+        return None
     }
 
     /// Tries to get mesh from task if it is ready then sets it to chunk.
@@ -853,22 +869,22 @@ impl ChunkArray {
         full_tasks: &mut HashMap<Int3, FullTask>,
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
         pos: Int3, lod: Lod,
-        chunk: &mut Chunk, facade: &dyn gl::backend::Facade,
+        mesh: &mut ChunkMesh, facade: &dyn gl::backend::Facade,
     ) -> Result<(), TaskError> {
         match lod {
-            0   => Self::try_finish_full_mesh_task(full_tasks, pos, chunk, facade).await,
-            lod => Self::try_finish_low_mesh_task(low_tasks, pos, lod, chunk, facade).await,
+            0   => Self::try_finish_full_mesh_task(full_tasks, pos, mesh, facade).await,
+            lod => Self::try_finish_low_mesh_task(low_tasks, pos, lod, mesh, facade).await,
         }
     }
 
     pub async fn try_finish_full_mesh_task(
         full_tasks: &mut HashMap<Int3, FullTask>,
-        pos: Int3, chunk: &mut Chunk, facade: &dyn gl::backend::Facade,
+        pos: Int3, mesh: &mut ChunkMesh, facade: &dyn gl::backend::Facade,
     ) -> Result<(), TaskError> {
         match full_tasks.get_mut(&pos) {
             Some(task) => match task.try_take_result().await {
                 Some(vertices) => {
-                    chunk.upload_full_detail_vertices(&vertices, facade);
+                    mesh.upload_full_detail_vertices(&vertices, facade);
                     let _ = full_tasks.remove(&pos)
                         .expect("there should be a task");
                     Ok(())
@@ -882,12 +898,12 @@ impl ChunkArray {
     pub async fn try_finish_low_mesh_task(
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
         pos: Int3, lod: Lod,
-        chunk: &mut Chunk, facade: &dyn gl::backend::Facade,
+        mesh: &mut ChunkMesh, facade: &dyn gl::backend::Facade,
     ) -> Result<(), TaskError> {
         match low_tasks.get_mut(&(pos, lod)) {
             Some(task) => match task.try_take_result().await {
                 Some(vertices) => {
-                    chunk.upload_low_detail_vertices(&vertices, lod, facade);
+                    mesh.upload_low_detail_vertices(&vertices, lod, facade);
                     let _ = low_tasks.remove(&(pos, lod))
                         .expect("there should be a task");
                     Ok(())
@@ -941,30 +957,26 @@ impl ChunkArray {
                 ui.slider(
                     "Chunks lod threashold",
                     0.01, 20.0,
-                    &mut self.lod_dist_threashold,
+                    &mut self.lod_threashold,
                 );
 
                 ui.separator();
 
                 ui.text("Generate new");
 
-                static SIZES: Mutex<[i32; 3]> = Mutex::new(Int3::ZERO.as_array());
-                let mut sizes = SIZES.lock()
+                let mut sizes = GENERATOR_SIZES.lock()
                     .expect("mutex should be not poisoned");
 
-                ui.input_int3("Sizes", &mut *sizes)
-                    .build();
+                ui.input_scalar_n("Sizes", &mut *sizes).build();
 
                 if ui.button("Generate") {
-                    let sizes = USize3::from(Int3::from(*sizes).abs());
-
                     self.drop_tasks();
-                    *self = Self::new_empty_chunks(sizes);
+                    *self = Self::new_empty_chunks(USize3::from(*sizes));
                 }
             });
     }
 
-    pub fn process_commands(&mut self, facade: &dyn Facade) {
+    pub async fn process_commands(&mut self, facade: &dyn Facade) {
         use crate::app::utils::terrain::chunk::commands::*;
 
         let mut commands = COMMAND_CHANNEL  
@@ -979,7 +991,7 @@ impl ChunkArray {
                 SetVoxel { pos, new_id } => {
                     let old_id = self.set_voxel(pos, new_id)
                         .unwrap_or_else(|err| {
-                            logger::log!(Error, "chunk array", format!("failed to set voxel: {err}"));
+                            logger::log!(Error, "chunk-array", format!("failed to set voxel: {err}"));
                             return 0;
                         });
 
@@ -991,7 +1003,7 @@ impl ChunkArray {
                 FillVoxels { pos_from, pos_to, new_id } => {
                     let _is_changed = self.fill_voxels(pos_from, pos_to, new_id)
                         .unwrap_or_else(|err| {
-                            logger::log!(Error, "chunk array", format!("failed to fill voxels: {err}"));
+                            logger::log!(Error, "chunk-array", format!("failed to fill voxels: {err}"));
                             return false;
                         });
                 }
@@ -1003,43 +1015,42 @@ impl ChunkArray {
         let idxs_to_reload = change_tracker.idxs_to_reload_partitioning();
         let n_changed = idxs_to_reload.len();
         for (idx, partition_idx) in idxs_to_reload {
-            self.reload_chunk_partitioning(idx, partition_idx, facade);
+            self.reload_chunk_partitioning(idx, partition_idx, facade).await;
         }
 
         if n_changed != 0 {
-            logger::log!(Info, "chunk array", format!("{n_changed} chunks were updated!"));
+            logger::log!(Info, "chunk-array", format!("{n_changed} chunks were updated!"));
         }
     }
 
-    pub fn reload_chunk(&mut self, idx: usize, facade: &dyn Facade) {
+    pub async fn reload_chunk(&self, idx: usize, facade: &dyn Facade) {
         let chunk_pos = Self::idx_to_pos(idx, self.sizes);
+        let adj = self.get_adj_chunks(chunk_pos);
 
-        // * It is safe, because current chunk mutable reference is not aliasing
-        // * adjacent chunks shared references.
-        let adj = unsafe { self.get_adj_chunks(chunk_pos).as_static() };
+        match self.chunks.get(idx) {
+            Some(chunk) => {
+                let mut mesh = self.meshes[idx].borrow_mut();
+                chunk.generate_mesh(&mut *mesh, 0, adj, facade);
+            },
 
-        match self.chunks.get_mut(idx) {
-            Some(chunk) => chunk.generate_mesh(0, adj, facade),
             None => return,
         }
     }
 
-    pub fn reload_chunk_partitioning(
-        &mut self, chunk_idx: usize, partition_idx: usize, facade: &dyn Facade,
+    pub async fn reload_chunk_partitioning(
+        &self, chunk_idx: usize, partition_idx: usize, facade: &dyn Facade,
     ) {
         let chunk_pos = Self::idx_to_pos(chunk_idx, self.sizes);
+        let adj = self.get_adj_chunks(chunk_pos);
 
-        // * It is safe, because current chunk mutable reference is not aliasing
-        // * adjacent chunks shared references.
-        let adj = unsafe { self.get_adj_chunks(chunk_pos).as_static() };
-
-        match self.chunks.get_mut(chunk_idx) {
+        match self.chunks.get(chunk_idx) {
             Some(chunk) => {
-                if chunk.is_partitioned() {
-                    let partial_vertices = chunk.make_partition(adj, partition_idx);
-                    chunk.upload_partition(&partial_vertices, partition_idx, facade);
+                let mut mesh = self.meshes[chunk_idx].borrow_mut();
+                if mesh.is_partitioned() {
+                    let partial_vertices = chunk.make_partition(&adj, partition_idx);
+                    mesh.upload_partition(&partial_vertices, partition_idx, facade);
                 } else {
-                    chunk.partition_mesh(adj, facade);
+                    chunk.partition_mesh(&mut *mesh, adj, facade);
                 }
             },
 
@@ -1061,36 +1072,28 @@ impl ChunkArray {
             })
     }
 
-    pub fn proccess_camera_input(&mut self, cam: &Camera) {
-        const MAX_STEPS: usize = 1024;
+    pub async fn proccess_camera_input(&mut self, cam: &Camera) {
+        use super::commands::{command, Command};
 
-        let first_voxel = self.trace_ray(Line::new(cam.pos, cam.front), MAX_STEPS)
-            .filter(|voxel| !voxel.is_air())
-            .next();
+        let first_voxel = self.trace_ray(Line::new(cam.pos, cam.front), Self::MAX_TRACE_STEPS)
+            .find(|voxel| !voxel.is_air());
 
         match first_voxel {
-            Some(voxel) => {
-                use {
-                    commands::{command, Command},
-                    crate::app::utils::terrain::voxel::voxel_data::AIR_VOXEL_DATA
-                };
+            Some(voxel) if mouse::just_left_pressed() && cam.grabbes_cursor =>
+                command(Command::SetVoxel { pos: voxel.pos, new_id: AIR_VOXEL_DATA.id }),
 
-                if mouse::just_left_pressed() && cam.grabbes_cursor {
-                    command(Command::SetVoxel { pos: voxel.pos, new_id: AIR_VOXEL_DATA.id })
-                }
-            },
-
-            None => (),
+            _ => (),
         }
     }
 
     pub async fn update(&mut self, facade: &dyn Facade, cam: &Camera) -> Result<(), UpdateError> {
-        self.proccess_camera_input(cam);
-        self.process_commands(facade);
+        self.proccess_camera_input(cam).await;
+        self.process_commands(facade).await;
 
         if keyboard::just_pressed_combo([Key::LControl, Key::S]) {
+            let chunks: Vec<_> = self.chunks.iter().map(Arc::clone).collect();
             let handle = tokio::spawn(
-                ChunkArray::save_to_file(self.sizes, self.make_static_refs(), "world", "world")
+                ChunkArray::save_to_file(self.sizes, chunks, "world", "world")
             );
             self.saving_handle = Some(handle);
         }
@@ -1218,3 +1221,42 @@ impl ChangeTracker {
         result
     }
 }
+
+#[derive(Debug)]
+pub struct Chunks<'s> {
+    chunk_arr: &'s ChunkArray,
+    idx: usize,
+}
+
+impl Iterator for Chunks<'_> {
+    type Item = ChunkRef;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.idx < ChunkArray::volume(self.chunk_arr.sizes) {
+            true => {
+                self.idx += 1;
+                Some(Arc::clone(&self.chunk_arr.chunks[self.idx - 1]))
+            },
+            false => None,
+        }
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        self.chunk_arr.chunks.get(n).cloned()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        // TODO:
+        (0, None)
+    }
+}
+
+impl ExactSizeIterator for Chunks<'_> {
+    fn len(&self) -> usize {
+        ChunkArray::volume(self.chunk_arr.sizes) - self.idx
+    }
+}
+
+pub type ChunkRef = Arc<Chunk>;
+pub type MeshRef = Rc<RefCell<ChunkMesh>>;
+pub type ChunkAdj = Sides<Option<Arc<Chunk>>>;

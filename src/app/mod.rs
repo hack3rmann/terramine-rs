@@ -53,7 +53,7 @@ pub struct App {
 
 impl App where Self: 'static {
     /// Constructs [`App`].
-    pub fn new() -> Self {
+    pub async fn new() -> Self {
         let _work_guard = logger::work("app", "initialize");
 
         let graphics = Graphics::new()
@@ -76,7 +76,7 @@ impl App where Self: 'static {
         let chunk_arr = DebugVisualizedStatic::new_chunk_array(
             ChunkArray::new_empty(),
             graphics.display.as_ref().get_ref(),
-        );
+        ).await;
 
         Self {
             chunk_arr,
@@ -151,7 +151,7 @@ impl App where Self: 'static {
     async fn main_events_cleared(&mut self, control_flow: &mut ControlFlow) {
         // ImGui can capture keyboard, if needed.
         keyboard::set_input_capture(
-            self.graphics.imguic.io().want_capture_keyboard
+            self.graphics.imguic.io().want_text_input
         );
         
         /* Close window is `escape` pressed */
@@ -238,6 +238,9 @@ impl App where Self: 'static {
             /* Logger window */
             logger::spawn_window(ui);
 
+            /* Generator window */
+            crate::app::utils::terrain::voxel::generator::spawn_control_window(ui);
+
             /* Light control window */
             for light in self.lights.iter_mut().take(1) {
                 light.spawn_control_window(ui);
@@ -275,6 +278,7 @@ impl App where Self: 'static {
                     .expect("failed to render chunk array");
 
                 self.chunk_arr.render_chunk_debug(display, frame_buffer, &uniforms)
+                    .await
                     .expect("failed to render chunk array debug visuals");
         
                 self.camera.render_camera_debug_visuals(display, frame_buffer, &uniforms)

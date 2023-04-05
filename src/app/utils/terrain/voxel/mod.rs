@@ -3,16 +3,11 @@ pub mod atlas;
 pub mod generator;
 
 use {
-    crate::app::utils::{
-        cfg,
-        terrain::chunk::{FullVertex, LowVertex},
-        terrain::voxel::VoxelData,
-        reinterpreter::*,
+    crate::{
+        prelude::*,
+        terrain::chunk::mesh::{FullVertex, LowVertex},
     },
-    voxel_data::*,
-    math_linear::prelude::*,
-    parse_display::Display,
-    smallvec::SmallVec,
+    voxel_data::{data::*, VoxelData, Id},
 };
 
 /// Represents voxel.

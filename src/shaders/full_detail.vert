@@ -22,11 +22,26 @@ uniform mat4 light_proj;
 uniform mat4 light_view;
 uniform bool is_shadow_pass;
 
+vec3 normals[] = {
+    vec3(1, 0, 0),
+    vec3(-1, 0, 0),
+    vec3(0, 1, 0),
+    vec3(0, -1, 0),
+    vec3(0, 0, 1),
+    vec3(0, 0, -1)
+};
+
+vec3 tangents[] = {
+    vec3(0, 1, 0),
+    vec3(0, 1, 0),
+    vec3(-1, 0, 0),
+    vec3(-1, 0, 0),
+    vec3(0, 1, 0),
+    vec3(0, 1, 0)
+};
+
 void process_shadow();
 void shade_standart();
-
-vec3 get_normal(uint face_idx);
-vec3 get_tangent(uint face_idx);
 
 void main() {
     if (is_shadow_pass) {
@@ -47,8 +62,8 @@ void process_shadow() {
 void shade_standart() {
     /* Assembling output compound */
     v_tex_coords = tex_coords;
-    v_normal = get_normal(face_idx);
-    v_tangent = get_tangent(face_idx);
+    v_normal = normals[face_idx];
+    v_tangent = tangents[face_idx];
     v_bitangent = cross(v_normal, v_tangent);
     v_position = position;
 
@@ -61,35 +76,4 @@ void shade_standart() {
 
     /* Writing to gl_Position */
     gl_Position = proj * view * vec4(position, 1.0);
-}
-
-vec3 get_normal(uint face_idx) {
-    switch (face_idx) {
-        case 0: return vec3(1, 0, 0);
-        case 1: return vec3(-1, 0, 0);
-        case 2: return vec3(0, 1, 0);
-        case 3: return vec3(0, -1, 0);
-        case 4: return vec3(0, 0, 1);
-        case 5: return vec3(0, 0, -1);
-        
-        default:
-            return vec3(-1, -1, -1);
-    }
-}
-
-vec3 get_tangent(uint face_idx) {
-    switch (face_idx) {
-        case 0:
-        case 1:
-        case 4:
-        case 5:
-            return vec3(0, 1, 0);
-
-        case 2:
-        case 3:
-            return vec3(-1, 0, 0);
-
-        default:
-            return vec3(-1, -1, -1);
-    }
 }

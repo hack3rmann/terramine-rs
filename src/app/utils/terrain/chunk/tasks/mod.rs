@@ -1,12 +1,10 @@
 use {
-    crate::app::utils::{
-        terrain::{
-            chunk::{FullVertex, LowVertex, Id},
-        },
+    crate::{
+        prelude::*,
+        terrain::chunk::{FullVertex, LowVertex, Id},
     },
     std::future::Future,
     tokio::task::JoinHandle,
-    smallvec::SmallVec,
 };
 
 #[derive(Debug)]
@@ -28,7 +26,7 @@ impl<Item> AsMut<Task<Item>> for Task<Item> {
 
 pub type FullTask = Task<Vec<FullVertex>>;
 pub type LowTask  = Task<Vec<LowVertex>>;
-pub type GenTask  = Task<Vec<Id>>;
+pub type GenTask  = Task<Vec<Atomic<Id>>>;
 pub type PartitionTask = Task<[Vec<FullVertex>; 8]>;
 
 impl<Item: Send + 'static> Task<Item> {
