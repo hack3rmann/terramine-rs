@@ -604,7 +604,10 @@ impl ChunkArray {
             if !chunk.is_generated() {
                 if Self::is_voxels_gen_task_running(&self.voxels_gen_tasks, chunk_pos) {
                     if let Some(new_chunk) = Self::try_finish_voxels_gen_task(&mut self.voxels_gen_tasks, chunk_pos).await {
-                        // FIXME:
+                        Self::drop_reader_tasks(&mut self.full_tasks, &mut self.low_tasks, chunk_pos);
+
+                        // * Safety:
+                        // * Safe, because there's no chunk readers due to tasks drop above
                         unsafe {
                             let _ = mem::replace(Arc::get_mut_unchecked(&mut chunk), new_chunk);
                         }
@@ -705,6 +708,22 @@ impl ChunkArray {
         }
     }
 
+    pub fn drop_reader_tasks(
+        full_tasks: &mut HashMap<Int3, FullTask>,
+        low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
+        pos: Int3,
+    ) {
+        let vals_to_be_dropped = Chunk::get_possible_lods()
+            .into_iter()
+            .cartesian_product(SpaceIter::adj_iter(pos)
+                .chain(std::iter::once(pos))
+            );
+        
+        for (lod, pos) in vals_to_be_dropped {
+            Self::drop_task(full_tasks, low_tasks, pos, lod);
+        }
+    }
+
     pub async fn try_finish_full_tasks(&mut self, facade: &dyn Facade) {
         let iter = self.full_tasks.iter_mut()
             .map(|(&pos, task)| (pos, task));
@@ -745,7 +764,10 @@ impl ChunkArray {
             let mut chunk = self.get_chunk_by_pos(pos)
                 .expect("pos should be valid");
 
-            // FIXME:
+            Self::drop_reader_tasks(&mut self.full_tasks, &mut self.low_tasks, pos);
+            
+            // * Safety:
+            // * Safe, because there's no chunk readers due to tasks drop above.
             unsafe {
                 let _ = mem::replace(Arc::get_mut_unchecked(&mut chunk), Chunk::from_voxels(voxels, pos));
             }
@@ -1215,41 +1237,6 @@ impl ChangeTracker {
         }
 
         result
-    }
-}
-
-#[derive(Debug)]
-pub struct Chunks<'s> {
-    chunk_arr: &'s ChunkArray,
-    idx: usize,
-}
-
-impl Iterator for Chunks<'_> {
-    type Item = ChunkRef;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.idx < ChunkArray::volume(self.chunk_arr.sizes) {
-            true => {
-                self.idx += 1;
-                Some(Arc::clone(&self.chunk_arr.chunks[self.idx - 1]))
-            },
-            false => None,
-        }
-    }
-
-    fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.chunk_arr.chunks.get(n).cloned()
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        // TODO:
-        (0, None)
-    }
-}
-
-impl ExactSizeIterator for Chunks<'_> {
-    fn len(&self) -> usize {
-        ChunkArray::volume(self.chunk_arr.sizes) - self.idx
     }
 }
 
