@@ -114,13 +114,13 @@ impl Graphics {
                 QuadVertex { position: [-1.0,  1.0, 0.0, 1.0], texcoord: [0.0, 1.0] },
                 QuadVertex { position: [ 1.0,  1.0, 0.0, 1.0], texcoord: [1.0, 1.0] },
                 QuadVertex { position: [ 1.0, -1.0, 0.0, 1.0], texcoord: [1.0, 0.0] },
-            ]).map_err(|err| GraphicsError::VertexBufferCreation(err))?;
+            ]).map_err(GraphicsError::VertexBufferCreation)?;
     
             let indices = glium::IndexBuffer::new(
                 display.as_ref().get_ref(),
                 glium::index::PrimitiveType::TrianglesList,
                 &[0_u16, 1, 2, 0, 2, 3],
-            ).map_err(|err| GraphicsError::IndexBuffferCreation(err))?;
+            ).map_err(GraphicsError::IndexBuffferCreation)?;
 
             let shader = Shader::new("postprocessing", "postprocessing", display.as_ref().get_ref())?;
 
@@ -226,9 +226,7 @@ macro_rules! draw {
                 let $fb_name = &mut $graphics.surface.shadow_buffer;
                 $fb_draw_call
             }
-        } else {
-            ()
-        };
+        } else { };
         
         $graphics.surface.frame_buffer.clear_all(CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL);
         let result2 = {

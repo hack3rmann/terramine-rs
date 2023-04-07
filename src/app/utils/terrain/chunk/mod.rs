@@ -1,4 +1,4 @@
-#![allow(dead_code)]
+// #![allow(dead_code)]
 
 pub mod iterator;
 pub mod chunk_array;
@@ -94,7 +94,7 @@ impl Chunk {
 
     /// Gives iterator over low-detail voxels with their coords.
     pub fn low_voxel_iter(&self, lod: Lod) -> impl Iterator<Item = (LoweredVoxel, Int3)> + '_ {
-        let sub_chunk_size = 2_i32.pow(lod as u32);
+        let sub_chunk_size = 2_i32.pow(lod);
 
         Chunk::chunked_pos_iter(sub_chunk_size as usize)
             .map(move |chunk_iter| {
@@ -329,7 +329,7 @@ impl Chunk {
         if self.is_empty() || is_filled_and_blocked { return vec![] }
 
         // TODO: optimize for same-filled chunks
-        let sub_chunk_size = 2_i32.pow(lod as u32);
+        let sub_chunk_size = 2_i32.pow(lod);
         self.low_voxel_iter(lod)
             .filter_map(|(voxel, p)| match voxel {
                 LoweredVoxel::Transparent => None,
@@ -732,7 +732,7 @@ impl Chunk {
 
         let idx = sdex::get_index(&USize3::from(pos).as_array(), &[Self::SIZE; 3]);
 
-        (idx < Self::VOLUME).then(|| idx)
+        (idx < Self::VOLUME).then_some(idx)
     }
 
     /// Gives index in voxel array by it's 3D-index (or relative to chunk position)
@@ -887,7 +887,7 @@ pub enum FillType {
 
 
 
-unsafe impl AsBytes for FillType {
+impl AsBytes for FillType {
     fn as_bytes(&self) -> Vec<u8> {
         match self {
             Self::Default => vec![0],
@@ -899,7 +899,7 @@ unsafe impl AsBytes for FillType {
     }
 }
 
-unsafe impl FromBytes for FillType {
+impl FromBytes for FillType {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let mut reader = ByteReader::new(source);
         let variant: u8 = reader.read()?;
@@ -914,7 +914,7 @@ unsafe impl FromBytes for FillType {
     }
 }
 
-unsafe impl DynamicSize for FillType {
+impl DynamicSize for FillType {
     fn dynamic_size(&self) -> usize {
         u8::static_size() +
         match self {

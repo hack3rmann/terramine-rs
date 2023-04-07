@@ -56,7 +56,7 @@ impl Camera {
     /// Gives camera positioned to given coordinates
     pub fn with_position(mut self, x: f32, y: f32, z: f32) -> Self {
         self.set_position(x, y, z);
-        return self;
+        self
     }
 
     /// Sets position.
@@ -67,7 +67,7 @@ impl Camera {
     /// Gives camera rotated to given angles
     pub fn with_rotation(mut self, roll: f64, pitch: f64, yaw: f64) -> Self {
         self.set_rotation(roll, pitch, yaw);
-        return self;
+        self
     }
 
     /// Stores rotation.
@@ -153,13 +153,11 @@ impl Camera {
         /* Normalyzing direction vector */
         self.speed = if new_speed != vec3::zero() {
             self.speed / 2.0 + new_speed / 2.0
+        } else if self.speed.len() > 0.1 {
+            const SPEED_FALLOFF_ADDITION: f32 = 1.0;
+            self.speed * self.speed_falloff.powf(dt as f32 + SPEED_FALLOFF_ADDITION)
         } else {
-            if self.speed.len() > 0.1 {
-                const SPEED_FALLOFF_ADDITION: f32 = 1.0;
-                self.speed * self.speed_falloff.powf(dt as f32 + SPEED_FALLOFF_ADDITION)
-            } else {
-                vec3::all(0.0)
-            }
+            vec3::all(0.0)
         };
 
         /* Move camera with move vector */
@@ -300,6 +298,6 @@ impl Default for Camera {
         };
         cam.update_vectors();
 
-        return cam;
+        cam
     }
 }

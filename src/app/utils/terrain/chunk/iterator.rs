@@ -13,28 +13,28 @@ use {
 /// # Example:
 /// ```
 /// use crate::app::utils::terrain::chunk::{
-/// 	position_function,
-/// 	iterator::CubeBorder,
+///     position_function,
+///     iterator::CubeBorder,
 /// };
 /// 
 /// fn test2() {
-/// 	/* [`CubeBorder`] iterator */
-/// 	let border = CubeBorder::new(16);
+///     /* [`CubeBorder`] iterator */
+///     let border = CubeBorder::new(16);
 /// 
-/// 	const MAX: i32 = 16 - 1;
-/// 	let classic_iter = (0 .. 16_i32.pow(3))
-/// 		.map(|i| position_function(i))
-/// 		.filter(|pos|
-/// 			/* Check 'bordered' condition */
-/// 			pos.x() == 0 || pos.x() == MAX ||
-/// 			pos.y() == 0 || pos.y() == MAX ||
-/// 			pos.z() == 0 || pos.z() == MAX
-/// 		);
+///     const MAX: i32 = 16 - 1;
+///     let classic_iter = (0 .. 16_i32.pow(3))
+///         .map(|i| position_function(i))
+///         .filter(|pos|
+///             /* Check 'bordered' condition */
+///             pos.x() == 0 || pos.x() == MAX ||
+///             pos.y() == 0 || pos.y() == MAX ||
+///             pos.z() == 0 || pos.z() == MAX
+///         );
 /// 
-/// 	/* Walk over both together */
-/// 	for (b, w) in border.zip(classic_iter) {
-/// 		assert_eq!(b, w)
-/// 	}
+///     /* Walk over both together */
+///     for (b, w) in border.zip(classic_iter) {
+///         assert_eq!(b, w)
+///     }
 /// }
 /// ```
 #[derive(Clone, Debug)]
@@ -70,7 +70,7 @@ impl Iterator for CubeBorder {
         /* Returning local function */
         let mut give = |pos| {
             self.prev = pos;
-            return Some(pos)
+            Some(pos)
         };
 
         /* If somewhere slicing cube (in 1 .. MAX - 1) */
@@ -195,27 +195,27 @@ impl Iterator for CubeBorder {
 /// 
 /// ```
 /// use crate::app::utils::{
-/// 	math::Int3,
-/// 	terrain::chunk::iterator::SpaceIter,
+///     math::Int3,
+///     terrain::chunk::iterator::SpaceIter,
 /// };
 /// 
 /// fn test() {
-/// 	let mut res1 = vec![];
-/// 	let mut res2 = vec![];
+///     let mut res1 = vec![];
+///     let mut res2 = vec![];
 /// 
-/// 	/* [`SpaceIter`] equivalent */
-/// 	for pos in SpaceIter::new(Int3::ZERO..Int3::all(16)) {
-/// 		res1.push(pos)
-/// 	}
+///     /* [`SpaceIter`] equivalent */
+///     for pos in SpaceIter::new(Int3::ZERO..Int3::all(16)) {
+///         res1.push(pos)
+///     }
 /// 
-/// 	/* Classic 3-fold cycle */
-/// 	for x in 0..16 {
-/// 	for y in 0..16 {
-/// 	for z in 0..16 {
-/// 		res2.push(veci!(x, y, z))
-/// 	}}}
+///     /* Classic 3-fold cycle */
+///     for x in 0..16 {
+///     for y in 0..16 {
+///     for z in 0..16 {
+///         res2.push(veci!(x, y, z))
+///     }}}
 /// 
-/// 	assert_eq!(res1, res2);
+///     assert_eq!(res1, res2);
 /// }
 /// ```
 #[derive(Debug, Clone)]
@@ -370,19 +370,19 @@ pub fn idx_to_coord_idx(idx: usize, sizes: USize3) -> USize3 {
 /// # Example:
 /// ```
 /// use crate::app::utils::{
-/// 	math::prelude::*,
-/// 	terrain::chunk::iterator::{
-/// 		ChunkSplitten, SpaceIter
-/// 	},
+///     math::prelude::*,
+///     terrain::chunk::iterator::{
+///         ChunkSplitten, SpaceIter
+///     },
 /// };
 /// 
 /// fn example() {
-/// 	let split = ChunkSplitten::new(Int3::all(16), Int3::all(2));
-///		let space: Vec<_> = SpaceIter::new(Int3::ZERO..Int3::all(16)).collect();
-///
-///		for (entire, _) in split {
-///			assert!(space.contains(&entire));
-///		}
+///     let split = ChunkSplitten::new(Int3::all(16), Int3::all(2));
+///     let space: Vec<_> = SpaceIter::new(Int3::ZERO..Int3::all(16)).collect();
+/// 
+///     for (entire, _) in split {
+///         assert!(space.contains(&entire));
+///     }
 /// }
 /// ```
 #[derive(Debug)]
@@ -423,12 +423,12 @@ impl Iterator for ChunkSplitten {
             self.current = self.outer.next();
             self.inner = SpaceIter::new(Int3::ZERO..self.chunk_size);
 
-            return self.inner.next().unwrap()
+            self.inner.next().unwrap()
         });
         
         let outer = self.current?;
 
-        return Some((outer * self.chunk_size + inner, inner, outer))
+        Some((outer * self.chunk_size + inner, inner, outer))
     }
 }
 
@@ -566,12 +566,12 @@ mod space_iter_tests {
         let poses2: Vec<_> = SpaceIter::new(range)
             .collect();
 
-        for pos in poses1.iter().copied() {
-            assert!(poses2.contains(&pos), "{}, {:?}, {:?}", pos, poses1, poses2);
+        for pos in poses1.iter() {
+            assert!(poses2.contains(pos), "{}, {:?}, {:?}", pos, poses1, poses2);
         }
  
-        for pos in poses2.iter().copied() {
-            assert!(poses1.contains(&pos), "{}, {:?}, {:?}", pos, poses1, poses2);
+        for pos in poses2.iter() {
+            assert!(poses1.contains(pos), "{}, {:?}, {:?}", pos, poses1, poses2);
         }
     }
 
@@ -584,14 +584,14 @@ mod space_iter_tests {
             .collect();
     
         for pos in sample.iter() {
-            match chunked.contains(&pos) {
+            match chunked.contains(pos) {
                 true => (),
                 false => panic!("chunked.contains(&pos): {:?}", pos),
             }
         }
     
         for pos in chunked.iter() {
-            match sample.contains(&pos) {
+            match sample.contains(pos) {
                 true => (),
                 false => panic!("sample.contains(&pos): {:?}", pos),
             }

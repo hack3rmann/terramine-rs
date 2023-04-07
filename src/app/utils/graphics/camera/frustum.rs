@@ -91,7 +91,7 @@ impl Frustum {
         }
 
         /* All passed */
-        return false;
+        false
     }
 
     /// Checks if given vector is in frustum
@@ -115,6 +115,6 @@ impl Frustum {
         sum += self.top		.signed_distance(vec);
         sum += self.bottom	.signed_distance(vec);
 
-        return sum;
+        sum
     }
 }

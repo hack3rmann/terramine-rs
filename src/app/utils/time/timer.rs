@@ -17,6 +17,12 @@ pub struct Timer {
     avg_fps: f32,
 }
 
+impl Default for Timer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Timer {
     /// Constructs new timer.
     pub fn new() -> Self {

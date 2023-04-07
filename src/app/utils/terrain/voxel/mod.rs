@@ -45,7 +45,7 @@ pub enum LoweredVoxel {
 
 
 
-unsafe impl AsBytes for Voxel {
+impl AsBytes for Voxel {
     fn as_bytes(&self) -> Vec<u8> {
         compose! {
             self.data.id.as_bytes(),
@@ -54,7 +54,7 @@ unsafe impl AsBytes for Voxel {
     }
 }
 
-unsafe impl FromBytes for Voxel {
+impl FromBytes for Voxel {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         read! {
             source,
@@ -66,7 +66,7 @@ unsafe impl FromBytes for Voxel {
     }
 }
 
-unsafe impl StaticSize for Voxel {
+impl StaticSize for Voxel {
     fn static_size() -> usize { 16 }
 }
 
@@ -124,7 +124,7 @@ pub mod shape {
         #[allow(dead_code)]
         pub fn size(mut self, new_size: f32) -> Self {
             self.half_size = new_size * 0.5;
-            return self
+            self
         }
 
         pub fn by_offset<const N: usize>(&self, offset: Int3, position: vec3, vertices: &mut SmallVec<[FullVertex; N]>) {

@@ -1,4 +1,5 @@
 #![macro_use]
+#![allow(clippy::manual_strip, clippy::too_many_arguments)]
 
 use {
     crate::app::utils::{

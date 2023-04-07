@@ -93,8 +93,12 @@ impl<'s> Surface<'s> {
         })
     }
 
-    pub unsafe fn make_frame_buffer<'t, 'b>(
-        render_textures: Pin<&'t DeferredTextures>,
+    /// # Safety
+    /// 
+    /// `render_textures` should live as long as frame buffer and can not beeing modified.
+    /// If textures are modified then it should be called again.
+    pub unsafe fn make_frame_buffer<'b>(
+        render_textures: Pin<&DeferredTextures>,
         facade: &dyn Facade,
     ) -> Result<MultiOutputFrameBuffer<'b>, ValidationError> {
         let textures = render_textures.get_ref() as *const DeferredTextures;
@@ -111,8 +115,12 @@ impl<'s> Surface<'s> {
         )
     }
 
-    pub unsafe fn make_shadow_buffer<'t, 'b>(
-        render_textures: Pin<&'t DeferredTextures>,
+    /// # Safety
+    /// 
+    /// `render_textures` should live as long as frame buffer and can not beeing modified.
+    /// If textures are modified then it should be called again.
+    pub unsafe fn make_shadow_buffer<'b>(
+        render_textures: Pin<&DeferredTextures>,
         facade: &dyn Facade,
     ) -> Result<SimpleFrameBuffer<'b>, ValidationError> {
         let texture = &render_textures.light_depth as *const DepthTexture2d;

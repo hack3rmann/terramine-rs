@@ -5,7 +5,7 @@
 //!
 
 use {
-    std::{mem::transmute, convert::TryInto},
+    std::convert::TryInto,
     thiserror::Error,
 };
 
@@ -44,49 +44,49 @@ macro_rules! read {
 
 pub use crate::{compose, read};
 
-pub unsafe trait Reinterpret:
+pub trait Reinterpret:
     AsBytes +
     FromBytes +
     StaticSizeHint +
     DynamicSize
 { }
 
-unsafe impl<T:
+impl<T:
     AsBytes +
     FromBytes +
     StaticSizeHint +
     DynamicSize
 > Reinterpret for T { }
 
-pub unsafe trait AsBytes {
+pub trait AsBytes {
     fn as_bytes(&self) -> Vec<u8>;
 }
 
-pub unsafe trait FromBytes: Sized {
+pub trait FromBytes: Sized {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError>;
 }
 
-pub unsafe trait StaticSize: Sized {
+pub trait StaticSize: Sized {
     fn static_size() -> usize {
         std::mem::size_of::<Self>()
     }
 }
 
-pub unsafe trait StaticSizeHint {
+pub trait StaticSizeHint {
     fn static_size_hint() -> Option<usize>;
 }
 
-unsafe impl<T: StaticSize> StaticSizeHint for T {
+impl<T: StaticSize> StaticSizeHint for T {
     fn static_size_hint() -> Option<usize> {
         Some(Self::static_size())
     }
 }
 
-pub unsafe trait DynamicSize {
+pub trait DynamicSize {
     fn dynamic_size(&self) -> usize;
 }
 
-unsafe impl<T: StaticSize> DynamicSize for T {
+impl<T: StaticSize> DynamicSize for T {
     fn dynamic_size(&self) -> usize {
         Self::static_size()
     }
@@ -104,20 +104,6 @@ pub enum ReinterpretError {
 
     #[error("failed to convert types: {0}")]
     Conversion(String),
-}
-
-fn get<Idx, Out>(source: &[u8], idx: Idx) -> Result<&Out, ReinterpretError>
-where
-    Idx: std::slice::SliceIndex<[u8], Output = Out> + std::fmt::Debug + Clone,
-{
-    Ok(source.get(idx.clone())
-        .ok_or_else(||
-            ReinterpretError::NotEnoughBytes { 
-                idx: format!("{:?}", idx),
-                len: source.len(),
-            }
-        )?
-    )
 }
 
 #[repr(transparent)]
@@ -147,253 +133,42 @@ impl<'s> ByteReader<'s> {
     }
 }
 
+macro_rules! impl_nums {
+    ($($Type:ty),* $(,)?) => {
+        $(
+            impl AsBytes for $Type {
+                fn as_bytes(&self) -> Vec<u8> {
+                    self.to_ne_bytes().into()
+                }
+            }
 
+            impl FromBytes for $Type {
+                fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+                    use std::array::TryFromSliceError;
 
-unsafe impl AsBytes for u8 {
-    fn as_bytes(&self) -> Vec<u8> { vec![*self] }
-}
+                    let size = std::mem::size_of::<Self>();
+                    Ok(Self::from_ne_bytes(source[..size].try_into().map_err(|err: TryFromSliceError|
+                        ReinterpretError::Conversion(err.to_string())
+                    )?))
+                }
+            }
 
-unsafe impl FromBytes for u8 {
-    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-        Ok(*get(source, 0)?)
+            impl StaticSize for $Type { }
+        )*
     }
 }
 
-unsafe impl StaticSize for u8 { }
+impl_nums! { u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, f32, f64 }
 
 
-
-unsafe impl AsBytes for i8 {
-    fn as_bytes(&self) -> Vec<u8> { unsafe { vec![transmute(*self)] } }
-}
-
-unsafe impl FromBytes for i8 {
-    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-        Ok(unsafe { transmute(*get(source, 0)?) })
-    }
-}
-
-unsafe impl StaticSize for i8 { }
-
-
-
-unsafe impl AsBytes for u16 {
-    fn as_bytes(&self) -> Vec<u8> {
-        let bytes: [u8; 2] = unsafe { transmute(*self) };
-        bytes.into()
-    }
-}
-
-unsafe impl FromBytes for u16 {
-    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-        Ok(unsafe {
-            transmute([*get(source, 0)?, *get(source, 1)?])
-        })
-    }
-}
-
-unsafe impl StaticSize for u16 { }
-
-
-
-unsafe impl AsBytes for i16 {
-    fn as_bytes(&self) -> Vec<u8> {
-        let bytes: [u8; 2] = unsafe { transmute(*self) };
-        bytes.into()
-    }
-}
-
-unsafe impl FromBytes for i16 {
-    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-        Ok(unsafe {
-            transmute([*get(source, 0)?, *get(source, 1)?])
-        })
-    }
-}
-
-unsafe impl StaticSize for i16 { }
-
-
-
-unsafe impl AsBytes for u32 {
-    fn as_bytes(&self) -> Vec<u8> {
-        let bytes: [u8; 4] = unsafe { transmute(*self) };
-        bytes.into()
-    }
-}
-
-unsafe impl FromBytes for u32 {
-    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-        Ok(unsafe {
-            transmute([*get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?])
-        })
-    }
-}
-
-unsafe impl StaticSize for u32 { }
-
-
-
-unsafe impl AsBytes for i32 {
-    fn as_bytes(&self) -> Vec<u8> {
-        let bytes: [u8; 4] = unsafe { transmute(*self) };
-        bytes.into()
-    }
-}
-
-unsafe impl FromBytes for i32 {
-    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-        Ok(unsafe {
-            transmute([*get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?])
-        })
-    }
-}
-
-unsafe impl StaticSize for i32 { }
-
-
-
-unsafe impl AsBytes for u64 {
-    fn as_bytes(&self) -> Vec<u8> {
-        let bytes: [u8; 8] = unsafe { transmute(*self) };
-        bytes.into()
-    }
-}
-
-unsafe impl FromBytes for u64 {
-    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-        Ok(unsafe {
-            transmute([
-                *get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?,
-                *get(source, 4)?, *get(source, 5)?, *get(source, 6)?, *get(source, 7)?,
-            ])
-        })
-    }
-}
-
-unsafe impl StaticSize for u64 { }
-
-
-
-unsafe impl AsBytes for i64 {
-    fn as_bytes(&self) -> Vec<u8> {
-        let bytes: [u8; 8] = unsafe { transmute(*self) };
-        bytes.into()
-    }
-}
-
-unsafe impl FromBytes for i64 {
-    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-        Ok(unsafe {
-            transmute([
-                *get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?,
-                *get(source, 4)?, *get(source, 5)?, *get(source, 6)?, *get(source, 7)?,
-            ])
-        })
-    }
-}
-
-unsafe impl StaticSize for i64 { }
-
-
-
-unsafe impl AsBytes for u128 {
-    fn as_bytes(&self) -> Vec<u8> {
-        let bytes: [u8; 16] = unsafe { transmute(*self) };
-        bytes.into()
-    }
-}
-
-unsafe impl FromBytes for u128 {
-    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-        Ok(unsafe {
-            transmute([
-                *get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?,
-                *get(source, 4)?, *get(source, 5)?, *get(source, 6)?, *get(source, 7)?,
-                *get(source, 8)?, *get(source, 9)?, *get(source, 10)?, *get(source, 11)?,
-                *get(source, 12)?, *get(source, 13)?, *get(source, 14)?, *get(source, 15)?,
-            ])
-        })
-    }
-}
-
-unsafe impl StaticSize for u128 { }
-
-
-
-unsafe impl AsBytes for i128 {
-    fn as_bytes(&self) -> Vec<u8> {
-        let bytes: [u8; 16] = unsafe { transmute(*self) };
-        bytes.into()
-    }
-}
-
-unsafe impl FromBytes for i128 {
-    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-        Ok(unsafe {
-            transmute([
-                *get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?,
-                *get(source, 4)?, *get(source, 5)?, *get(source, 6)?, *get(source, 7)?,
-                *get(source, 8)?, *get(source, 9)?, *get(source, 10)?, *get(source, 11)?,
-                *get(source, 12)?, *get(source, 13)?, *get(source, 14)?, *get(source, 15)?,
-            ])
-        })
-    }
-}
-
-unsafe impl StaticSize for i128 { }
-
-
-
-unsafe impl AsBytes for f32 {
-    fn as_bytes(&self) -> Vec<u8> {
-        let bytes: [u8; 4] = unsafe { transmute(*self) };
-        bytes.into()
-    }
-}
-
-unsafe impl FromBytes for f32 {
-    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-        Ok(unsafe {
-            transmute([*get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?])
-        })
-    }
-}
-
-unsafe impl StaticSize for f32 { }
-
-
-
-unsafe impl AsBytes for f64 {
-    fn as_bytes(&self) -> Vec<u8> {
-        let bytes: [u8; 8] = unsafe { transmute(*self) };
-        bytes.into()
-    }
-}
-
-unsafe impl FromBytes for f64 {
-    fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-        Ok(unsafe {
-            transmute([
-                *get(source, 0)?, *get(source, 1)?, *get(source, 2)?, *get(source, 3)?,
-                *get(source, 4)?, *get(source, 5)?, *get(source, 6)?, *get(source, 7)?,
-            ])
-        })
-    }
-}
-
-unsafe impl StaticSize for f64 { }
-
-
-
-unsafe impl AsBytes for usize {
+impl AsBytes for usize {
     fn as_bytes(&self) -> Vec<u8> {
         let filled = *self as u64;
         filled.as_bytes()
     }
 }
 
-unsafe impl FromBytes for usize {
+impl FromBytes for usize {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let filled = u64::from_bytes(source)?;
         filled.try_into()
@@ -403,7 +178,7 @@ unsafe impl FromBytes for usize {
     }
 }
 
-unsafe impl StaticSize for usize {
+impl StaticSize for usize {
     fn static_size() -> usize {
         u64::static_size()
     }
@@ -411,14 +186,14 @@ unsafe impl StaticSize for usize {
 
 
 
-unsafe impl AsBytes for isize {
+impl AsBytes for isize {
     fn as_bytes(&self) -> Vec<u8> {
         let filled = *self as i64;
         filled.as_bytes()
     }
 }
 
-unsafe impl FromBytes for isize {
+impl FromBytes for isize {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let filled = i64::from_bytes(source)?;
         filled.try_into()
@@ -428,7 +203,7 @@ unsafe impl FromBytes for isize {
     }
 }
 
-unsafe impl StaticSize for isize {
+impl StaticSize for isize {
     fn static_size() -> usize {
         i64::static_size()
     }
@@ -436,13 +211,13 @@ unsafe impl StaticSize for isize {
 
 
 
-unsafe impl AsBytes for char {
+impl AsBytes for char {
     fn as_bytes(&self) -> Vec<u8> {
         u32::from(*self).as_bytes()
     }
 }
 
-unsafe impl FromBytes for char {
+impl FromBytes for char {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let source = u32::from_bytes(source)?;
         source.try_into()
@@ -452,7 +227,7 @@ unsafe impl FromBytes for char {
     }
 }
 
-unsafe impl StaticSize for char {
+impl StaticSize for char {
     fn static_size() -> usize {
         u32::static_size()
     }
@@ -460,13 +235,13 @@ unsafe impl StaticSize for char {
 
 
 
-unsafe impl AsBytes for bool {
+impl AsBytes for bool {
     fn as_bytes(&self) -> Vec<u8> {
         vec![*self as u8]
     }
 }
 
-unsafe impl FromBytes for bool {
+impl FromBytes for bool {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let mut reader = ByteReader::new(source);
         let byte: u8 = reader.read()?;
@@ -481,7 +256,7 @@ unsafe impl FromBytes for bool {
     }
 }
 
-unsafe impl StaticSize for bool {
+impl StaticSize for bool {
     fn static_size() -> usize {
         u8::static_size()
     }
@@ -489,7 +264,7 @@ unsafe impl StaticSize for bool {
 
 
 
-unsafe impl<T: AsBytes> AsBytes for Vec<T> {
+impl<T: AsBytes> AsBytes for Vec<T> {
     fn as_bytes(&self) -> Vec<u8> {
         compose! {
             self.len().as_bytes(),
@@ -499,7 +274,7 @@ unsafe impl<T: AsBytes> AsBytes for Vec<T> {
     }
 }
 
-unsafe impl<T: FromBytes + DynamicSize> FromBytes for Vec<T> {
+impl<T: FromBytes + DynamicSize> FromBytes for Vec<T> {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let mut reader = ByteReader::new(source);
         let len = reader.read()?;
@@ -514,7 +289,7 @@ unsafe impl<T: FromBytes + DynamicSize> FromBytes for Vec<T> {
     }
 }
 
-unsafe impl<T: StaticSize> DynamicSize for Vec<T> {
+impl<T: StaticSize> DynamicSize for Vec<T> {
     fn dynamic_size(&self) -> usize {
         usize::static_size() + self.len() * T::static_size()
     }
@@ -522,7 +297,7 @@ unsafe impl<T: StaticSize> DynamicSize for Vec<T> {
 
 
 
-unsafe impl AsBytes for bit_vec::BitVec {
+impl AsBytes for bit_vec::BitVec {
     fn as_bytes(&self) -> Vec<u8> {
         compose! {
             self.len().as_bytes(),
@@ -531,7 +306,7 @@ unsafe impl AsBytes for bit_vec::BitVec {
     }
 }
 
-unsafe impl FromBytes for bit_vec::BitVec {
+impl FromBytes for bit_vec::BitVec {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let mut reader = ByteReader::new(source);
         let len = reader.read()?;
@@ -543,7 +318,7 @@ unsafe impl FromBytes for bit_vec::BitVec {
     }
 }
 
-unsafe impl DynamicSize for bit_vec::BitVec {
+impl DynamicSize for bit_vec::BitVec {
     fn dynamic_size(&self) -> usize {
         self.storage().len() + usize::static_size()
     }
@@ -551,7 +326,7 @@ unsafe impl DynamicSize for bit_vec::BitVec {
 
 
 
-unsafe impl<K, V> AsBytes for std::collections::HashMap<K, V>
+impl<K, V> AsBytes for std::collections::HashMap<K, V>
 where
     K: AsBytes,
     V: AsBytes,
@@ -568,7 +343,7 @@ where
     }
 }
 
-unsafe impl<K, V> FromBytes for std::collections::HashMap<K, V>
+impl<K, V> FromBytes for std::collections::HashMap<K, V>
 where
     K: DynamicSize + FromBytes + Eq + std::hash::Hash,
     V: DynamicSize + FromBytes,
@@ -590,7 +365,7 @@ where
     }
 }
 
-unsafe impl<K: StaticSize, V: StaticSize> DynamicSize for std::collections::HashMap<K, V> {
+impl<K: StaticSize, V: StaticSize> DynamicSize for std::collections::HashMap<K, V> {
     fn dynamic_size(&self) -> usize {
         usize::static_size() + self.len() * (K::static_size() + V::static_size())
     }
@@ -598,7 +373,7 @@ unsafe impl<K: StaticSize, V: StaticSize> DynamicSize for std::collections::Hash
 
 
 
-unsafe impl<T: AsBytes> AsBytes for Option<T> {
+impl<T: AsBytes> AsBytes for Option<T> {
     fn as_bytes(&self) -> Vec<u8> {
         match self {
             None => false.as_bytes(),
@@ -611,7 +386,7 @@ unsafe impl<T: AsBytes> AsBytes for Option<T> {
     }
 }
 
-unsafe impl<T: FromBytes + DynamicSize> FromBytes for Option<T> {
+impl<T: FromBytes + DynamicSize> FromBytes for Option<T> {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let mut reader = ByteReader::new(source);
         let is_some: bool = reader.read()?;
@@ -623,7 +398,7 @@ unsafe impl<T: FromBytes + DynamicSize> FromBytes for Option<T> {
     }
 }
 
-unsafe impl<T: DynamicSize> DynamicSize for Option<T> {
+impl<T: DynamicSize> DynamicSize for Option<T> {
     fn dynamic_size(&self) -> usize {
         bool::static_size() + 
         match self {
@@ -639,7 +414,7 @@ use math_linear::prelude::*;
 
 macro_rules! reinterpret_3d_vectors {
     ($($VecName:ident = ($x:ident, $y:ident, $z:ident): $Type:ty);* $(;)?) => {$(
-        unsafe impl AsBytes for $VecName {
+        impl AsBytes for $VecName {
             fn as_bytes(&self) -> Vec<u8> {
                 compose! {
                     self.$x.as_bytes(),
@@ -649,7 +424,7 @@ macro_rules! reinterpret_3d_vectors {
             }
         }
 
-        unsafe impl FromBytes for $VecName {
+        impl FromBytes for $VecName {
             fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
                 let mut reader = ByteReader::new(source);
 
@@ -661,7 +436,7 @@ macro_rules! reinterpret_3d_vectors {
             }
         }
 
-        unsafe impl StaticSize for $VecName {
+        impl StaticSize for $VecName {
             fn static_size() -> usize { 3 * <$Type>::static_size() }
         }
     )*};
@@ -688,7 +463,7 @@ reinterpret_3d_vectors! {
 
 
 
-unsafe impl AsBytes for Float4 {
+impl AsBytes for Float4 {
     fn as_bytes(&self) -> Vec<u8> {
         compose! {
             self.x().as_bytes(),
@@ -699,7 +474,7 @@ unsafe impl AsBytes for Float4 {
     }
 }
 
-unsafe impl FromBytes for Float4 {
+impl FromBytes for Float4 {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let mut reader = ByteReader::new(source);
 
@@ -712,7 +487,7 @@ unsafe impl FromBytes for Float4 {
     }
 }
 
-unsafe impl StaticSize for Float4 {
+impl StaticSize for Float4 {
     fn static_size() -> usize { 16 }
 }
 

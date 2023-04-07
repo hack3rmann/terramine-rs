@@ -104,7 +104,7 @@ pub fn upload_measure(measure: &Measure) {
         .expect("mutex should be not poisoned")
         .profiles
         .get_mut(&measure.id)
-        .expect(&format!("measure {measure:?} should be in measure map"))
+        .unwrap_or_else(|| panic!("{}", "measure {measure:?} should be in measure map"))
         .measures
         .push(measure.value)
 }
@@ -181,7 +181,7 @@ pub fn update() {
 pub fn build_window(ui: &imgui::Ui, profiler_result: DataSummary) {
     use crate::app::utils::graphics::ui::imgui_constructor::make_window;
 
-    if profiler_result.len() != 0 && *DRAWING_ENABLED.lock().expect("mutex should be not poisoned") {
+    if !profiler_result.is_empty() && *DRAWING_ENABLED.lock().expect("mutex should be not poisoned") {
         make_window(ui, "Profiler")
             .always_auto_resize(true)
             .build(|| {

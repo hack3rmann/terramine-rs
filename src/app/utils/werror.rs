@@ -7,7 +7,7 @@ pub fn set_panic_hook() {
     std::panic::set_hook(Box::new(|panic_info| {
         error_message("Panic occured", &format!(
             "{msg}: {panic_info:?}",
-            msg = panic_info.to_string()
+            msg = panic_info
         )).expect("failed to make error message box");
     }))
 }

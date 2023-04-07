@@ -101,14 +101,14 @@ impl StackHeap {
 
     pub async fn seek_write(file: &mut File, bytes: &[u8], offset: Offset) -> io::Result<()> {
         file.seek(SeekFrom::Start(offset)).await?;
-        file.write(bytes).await?;
+        file.write_all(bytes).await?;
 
         Ok(())
     }
 
     pub async fn seek_read(file: &mut File, buffer: &mut [u8], offset: Offset) -> io::Result<()> {
         file.seek(SeekFrom::Start(offset)).await?;
-        file.read(buffer).await?;
+        file.read_exact(buffer).await?;
 
         Ok(())
     }
@@ -122,7 +122,7 @@ impl StackHeap {
         /* Increment stack pointer */
         self.stack_ptr += data.len() as Size;
 
-        return Ok(offset)
+        Ok(offset)
     }
 
     /// Writes data to stack by its offset.
@@ -303,10 +303,9 @@ impl StackHeap {
         for range in self.freed_space.iter() {
             if range.end   == free_range.start {
                 repeated[0] = range.clone();
-            } else
-            if range.start == free_range.end {
+            } else if range.start == free_range.end {
                 repeated[2] = range.clone();
-            }			
+            }
         }
 
         /* Remove all found ranges */
@@ -334,7 +333,7 @@ mod tests {
             let bytes_64:  Vec<_> = (0_u64..).flat_map(|num| num.as_bytes()).take(64) .collect();
             let bytes_128: Vec<_> = (0_u64..).flat_map(|num| num.as_bytes()).take(128).collect();
 
-            let bytes_64_rev: Vec<_> = bytes_64.iter().map(|&byte| byte).rev().collect();
+            let bytes_64_rev: Vec<_> = bytes_64.iter().copied().rev().collect();
 
             let alloc_64 = file.alloc(64).await.unwrap();
             file.write_to_heap(alloc_64, &bytes_64).await.unwrap();

@@ -97,7 +97,7 @@ impl<E: Copy + Into<Enumerator>> SaveBuilder<E> {
             let mut buffer = vec![0; Size::static_size()];
 
             offsets_save.seek(SeekFrom::Start(0)).await?;
-            offsets_save.read(&mut buffer).await?;
+            offsets_save.read_exact(&mut buffer).await?;
 
             Size::from_bytes(&buffer)
                 .expect("failed to make offsets out of bytes")
@@ -109,7 +109,7 @@ impl<E: Copy + Into<Enumerator>> SaveBuilder<E> {
         for i in (1..).step_by(2).take(n_offsets as usize) {
             let enumerator = {
                 offsets_save.seek(SeekFrom::Start(offset_size * i)).await?;
-                offsets_save.read(&mut buffer).await?;
+                offsets_save.read_exact(&mut buffer).await?;
                 
                 Enumerator::from_bytes(&buffer)
                     .expect("failed to make enumerator from bytes")
@@ -117,7 +117,7 @@ impl<E: Copy + Into<Enumerator>> SaveBuilder<E> {
 
             let offset = {
                 offsets_save.seek(SeekFrom::Start(offset_size * (i + 1))).await?;
-                offsets_save.read(&mut buffer).await?;
+                offsets_save.read_exact(&mut buffer).await?;
 
                 Offset::from_bytes(&buffer)
                     .expect("failed to make offset from bytes")
@@ -135,7 +135,7 @@ impl<E: Copy + Into<Enumerator>> SaveBuilder<E> {
 
 impl<E: Copy + Into<Enumerator>> Save<E> {
     /// Creates new [`SaveBuilder`] struct.
-    pub fn new(name: impl Into<String>) -> SaveBuilder<E> {
+    pub fn builder(name: impl Into<String>) -> SaveBuilder<E> {
         SaveBuilder {
             name: name.into(),
             offsets: HashMap::new(),
@@ -212,7 +212,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
     /// Assignes new values to enum-named array.
     #[allow(dead_code)]
-    pub async fn assign_array<'t, T: 't, F>(&mut self, enumerator: E, mut elem: F)
+    pub async fn assign_array<'t, T: 't, F>(&mut self, enumerator: E, elem: F)
     where
         T: AsBytes + StaticSize,
         F: FnMut(usize) -> &'t T,
@@ -226,7 +226,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
             .expect("failed to read from stack");
 
         /* Iterate all elements and assign to them offsets */
-        let elements = (0..).map(|i| elem(i));
+        let elements = (0..).map(elem);
         let offsets = (0..).map(|i| offset + i * T::static_size() as Size + Size::static_size() as Size);
         
         /* Write them to file */
@@ -298,7 +298,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
             result.push(T::from_bytes(&buffer).expect("failed to make T from bytes"));
         }
 
-        return result
+        result
     }
 
     /// Reads element of enum-named array on stack by index `idx`.
@@ -349,7 +349,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         self.store_offset(enumerator, offset)
             .expect("failed to store offset");
 
-        return self
+        self
     }
 
     /// Assignes new data to the value of pointer to heap.
@@ -411,12 +411,12 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
                 .expect("failed to write to a heap");
         }
 
-        return self
+        self
     }
 
     /// Assigns new array of pointers to existed one.
     #[allow(dead_code)]
-    pub async fn assign_pointer_array<F>(&mut self, enumerator: E, mut elem: F)
+    pub async fn assign_pointer_array<F>(&mut self, enumerator: E, elem: F)
     where
         F: FnMut(usize) -> Vec<u8>,
     {
@@ -432,7 +432,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         let offsets = (1..).map(|i| stack_offset + i * Offset::static_size() as Size);
 
         /* Elements iterator */
-        let elements = (0..).map(|i| elem(i));
+        let elements = (0..).map(elem);
 
         /* Write bytes */
         for (bytes, offset) in elements.zip(offsets).take(length as usize) {
@@ -502,7 +502,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
             result.push(elem(i as usize - 1, bytes).await);
         }
 
-        return result
+        result
     }
 
     /// Reads a pointer array element at index `idx`.
@@ -550,10 +550,8 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     fn load_offset(&self, enumerator: E) -> Offset {
         *self.offsets
             .get(&enumerator.into())
-            .expect(&format!(
-                "There is no data enumerated by {}",
-                enumerator.into()
-            ))
+            .unwrap_or_else(|| panic!("There is no data enumerated by {}",
+                enumerator.into()))
     }
 
     async fn offsets_async_write(file: &mut File, bytes: &[u8], offset: Offset) -> io::Result<()> {

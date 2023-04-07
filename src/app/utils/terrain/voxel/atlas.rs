@@ -68,6 +68,6 @@ impl UV {
     pub fn with_inversion(mut self) -> Self {
         self.y_lo = 1.0 - self.y_lo;
         self.y_hi = 1.0 - self.y_hi;
-        return self;
+        self
     }
 }

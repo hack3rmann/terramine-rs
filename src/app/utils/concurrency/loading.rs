@@ -30,6 +30,12 @@ pub struct Loadings {
     pub list: HashMap<String, f32>,
 }
 
+impl Default for Loadings {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Loadings {
     pub fn new() -> Self {
         Self { list: HashMap::new() }
@@ -50,9 +56,12 @@ impl Loadings {
                 LoadingError::RefreshFailed(name.into(), new_val)
             ),
 
-            Some(value) => Ok(
-                *value = new_val
-            ),
+            Some(value) => {
+                *value = new_val;
+                Ok(
+                    ()
+                )
+            },
         }
     }
 
@@ -129,6 +138,12 @@ pub fn start_new(name: &'static str) -> LoadingGuard {
         .expect("failed to send add command to loading");
 
     LoadingGuard { name, sender }
+}
+
+impl Default for ChannelLoadings<'_> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<'s> ChannelLoadings<'s> {

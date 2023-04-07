@@ -117,7 +117,7 @@ impl DebugVisualized<'_, Camera> {
     ) -> Result<(), DrawError> {
         if ENABLED.load(Ordering::Relaxed) {
             let mesh = data::construct_mesh(&self.inner, facade);
-            mesh.render(target, &self.static_data.shader, &self.static_data.draw_params, uniforms)
+            mesh.render(target, self.static_data.shader, self.static_data.draw_params, uniforms)
         } else { Ok(()) }
     }
 }

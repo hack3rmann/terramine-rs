@@ -35,8 +35,8 @@ glium::implement_vertex!(LowVertex, position, color, face_idx);
 
 #[derive(Debug)]
 pub enum ChunkDetailedMesh {
-    Standart(UnindexedMesh<FullVertex>),
-    Partial([UnindexedMesh<FullVertex>; 8]),
+    Standart(Box<UnindexedMesh<FullVertex>>),
+    Partial(Box<[UnindexedMesh<FullVertex>; 8]>),
 }
 
 impl ChunkDetailedMesh {
@@ -57,7 +57,7 @@ impl ChunkDetailedMesh {
                 mesh.render(target, shader, draw_params, uniforms),
 
             Self::Partial(meshes) => {
-                for mesh in meshes {
+                for mesh in meshes.iter() {
                     mesh.render(target, shader, draw_params, uniforms)?;
                 }
 
@@ -98,34 +98,26 @@ impl ChunkMesh {
     /// Connects mesh partitions into one mesh. If [chunk][Chunk] is not
     /// partitioned then it will do nothing.
     pub fn connect_partitions(&mut self, facade: &dyn Facade) {
-        let mesh = match self.detailed_mesh {
-            Some(ref mut mesh) => match mesh {
-                ChunkDetailedMesh::Partial(ref meshes) => {
-                    let vertices: Vec<_> = meshes.iter()
-                        .flat_map(|submesh| submesh
-                            .vertices
-                            .inner
-                            .as_slice()
-                            .read()
-                            .expect("failed to read vertex buffer subbuffer")
-                        )
-                        .collect();
-                    let vbuffer = VertexBuffer::no_indices(facade, &vertices, PrimitiveType::TrianglesList);
-                    Mesh::new(vbuffer)
-                },
+        let mesh = if let Some(ChunkDetailedMesh::Partial(ref meshes)) = self.detailed_mesh {
+            let vertices: Vec<_> = meshes.iter()
+                .flat_map(|submesh| submesh
+                    .vertices
+                    .inner
+                    .as_slice()
+                    .read()
+                    .expect("failed to read vertex buffer subbuffer")
+                )
+                .collect();
+            let vbuffer = VertexBuffer::no_indices(facade, &vertices, PrimitiveType::TrianglesList);
+            Mesh::new(vbuffer)
+        } else { return };
 
-                _ => return,
-            },
-
-            None => return,
-        };
-
-        self.detailed_mesh.replace(ChunkDetailedMesh::Standart(mesh));
+        self.detailed_mesh.replace(ChunkDetailedMesh::Standart(Box::new(mesh)));
     }
 
     /// Drops all generated meshes, if they exist.
     pub fn drop_all(&mut self) {
-        if let Some(_) = self.detailed_mesh.take() { }
+        let _ = self.detailed_mesh.take();
         for _ in self.low_meshes.iter_mut().filter_map(|m| m.take()) { }        
     }
 
@@ -154,14 +146,14 @@ impl ChunkMesh {
             let vbuffer = VertexBuffer::no_indices(facade, vertices[i], PrimitiveType::TrianglesList);
             Mesh::new(vbuffer)
         });
-        self.detailed_mesh.replace(ChunkDetailedMesh::Partial(partitions));
+        self.detailed_mesh.replace(ChunkDetailedMesh::Partial(Box::new(partitions)));
     }
 
     /// Sets mesh to chunk.
     pub fn upload_full_detail_vertices(&mut self, vertices: &[FullVertex], facade: &dyn Facade) {
         let vbuffer = VertexBuffer::no_indices(facade, vertices, PrimitiveType::TrianglesList);
         let mesh = Mesh::new(vbuffer);
-        self.detailed_mesh.replace(ChunkDetailedMesh::Standart(mesh));
+        self.detailed_mesh.replace(ChunkDetailedMesh::Standart(Box::new(mesh)));
     }
 
     /// Sets mesh to chunk.

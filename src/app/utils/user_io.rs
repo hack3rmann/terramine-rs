@@ -294,26 +294,15 @@ pub mod mouse {
 
 pub fn handle_event(event: &Event<()>, window: &glium::glutin::window::Window) {
     static CURSOR_REGRABBED: Mutex<bool> = Mutex::new(false);
-    
-    match event {
-        /* Window events */
-        Event::WindowEvent { event, .. } => match event {
-            /* Close event */
-            WindowEvent::KeyboardInput { input, .. } => match input.virtual_keycode {
-                /* Key matching */
-                Some(key) => match key {
-                    _ => {
-                        /* If key is pressed then press it on virtual keyboard, if not then release it. */
-                        match input.state {
-                            ElementState::Pressed =>
-                                keyboard::press(key),
 
-                            ElementState::Released =>
-                                keyboard::release(key),
-                        }
-                    }
+    if let Event::WindowEvent { event, .. } = event {
+        match event {
+            /* Close event */
+            WindowEvent::KeyboardInput { input, .. } => if let Some(key) = input.virtual_keycode {
+                match input.state {
+                    ElementState::Pressed => keyboard::press(key),
+                    ElementState::Released => keyboard::release(key),
                 }
-                 _ => ()
             },
 
             /* Mouse buttons match. */
@@ -349,7 +338,6 @@ pub fn handle_event(event: &Event<()>, window: &glium::glutin::window::Window) {
                 }
             }
             _ => (),
-        },
-        _ => ()
+        }
     }
 }

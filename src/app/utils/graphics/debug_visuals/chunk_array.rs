@@ -82,11 +82,10 @@ pub mod data {
             let is_partitioned = chunk_mesh.borrow().is_partitioned();
             let is_empty = chunk.is_empty();
             let is_same_filled = chunk.is_same_filled();
-            drop(chunk);
 
             let bias = cfg::topology::Z_FIGHTING_BIAS
                      * (active_lod as f32 * 80.0 + 1.0);
-            let size = Chunk::GLOBAL_SIZE as f32 + bias;
+            let size = Chunk::GLOBAL_SIZE + bias;
 
             let pos = vec3::from(Chunk::global_pos(chunk_pos)) * Voxel::SIZE
                     - vec3::all(0.5 * Voxel::SIZE);

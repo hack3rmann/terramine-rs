@@ -33,23 +33,23 @@ pub fn spawn_control_window(ui: &imgui::Ui) {
 
     make_window(ui, "Generator settings").build(|| {
         let _ = FREQUENCY.fetch_update(Ordering::AcqRel, Ordering::Relaxed, |mut freq| {
-            ui.input_float("Frequency", &mut freq).build().then(|| freq)
+            ui.input_float("Frequency", &mut freq).build().then_some(freq)
         });
 
         let _ = N_OCTAVES.fetch_update(Ordering::AcqRel, Ordering::Relaxed, |mut n_oct| {
-            ui.input_scalar("Octaves", &mut n_oct).build().then(|| n_oct)
+            ui.input_scalar("Octaves", &mut n_oct).build().then_some(n_oct)
         });
 
         let _ = PERSISTENCE.fetch_update(Ordering::AcqRel, Ordering::Relaxed, |mut pers| {
-            ui.input_scalar("Persistence", &mut pers).build().then(|| pers)
+            ui.input_scalar("Persistence", &mut pers).build().then_some(pers)
         });
 
         let _ = LACUNARITY.fetch_update(Ordering::AcqRel, Ordering::Relaxed, |mut lac| {
-            ui.input_scalar("Lacunarity", &mut lac).build().then(|| lac)
+            ui.input_scalar("Lacunarity", &mut lac).build().then_some(lac)
         });
 
         let _ = SEED.fetch_update(Ordering::AcqRel, Ordering::Relaxed, |mut seed| {
-            ui.input_scalar("Seed", &mut seed).build().then(|| seed)
+            ui.input_scalar("Seed", &mut seed).build().then_some(seed)
         });
 
         if ui.button("Build") {
