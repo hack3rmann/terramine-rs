@@ -194,9 +194,9 @@ impl App where Self: 'static {
         }
 
         /* Update save/load tasks of `ChunkArray` */
-        self.chunk_arr.update(self.graphics.display.as_ref().get_ref(), &self.camera)
-            .await
-            .expect("failed to update chunk array");
+        if let Err(err) = self.chunk_arr.update(self.graphics.display.as_ref().get_ref(), &self.camera).await {
+            logger::log!(Error, "app", format!("failed to update chunk array: {err})"));
+        }
 
         let window = self.graphics.display.gl_window();
         let window = window.window();
