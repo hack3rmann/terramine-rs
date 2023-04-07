@@ -2,12 +2,11 @@
 #![allow(clippy::manual_strip, clippy::too_many_arguments)]
 
 use {
-    crate::app::utils::{
+    crate::{
+        prelude::*,
         concurrency::channel::Channel,
     },
-    std::{sync::Mutex, collections::VecDeque, borrow::Cow},
-    lazy_static::lazy_static,
-    parse_display::Display,
+    std::sync::Mutex,
 };
 
 lazy_static! {
@@ -75,7 +74,7 @@ impl WorkLogGuard {
 
 impl Drop for WorkLogGuard {
     fn drop(&mut self) {
-        let from = std::mem::take(&mut self.from);
+        let from = mem::take(&mut self.from);
         log!(Info, from, format!("End {work}", work = self.work));
     }
 }

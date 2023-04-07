@@ -4,10 +4,7 @@
 //! Provides some `type-byte` and `byte-type` reinterpretations to common types
 //!
 
-use {
-    std::convert::TryInto,
-    thiserror::Error,
-};
+use crate::prelude::*;
 
 /// Composes input list of `IntoIterator`s with `Item = u8`
 /// into one large iterator by sequetially calling `.chain()`,
@@ -68,7 +65,7 @@ pub trait FromBytes: Sized {
 
 pub trait StaticSize: Sized {
     fn static_size() -> usize {
-        std::mem::size_of::<Self>()
+        mem::size_of::<Self>()
     }
 }
 
@@ -146,7 +143,7 @@ macro_rules! impl_nums {
                 fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
                     use std::array::TryFromSliceError;
 
-                    let size = std::mem::size_of::<Self>();
+                    let size = mem::size_of::<Self>();
                     Ok(Self::from_ne_bytes(source[..size].try_into().map_err(|err: TryFromSliceError|
                         ReinterpretError::Conversion(err.to_string())
                     )?))

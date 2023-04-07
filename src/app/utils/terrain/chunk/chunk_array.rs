@@ -218,7 +218,7 @@ impl ChunkArray {
 
     /// Reinterprets [chunk][Chunk] as bytes. It uses Huffman's compresstion.
     pub fn chunk_as_bytes(chunk: &Chunk) -> Vec<u8> {
-        use { std::iter::FromIterator, bit_vec::BitVec, huffman_compress as hc };
+        use { bit_vec::BitVec, huffman_compress as hc };
 
         match chunk.info.load(Relaxed).fill_type {
             FillType::AllSame(id) =>
@@ -258,7 +258,7 @@ impl ChunkArray {
 
     /// Reinterprets bytes as [chunk][Chunk] and reads [id][Id] array and [fill type][FillType] from it.
     pub fn array_filltype_from_bytes(bytes: &[u8]) -> (Vec<Atomic<Id>>, FillType) {
-        use { std::iter::FromIterator, bit_vec::BitVec, huffman_compress as hc };
+        use { bit_vec::BitVec, huffman_compress as hc };
 
         let mut reader = ByteReader::new(bytes);
         let fill_type: FillType = reader.read()
@@ -362,7 +362,7 @@ impl ChunkArray {
             if chunk_changed {
                 is_changed = true;
                 
-                for &idx in Self::get_adj_chunks_idxs(self.sizes, chunk_pos).as_array().iter().flatten() {
+                for idx in Self::get_adj_chunks_idxs(self.sizes, chunk_pos).as_array().into_iter().flatten() {
                     self.meshes[idx].borrow_mut().drop_all();
                 }
             }
@@ -412,7 +412,7 @@ impl ChunkArray {
 
         let new_chunks = ChunkArray::from_chunks(sizes, chunks)?;
         self.drop_tasks();
-        let _ = std::mem::replace(self, new_chunks);
+        let _ = mem::replace(self, new_chunks);
 
         Ok(())
     }
@@ -588,10 +588,7 @@ impl ChunkArray {
     pub async fn render(
         &mut self, target: &mut impl gl::Surface, draw_bundle: &ChunkDrawBundle<'_>,
         uniforms: &impl gl::uniforms::Uniforms, facade: &dyn gl::backend::Facade, cam: &Camera,
-    ) -> Result<(), ChunkRenderError>
-    where
-        Self: 'static,
-    {
+    ) -> Result<(), ChunkRenderError> {
         #![allow(clippy::await_holding_refcell_ref)]
 
         let sizes = self.sizes;
@@ -609,7 +606,7 @@ impl ChunkArray {
                     if let Some(new_chunk) = Self::try_finish_voxels_gen_task(&mut self.voxels_gen_tasks, chunk_pos).await {
                         // FIXME:
                         unsafe {
-                            let _ = std::mem::replace(Arc::get_mut_unchecked(&mut chunk), new_chunk);
+                            let _ = mem::replace(Arc::get_mut_unchecked(&mut chunk), new_chunk);
                         }
                     }
                 }
@@ -750,7 +747,7 @@ impl ChunkArray {
 
             // FIXME:
             unsafe {
-                let _ = std::mem::replace(Arc::get_mut_unchecked(&mut chunk), Chunk::from_voxels(voxels, pos));
+                let _ = mem::replace(Arc::get_mut_unchecked(&mut chunk), Chunk::from_voxels(voxels, pos));
             }
         }
     }
@@ -971,7 +968,7 @@ impl ChunkArray {
                     self.drop_tasks();
                     match Self::new_empty_chunks(USize3::from(*sizes)) {
                         Ok(new_chunks) => {
-                            let _ = std::mem::replace(self, new_chunks);
+                            let _ = mem::replace(self, new_chunks);
                         },
                         Err(err) => logger::log!(Error, "chunk-array", err.to_string())
                     }

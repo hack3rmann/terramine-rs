@@ -1,7 +1,7 @@
 [package]
 name = "terramine"
 version = "0.0.2"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 glium = "0.32.1"
@@ -13,16 +13,16 @@ imgui-winit-support = "0.10.0"
 winapi = "0.3.9"
 profiler = { path = "../profiler" }
 crossbeam = "0.8.1"
-tokio = { version = "1.19.2", features = ["full"] }
-tokio-stream = "0.1.9"
+tokio = { version = "1.27.0", features = ["full"] }
+tokio-stream = "0.1.12"
 math_linear = { version = "0.1.0", path = "../math_linear" }
-thiserror = "1.0.38"
-rayon = "1.6.1"
-winit = "0.28.2"
+thiserror = "1.0.40"
+rayon = "1.7.0"
+winit = "0.28.3"
 derive-deref-rs = "0.1.1"
 types = { version = "0.1.0", path = "../types" }
 lazy_static = "1.4.0"
-portable-atomic = { version = "1.0.1", features = ["float"] }
+portable-atomic = { version = "1.2.0", features = ["float"] }
 huffman-compress = "0.6.1"
 bit-vec = "0.6.3"
 array-init = "2.1.0"

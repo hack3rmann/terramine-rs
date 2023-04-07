@@ -16,10 +16,17 @@ pub use {
     math_linear::prelude::*,
     user_error::UserFacingError,
     std::{
-        sync::Arc, rc::Rc, cell::{RefCell, Cell},
+        sync::Arc, rc::Rc, cell::{RefCell, Cell}, mem,
         collections::{HashMap, HashSet, VecDeque},
+        sync::atomic::{
+            AtomicUsize, AtomicBool, AtomicI16, AtomicI32, AtomicI64,
+            AtomicI8, AtomicIsize, AtomicPtr, AtomicU16, AtomicU32, AtomicU64, AtomicU8,
+        },
+        convert::{TryFrom, TryInto},
+        borrow::Cow,
     },
     itertools::Itertools,
+    portable_atomic::{AtomicF32, AtomicF64, AtomicU128, AtomicI128},
     atomic::{Atomic, Ordering::*},
     lazy_static::lazy_static,
     ordered_float::NotNan,

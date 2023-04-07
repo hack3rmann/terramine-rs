@@ -531,7 +531,7 @@ impl Chunk {
     /// # Error
     /// Returns [`Err`] if `idx` is out of bounds.
     pub fn set_id(&mut self, idx: usize, new_id: Id) -> Result<Id, EditError> {
-        if idx < Self::VOLUME {
+        if Self::VOLUME <= idx {
             return Err(
                 EditError::IdxOutOfBounds { idx, len: Self::VOLUME }
             )
