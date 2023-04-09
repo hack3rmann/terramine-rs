@@ -75,10 +75,12 @@ pub mod terrain {
             math_linear::prelude::Color,
         };
 
-        pub const VOXEL_DATA: [VoxelData; 3] = [
+        pub const VOXEL_DATA: [VoxelData; 5] = [
             VoxelData { name: "Air",    id: 0, avarage_color: Color::new(0.00, 0.00, 0.00), textures: TextureSides::all(0) },
-            VoxelData { name: "Log",    id: 1, avarage_color: Color::new(0.15, 0.10, 0.05), textures: TextureSides::vertical(3, 1) },
-            VoxelData { name: "Stone",  id: 2, avarage_color: Color::new(0.20, 0.20, 0.20), textures: TextureSides::all(2) },
+            VoxelData { name: "Log",    id: 1, avarage_color: Color::new(0.15, 0.10, 0.05), textures: TextureSides::vertical(3, 1, 1) },
+            VoxelData { name: "Stone",  id: 2, avarage_color: Color::new(0.45, 0.45, 0.45), textures: TextureSides::all(2) },
+            VoxelData { name: "Grass",  id: 3, avarage_color: Color::new(0.40, 0.64, 0.24), textures: TextureSides::vertical(4, 6, 5) },
+            VoxelData { name: "Dirt",   id: 4, avarage_color: Color::new(0.59, 0.42, 0.29), textures: TextureSides::all(5) },
         ];
     }
 

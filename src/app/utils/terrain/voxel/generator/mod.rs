@@ -9,11 +9,11 @@ use {
     std::sync::RwLock,
 };
 
-static FREQUENCY: AtomicF32 = AtomicF32::new(1.0);
+static FREQUENCY: AtomicF32 = AtomicF32::new(0.05);
 static N_OCTAVES: AtomicUsize = AtomicUsize::new(6);
-static PERSISTENCE: AtomicF32 = AtomicF32::new(1.0);
+static PERSISTENCE: AtomicF32 = AtomicF32::new(3.0);
 static LACUNARITY: AtomicF32 = AtomicF32::new(0.5);
-static SEED: AtomicU32 = AtomicU32::new(0);
+static SEED: AtomicU32 = AtomicU32::new(10);
 
 lazy_static! {
     static ref NOISE_VALS: RwLock<Noise2d> = RwLock::new(

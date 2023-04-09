@@ -42,8 +42,8 @@ impl TextureSides {
 
     /// Sides and up/bottom
     #[allow(dead_code)]
-    pub const fn vertical(sides: u16, up_bottom: u16) -> Self {
-        Self::new(sides, sides, sides, sides, up_bottom, up_bottom)
+    pub const fn vertical(sides: Id, top: Id, bottom: Id) -> Self {
+        Self::new(sides, sides, sides, sides, top, bottom)
     }
 
     /// Front, up/bottom and other sides
@@ -61,4 +61,6 @@ pub mod data {
     pub const AIR_VOXEL_DATA:    		&VoxelData = &VOXEL_DATA[0];
     pub const LOG_VOXEL_DATA:			&VoxelData = &VOXEL_DATA[1];
     pub const STONE_VOXEL_DATA:			&VoxelData = &VOXEL_DATA[2];
+    pub const GRASS_VOXEL_DATA:         &VoxelData = &VOXEL_DATA[3];
+    pub const DIRT_VOXEL_DATA:          &VoxelData = &VOXEL_DATA[4];
 }

@@ -67,7 +67,7 @@ pub struct WorkLogGuard {
 impl WorkLogGuard {
     pub fn new(from: impl Into<CowStr>, work: impl Into<CowStr>) -> Self {
         let (from, work) = (from.into(), work.into());
-        log!(Info, from.clone(), format!("Start {work}"));
+        log!(Info, from = from.clone(), "Start {work}");
         Self { from, work }
     }
 }
@@ -75,15 +75,15 @@ impl WorkLogGuard {
 impl Drop for WorkLogGuard {
     fn drop(&mut self) {
         let from = mem::take(&mut self.from);
-        log!(Info, from, format!("End {work}", work = self.work));
+        log!(Info, from = from, "End {work}", work = self.work);
     }
 }
 
 #[macro_export]
 macro_rules! log {
-    ($msg_type:ident, $from:expr, $content:expr) => {{
+    ($msg_type:ident, from = $from:expr, $($content:tt)*) => {{
         use $crate::app::utils::logger::{log, MsgType::*};
-        log($msg_type, $from, $content);
+        log($msg_type, $from, std::fmt::format(format_args!($($content)*)));
     }};
 }
 
@@ -97,7 +97,15 @@ macro_rules! log_dbg {
     }};
 }
 
-pub use crate::{log, log_dbg};
+#[macro_export]
+macro_rules! work {
+    (from = $from:expr, $($content:tt)*) => {{
+        use $crate::app::utils::logger::work;
+        work($from, std::fmt::format(format_args!($($content)*)))
+    }};
+}
+
+pub use crate::{log, log_dbg, work};
 
 pub fn spawn_window(ui: &imgui::Ui) {
     use {
@@ -131,7 +139,7 @@ pub fn spawn_window(ui: &imgui::Ui) {
 
             static INPUT: Mutex<String> = Mutex::new(String::new());
             let mut input = INPUT.lock()
-                .expect("mutex should be not poisoned");
+                .unwrap();
 
             let is_enter_pressed = ui.input_text("Console", &mut input)
                 .enter_returns_true(true)
@@ -164,22 +172,22 @@ pub fn spawn_window(ui: &imgui::Ui) {
 
             locals.set_item(py, "voxel_set", voxel_set)
                 .unwrap_or_else(|err|
-                    log!(Error, "logger", format!("failed to set 'voxel_set' item: {err:?}"))
+                    log!(Error, from = "logger", "failed to set 'voxel_set' item: {err:?}")
                 );
 
             locals.set_item(py, "voxel_fill", voxel_fill)
                 .unwrap_or_else(|err|
-                    log!(Error, "logger", format!("failed to set 'voxel_fill' item: {err:?}"))
+                    log!(Error, from = "logger", "failed to set 'voxel_fill' item: {err:?}")
                 );
                 
             locals.set_item(py, "drop_all_meshes", drop_all_meshes)
                 .unwrap_or_else(|err|
-                    log!(Error, "logger", format!("failed to set 'drop_all_meshes' item: {err:?}"))
+                    log!(Error, from = "logger", "failed to set 'drop_all_meshes' item: {err:?}")
                 );
 
             if is_enter_pressed {
                 py.run(&buf, None, Some(&locals))
-                    .unwrap_or_else(|err| log!(Error, "logger", format!("{err:?}")));
+                    .unwrap_or_else(|err| log!(Error, from = "logger", "{err:?}"));
             }
 
             for msg in messages.iter().rev() {

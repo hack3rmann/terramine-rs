@@ -7,6 +7,7 @@ pub use {
         user_io::{keyboard, mouse, Key},
         terrain::{chunk::iterator::SpaceIter, voxel::voxel_data::data as voxels},
         concurrency::loading,
+        runtime::RUNTIME,
     },
     smallvec::{SmallVec, smallvec},
     array_init::array_init,

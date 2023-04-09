@@ -572,7 +572,7 @@ impl ChunkArray {
             match NotNan::new(dot) {
                 Ok(result) => result,
                 Err(err) => {
-                    logger::log!(Error, "chunk-array", err.to_string());
+                    logger::log!(Error, from = "chunk-array", "{err}");
                     NotNan::default()
                 }
             }
@@ -982,7 +982,7 @@ impl ChunkArray {
                 ui.text("Generate new");
 
                 let mut sizes = GENERATOR_SIZES.lock()
-                    .expect("mutex should be not poisoned");
+                    .unwrap();
 
                 ui.input_scalar_n("Sizes", &mut *sizes).build();
 
@@ -992,7 +992,7 @@ impl ChunkArray {
                         Ok(new_chunks) => {
                             let _ = mem::replace(self, new_chunks);
                         },
-                        Err(err) => logger::log!(Error, "chunk-array", err.to_string())
+                        Err(err) => logger::log!(Error, from = "chunk-array", "{err}")
                     }
                 }
             });
@@ -1012,7 +1012,7 @@ impl ChunkArray {
                 SetVoxel { pos, new_id } => {
                     let old_id = self.set_voxel(pos, new_id)
                         .unwrap_or_else(|err| {
-                            logger::log!(Error, "chunk-array", format!("failed to set voxel: {err}"));
+                            logger::log!(Error, from = "chunk-array", "failed to set voxel: {err}");
                             0
                         });
 
@@ -1024,7 +1024,7 @@ impl ChunkArray {
                 FillVoxels { pos_from, pos_to, new_id } => {
                     let _is_changed = self.fill_voxels(pos_from, pos_to, new_id)
                         .unwrap_or_else(|err| {
-                            logger::log!(Error, "chunk-array", format!("failed to fill voxels: {err}"));
+                            logger::log!(Error, from = "chunk-array", "failed to fill voxels: {err}");
                             false
                         });
                 }
@@ -1042,7 +1042,7 @@ impl ChunkArray {
         }
 
         if n_changed != 0 {
-            logger::log!(Info, "chunk-array", format!("{n_changed} chunks were updated!"));
+            logger::log!(Info, from = "chunk-array", "{n_changed} chunks were updated!");
         }
     }
 
@@ -1201,9 +1201,12 @@ impl ChangeTracker {
         let mut result = HashSet::new();
 
         for &voxel_pos in self.voxel_poses.iter() {
+            let chunk_sizes = Int3::from(Chunk::SIZES);
+
             let chunk_pos = Chunk::local_pos(voxel_pos);
             let local_pos = Chunk::global_to_local_pos(chunk_pos, voxel_pos);
             let voxel_coord_idx = USize3::from(local_pos);
+
             let partition_idx = ChunkArray::coord_idx_to_idx(
                 USize3::all(2),
                 voxel_coord_idx / (Chunk::SIZES / 2),
@@ -1216,9 +1219,10 @@ impl ChangeTracker {
 
             result.insert((chunk_idx, partition_idx));
 
-            for offset in iterator::offsets_from_border(local_pos, Int3::ZERO..Int3::from(Chunk::SIZES)) {
+            let local_rem = local_pos.rem_euclid(chunk_sizes / 2);
+            for offset in iterator::offsets_from_border(local_rem, Int3::ZERO .. chunk_sizes / 2) {
                 let adj_voxel_global_pos = voxel_pos + offset;
-                let adj_chunk_pos = chunk_pos + offset;
+                let adj_chunk_pos = Chunk::local_pos(adj_voxel_global_pos);
                 let local_adj_voxel_pos = Chunk::global_to_local_pos(
                     adj_chunk_pos,
                     adj_voxel_global_pos

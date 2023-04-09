@@ -64,8 +64,6 @@ float get_light_depth() {
 float get_shadow_small(vec4 frag_pos, float current_depth) {
     float shadow_glitch_brightness_shift = 0.13;
 
-    frag_pos = floor(frag_pos * 8.0) * 0.125;
-
     vec4 frag_pos_light_space = light_proj * light_view * frag_pos;
     vec3 proj_coords = frag_pos_light_space.xyz / frag_pos_light_space.w;
     proj_coords = proj_coords * 0.5 + 0.5;
@@ -88,20 +86,26 @@ float get_shadow_small(vec4 frag_pos, float current_depth) {
 }
 
 float get_shadow(vec4 frag_pos, float current_depth) {
+    vec2 offset = 0.2 * vec2(1, 0);
+    frag_pos = floor(frag_pos * 8.0) * 0.125;
+
     float nearby[6];
-    nearby[0] = get_shadow_small(frag_pos + vec4( 0.125,  0.0,  0.0, 0.0), current_depth);
-    nearby[1] = get_shadow_small(frag_pos + vec4(-0.125,  0.0,  0.0, 0.0), current_depth);
-    nearby[2] = get_shadow_small(frag_pos + vec4( 0.0,  0.0,  0.125, 0.0), current_depth);
-    nearby[3] = get_shadow_small(frag_pos + vec4( 0.0,  0.0, -0.125, 0.0), current_depth);
-    nearby[4] = get_shadow_small(frag_pos + vec4( 0.0,  0.125,  0.0, 0.0), current_depth);
-    nearby[5] = get_shadow_small(frag_pos + vec4( 0.0, -0.125,  0.0, 0.0), current_depth);
+    nearby[0] = get_shadow_small(frag_pos + offset.xyyy, current_depth);
+    nearby[1] = get_shadow_small(frag_pos - offset.xyyy, current_depth);
+    nearby[2] = get_shadow_small(frag_pos + offset.yyxy, current_depth);
+    nearby[3] = get_shadow_small(frag_pos - offset.yyxy, current_depth);
+    nearby[4] = get_shadow_small(frag_pos + offset.yxyy, current_depth);
+    nearby[5] = get_shadow_small(frag_pos - offset.yxyy, current_depth);
 
-    float shadow_summary = get_shadow_small(frag_pos, current_depth);
+    float centre_weight = 0.6;
+    float nearby_weight = 0.1;
 
-    for (uint i = 0; i < 6; ++i)
-        shadow_summary += nearby[i];
+    float shadow_summary = centre_weight * get_shadow_small(frag_pos, current_depth);
 
-    return shadow_summary / 7.0;
+    for (uint i = uint(0); i < uint(6); ++i)
+        shadow_summary += nearby[i] * nearby_weight;
+
+    return shadow_summary / (centre_weight + 6.0 * nearby_weight);
 }
 
 bool is_cross() {

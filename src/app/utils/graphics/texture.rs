@@ -20,7 +20,7 @@ pub struct Texture {
 impl Texture {
     /// Loads texture from path.
     pub fn from_path(path: impl AsRef<Path>, display: &dyn Facade) -> Result<Self, io::Error> {
-        let _work_guard = logger::work("texture loader", format!("from {path:?}", path = path.as_ref()));
+        let _log_guard = logger::work!(from = "texture loader", "from {path:?}", path = path.as_ref());
 
         let path_buf = path.as_ref().to_owned();
         let image_bytes = fs::read(path)?;

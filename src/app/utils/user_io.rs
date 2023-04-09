@@ -43,19 +43,19 @@ pub mod keyboard {
 
     pub fn press(key: Key) {
         INPUTS.write()
-            .expect("mutex should be not poisoned")
+            .unwrap()
             .insert(key, ElementState::Pressed);
     }
 
     pub fn release(key: Key) {
         INPUTS.write()
-            .expect("mutex should be not poisoned")
+            .unwrap()
             .remove(&key);
     }
 
     pub fn is_pressed(key: Key) -> bool {
         let is_pressed = INPUTS.read()
-            .expect("mutex should be not poisoned")
+            .unwrap()
             .contains_key(&key);
         let is_captured = IS_INPUT_CAPTURED.load(Ordering::Relaxed);
 
@@ -64,12 +64,12 @@ pub mod keyboard {
 
     pub fn just_pressed(key: Key) -> bool {
         let inputs = INPUTS.read()
-            .expect("mutex should be not poisoned");
+            .unwrap();
 
         let is_pressed = inputs.contains_key(&key);
         if is_pressed && !IS_INPUT_CAPTURED.load(Ordering::Relaxed) {
             RELEASED_KEYS.lock()
-                .expect("mutex should be not poisoned")
+                .unwrap()
                 .insert(key);
             true
         } else {
@@ -93,7 +93,7 @@ pub mod keyboard {
 
         if is_pressed && !is_captured {
             let mut released_keys = RELEASED_KEYS.lock()
-                .expect("mutex should be not poisoned");
+                .unwrap();
 
             for key in keys {
                 released_keys.insert(key);
@@ -105,10 +105,10 @@ pub mod keyboard {
 
     pub fn update_input() {
         let mut input = INPUTS.write()
-            .expect("mutex should be not poisoned");
+            .unwrap();
 
         let mut released_keys = RELEASED_KEYS.lock()
-            .expect("mutex should be not poisoned");
+            .unwrap();
 
         for key in released_keys.iter() {
             input.remove(key);
@@ -145,19 +145,19 @@ pub mod mouse {
 
     pub fn press(button: MouseButton) {
         INPUTS.write()
-            .expect("mutex should be not poisoned")
+            .unwrap()
             .insert(button);
     }
 
     pub fn release(button: MouseButton) {
         INPUTS.write()
-            .expect("mutex should be not poisoned")
+            .unwrap()
             .remove(&button);
     }
 
     pub fn is_pressed(button: MouseButton) -> bool {
         INPUTS.read()
-            .expect("mutex should be not poisoned")
+            .unwrap()
             .contains(&button)
     }
 
@@ -166,7 +166,7 @@ pub mod mouse {
 
         if is_pressed {
             RELEASED_KEYS.lock()
-                .expect("mutex should be not poisoned")
+                .unwrap()
                 .insert(button);
         }
 
@@ -201,7 +201,7 @@ pub mod mouse {
     pub fn update(window: &glium::glutin::window::Window) -> Result<(), MouseError> {
         {
             let mut released_keys = RELEASED_KEYS.lock()
-                .expect("mutex should be not poisoned");
+                .unwrap();
 
             let mut inputs = INPUTS.write()
                 .expect("rwlock should be not poisoned");
@@ -326,7 +326,7 @@ pub fn handle_event(event: &Event<()>, window: &glium::glutin::window::Window) {
             WindowEvent::Focused(focused) => {
                 /* If window has unfocused then release cursor. */
                 let mut is_regrabbed = CURSOR_REGRABBED.lock()
-                    .expect("mutex should be not poisoned");
+                    .unwrap();
 
                 let is_grabbed = mouse::IS_GRABBED.load(Ordering::SeqCst);
                 if *focused && *is_regrabbed && !is_grabbed {

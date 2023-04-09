@@ -2,11 +2,9 @@ pub mod utils;
 
 use {
     /* Other files */
-    crate::app::utils::{
-        cfg,
-        logger,
-        concurrency::loading,
-        user_io::{self, Key, keyboard, mouse},
+    crate::{
+        prelude::*,
+        user_io,
         graphics::{
             self,
             light::DirectionalLight,
@@ -20,8 +18,6 @@ use {
             ChunkDrawBundle,
         },
         time::timer::Timer,
-        profiler,
-        runtime::RUNTIME,
     },
 
     /* Glium includes */
@@ -32,15 +28,13 @@ use {
             event_loop::ControlFlow,
         },
     },
-
-    math_linear::prelude::*,
 };
 
 /// Struct that handles everything.
 pub struct App {
     graphics: Graphics,
     camera: DebugVisualizedStatic<Camera>,
-    lights: [DirectionalLight; 3],
+    lights: [DirectionalLight; 5],
     render_shadows: bool,
     timer: Timer,
 
@@ -49,6 +43,8 @@ pub struct App {
 
     texture_atlas: Texture,
     normal_atlas: Texture,
+
+    imgui_window_builders: Vec<fn(&imgui::Ui)>,
 }
 
 impl App where Self: 'static {
@@ -78,6 +74,12 @@ impl App where Self: 'static {
             graphics.display.as_ref().get_ref(),
         ).await;
 
+        let imgui_window_builders = vec![
+            logger::spawn_window,
+            loading::spawn_info_window,
+            crate::terrain::voxel::generator::spawn_control_window,
+        ];
+
         Self {
             chunk_arr,
             chunk_draw_bundle,
@@ -88,6 +90,7 @@ impl App where Self: 'static {
             texture_atlas,
             normal_atlas,
             timer: Timer::new(),
+            imgui_window_builders,
         }
     }
 
@@ -154,7 +157,7 @@ impl App where Self: 'static {
             self.graphics.imguic.io().want_text_input
         );
         
-        /* Close window is `escape` pressed */
+        // Close window is `escape` pressed
         if keyboard::just_pressed(cfg::key_bindings::APP_EXIT) {
             *control_flow = ControlFlow::Exit;
             self.chunk_arr.drop_tasks();
@@ -165,7 +168,7 @@ impl App where Self: 'static {
             self.chunk_arr.drop_tasks();
         }
 
-        /* Control camera by user input */
+        // Control camera by user input
         if keyboard::just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
             if self.camera.grabbes_cursor {
                 mouse::release_cursor(self.graphics.display.gl_window().window());
@@ -184,64 +187,60 @@ impl App where Self: 'static {
             self.chunk_draw_bundle = ChunkDrawBundle::new(self.graphics.display.as_ref().get_ref());
 
             self.graphics.refresh_postprocessing_shaders().unwrap_or_else(|err|
-                logger::log!(Error, "app", format!("failed to reload postprocessing shaders: {err}"))
+                logger::log!(Error, from = "app", "failed to reload postprocessing shaders: {err}")
             );
 
             match Texture::from_path("src/image/normal_atlas.png", self.graphics.display.as_ref().get_ref()) {
                 Ok(normals) => self.normal_atlas = normals,
-                Err(err) => logger::log!(Error, "app", format!("failed to reload normal atlas: {err}")),
+                Err(err) => logger::log!(Error, from = "app", "failed to reload normal atlas: {err}"),
             }
         }
 
-        /* Update save/load tasks of `ChunkArray` */
+        // Update save/load tasks of `ChunkArray`
         if let Err(err) = self.chunk_arr.update(self.graphics.display.as_ref().get_ref(), &self.camera).await {
-            logger::log!(Error, "app", format!("failed to update chunk array: {err})"));
+            logger::log!(Error, from = "app", "failed to update chunk array: {err})");
         }
 
         let window = self.graphics.display.gl_window();
         let window = window.window();
 
-        /* Display FPS */
+        // Display FPS
         window.set_title(&format!("Terramine: {0:.0} FPS", self.timer.fps()));
 
-        /* Update ImGui stuff */
+        // Update ImGui stuff
         self.graphics.imguip
             .prepare_frame(self.graphics.imguic.io_mut(), window)
             .expect("failed to prepare frame");
 
-        /* Moves to `RedrawRequested` stage */
+        // Moves to `RedrawRequested` stage
         window.request_redraw();
     }
 
     /// Prepares the frame.
     async fn redraw_requested(&mut self) {
-        /* InGui draw data */
+        // InGui draw data
         let draw_data = {
-            /* Get UI frame renderer */
+            // Get UI frame renderer
             let ui = self.graphics.imguic.new_frame();
 
-            /* Camera window */
+            // Camera window
             self.camera.spawn_control_window(ui);
 
-            /* Profiler window */
+            // Profiler window
             profiler::update_and_build_window(ui, &self.timer);
 
-            /* Render UI */
+            // Render UI
             self.graphics.imguip.prepare_render(ui, self.graphics.display.gl_window().window());
 
-            /* Chunk array control window */
+            // Chunk array control window
             self.chunk_arr.spawn_control_window(ui);
 
-            /* Loadings window */
-            loading::spawn_info_window(ui);
+            // Draw all windows by callbacks
+            for builder in self.imgui_window_builders.iter() {
+                builder(ui)
+            }
 
-            /* Logger window */
-            logger::spawn_window(ui);
-
-            /* Generator window */
-            crate::app::utils::terrain::voxel::generator::spawn_control_window(ui);
-
-            /* Light control window */
+            // Light control window
             for light in self.lights.iter_mut().take(1) {
                 light.spawn_control_window(ui);
             }
@@ -260,8 +259,8 @@ impl App where Self: 'static {
 
                 light_proj: self.lights[0].cam.get_ortho(64.0, 64.0),
                 light_view: self.lights[0].cam.get_view(),
-                light_dir: self.lights[0].cam.front.as_array(),
-                light_pos: self.lights[0].cam.pos.as_array(),
+                light_dir:  self.lights[0].cam.front.as_array(),
+                light_pose: self.lights[0].cam.pos.as_array(),
 
                 time: self.timer.time(),
                 aspect_ratio: self.camera.aspect_ratio,
@@ -311,7 +310,7 @@ impl App where Self: 'static {
 
         // Loading recieve.
         loading::recv_all().unwrap_or_else(|err|
-            logger::log!(Error, "app", format!("failed to receive all loadings: {err}"))
+            logger::log!(Error, from = "app", "failed to receive all loadings: {err}")
         );
 
         // Log messages receive.

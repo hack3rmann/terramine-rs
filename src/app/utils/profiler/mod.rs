@@ -4,16 +4,14 @@ pub extern crate profiler as profiler_target_macro;
 pub use profiler_target_macro::profiler_target;
 
 use {
-    crate::app::utils::{
+    crate::{
+        prelude::*,
         time::timer::Timer,
-        cfg,
     },
     std::{
-        collections::HashMap,
         time::Instant,
         sync::Mutex,
     },
-    lazy_static::lazy_static,
 };
 
 pub mod prelude {
@@ -46,7 +44,7 @@ pub struct Profile {
 
 impl Profile {
     /// Creates new profile
-    pub fn new(target_name: &str) -> Self {
+    pub fn new(target_name: impl ToOwned<Owned = String>) -> Self {
         Self {
             target_name: target_name.to_owned(),
             measures: vec![],
@@ -82,7 +80,7 @@ pub struct Profiler {
     pub profiles: HashMap<MeasureId, Profile>,
 }
 
-static DRAWING_ENABLED: Mutex<bool> = Mutex::new(false);
+static IS_DRAWING_ENABLED: AtomicBool = AtomicBool::new(false);
 
 lazy_static! {
     static ref PROFILER: Mutex<Profiler> = Mutex::new(Profiler {
@@ -93,7 +91,7 @@ lazy_static! {
 /// Adds profile
 pub fn add_profile(profile: Profile, id: MeasureId) {
     PROFILER.lock()
-        .expect("mutex should be not poisoned")
+        .unwrap()
         .profiles
         .insert(id, profile);
 }
@@ -101,18 +99,18 @@ pub fn add_profile(profile: Profile, id: MeasureId) {
 /// Uploads measure
 pub fn upload_measure(measure: &Measure) {
     PROFILER.lock()
-        .expect("mutex should be not poisoned")
+        .unwrap()
         .profiles
         .get_mut(&measure.id)
-        .unwrap_or_else(|| panic!("{}", "measure {measure:?} should be in measure map"))
+        .unwrap_or_else(|| panic!("measure {measure:?} should be in measure map"))
         .measures
         .push(measure.value)
 }
 
 /// Starting capturing to to profile under given `id`.
-pub fn start_capture(target_name: &str, id: MeasureId) -> Measure {
+pub fn start_capture(target_name: impl ToOwned<Owned = String>, id: MeasureId) -> Measure {
     let is_already_captured = PROFILER.lock()
-        .expect("mutex should be not poisoned")
+        .unwrap()
         .profiles
         .get(&id)
         .is_some();
@@ -126,16 +124,11 @@ pub fn start_capture(target_name: &str, id: MeasureId) -> Measure {
 
 /// Updates profiler and builds ImGui window.
 pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer) {
-    use crate::app::utils::user_io::keyboard;
-
     if keyboard::just_pressed(cfg::key_bindings::ENABLE_PROFILER_WINDOW) {
-        let mut guard = DRAWING_ENABLED.lock()
-            .expect("DRAWING_ENABLED mutex shuold be not poisoned");
-        *guard = !*guard;
+        let _ = IS_DRAWING_ENABLED.fetch_update(AcqRel, Relaxed, |prev| Some(!prev));
     }
 
-    let mut lock = PROFILER.lock()
-        .expect("mutex should be not poisoned");
+    let mut lock = PROFILER.lock().unwrap();
     let data = lock.profiles
         .iter_mut()
         .map(|(_, profile)| {
@@ -167,12 +160,8 @@ pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer) {
 /// Updates profiler:
 /// * Clears measures
 pub fn update() {
-    let mut lock = PROFILER.lock()
-        .expect("mutex should be not poisoned");
-    let profiles = lock.profiles
-        .iter_mut();
-
-    for (_, profile) in profiles {
+    let mut lock = PROFILER.lock().unwrap();
+    for (_, profile) in lock.profiles.iter_mut() {
         profile.measures.clear()
     }
 }
@@ -181,7 +170,7 @@ pub fn update() {
 pub fn build_window(ui: &imgui::Ui, profiler_result: DataSummary) {
     use crate::app::utils::graphics::ui::imgui_constructor::make_window;
 
-    if !profiler_result.is_empty() && *DRAWING_ENABLED.lock().expect("mutex should be not poisoned") {
+    if !profiler_result.is_empty() && IS_DRAWING_ENABLED.load(Relaxed) {
         make_window(ui, "Profiler")
             .always_auto_resize(true)
             .build(|| {

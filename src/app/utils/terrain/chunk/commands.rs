@@ -30,7 +30,7 @@ pub enum Command {
 
 pub fn command(command: Command) {
     COMMAND_CHANNEL.lock()
-        .expect("mutex should be not poisoned")
+        .unwrap()
         .sender
         .send(command)
         .expect("failed to send command");

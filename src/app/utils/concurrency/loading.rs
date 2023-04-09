@@ -94,14 +94,14 @@ impl Loadings {
 
 pub fn spawn_info_window(ui: &imgui::Ui) {
     LOADINGS.lock()
-        .expect("mutex should be not poisoned")
+        .unwrap()
         .loads
         .spawn_info_window(ui)
 }
 
 pub fn recv_all() -> Result<(), LoadingError> {
     LOADINGS.lock()
-        .expect("mutex should be not poisoned")
+        .unwrap()
         .recv_all()
 }
 
@@ -127,7 +127,7 @@ lazy_static! {
 
 pub fn make_sender() -> CommandSender<'static> {
     LOADINGS.lock()
-        .expect("mutex should be not poisoned")
+        .unwrap()
         .tx
         .clone()
 }

@@ -101,7 +101,7 @@ impl Chunk {
                 let (color_sum, n_colors) = chunk_iter
                     .filter_map(|pos| match self.get_voxel_local(pos) {
                         None => {
-                            logger::log!(Error, "chunk", format!("failed to get voxel by pos {pos}"));
+                            logger::log!(Error, from = "chunk", "failed to get voxel by pos {pos}");
                             None
                         },
                         some => some,
@@ -170,7 +170,7 @@ impl Chunk {
         pos_iter
             .filter_map(|pos| match self.get_voxel_local(pos) {
                 None => {
-                    logger::log!(Error, "chunk", "failed to get voxel from pos {pos}");
+                    logger::log!(Error, from = "chunk", "failed to get voxel from pos {pos}");
                     None
                 },
                 some => some,
@@ -190,20 +190,22 @@ impl Chunk {
                                     ChunkOption::Voxel(voxel) => voxel.is_air(),
                                     ChunkOption::OutsideChunk => true,
                                     ChunkOption::Failed => {
-                                        logger::log!(Error, "chunk", format!(
+                                        logger::log!(
+                                            Error, from = "chunk",
                                             "caught on failed chunk voxel in {pos}",
                                             pos = voxel.pos + offset,
-                                        ));
+                                        );
                                         true
                                     },
                                 }
                             },
 
                             ChunkOption::Failed => {
-                                logger::log!(Error, "chunk", format!(
+                                logger::log!(
+                                    Error, from = "chunk",
                                     "caught on failed chunk voxel in {pos}",
                                     pos = voxel.pos + offset,
-                                ));
+                                );
                                 true
                             },
                         }
@@ -245,14 +247,14 @@ impl Chunk {
         let coord_idx = iterator::idx_to_coord_idx(partition_idx, USize3::all(2));
         let chunk_adj = Self::optimize_chunk_adj_for_partitioning(chunk_adj.clone(), coord_idx);
 
-        let start_pos = Int3::from(coord_idx * (Chunk::SIZES / 2));
+        let start_pos = Int3::from(coord_idx * Chunk::SIZES / 2);
         let end_pos   = start_pos + Int3::from(Chunk::SIZES / 2);
 
         SpaceIter::new(start_pos..end_pos)
             .filter_map(|pos| match self.get_voxel_local(pos) {
                 some @ Some(_) => some,
                 None => {
-                    logger::log!(Error, "chunk", "failed to get voxel from pos {pos}");
+                    logger::log!(Error, from = "chunk", "failed to get voxel from pos {pos}");
                     None
                 },
             })
@@ -271,20 +273,22 @@ impl Chunk {
                                     ChunkOption::Voxel(voxel) => voxel.is_air(),
                                     ChunkOption::OutsideChunk => true,
                                     ChunkOption::Failed => {
-                                        logger::log!(Error, "chunk", format!(
+                                        logger::log!(
+                                            Error, from = "chunk",
                                             "caught on failed chunk voxel in {pos}",
                                             pos = voxel.pos + offset,
-                                        ));
+                                        );
                                         true
                                     },
                                 }
                             },
 
                             ChunkOption::Failed => {
-                                logger::log!(Error, "chunk", format!(
+                                logger::log!(
+                                    Error, from = "chunk",
                                     "caught on failed chunk voxel in {pos}",
                                     pos = voxel.pos + offset,
-                                ));
+                                );
                                 true
                             },
                         }
@@ -353,7 +357,7 @@ impl Chunk {
                                 ChunkOption::OutsideChunk => unreachable!("Can't fall out of an adjacent chunk"),
                                 ChunkOption::Voxel(voxel) => !voxel.is_air(),
                                 ChunkOption::Failed => {
-                                    logger::log!(Error, "chunk", format!("caught failed chunk voxel in {pos}"));
+                                    logger::log!(Error, from = "chunk", "caught failed chunk voxel in {pos}");
                                     false
                                 },
                             },
@@ -363,7 +367,7 @@ impl Chunk {
                     ChunkOption::Voxel(voxel) => !voxel.is_air(),
 
                     ChunkOption::Failed => {
-                        logger::log!(Error, "chunk", format!("caught failed chunk voxel in {pos}"));
+                        logger::log!(Error, from = "chunk", "caught failed chunk voxel in {pos}");
                         false
                     },
                 };
@@ -472,13 +476,18 @@ impl Chunk {
     /// Generates voxel id array.
     pub fn generate_voxels(chunk_pos: Int3, chunk_array_sizes: USize3) -> Vec<Atomic<Id>> {
         Self::global_pos_iter(chunk_pos)
-            .map(|pos| Atomic::new(
-                if pos.y <= gen::perlin(pos, chunk_array_sizes) {
-                    LOG_VOXEL_DATA.id
+            .map(|pos| Atomic::new({
+                let height = gen::perlin(pos, chunk_array_sizes);
+                if pos.y <= height - 5 {
+                    STONE_VOXEL_DATA.id
+                } else if pos.y <= height - 1 {
+                    DIRT_VOXEL_DATA.id
+                } else if pos.y <= height {
+                    GRASS_VOXEL_DATA.id
                 } else {
                     AIR_VOXEL_DATA.id
                 }
-            ))
+            }))
             .collect()
     }
 
@@ -687,12 +696,7 @@ impl Chunk {
 
     /// Converts all in-chunk world positions to that chunk position.
     pub fn local_pos(world_pos: Int3) -> Int3 {
-        let size = Self::SIZE as i32;
-        Int3::new(
-            world_pos.x.div_euclid(size),
-            world_pos.y.div_euclid(size),
-            world_pos.z.div_euclid(size),
-        )
+        world_pos.div_euclid(Int3::from(Self::SIZES))
     }
 
     /// Computes global position from relative to chunk position.
