@@ -92,7 +92,7 @@ macro_rules! log_dbg {
     ($expr:expr) => {{
         use $crate::app::utils::logger::log;
         let result = $expr;
-        log!(Info, "dbg", format!("{} = {:?}", stringify!($expr), result));
+        log!(Info, from = "dbg", "{expr} = {result:?}", expr = stringify!($expr));
         result
     }};
 }
@@ -199,4 +199,45 @@ pub fn spawn_window(ui: &imgui::Ui) {
                 ui.text_colored(color, &format!("[LOG]: {msg}"));
             }
         });
+}
+
+pub trait LogError<T> {
+    fn log_error(self, from: impl Into<CowStr>, msg: impl Into<CowStr>) -> T where T: Default;
+    fn log_error_or(self, from: impl Into<CowStr>, msg: impl Into<CowStr>, default: T) -> T;
+    fn log_error_or_else(self, from: impl Into<CowStr>, msg: impl Into<CowStr>, f: impl FnOnce() -> T) -> T;
+}
+
+impl<T, E: std::error::Error> LogError<T> for Result<T, E> {
+    fn log_error(self, from: impl Into<CowStr>, msg: impl Into<CowStr>) -> T where T: Default {
+        match self {
+            Ok(item) => item,
+            Err(err) => {
+                let msg = msg.into();
+                log!(Error, from = from, "{msg}: {err}");
+                Default::default()
+            }
+        }
+    }
+
+    fn log_error_or(self, from: impl Into<CowStr>, msg: impl Into<CowStr>, default: T) -> T {
+        match self {
+            Ok(item) => item,
+            Err(err) => {
+                let msg = msg.into();
+                log!(Error, from = from, "{msg}: {err}");
+                default
+            }
+        }
+    }
+
+    fn log_error_or_else(self, from: impl Into<CowStr>, msg: impl Into<CowStr>, f: impl FnOnce() -> T) -> T {
+        match self {
+            Ok(item) => item,
+            Err(err) => {
+                let msg = msg.into();
+                log!(Error, from = from, "{msg}: {err}");
+                f()
+            }
+        }
+    }
 }

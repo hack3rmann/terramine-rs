@@ -47,28 +47,24 @@ impl MessageBox {
         use flags::*;
         self.flags.button = button::OK;
         self.flags.icon = icon::ERROR;
-
         self
     }
 
     /// Configures info flags.
     pub fn infod(mut self) -> Self {
         self.flags = Default::default();
-
         self
     }
 
     /// Configures custom flags.
     pub fn cfg_flags(mut self, flags: Flags) -> Self {
         self.flags.merge(&flags);
-
         self
     }
 
     /// Configures `other` part of flags.
     pub fn cfg_other(mut self, other: u32) -> Self {
         self.flags.other |= other;
-
         self
     }
 
@@ -204,7 +200,7 @@ impl From<i32> for MessageBoxResult {
             7  => No,
             10 => TryAgain,
             11 => Continue,
-            _ => panic!("Unresolved enum variant {}!", num),
+            _ => panic!("Unresolved enum variant {num}!"),
         }
     }
 }

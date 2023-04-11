@@ -1,5 +1,5 @@
 use {
-    crate::app::utils::logger,
+    crate::prelude::*,
     std::{io::{Cursor, self}, fs, path::{Path, PathBuf}},
     glium::{
         uniforms::SamplerWrapFunction,
@@ -11,9 +11,11 @@ use {
 
 /// Texture struct.
 /// Contains texture stuff.
-#[derive(Debug)]
+#[derive(Debug, Deref)]
 pub struct Texture {
     pub path: PathBuf,
+
+    #[deref]
     pub inner: Texture2d,
 }
 
@@ -44,7 +46,7 @@ impl Texture {
     }
 
     /// Adds mips to texture uniform.
-    pub fn with_mips(&self) -> Sampler<Texture2d> {
+    pub fn get_sampler(&self) -> Sampler<Texture2d> {
         Sampler::new(&self.inner)
             .magnify_filter(MagnifySamplerFilter::Nearest)
             .minify_filter(MinifySamplerFilter::NearestMipmapNearest)

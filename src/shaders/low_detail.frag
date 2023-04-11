@@ -14,8 +14,10 @@ out vec3 out_position;
 
 uniform sampler2D texture_atlas;
 uniform sampler2D normal_atlas;
-uniform vec3 light_pos;
-uniform vec3 light_dir;
+
+uniform vec3 light_pos0;
+uniform vec3 light_dir0;
+
 uniform bool is_shadow_pass;
 uniform float time;
 
@@ -31,7 +33,7 @@ void main() {
 }
 
 void shade_standart() {
-    out_albedo = 0.65 * vec3(
+    out_albedo = 1.02 * vec3(
         pow(v_color.r, 0.4545),
         pow(v_color.g, 0.4545),
         pow(v_color.b, 0.4545)

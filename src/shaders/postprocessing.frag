@@ -2,7 +2,7 @@
 
 in vec2 v_frag_texcoord;
 
-out vec4 color;
+out vec4 out_color;
 
 uniform sampler2D depth_texture;
 uniform sampler2D albedo_texture;
@@ -10,15 +10,22 @@ uniform sampler2D normal_texture;
 uniform sampler2D position_texture;
 uniform sampler2D light_depth_texture;
 uniform float time;
-uniform vec3 light_dir;
-uniform vec3 light_pos;
-uniform mat4 light_proj;
-uniform mat4 light_view;
+
+uniform vec3 light_dir0;
+uniform vec3 light_pos0;
+uniform mat4 light_proj0;
+uniform mat4 light_view0;
+
+uniform vec3 light_dir1;
+uniform vec3 light_pos1;
+uniform mat4 light_proj1;
+uniform mat4 light_view1;
+
+uniform vec2 screen_resolution;
 uniform vec3 cam_pos;
 uniform mat4 proj;
 uniform mat4 view;
 uniform bool render_shadows;
-uniform float aspect_ratio;
 
 /// These constants are shared. See cfg module.
 vec4 default_color = vec4(0.01, 0.01, 0.01, 1.0);
@@ -64,7 +71,7 @@ float get_light_depth() {
 float get_shadow_small(vec4 frag_pos, float current_depth) {
     float shadow_glitch_brightness_shift = 0.13;
 
-    vec4 frag_pos_light_space = light_proj * light_view * frag_pos;
+    vec4 frag_pos_light_space = light_proj0 * light_view0 * frag_pos;
     vec3 proj_coords = frag_pos_light_space.xyz / frag_pos_light_space.w;
     proj_coords = proj_coords * 0.5 + 0.5;
 
@@ -78,7 +85,7 @@ float get_shadow_small(vec4 frag_pos, float current_depth) {
     current_depth = linearize_depth(proj_coords.z, z_near, z_far);
     bool is_shadow = current_depth - 0.0003 > closest_depth;
 
-    color = vec4(vec3(closest_depth), 1.0);
+    out_color = vec4(vec3(closest_depth), 1.0);
 
     return is_shadow
         ? shadow_brightness
@@ -109,11 +116,13 @@ float get_shadow(vec4 frag_pos, float current_depth) {
 }
 
 bool is_cross() {
-    vec2 pos = v_frag_texcoord.xy * 2.0 - 1.0;
-    pos.y *= aspect_ratio;
+    vec2 crosshair_sizes = vec2(3.5, 21.5);
 
-    return abs(pos.x) <= 0.002 && abs(pos.y) <= 0.010 ||
-           abs(pos.x) <= 0.010 && abs(pos.y) <= 0.002;
+    vec2 pos = (v_frag_texcoord.xy * 2.0 - 1.0) * screen_resolution;
+    pos = round(pos);
+
+    return abs(pos.x) <= crosshair_sizes.x && abs(pos.y) <= crosshair_sizes.y ||
+           abs(pos.x) <= crosshair_sizes.y && abs(pos.y) <= crosshair_sizes.x;
 }
 
 void main() {
@@ -127,15 +136,15 @@ void main() {
         light_depth = get_light_depth();
 
     if (normal == vec3(0.0) || depth > z_far * 0.5) {
-        color = default_color;
+        out_color = default_color;
         if (is_cross()) {
-            color = (1.0 - color) * 0.5;
-            color.a = 1.0;
+            out_color = (1.0 - out_color) * 0.5;
+            out_color.a = 1.0;
         }
         return;
     }
 
-    vec3 to_light_dir = -light_dir;
+    vec3 to_light_dir = -light_dir0;
     float brightness = max(0.05, dot(normal, to_light_dir));
 
     vec3 to_cam = normalize(cam_pos - position);
@@ -153,18 +162,18 @@ void main() {
     if (render_shadows)
         shadow = get_shadow(vec4(position, 1.0), depth);
 
-    color = vec4(albedo * brightness + fresnel + specular, 1.0) * shadow * 4.0;
+    out_color = vec4(albedo * brightness + fresnel + specular, 1.0) * shadow * 4.0;
 
     /* Simple gamma-correction */
-    color = vec4(
-        pow(color.r, 0.4545),
-        pow(color.g, 0.4545),
-        pow(color.b, 0.4545),
+    out_color = vec4(
+        pow(out_color.r, 0.4545),
+        pow(out_color.g, 0.4545),
+        pow(out_color.b, 0.4545),
         1.0
     );
 
     if (is_cross()) {
-        color = (1.0 - color) * 0.5;
-        color.a = 1.0;
+        out_color = (1.0 - out_color) * 0.5;
+        out_color.a = 1.0;
     }
 }

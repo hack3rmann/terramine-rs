@@ -12,7 +12,6 @@ use {
     crate::app::utils::{logger, cfg},
     super::window::Window,
     shader::{Shader, ShaderError},
-    vertex_buffer::VertexBuffer,
     surface::{Surface, SurfaceError},
     glium::{
         vertex::BufferCreationError as VertexCreationError,

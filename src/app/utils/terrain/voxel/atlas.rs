@@ -61,11 +61,11 @@ impl UV {
         y_lo += ATLAS_PADDING_F;
         y_hi -= ATLAS_PADDING_F;
 
-        UV { x_lo, x_hi, y_lo, y_hi }.with_inversion()
+        UV { x_lo, x_hi, y_lo, y_hi }.inversed()
     }
 
     /// Useful if texture is inverted
-    pub fn with_inversion(mut self) -> Self {
+    pub fn inversed(mut self) -> Self {
         self.y_lo = 1.0 - self.y_lo;
         self.y_hi = 1.0 - self.y_hi;
         self

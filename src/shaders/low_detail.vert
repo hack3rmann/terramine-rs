@@ -15,10 +15,12 @@ out float v_time;
 uniform float time;
 uniform mat4 proj;
 uniform mat4 view;
-uniform vec3 light_dir;
-uniform vec3 light_pos;
-uniform mat4 light_proj;
-uniform mat4 light_view;
+
+uniform vec3 light_dir0;
+uniform vec3 light_pos0;
+uniform mat4 light_proj0;
+uniform mat4 light_view0;
+
 uniform bool is_shadow_pass;
 
 void process_shadow();
@@ -36,7 +38,7 @@ void main() {
 
 void process_shadow() {
     v_position = position;
-    gl_Position = light_proj * light_view * vec4(position, 1.0);
+    gl_Position = light_proj0 * light_view0 * vec4(position, 1.0);
 }
 
 void shade_standart() {
@@ -45,7 +47,7 @@ void shade_standart() {
     v_normal = get_normal(face_idx);
     v_position = position;
     v_time = time;
-    v_light_dir = light_dir;
+    v_light_dir = light_dir0;
 
     /* Writing to gl_Position */
     gl_Position = proj * view * vec4(position, 1.0);

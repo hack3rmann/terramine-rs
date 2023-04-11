@@ -35,25 +35,27 @@ impl Window {
             .with_resizable(true)
             .with_inner_size(PhysicalSize::new(sizes.x as u32, sizes.y as u32))
             .with_window_icon(Some(Self::load_icon()));
+        
         let window = ContextBuilder::new()
             .with_gl(GlRequest::Latest)
             .with_depth_buffer(24)
             .with_stencil_buffer(8)
-            .with_vsync(true)
+            .with_vsync(false)
             .build_windowed(window, event_loop)
             .expect("failed to build the window");
+
         let window = unsafe {
             window.make_current()
                 .expect("failed to make window as current context")
         };
 
-        Window { window: Some(window) }
+        Self { window: Some(window) }
     }
 
     fn load_icon() -> Icon {
         /* Bytes vector from bmp file */
         /* File formatted in BGRA */
-        let raw_data = include_bytes!("../../../image/TerramineIcon32p.bmp");
+        let raw_data = include_bytes!("../../../image/terramine_icon_32p.bmp");
         let mut raw_data = *raw_data;
 
         /* Bytemap pointer load from 4 bytes of file */

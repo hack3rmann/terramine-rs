@@ -587,7 +587,7 @@ impl ChunkArray {
     /// of concrete [chunk][Chunk]. If it can't then it will do nothing.
     pub async fn render(
         &mut self, target: &mut impl gl::Surface, draw_bundle: &ChunkDrawBundle<'_>,
-        uniforms: &impl gl::uniforms::Uniforms, facade: &dyn gl::backend::Facade, cam: &Camera,
+        uniforms: &impl gl::uniforms::Uniforms, facade: &dyn gl::backend::Facade, cam: &mut Camera,
     ) -> Result<(), ChunkRenderError> {
         #![allow(clippy::await_holding_refcell_ref)]
 

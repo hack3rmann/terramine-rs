@@ -44,9 +44,9 @@ pub struct Profile {
 
 impl Profile {
     /// Creates new profile
-    pub fn new(target_name: impl ToOwned<Owned = String>) -> Self {
+    pub fn new(target_name: impl Into<String>) -> Self {
         Self {
-            target_name: target_name.to_owned(),
+            target_name: target_name.into(),
             measures: vec![],
             max_time: 0.0
         }
@@ -108,7 +108,7 @@ pub fn upload_measure(measure: &Measure) {
 }
 
 /// Starting capturing to to profile under given `id`.
-pub fn start_capture(target_name: impl ToOwned<Owned = String>, id: MeasureId) -> Measure {
+pub fn start_capture(target_name: impl Into<String>, id: MeasureId) -> Measure {
     let is_already_captured = PROFILER.lock()
         .unwrap()
         .profiles
@@ -144,7 +144,7 @@ pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer) {
             Data {
                 name: profile.target_name.as_str(),
                 call_freq: profile.measures.len(),
-                frame_time: time_summary / timer.dt_as_f64(),
+                frame_time: time_summary / timer.dt as f64,
                 time: time_summary,
                 max_time: profile.max_time,
             }

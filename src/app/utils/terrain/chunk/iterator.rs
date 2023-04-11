@@ -283,19 +283,15 @@ impl SpaceIter {
             })
     }
 
-    pub fn adj_iter(pos: Int3) -> smallvec::IntoIter<[Int3; 6]> {
-        use smallvec::smallvec;
-
-        let vals: SmallVec<[Int3; 6]> = smallvec![
+    pub fn adj_iter(pos: Int3) -> std::array::IntoIter<Int3, 6> {
+        [
             pos + veci!( 1,  0,  0),
             pos + veci!(-1,  0,  0),
             pos + veci!( 0,  1,  0),
             pos + veci!( 0, -1,  0),
             pos + veci!( 0,  0,  1),
             pos + veci!( 0,  0, -1),
-        ];
-
-        vals.into_iter()
+        ].into_iter()
     }
 
     fn coord_idx_from_idx(idx: usize, sizes: USize3) -> USize3 {

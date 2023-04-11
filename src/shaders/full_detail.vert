@@ -11,15 +11,17 @@ out vec3 v_normal;
 out vec3 v_tangent;
 out vec3 v_bitangent;
 out vec3 v_position;
-out mat3 to_world;
+out mat3 v_to_world;
 
 uniform float time;
 uniform mat4 proj;
 uniform mat4 view;
-uniform vec3 light_dir;
-uniform vec3 light_pos;
-uniform mat4 light_proj;
-uniform mat4 light_view;
+
+uniform vec3 light_dir0;
+uniform vec3 light_pos0;
+uniform mat4 light_proj0;
+uniform mat4 light_view0;
+
 uniform bool is_shadow_pass;
 
 vec3 normals[] = {
@@ -56,7 +58,7 @@ void process_shadow() {
     v_position = position;
 
     /* Writing to gl_Position */
-    gl_Position = light_proj * light_view * vec4(position, 1.0);
+    gl_Position = light_proj0 * light_view0 * vec4(position, 1.0);
 }
 
 void shade_standart() {
@@ -72,7 +74,7 @@ void shade_standart() {
         v_bitangent.y, v_tangent.y, v_normal.y,
         v_bitangent.z, v_tangent.z, v_normal.z
     );
-    to_world = inverse(to_local);
+    v_to_world = inverse(to_local);
 
     /* Writing to gl_Position */
     gl_Position = proj * view * vec4(position, 1.0);

@@ -458,7 +458,7 @@ impl Chunk {
     }
 
     /// Tests that chunk is visible by camera.
-    pub fn is_visible_by_camera(&self, camera: &Camera) -> bool {
+    pub fn is_visible_by_camera(&self, camera: &mut Camera) -> bool {
         let global_chunk_pos = Chunk::global_pos(self.pos.load(Relaxed));
         let global_chunk_pos = vec3::from(global_chunk_pos) * Voxel::SIZE;
 
@@ -480,7 +480,7 @@ impl Chunk {
                 let height = gen::perlin(pos, chunk_array_sizes);
                 if pos.y <= height - 5 {
                     STONE_VOXEL_DATA.id
-                } else if pos.y <= height - 1 {
+                } else if pos.y < height {
                     DIRT_VOXEL_DATA.id
                 } else if pos.y <= height {
                     GRASS_VOXEL_DATA.id
@@ -546,21 +546,32 @@ impl Chunk {
             )
         }
 
-        let old_id = self.voxel_ids[idx].load(Acquire);
-
-        match self.info.load(Relaxed).fill_type {
-            FillType::Default => if old_id != new_id {
-                self.voxel_ids[idx].store(new_id, Release);
-                self.optimize();
+        let old_id = match self.info.load(Relaxed).fill_type {
+            FillType::Default => {
+                let old_id = self.voxel_ids[idx].swap(new_id, AcqRel);
+                if old_id != new_id { self.optimize() }
+                old_id
             },
 
-            FillType::AllSame(id) => if id != new_id {
+            FillType::AllSame(old_id) => if old_id != new_id {
                 self.unoptimyze();
-                self.voxel_ids[idx].store(new_id, Release);
+                self.voxel_ids[idx].swap(new_id, AcqRel)
+            } else {
+                old_id
             },
-        }
+        };
 
         Ok(old_id)
+    }
+
+    /// Sets new voxel [`id`][Id] to voxel by index.
+    /// 
+    /// # Safety
+    /// 
+    /// 1. `idx` < `Chunk::VOLUME`
+    /// 2. `self.info.fill_type` should be [`FillType::Default`].
+    pub unsafe fn set_id_fast(&self, idx: usize, new_id: Id) -> Id {
+        self.voxel_ids.get_unchecked(idx).swap(new_id, AcqRel)
     }
 
     /// Sets voxel's id with position `pos` to `new_id` and returns old [id][Id]. If voxel is 
@@ -597,6 +608,8 @@ impl Chunk {
         Self::global_to_local_pos_checked(pos, pos_to - Int3::ONE)?;
         let local_pos_to = Self::global_to_local_pos(pos, pos_to);
 
+        self.unoptimyze();
+
         let mut is_changed = false;
 
         for local_pos in SpaceIter::new(local_pos_from..local_pos_to) {
@@ -606,13 +619,16 @@ impl Chunk {
             let old_id = self.get_id(idx).expect("idx should be valid");
             if old_id != new_id {
                 is_changed = true;
-                self.set_id(idx, new_id)?;
+
+                // * Safety:
+                // * Safe, because `idx` is valid and `self` is unoptimized.
+                unsafe {
+                    self.set_id_fast(idx, new_id);
+                }
             }
         }
 
-        if is_changed {
-            self.optimize();
-        }
+        self.optimize();
 
         Ok(is_changed)
     }

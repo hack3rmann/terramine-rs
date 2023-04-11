@@ -1,7 +1,7 @@
 pub use {
     crate::{
         profiler::prelude::*,
-        logger,
+        logger::{self, LogError},
         reinterpreter::*,
         cfg,
         user_io::{keyboard, mouse, Key},

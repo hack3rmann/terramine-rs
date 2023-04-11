@@ -1,10 +1,7 @@
 use {
     crate::{
         prelude::*,
-        graphics::{
-            vertex_buffer::VertexBuffer,
-            mesh::UnindexedMesh,
-        },
+        graphics::mesh::Mesh,
         terrain::{
             chunk::{
                 Chunk,
@@ -16,7 +13,7 @@ use {
     super::*,
     glium::{
         Depth, DepthTest, BackfaceCullingMode,
-        index::PrimitiveType,
+        index::PrimitiveType, VertexBuffer,
         uniforms::Uniforms,
     },
 };
@@ -159,8 +156,10 @@ pub mod data {
             ] as &mut SmallVec<[_; 24]>);
         }
 
-        let vbuffer = VertexBuffer::no_indices(facade, &vertices, PrimitiveType::LinesList);
-        UnindexedMesh::new(vbuffer)
+        let vbuffer = VertexBuffer::new(facade, &vertices)
+            .expect("failed to create vertex buffer");
+        
+        Mesh::new_unindexed(vbuffer, PrimitiveType::LinesList)
     }
 }
 

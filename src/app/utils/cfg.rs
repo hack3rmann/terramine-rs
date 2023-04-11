@@ -19,7 +19,7 @@ pub mod camera {
         pub const NEAR_PLANE:     f32 = 0.5;
         pub const FAR_PLANE:      f32 = 10_000.0;
 
-        pub const SPEED:	      f64 = 10.0;
+        pub const SPEED:	      f32 = 10.0;
         pub const SPEED_FALLOFF:  f32 = 0.88;
         pub const FOV_IN_DEGREES: f32 = 60.0;
     }
@@ -77,7 +77,7 @@ pub mod terrain {
 
         pub const VOXEL_DATA: [VoxelData; 5] = [
             VoxelData { name: "Air",    id: 0, avarage_color: Color::new(0.00, 0.00, 0.00), textures: TextureSides::all(0) },
-            VoxelData { name: "Log",    id: 1, avarage_color: Color::new(0.15, 0.10, 0.05), textures: TextureSides::vertical(3, 1, 1) },
+            VoxelData { name: "Log",    id: 1, avarage_color: Color::new(0.62, 0.52, 0.30), textures: TextureSides::vertical(3, 1, 1) },
             VoxelData { name: "Stone",  id: 2, avarage_color: Color::new(0.45, 0.45, 0.45), textures: TextureSides::all(2) },
             VoxelData { name: "Grass",  id: 3, avarage_color: Color::new(0.40, 0.64, 0.24), textures: TextureSides::vertical(4, 6, 5) },
             VoxelData { name: "Dirt",   id: 4, avarage_color: Color::new(0.59, 0.42, 0.29), textures: TextureSides::all(5) },
@@ -139,4 +139,8 @@ pub mod key_bindings {
     pub const ENABLE_PROFILER_WINDOW:         Key = Key::E;
     pub const SWITCH_RENDER_SHADOWS:          Key = Key::U;
     pub const RELOAD_RESOURCES:               Key = Key::H;
+}
+
+pub mod timer {
+    pub const N_FAMES_TO_MEASURE: usize = 16;
 }

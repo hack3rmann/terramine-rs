@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use {
     crate::app::utils::cfg::terrain::voxel_types::VOXEL_DATA as CFG_VOXEL_DATA,
     math_linear::prelude::*,

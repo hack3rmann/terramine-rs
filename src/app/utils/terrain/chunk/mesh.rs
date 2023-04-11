@@ -2,13 +2,13 @@ use {
     crate::{
         prelude::*,
         graphics::{
-            mesh::{UnindexedMesh, Mesh},
-            shader::Shader, vertex_buffer::VertexBuffer,
+            mesh::{Mesh, UnindexedMesh},
+            shader::Shader,
         },
         terrain::chunk::prelude::*,
     },
     glium::{
-        DrawError, uniforms::Uniforms, Surface,
+        DrawError, uniforms::Uniforms, Surface, VertexBuffer,
         DrawParameters, backend::Facade, index::PrimitiveType,
     },
 };
@@ -102,14 +102,16 @@ impl ChunkMesh {
             let vertices: Vec<_> = meshes.iter()
                 .flat_map(|submesh| submesh
                     .vertices
-                    .inner
                     .as_slice()
                     .read()
                     .expect("failed to read vertex buffer subbuffer")
                 )
                 .collect();
-            let vbuffer = VertexBuffer::no_indices(facade, &vertices, PrimitiveType::TrianglesList);
-            Mesh::new(vbuffer)
+
+            let vbuffer = VertexBuffer::new(facade, &vertices)
+                .expect("failed to create vertex buffer");
+
+            Mesh::new_unindexed(vbuffer, PrimitiveType::TrianglesList)
         } else { return };
 
         self.detailed_mesh.replace(ChunkDetailedMesh::Standart(Box::new(mesh)));
@@ -132,8 +134,10 @@ impl ChunkMesh {
                     panic!("cannot upload only one partititon"),
 
                 ChunkDetailedMesh::Partial(ref mut meshes) => {
-                    let vbuffer = VertexBuffer::no_indices(facade, partition, PrimitiveType::TrianglesList);
-                    let mesh = Mesh::new(vbuffer);
+                    let vbuffer = VertexBuffer::new(facade, partition)
+                        .expect("failed to create vertex buffer");
+                    let mesh = Mesh::new_unindexed(vbuffer, PrimitiveType::TrianglesList);
+
                     meshes[partition_idx] = mesh;
                 },
             }
@@ -143,23 +147,29 @@ impl ChunkMesh {
     /// Sets mesh to chunk.
     pub fn upload_partitioned_vertices(&mut self, vertices: [&[FullVertex]; 8], facade: &dyn Facade) {
         let partitions = array_init(|i| {
-            let vbuffer = VertexBuffer::no_indices(facade, vertices[i], PrimitiveType::TrianglesList);
-            Mesh::new(vbuffer)
+            let vbuffer = VertexBuffer::new(facade, vertices[i])
+                .expect("failed to create vertex buffer");
+
+            Mesh::new_unindexed(vbuffer, PrimitiveType::TrianglesList)
         });
         self.detailed_mesh.replace(ChunkDetailedMesh::Partial(Box::new(partitions)));
     }
 
     /// Sets mesh to chunk.
     pub fn upload_full_detail_vertices(&mut self, vertices: &[FullVertex], facade: &dyn Facade) {
-        let vbuffer = VertexBuffer::no_indices(facade, vertices, PrimitiveType::TrianglesList);
-        let mesh = Mesh::new(vbuffer);
+        let vbuffer = VertexBuffer::new(facade, vertices)
+            .expect("failed to create vertex buffer");
+        let mesh = Mesh::new_unindexed(vbuffer, PrimitiveType::TrianglesList);
+        
         self.detailed_mesh.replace(ChunkDetailedMesh::Standart(Box::new(mesh)));
     }
 
     /// Sets mesh to chunk.
     pub fn upload_low_detail_vertices(&mut self, vertices: &[LowVertex], lod: Lod, facade: &dyn Facade) {
-        let vbuffer = VertexBuffer::no_indices(facade, vertices, PrimitiveType::TrianglesList);
-        let mesh = Mesh::new(vbuffer);
+        let vbuffer = VertexBuffer::new(facade, vertices)
+            .expect("failed to create vertex buffer");
+        let mesh = Mesh::new_unindexed(vbuffer, PrimitiveType::TrianglesList);
+
         self.low_meshes[lod as usize - 1].replace(mesh);
     }
 

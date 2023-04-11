@@ -1,51 +1,61 @@
 use {
-    crate::app::utils::graphics::{
-        VertexBuffer,
-        Shader
-    },
+    crate::graphics::Shader,
     glium::{
-        Vertex as TVertex,
+        Vertex,
+        VertexBuffer,
         DrawParameters,
         Surface,
         DrawError,
         uniforms::Uniforms,
-        index::{NoIndices, IndicesSource}
+        backend::Facade,
+        vertex::BufferCreationError,
+        index::{NoIndices, PrimitiveType, IndicesSource}
     },
 };
 
-pub type UnindexedMesh<Vertex> = Mesh<NoIndices, Vertex>;
+pub type UnindexedMesh<V> = Mesh<NoIndices, V>;
 
 /// Handles vertex_buffer and shader.
 #[derive(Debug)]
-pub struct Mesh<Idx, Vertex: Copy> {
-    pub vertices: VertexBuffer<Idx, Vertex>,
+pub struct Mesh<IntoIdx, V: Copy> {
+    pub vertices: VertexBuffer<V>,
+    pub indices: IntoIdx,
 }
 
-impl<Idx, Vertex: Copy> Mesh<Idx, Vertex> {
+impl<'src, IntoIdx, V> Mesh<IntoIdx, V>
+where
+    IntoIdx: Into<IndicesSource<'src>>,
+    V: Vertex,
+{
     /// Constructs new mesh.
-    pub fn new(vertex_buffer: VertexBuffer<Idx, Vertex>) -> Self {
-        Mesh { vertices: vertex_buffer }
+    pub fn new(vertices: VertexBuffer<V>, indices: IntoIdx) -> Self {
+        Self { vertices, indices }
     }
 
     /// Renders mesh.
-    pub fn render<'a, U>(
-        &'a self, target: &mut impl Surface, shader: &Shader,
-        draw_params: &DrawParameters<'_>, uniforms: &U) -> Result<(), DrawError>
+    pub fn render<'s>(
+        &'s self, target: &mut impl Surface, shader: &Shader,
+        draw_params: &DrawParameters<'_>, uniforms: &impl Uniforms
+    ) -> Result<(), DrawError>
     where
-        U: Uniforms,
-        &'a Idx: Into<IndicesSource<'a>>,
+        &'s IntoIdx: Into<IndicesSource<'src>>,
     {
-        target.draw(&self.vertices.inner, &self.vertices.indices, &shader.program, uniforms, draw_params)
+        target.draw(&self.vertices, &self.indices, &shader.program, uniforms, draw_params)
     }
 
-    /// Checks if vertices vector is empty
+    /// Checks if vertices vector is empty.
     pub fn is_empty(&self) -> bool {
-        self.vertices.inner.len() == 0
+        self.vertices.len() == 0
     }
 }
 
-impl <Vertex: Copy + TVertex> Mesh<NoIndices, Vertex> {
-    pub fn new_empty(display: &dyn glium::backend::Facade) -> Self {
-        Mesh { vertices: VertexBuffer::new_empty(display) }
+impl<V: Vertex> UnindexedMesh<V> {
+    pub fn new_unindexed(vertices: VertexBuffer<V>, primitive_type: PrimitiveType) -> Self {
+        Self { vertices, indices: NoIndices(primitive_type) }
+    }
+
+    pub fn new_empty(facade: &dyn Facade, primitive_type: PrimitiveType) -> Result<Self, BufferCreationError> {
+        let vertices = VertexBuffer::new(facade, &[])?;
+        Ok(Self::new_unindexed(vertices, primitive_type))
     }
 }

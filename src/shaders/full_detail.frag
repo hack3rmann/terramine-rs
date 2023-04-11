@@ -2,11 +2,8 @@
 
 /* Input compound */
 in vec2 v_tex_coords;
-in vec3 v_normal;
-in vec3 v_tangent;
-in vec3 v_bitangent;
 in vec3 v_position;
-in mat3 to_world;
+in mat3 v_to_world;
 
 /* Output */
 out vec3 out_albedo;
@@ -16,10 +13,7 @@ out vec3 out_position;
 /* Texture samplter */
 uniform sampler2D texture_atlas;
 uniform sampler2D normal_atlas;
-uniform vec3 light_pos;
-uniform vec3 light_dir;
 uniform bool is_shadow_pass;
-uniform float time;
 
 void process_shadow();
 void shade_standart();
@@ -53,6 +47,6 @@ void shade_standart() {
         discard;
 
     out_albedo = tex_color.rgb;
-    out_normal = to_world * local_normal;
+    out_normal = v_to_world * local_normal;
     out_position = v_position;
 }
