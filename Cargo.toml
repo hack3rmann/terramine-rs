@@ -36,6 +36,7 @@ itertools = "0.10.5"
 atomic = "0.5.1"
 ordered-float = "3.6.0"
 rand = "0.8.5"
+spin = { version = "0.9.8", features = ["mutex", "spin_mutex", "ticket_mutex", "rwlock", "once", "lazy", "barrier", "lock_api"] }
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"

@@ -6,7 +6,7 @@ use {
         terrain::chunk::{Chunk, chunk_array::{GENERATOR_SIZES, ChunkArray}},
     },
     self::noise::Noise2d,
-    std::sync::RwLock,
+    spin::RwLock,
 };
 
 static FREQUENCY: AtomicF32 = AtomicF32::new(0.05);
@@ -53,7 +53,7 @@ pub fn spawn_control_window(ui: &imgui::Ui) {
         });
 
         if ui.button("Build") {
-            let mut noise_vals = NOISE_VALS.write().unwrap();
+            let mut noise_vals = NOISE_VALS.write();
             let _ = mem::replace(&mut *noise_vals, Noise2d::new(
                 SEED.load(Relaxed),
                 (Chunk::SIZES * USize3::from(*GENERATOR_SIZES.lock().unwrap())).xz(),
@@ -72,7 +72,7 @@ pub fn perlin(pos: Int3, chunk_array_sizes: USize3) -> i32 {
         chunk_array_sizes,
     ).expect("failed to convert voxel pos to coord idx");
 
-    NOISE_VALS.read().unwrap()
+    NOISE_VALS.read()
         .map
         .get_value(coord_idx.x, coord_idx.z)
         .round() as i32

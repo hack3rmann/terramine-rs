@@ -476,7 +476,7 @@ impl Chunk {
     /// Generates voxel id array.
     pub fn generate_voxels(chunk_pos: Int3, chunk_array_sizes: USize3) -> Vec<Atomic<Id>> {
         Self::global_pos_iter(chunk_pos)
-            .map(|pos| Atomic::new({
+            .map(|pos| {
                 let height = gen::perlin(pos, chunk_array_sizes);
                 if pos.y <= height - 5 {
                     STONE_VOXEL_DATA.id
@@ -487,7 +487,8 @@ impl Chunk {
                 } else {
                     AIR_VOXEL_DATA.id
                 }
-            }))
+            })
+            .map(Atomic::new)
             .collect()
     }
 
@@ -576,7 +577,9 @@ impl Chunk {
 
     /// Sets voxel's id with position `pos` to `new_id` and returns old [id][Id]. If voxel is 
     /// set then this function should drop all its meshes.
+    /// 
     /// # Error
+    /// 
     /// Returns `Err` if `new_id` is not valid or `pos` is not in this [`Chunk`].
     pub fn set_voxel(&mut self, pos: Int3, new_id: Id) -> Result<Id, EditError> {
         if !voxel::is_id_valid(new_id) {
@@ -776,7 +779,7 @@ impl Chunk {
         }
     }
 
-    /// Partitions [mesh][Mesh] of this [chunk][Chunk].
+    /// Partitions [mesh][crate::graphics::mesh::Mesh] of this [chunk][Chunk].
     pub fn partition_mesh(&self, mesh: &mut ChunkMesh, chunk_adj: ChunkAdj, facade: &dyn gl::backend::Facade) {
         let vertices = self.make_partitioned_vertices(chunk_adj);
         mesh.upload_partitioned_vertices(

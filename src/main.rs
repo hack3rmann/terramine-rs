@@ -1,5 +1,5 @@
 #![cfg_attr(feature = "release", windows_subsystem = "windows")]
-#![feature(generators, generator_trait, get_mut_unchecked)]
+#![feature(generators, generator_trait, get_mut_unchecked, exhaustive_patterns, associated_type_defaults, never_type)]
 
 #[allow(unused_imports)]
 #[macro_use(vecf, veci, vecu, vecs)]

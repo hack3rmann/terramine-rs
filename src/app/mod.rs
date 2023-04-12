@@ -4,7 +4,6 @@ use {
     /* Other files */
     crate::{
         prelude::*,
-        user_io,
         graphics::{
             self,
             light::DirectionalLight,
@@ -17,7 +16,6 @@ use {
             chunk_array::ChunkArray,
             ChunkDrawBundle,
         },
-        time::timer::Timer,
     },
 
     /* Glium includes */
@@ -25,7 +23,7 @@ use {
         Surface,
         glutin::{
             event::{Event, WindowEvent, StartCause},
-            event_loop::ControlFlow,
+            event_loop::{ControlFlow, EventLoopWindowTarget},
             window::WindowId,
         },
     },
@@ -99,15 +97,17 @@ impl App {
 
     /// Runs app. Runs glium's `event_loop`.
     pub fn run(mut self) -> ! {
-        self.graphics.take_event_loop().run(move |event, _, control_flow|
-            RUNTIME.block_on(
-                self.run_frame_loop(event, control_flow)
-            )
-        )
+        let event_loop = self.graphics.take_event_loop();
+        event_loop.run(move |event, elw_target, control_flow| RUNTIME.block_on(
+            self.run_frame_loop(event, elw_target, control_flow)
+        ))
     }
 
     /// Event loop run function.
-    pub async fn run_frame_loop(&mut self, event: Event<'_, ()>, control_flow: &mut ControlFlow) {
+    pub async fn run_frame_loop(
+        &mut self, event: Event<'_, ()>,
+        _elw_target: &EventLoopWindowTarget<()>, control_flow: &mut ControlFlow,
+    ) {
         self.graphics.imguip.handle_event(
             self.graphics.imguic.io_mut(),
             self.graphics.display.gl_window().window(),
@@ -160,7 +160,7 @@ impl App {
             self.graphics.imguic.io().want_text_input
         );
         
-        // Close window is `escape` pressed
+        // Close window if `escape` pressed
         if keyboard::just_pressed(cfg::key_bindings::APP_EXIT) {
             *control_flow = ControlFlow::Exit;
             self.chunk_arr.drop_tasks();

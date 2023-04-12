@@ -149,12 +149,12 @@ pub mod shape {
             let (x, y, z) = position.as_tuple();
             let face_idx = FRONT_IDX as u8;
 
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), face_idx });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), face_idx });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), face_idx });
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), face_idx });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), face_idx });
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), face_idx });
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.hi.x, uv.hi.y), face_idx });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.hi.x, uv.lo.y), face_idx });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.lo.x, uv.lo.y), face_idx });
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.hi.x, uv.hi.y), face_idx });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.lo.x, uv.lo.y), face_idx });
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.lo.x, uv.hi.y), face_idx });
         }
 
         /// Cube back face vertex array.
@@ -166,12 +166,12 @@ pub mod shape {
             let (x, y, z) = position.as_tuple();
             let face_idx = BACK_IDX as u8;
 
-            vertices.push(FullVertex { position: (self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), face_idx });
-            vertices.push(FullVertex { position: (self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), face_idx });
-            vertices.push(FullVertex { position: (self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), face_idx });
-            vertices.push(FullVertex { position: (self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), face_idx });
-            vertices.push(FullVertex { position: (self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), face_idx });
-            vertices.push(FullVertex { position: (self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), face_idx });
+            vertices.push(FullVertex { position: (self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.lo.x, uv.hi.y), face_idx });
+            vertices.push(FullVertex { position: (self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.hi.x, uv.hi.y), face_idx });
+            vertices.push(FullVertex { position: (self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.hi.x, uv.lo.y), face_idx });
+            vertices.push(FullVertex { position: (self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.lo.x, uv.hi.y), face_idx });
+            vertices.push(FullVertex { position: (self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.hi.x, uv.lo.y), face_idx });
+            vertices.push(FullVertex { position: (self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.lo.x, uv.lo.y), face_idx });
         }
 
         /// Cube top face vertex array.
@@ -183,12 +183,12 @@ pub mod shape {
             let (x, y, z) = position.as_tuple();
             let face_idx = TOP_IDX as u8;
 
-            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), face_idx });
-            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), face_idx });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), face_idx });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), face_idx });
-            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), face_idx });
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), face_idx });
+            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.lo.x, uv.hi.y), face_idx });
+            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.hi.x, uv.hi.y), face_idx });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.lo.x, uv.lo.y), face_idx });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.lo.x, uv.lo.y), face_idx });
+            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.hi.x, uv.hi.y), face_idx });
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.hi.x, uv.lo.y), face_idx });
         }
 
         /// Cube bottom face vertex array.
@@ -200,12 +200,12 @@ pub mod shape {
             let (x, y, z) = position.as_tuple();
             let face_idx = BOTTOM_IDX as u8;
 
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), face_idx });
-            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), face_idx });
-            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), face_idx });
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), face_idx });
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), face_idx });
-            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), face_idx });
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.lo.x, uv.lo.y), face_idx });
+            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.hi.x, uv.hi.y), face_idx });
+            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.lo.x, uv.hi.y), face_idx });
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.lo.x, uv.lo.y), face_idx });
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.hi.x, uv.lo.y), face_idx });
+            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.hi.x, uv.hi.y), face_idx });
         }
 
         /// Cube left face vertex array.
@@ -217,12 +217,12 @@ pub mod shape {
             let (x, y, z) = position.as_tuple();
             let face_idx = LEFT_IDX as u8;
 
-            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), face_idx }); // 0 (uv.x_lo, uv.y_lo)
-            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), face_idx }); // 1 (uv.x_lo, uv.y_hi)
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), face_idx }); // 2 (uv.x_hi, uv.y_hi)
-            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), face_idx }); // 0
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), face_idx }); // 2
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), face_idx }); // 3 (uv.x_hi, uv.y_lo)
+            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.lo.x, uv.hi.y), face_idx }); // 0 (uv.x_lo, uv.y_lo)
+            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.lo.x, uv.lo.y), face_idx }); // 1 (uv.x_lo, uv.y_hi)
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.hi.x, uv.lo.y), face_idx }); // 2 (uv.x_hi, uv.y_hi)
+            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.lo.x, uv.hi.y), face_idx }); // 0
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y, -self.half_size + z), tex_coords: (uv.hi.x, uv.lo.y), face_idx }); // 2
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y, -self.half_size + z), tex_coords: (uv.hi.x, uv.hi.y), face_idx }); // 3 (uv.x_hi, uv.y_lo)
         }
 
         /// Cube right face vertex array.
@@ -234,12 +234,12 @@ pub mod shape {
             let (x, y, z) = position.as_tuple();
             let face_idx = RIGHT_IDX as u8;
 
-            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), face_idx }); // lolo (uv.x_lo, uv.y_lo)
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), face_idx }); // hihi
-            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_lo), face_idx }); // lohi (uv.x_lo, uv.y_hi)
-            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_lo, uv.y_hi), face_idx }); // lolo (uv.x_lo, uv.y_lo)
-            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_hi), face_idx }); // hilo
-            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.x_hi, uv.y_lo), face_idx }); // hihi
+            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.lo.x, uv.hi.y), face_idx }); // lolo (uv.x_lo, uv.y_lo)
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.hi.x, uv.lo.y), face_idx }); // hihi
+            vertices.push(FullVertex { position: ( self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.lo.x, uv.lo.y), face_idx }); // lohi (uv.x_lo, uv.y_hi)
+            vertices.push(FullVertex { position: ( self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.lo.x, uv.hi.y), face_idx }); // lolo (uv.x_lo, uv.y_lo)
+            vertices.push(FullVertex { position: (-self.half_size + x, -self.half_size + y,  self.half_size + z), tex_coords: (uv.hi.x, uv.hi.y), face_idx }); // hilo
+            vertices.push(FullVertex { position: (-self.half_size + x,  self.half_size + y,  self.half_size + z), tex_coords: (uv.hi.x, uv.lo.y), face_idx }); // hihi
         }
 
         /// Cube all sides.
