@@ -3,11 +3,12 @@
 //! 
 
 use {
+    crate::prelude::*,
     winapi::{
         um::winuser::GetCursorPos,
         shared::windef::POINT,
     },
-    std::{collections::{HashMap, HashSet}, sync::{RwLock, Mutex, atomic::{AtomicBool, Ordering}}},
+    std::sync::{RwLock, Mutex},
     glium::glutin::{
         event::{
             ElementState,
@@ -18,9 +19,6 @@ use {
         window::CursorGrabMode,
         dpi::PhysicalPosition,
     },
-    lazy_static::lazy_static,
-    math_linear::prelude::*,
-    thiserror::Error,
 };
 
 pub use glium::glutin::event::VirtualKeyCode as Key;
@@ -38,38 +36,33 @@ pub mod keyboard {
     pub static IS_INPUT_CAPTURED: AtomicBool = AtomicBool::new(false);
 
     pub fn set_input_capture(capture: bool) {
-        IS_INPUT_CAPTURED.store(capture, Ordering::SeqCst);
+        IS_INPUT_CAPTURED.store(capture, Relaxed);
     }
 
     pub fn press(key: Key) {
-        INPUTS.write()
-            .unwrap()
+        INPUTS.write().unwrap()
             .insert(key, ElementState::Pressed);
     }
 
     pub fn release(key: Key) {
-        INPUTS.write()
-            .unwrap()
+        INPUTS.write().unwrap()
             .remove(&key);
     }
 
     pub fn is_pressed(key: Key) -> bool {
-        let is_pressed = INPUTS.read()
-            .unwrap()
+        let is_pressed = INPUTS.read().unwrap()
             .contains_key(&key);
-        let is_captured = IS_INPUT_CAPTURED.load(Ordering::Relaxed);
+        let is_captured = IS_INPUT_CAPTURED.load(Relaxed);
 
         is_pressed && !is_captured
     }
 
     pub fn just_pressed(key: Key) -> bool {
-        let inputs = INPUTS.read()
-            .unwrap();
+        let inputs = INPUTS.read().unwrap();
 
         let is_pressed = inputs.contains_key(&key);
-        if is_pressed && !IS_INPUT_CAPTURED.load(Ordering::Relaxed) {
-            RELEASED_KEYS.lock()
-                .unwrap()
+        if is_pressed && !IS_INPUT_CAPTURED.load(Relaxed) {
+            RELEASED_KEYS.lock().unwrap()
                 .insert(key);
             true
         } else {
@@ -89,7 +82,7 @@ pub mod keyboard {
     {
         let keys = keys.into_iter();
         let is_pressed = is_pressed_combo(keys.clone());
-        let is_captured = IS_INPUT_CAPTURED.load(Ordering::SeqCst);
+        let is_captured = IS_INPUT_CAPTURED.load(Relaxed);
 
         if is_pressed && !is_captured {
             let mut released_keys = RELEASED_KEYS.lock()
@@ -104,11 +97,9 @@ pub mod keyboard {
     }
 
     pub fn update_input() {
-        let mut input = INPUTS.write()
-            .unwrap();
+        let mut input = INPUTS.write().unwrap();
 
-        let mut released_keys = RELEASED_KEYS.lock()
-            .unwrap();
+        let mut released_keys = RELEASED_KEYS.lock().unwrap();
 
         for key in released_keys.iter() {
             input.remove(key);
@@ -138,26 +129,23 @@ pub mod mouse {
     pub(super) static IS_ON_WINDOW: AtomicBool = AtomicBool::new(false);
     pub(super) static IS_GRABBED: AtomicBool = AtomicBool::new(false);
 
-    pub fn get_x() -> f32 { X.load(Ordering::Relaxed) }
-    pub fn get_y() -> f32 { Y.load(Ordering::Relaxed) }
-    pub fn get_dx_dt() -> f32 { DX.load(Ordering::Relaxed) }
-    pub fn get_dy_dt() -> f32 { DY.load(Ordering::Relaxed) }
+    pub fn get_x() -> f32 { X.load(Relaxed) }
+    pub fn get_y() -> f32 { Y.load(Relaxed) }
+    pub fn get_dx_dt() -> f32 { DX.load(Relaxed) }
+    pub fn get_dy_dt() -> f32 { DY.load(Relaxed) }
 
     pub fn press(button: MouseButton) {
-        INPUTS.write()
-            .unwrap()
+        INPUTS.write().unwrap()
             .insert(button);
     }
 
     pub fn release(button: MouseButton) {
-        INPUTS.write()
-            .unwrap()
+        INPUTS.write().unwrap()
             .remove(&button);
     }
 
     pub fn is_pressed(button: MouseButton) -> bool {
-        INPUTS.read()
-            .unwrap()
+        INPUTS.read().unwrap()
             .contains(&button)
     }
 
@@ -165,8 +153,7 @@ pub mod mouse {
         let is_pressed = is_pressed(button);
 
         if is_pressed {
-            RELEASED_KEYS.lock()
-                .unwrap()
+            RELEASED_KEYS.lock().unwrap()
                 .insert(button);
         }
 
@@ -200,8 +187,7 @@ pub mod mouse {
     /// Update mouse delta.
     pub fn update(window: &glium::glutin::window::Window) -> Result<(), MouseError> {
         {
-            let mut released_keys = RELEASED_KEYS.lock()
-                .unwrap();
+            let mut released_keys = RELEASED_KEYS.lock().unwrap();
 
             let mut inputs = INPUTS.write()
                 .expect("rwlock should be not poisoned");
@@ -215,26 +201,26 @@ pub mod mouse {
 
         /* Get cursor position from WinAPI */
         let (x, y) = get_cursor_pos(window)?.as_tuple();
-        let prev_x = X.load(Ordering::SeqCst);
-        let prev_y = Y.load(Ordering::SeqCst);
+        let prev_x = X.load(Acquire);
+        let prev_y = Y.load(Acquire);
 
         /* Update struct */
-        X.store(x, Ordering::SeqCst);
-        Y.store(y, Ordering::SeqCst);
-        DX.store(x - prev_x, Ordering::SeqCst);
-        DY.store(y - prev_y, Ordering::SeqCst);
+        X.store(x, Release);
+        Y.store(y, Release);
+        DX.store(x - prev_x, Release);
+        DY.store(y - prev_y, Release);
 
         /* Get window size */
         let wsize = window.inner_size();
 
         /* If cursor grabbed then not change mouse position and put cursor on center */
-        if IS_GRABBED.load(Ordering::SeqCst) {
+        if IS_GRABBED.load(Relaxed) {
             window.set_cursor_position(
                 PhysicalPosition::new(wsize.width / 2, wsize.height / 2)
             ).expect("failed to set cursor position");
             
-            X.store((wsize.width  / 2) as f32, Ordering::SeqCst);
-            Y.store((wsize.height / 2) as f32, Ordering::SeqCst);
+            X.store((wsize.width  / 2) as f32, Release);
+            Y.store((wsize.height / 2) as f32, Release);
         }
 
         Ok(())
@@ -270,7 +256,7 @@ pub mod mouse {
             .expect("failed to set cursor grab");
         window.set_cursor_visible(false);
 
-        IS_GRABBED.store(true, Ordering::Relaxed);
+        IS_GRABBED.store(true, Relaxed);
     }
 
     /// Releases cursor for standart input.
@@ -279,7 +265,7 @@ pub mod mouse {
             .expect("failed to release cursor");
         window.set_cursor_visible(true);
 
-        IS_GRABBED.store(false, Ordering::Relaxed);
+        IS_GRABBED.store(false, Relaxed);
     }
 
     #[derive(Debug, Error)]
@@ -317,18 +303,17 @@ pub fn handle_event(event: &Event<()>, window: &glium::glutin::window::Window) {
 
             /* Cursor entered the window event. */
             WindowEvent::CursorEntered { .. } =>
-                mouse::IS_ON_WINDOW.store(true, Ordering::Relaxed),
+                mouse::IS_ON_WINDOW.store(true, Relaxed),
 
             /* Cursor left the window. */
             WindowEvent::CursorLeft { .. } =>
-                mouse::IS_ON_WINDOW.store(false, Ordering::Relaxed),
+                mouse::IS_ON_WINDOW.store(false, Relaxed),
 
             WindowEvent::Focused(focused) => {
                 /* If window has unfocused then release cursor. */
-                let mut is_regrabbed = CURSOR_REGRABBED.lock()
-                    .unwrap();
+                let mut is_regrabbed = CURSOR_REGRABBED.lock().unwrap();
 
-                let is_grabbed = mouse::IS_GRABBED.load(Ordering::SeqCst);
+                let is_grabbed = mouse::IS_GRABBED.load(Relaxed);
                 if *focused && *is_regrabbed && !is_grabbed {
                     mouse::grab_cursor(window);
                     *is_regrabbed = false;

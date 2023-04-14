@@ -1,10 +1,8 @@
 use {
-    crate::app::utils::{
+    crate::{
+        prelude::*,
         graphics::camera::Camera,
-    },
-    math_linear::prelude::*,
-    portable_atomic::AtomicF32,
-    std::sync::atomic::Ordering,
+    }
 };
 
 #[derive(Debug, Default)]
@@ -24,16 +22,16 @@ impl DirectionalLight {
             static ANGLES: (AtomicF32, AtomicF32) = (AtomicF32::new(0.3), AtomicF32::new(5.7));
 
             let (mut horizontal, mut vertical) = (
-                ANGLES.0.load(Ordering::SeqCst),
-                ANGLES.1.load(Ordering::SeqCst),
+                ANGLES.0.load(Acquire),
+                ANGLES.1.load(Acquire),
             );
 
             ui.text("Rotation");
             ui.slider("Horizontal", 0.0, 2.0 * PI, &mut horizontal);
             ui.slider("Vertical",   0.0, 2.0 * PI, &mut vertical);
 
-            ANGLES.0.store(horizontal, Ordering::SeqCst);
-            ANGLES.1.store(vertical, Ordering::SeqCst);
+            ANGLES.0.store(horizontal, Release);
+            ANGLES.1.store(vertical, Release);
 
             self.cam.front = vec3::new(
                 f32::cos(vertical) * f32::cos(horizontal),

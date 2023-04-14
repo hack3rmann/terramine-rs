@@ -109,9 +109,7 @@ pub mod data {
             };
 
             let color = color.map(|c| {
-                let lod_coef = 1.0
-                                - active_lod as f32 / Chunk::N_LODS as f32
-                                + 0.001;
+                let lod_coef = 1.0 - active_lod as f32 / Chunk::N_LODS as f32 + 0.001;
                 c * (lod_coef * 0.7 + 0.3)
             });
 
@@ -176,7 +174,7 @@ impl<'s> DebugVisualized<'s, ChunkArray> {
         &mut self, facade: &dyn glium::backend::Facade,
         target: &mut impl glium::Surface, uniforms: &impl Uniforms,
     ) -> Result<(), glium::DrawError> {
-        if ENABLED.load(Ordering::SeqCst) {
+        if ENABLED.load(Ordering::Relaxed) {
             self.mesh = data::construct_mesh(self, facade).await;
         
             let shader = data::get(facade).shader;

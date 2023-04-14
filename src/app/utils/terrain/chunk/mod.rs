@@ -475,21 +475,24 @@ impl Chunk {
 
     /// Generates voxel id array.
     pub fn generate_voxels(chunk_pos: Int3, chunk_array_sizes: USize3) -> Vec<Atomic<Id>> {
-        Self::global_pos_iter(chunk_pos)
-            .map(|pos| {
-                let height = gen::perlin(pos, chunk_array_sizes);
-                if pos.y <= height - 5 {
-                    STONE_VOXEL_DATA.id
-                } else if pos.y < height {
-                    DIRT_VOXEL_DATA.id
-                } else if pos.y <= height {
-                    GRASS_VOXEL_DATA.id
-                } else {
-                    AIR_VOXEL_DATA.id
-                }
-            })
-            .map(Atomic::new)
-            .collect()
+        let mut result = Vec::with_capacity(Self::VOLUME);
+
+        for pos in Self::global_pos_iter(chunk_pos) {
+            let height = gen::perlin(pos, chunk_array_sizes);
+            let id = if pos.y <= height - 5 {
+                STONE_VOXEL_DATA.id
+            } else if pos.y < height {
+                DIRT_VOXEL_DATA.id
+            } else if pos.y <= height {
+                GRASS_VOXEL_DATA.id
+            } else {
+                AIR_VOXEL_DATA.id
+            };
+
+            result.push(Atomic::new(id));
+        }
+
+        result
     }
 
     /// Generates a chunk.
@@ -517,13 +520,13 @@ impl Chunk {
     /// Makes a [chunk][Chunk] out of voxel_ids.
     /// 
     /// # Panic
+    /// 
     /// Panics if `voxel_ids.len()` is not equal to `Chunk::VOLUME` or `0`.
     pub fn from_voxels(voxel_ids: Vec<Atomic<Id>>, chunk_pos: Int3) -> Self {
         let len = voxel_ids.len();
         assert!(
             len == Self::VOLUME || len == 0,
-            "`voxel_ids.len()` should be equal to `Chunk::VOLUME` or `0`, but it's {}",
-            len,
+            "`voxel_ids.len()` should be equal to `Chunk::VOLUME` or `0`, but it's {len}",
         );
 
         Self {
@@ -539,6 +542,7 @@ impl Chunk {
     /// Returns old [id][Id].
     /// 
     /// # Error
+    /// 
     /// Returns [`Err`] if `idx` is out of bounds.
     pub fn set_id(&mut self, idx: usize, new_id: Id) -> Result<Id, EditError> {
         if Self::VOLUME <= idx {

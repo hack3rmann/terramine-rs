@@ -18,7 +18,7 @@ pub use {
     math_linear::prelude::*,
     user_error::UserFacingError,
     std::{
-        sync::Arc, rc::Rc, cell::{RefCell, Cell}, mem,
+        sync::Arc, rc::Rc, cell::{RefCell, Cell}, mem, pin::Pin,
         collections::{HashMap, HashSet, VecDeque},
         sync::atomic::{
             AtomicUsize, AtomicBool, AtomicI16, AtomicI32, AtomicI64,

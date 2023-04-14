@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use {
+    derive_deref_rs::Deref,
     winapi::{
         um::{
             winuser::MessageBoxA,
@@ -69,24 +70,15 @@ impl MessageBox {
     }
 
     /// Shows message.
-    pub fn show(self) -> result::Result {
+    pub fn show(self) -> Result<MessageBoxSuccess, MessageBoxError> {
         unsafe {
-            match message_box(std::ptr::null_mut(), self.body.as_ptr(), self.title.as_ptr(), self.flags.compose()) {
-                MessageBoxResult::Error => Err(GetLastError()),
-                result => Ok(result),
-            }
+            message_box(std::ptr::null_mut(), self.body.as_ptr(), self.title.as_ptr(), self.flags.compose())
+                .map_err(|_err| MessageBoxError(GetLastError() as i32))
         }
     }
 }
 
-pub mod result {
-    use super::MessageBoxResult;
-    use std::result::Result as SResult;
-
-    pub type Result = SResult<MessageBoxResult, u32>;
-}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Hash)]
 pub struct Flags {
     pub button: u32,
     pub icon: u32,
@@ -172,10 +164,11 @@ pub mod flags {
     }
 }
 
-#[derive(Debug)]
-pub enum MessageBoxResult {
-    Error = 0,
+#[derive(Debug, Clone, Copy, Hash, PartialEq, PartialOrd, Ord, Eq, Default)]
+pub enum MessageBoxSuccess {
+    #[default]
     Ok = 1,
+
     Cancel = 2,
     Abort = 3,
     Retry = 4,
@@ -186,27 +179,24 @@ pub enum MessageBoxResult {
     Continue = 11,
 }
 
-impl From<i32> for MessageBoxResult {
-    fn from(num: i32) -> Self {
-        use MessageBoxResult::*;
+#[derive(Debug, Clone, Copy, Hash, PartialEq, PartialOrd, Ord, Eq, Default, Deref)]
+pub struct MessageBoxError(i32);
 
-        match num {
-            1  => Ok,
-            2  => Cancel,
-            3  => Abort,
-            4  => Retry,
-            5  => Ignore,
-            6  => Yes,
-            7  => No,
-            10 => TryAgain,
-            11 => Continue,
-            _ => panic!("Unresolved enum variant {num}!"),
-        }
+unsafe fn message_box(
+    hwnd: HWND, lp_text: LPCSTR, lp_caption: LPCSTR, flags: UINT
+) -> Result<MessageBoxSuccess, MessageBoxError> {
+    match MessageBoxA(hwnd, lp_text, lp_caption, flags) {
+        1  => Ok(MessageBoxSuccess::Ok),
+        2  => Ok(MessageBoxSuccess::Cancel),
+        3  => Ok(MessageBoxSuccess::Abort),
+        4  => Ok(MessageBoxSuccess::Retry),
+        5  => Ok(MessageBoxSuccess::Ignore),
+        6  => Ok(MessageBoxSuccess::Yes),
+        7  => Ok(MessageBoxSuccess::No),
+        10 => Ok(MessageBoxSuccess::TryAgain),
+        11 => Ok(MessageBoxSuccess::Continue),
+        other => Err(MessageBoxError(other)),
     }
-}
-
-unsafe fn message_box(hwnd: HWND, lp_text: LPCSTR, lp_caption: LPCSTR, flags: UINT) -> MessageBoxResult {
-    MessageBoxA(hwnd, lp_text, lp_caption, flags).into()
 }
 
 #[cfg(test)]
