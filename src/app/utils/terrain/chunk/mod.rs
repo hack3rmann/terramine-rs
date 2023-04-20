@@ -10,7 +10,7 @@ use {
     crate::{
         prelude::*,
         graphics::{
-            shader::Shader,
+            glium_shader::Shader,
             camera::Camera,
         },
     },
@@ -444,6 +444,7 @@ impl Chunk {
     /// Gives voxel from local position (relative to chunk).
     /// 
     /// # Panic
+    /// 
     /// Panics if [chunk][Chunk] is not already had been generated or `local_pos` is not local.
     pub fn get_voxel_local(&self, local_pos: Int3) -> Option<Voxel> {
         if !self.is_generated() { return None }

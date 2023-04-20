@@ -1,15 +1,13 @@
 use {
-    crate::app::utils::{
+    crate::{
+        prelude::*,
         cfg::save::{HEAP_FILE_EXTENSION, STACK_FILE_EXTENSION},
-        reinterpreter::*,
     },
     super::{Offset, Size},
     std::{
-        collections::HashSet,
         ops::Range,
         path::Path,
     },
-    thiserror::Error,
     tokio::{
         fs::{self, File, OpenOptions},
         io::{self, AsyncReadExt, AsyncWriteExt, AsyncSeekExt, SeekFrom},
@@ -38,33 +36,28 @@ pub type StackHeapResult<T> = Result<T, StackHeapError>;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Alloc {
-    pub(self) stack_offset: Offset,
-    pub(self) heap_offset: Offset,
-    pub(self) size: Size,
-}
-
-#[allow(dead_code)]
-impl Alloc {
-    pub fn get_stack_offset(self) -> Offset { self.stack_offset }
-    pub fn get_heap_offset(self) -> Offset { self.heap_offset }
-    pub fn get_size(self) -> Offset { self.size }
+    pub stack_offset: Offset,
+    pub heap_offset: Offset,
+    pub size: Size,
 }
 
 #[derive(Debug)]
 pub struct StackHeap {
-    pub stack: File,
-    pub stack_ptr: Offset,
+    pub stack_file: File,
+    pub stack_offset: Offset,
 
-    pub heap: File,
+    pub heap_file: File,
     pub eof: Offset,
     freed_space: HashSet<Range<Offset>>,
 }
 
 impl StackHeap {
     /// Makes new StackHeap struct and new directory for their files.
-    pub async fn new(path: &str, name: &str) -> io::Result<Self> {
+    pub async fn new(path: impl AsRef<Path>, name: &str) -> io::Result<Self> {
+        let path = path.as_ref();
+
         /* Create directory if this path doesn't exist */
-        if !Path::new(path).exists() {
+        if !path.exists() {
             fs::create_dir(path).await?;
         }
 
@@ -72,29 +65,29 @@ impl StackHeap {
             .write(true)
             .read(true)
             .create(true)
-            .open(format!("{path}/{name}.{STACK_FILE_EXTENSION}"))
+            .open(path.join(name).with_extension(STACK_FILE_EXTENSION))
             .await?;
 
         let heap = OpenOptions::new()
             .write(true)
             .read(true)
             .create(true)
-            .open(format!("{path}/{name}.{HEAP_FILE_EXTENSION}"))
+            .open(path.join(name).with_extension(HEAP_FILE_EXTENSION))
             .await?;
         
         Ok(Self {
-            stack,
-            heap,
-            stack_ptr: 0,
+            stack_file: stack,
+            heap_file: heap,
+            stack_offset: 0,
             eof: 0,
             freed_space: HashSet::new(),
         })
     }
 
     /// Saves the files.
-    pub async fn sync(&self) -> std::io::Result<()> {
-        self.stack.sync_all().await?;
-        self.heap.sync_all().await?;
+    pub async fn sync_all(&self) -> std::io::Result<()> {
+        self.stack_file.sync_all().await?;
+        self.heap_file.sync_all().await?;
 
         Ok(())
     }
@@ -116,26 +109,25 @@ impl StackHeap {
     /// Pushes data to stack. Returns an offset of the data.
     pub async fn push(&mut self, data: &[u8]) -> io::Result<Offset> {
         /* Write new data */
-        let offset = self.stack_ptr;
-        Self::seek_write(&mut self.stack, data, offset).await?;
+        let offset = self.stack_offset;
+        Self::seek_write(&mut self.stack_file, data, offset).await?;
 
         /* Increment stack pointer */
-        self.stack_ptr += data.len() as Size;
+        self.stack_offset += data.len() as Size;
 
         Ok(offset)
     }
 
     /// Writes data to stack by its offset.
     pub async fn write_to_stack(&mut self, offset: Offset, data: &[u8]) -> io::Result<()> {
-        Self::seek_write(&mut self.stack, data, offset).await?;
-        Ok(())
+        Self::seek_write(&mut self.stack_file, data, offset).await
     }
 
     /// Reads value from stack.
     pub async fn read_from_stack<T: FromBytes + StaticSize>(&mut self, offset: Offset) -> io::Result<T> {
         /* Read bytes */
         let mut buffer = vec![0; T::static_size()];
-        Self::seek_read(&mut self.stack, &mut buffer, offset).await?;
+        Self::seek_read(&mut self.stack_file, &mut buffer, offset).await?;
 
         /* Reinterpret */
         Ok(T::from_bytes(&buffer).expect("failed to make T from bytes"))
@@ -147,14 +139,14 @@ impl StackHeap {
         /* Read size */
         let size = {
             let mut buffer = vec![0; Size::static_size()];
-            Self::seek_read(&mut self.heap, &mut buffer, heap_offset).await?;
+            Self::seek_read(&mut self.heap_file, &mut buffer, heap_offset).await?;
             Size::from_bytes(&buffer)
                 .expect("failed to make Size from bytes")
         };
 
         /* Read data */
         let mut buffer = vec![0; size as usize];
-        Self::seek_read(&mut self.heap, &mut buffer, heap_offset + Size::static_size() as Size).await?;
+        Self::seek_read(&mut self.heap_file, &mut buffer, heap_offset + Size::static_size() as Size).await?;
 
         Ok(buffer)
     }
@@ -176,14 +168,14 @@ impl StackHeap {
         }
     }
 
-    /// Allocates space on heap. Returns an Alloc struct that contains all information about this allocation.
+    /// Allocates space on heap. Returns [`Alloc`] that contains all information about this allocation.
     pub async fn alloc(&mut self, size: Size) -> io::Result<Alloc> {
         /* Test freed memory */
         let full_size = size + Offset::static_size() as Size;
         let heap_offset = self.get_available_offset(full_size);
 
         /* Save size of data to heap */
-        Self::seek_write(&mut self.heap, &size.as_bytes(), heap_offset).await?;
+        Self::seek_write(&mut self.heap_file, &size.as_bytes(), heap_offset).await?;
 
         /* Save this offset on stack */
         let stack_offset = self.push(&heap_offset.as_bytes()).await?;
@@ -198,7 +190,7 @@ impl StackHeap {
         let heap_offset = self.read_from_stack(stack_offset).await?;
         let before_size = {
             let mut buffer = vec![0; Size::static_size()];
-            Self::seek_read(&mut self.heap, &mut buffer, heap_offset).await?;
+            Self::seek_read(&mut self.heap_file, &mut buffer, heap_offset).await?;
             Size::from_bytes(&buffer)
                 .expect("failed to make Size from bytes")
         };
@@ -214,7 +206,7 @@ impl StackHeap {
             let heap_offset = self.get_available_offset(full_size);
 
             /* Save size of data to heap */
-            Self::seek_write(&mut self.heap, &size.as_bytes(), heap_offset).await?;
+            Self::seek_write(&mut self.heap_file, &size.as_bytes(), heap_offset).await?;
 
             /* Save this offset on stack */
             self.write_to_stack(stack_offset, &heap_offset.as_bytes()).await?;
@@ -227,13 +219,13 @@ impl StackHeap {
             }
 
             /* Write size to heap */
-            Self::seek_write(&mut self.heap, &size.as_bytes(), heap_offset).await?;
+            Self::seek_write(&mut self.heap_file, &size.as_bytes(), heap_offset).await?;
 
             Ok(Alloc { stack_offset, heap_offset, size })
         }
     }
 
-    /// Stoles available offset from heap. It can edit freed_space so it is expensive.
+    /// Stoles available offset from heap.
     /// * Note: size is a full size of allocation, include size mark in heap
     fn get_available_offset(&mut self, size: Size) -> Offset {
         match self.freed_space.iter().find(|range| range.end >= size + range.start).cloned() {
@@ -261,7 +253,7 @@ impl StackHeap {
     /// Writes bytes to heap. Alloc struct must be passed in. It's a contract to write to available allocated chunk of bytes.
     pub async fn write_to_heap(&mut self, Alloc { size, heap_offset: offset, .. }: Alloc, data: &[u8]) -> StackHeapResult<()> {
         if size >= data.len() as Size {
-            Self::seek_write(&mut self.heap, data, offset + Size::static_size() as Size).await?;
+            Self::seek_write(&mut self.heap_file, data, offset + Size::static_size() as Size).await?;
             Ok(())
         } else {
             Err(StackHeapError::NotEnoughMemory {
@@ -278,7 +270,7 @@ impl StackHeap {
         let heap_offset: Offset = self.read_from_stack(stack_offset).await?;
         let size = {
             let mut buffer = vec![0; Size::static_size()];
-            Self::seek_read(&mut self.heap, &mut buffer, heap_offset).await?;
+            Self::seek_read(&mut self.heap_file, &mut buffer, heap_offset).await?;
 
             /* Note: Size mark in heap is included */
             let size = Size::from_bytes(&buffer)
@@ -338,18 +330,18 @@ mod tests {
             let alloc_64 = file.alloc(64).await.unwrap();
             file.write_to_heap(alloc_64, &bytes_64).await.unwrap();
 
-            let alloc_128 = file.realloc(128, alloc_64.get_stack_offset()).await.unwrap();
+            let alloc_128 = file.realloc(128, alloc_64.stack_offset).await.unwrap();
             file.write_to_heap(alloc_128, &bytes_128).await.unwrap();
 
             let alloc_64_rev = file.alloc(64).await.unwrap();
             file.write_to_heap(alloc_64_rev, &bytes_64_rev).await.unwrap();
 
-            let bytes_after = file.read_from_heap(alloc_128.get_heap_offset()).await.unwrap();
-            let bytes_rev_after = file.read_from_heap(alloc_64_rev.get_heap_offset()).await.unwrap();
+            let bytes_after = file.read_from_heap(alloc_128.heap_offset).await.unwrap();
+            let bytes_rev_after = file.read_from_heap(alloc_64_rev.heap_offset).await.unwrap();
 
             assert_eq!(bytes_128, bytes_after);
             assert_eq!(bytes_64_rev, bytes_rev_after);
-            assert_eq!(file.stack_ptr, 2 * Offset::static_size() as Size);
+            assert_eq!(file.stack_offset, 2 * Offset::static_size() as Size);
             assert_eq!(file.eof, 64 + 128 + 2 * Size::static_size() as Size);
         });
     }
@@ -371,17 +363,17 @@ mod tests {
             let alloc_64_2 = file.alloc(64).await.unwrap();
             file.write_to_heap(alloc_64_2, &bytes_64).await.unwrap();
 
-            assert_eq!(bytes_64, file.read_from_heap(alloc_64_1.get_heap_offset()).await.unwrap());
-            assert_eq!(bytes_64, file.read_from_heap(alloc_64_2.get_heap_offset()).await.unwrap());
+            assert_eq!(bytes_64, file.read_from_heap(alloc_64_1.heap_offset).await.unwrap());
+            assert_eq!(bytes_64, file.read_from_heap(alloc_64_2.heap_offset).await.unwrap());
 
-            file.free(alloc_64_1.get_stack_offset()).await.unwrap();
-            file.free(alloc_64_2.get_stack_offset()).await.unwrap();
+            file.free(alloc_64_1.stack_offset).await.unwrap();
+            file.free(alloc_64_2.stack_offset).await.unwrap();
 
             let alloc_128 = file.alloc(128).await.unwrap();
             file.write_to_heap(alloc_128, &bytes_128).await.unwrap();
 
-            assert_eq!(bytes_128, file.read_from_heap(alloc_128.get_heap_offset()).await.unwrap());
-            assert_eq!(file.stack_ptr, 3 * Offset::static_size() as Size);
+            assert_eq!(bytes_128, file.read_from_heap(alloc_128.heap_offset).await.unwrap());
+            assert_eq!(file.stack_offset, 3 * Offset::static_size() as Size);
             assert_eq!(file.eof, 2 * 64 + 2 * Size::static_size() as Size);
 
             let range = 128 + Size::static_size() as Size .. 2 * (64 + Size::static_size() as Size);

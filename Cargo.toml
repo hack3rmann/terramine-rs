@@ -18,9 +18,8 @@ tokio-stream = "0.1.12"
 math_linear = { version = "0.1.0", path = "../math_linear" }
 thiserror = "1.0.40"
 rayon = "1.7.0"
-winit = "0.28.3"
+winit = "0.27.5"
 derive-deref-rs = "0.1.1"
-types = { version = "0.1.0", path = "../types" }
 lazy_static = "1.4.0"
 portable-atomic = { version = "1.2.0", features = ["float"] }
 huffman-compress = "0.6.1"
@@ -37,6 +36,13 @@ atomic = "0.5.1"
 ordered-float = "3.6.0"
 rand = "0.8.5"
 spin = { version = "0.9.8", features = ["mutex", "spin_mutex", "ticket_mutex", "rwlock", "once", "lazy", "barrier", "lock_api"] }
+wgpu = "0.15.1"
+imgui-wgpu = "0.22.0"
+static_assertions = "1.1.0"
+env_logger = "0.10.0"
+log = "0.4.17"
+pollster = "0.3.0"
+bytemuck = { version = "1.13.1", features = ["derive"] }
 
 [target.'cfg(windows)'.build-dependencies]
 winres = "0.1.12"

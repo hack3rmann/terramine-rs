@@ -3,9 +3,9 @@
 in vec4 position;
 in vec2 texcoord;
 
-out vec2 v_frag_texcoord;
+out vec2 frag_uv;
 
 void main() {
-    v_frag_texcoord = texcoord;
+    frag_uv = texcoord;
     gl_Position = position;
 }

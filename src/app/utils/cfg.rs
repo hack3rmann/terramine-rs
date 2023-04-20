@@ -115,7 +115,7 @@ pub mod shader {
     pub const CLEAR_STENCIL: i32 = 0;
     
     /// That constant is shared with shader. See `postprocessing.frag`.
-    pub const CLEAR_COLOR: (f32, f32, f32, f32) = (0.01, 0.01, 0.01, 1.0);
+    pub const CLEAR_COLOR: (f32, f32, f32, f32) = (0.03, 0.03, 0.03, 1.0);
 
     pub mod voxel {
         pub mod light {

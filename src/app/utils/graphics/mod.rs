@@ -1,152 +1,270 @@
-pub mod shader;
+pub mod glium_shader;
 pub mod texture;
 pub mod camera;
-pub mod mesh;
+pub mod glium_mesh;
 pub mod debug_visuals;
 pub mod ui;
 pub mod light;
 pub mod surface;
+pub mod mesh;
+pub mod shader;
 
 use {
-    crate::app::utils::{logger, cfg},
-    super::window::Window,
-    shader::{Shader, ShaderError},
-    surface::{Surface, SurfaceError},
-    glium::{
-        vertex::BufferCreationError as VertexCreationError,
-        index::BufferCreationError as IndexCreationError,
-        glutin::{
-            event_loop::EventLoop,
-            event::{
-                Event,
-                WindowEvent,
-            },
-            dpi,
-        },
+    crate::{
+        prelude::*,
+        window::Window,
     },
-    std::{path::PathBuf, pin::Pin},
-    derive_deref_rs::Deref,
-    math_linear::prelude::*,
-    thiserror::Error,
-    imgui_glium_renderer::{
-        Renderer as ImguiRenderer,
-        RendererError as ImguiRendererError,
+    mesh::{Mesh, Bufferizable},
+    shader::Shader,
+    wgpu::{
+        Device, Queue, Adapter, Instance as WgpuInstance,
     },
+    winit::event_loop::EventLoop,
+    std::path::PathBuf,
 };
 
-#[derive(Clone, Copy, Debug)]
-pub struct QuadVertex {
-    pub position: [f32; 4],
-    pub texcoord: [f32; 2],
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Default, Pod, Zeroable)]
+pub struct TestVertex {
+    position: [f32; 2],
+    color: [f32; 3],
 }
 
-glium::implement_vertex! { QuadVertex, position, texcoord }
+impl Bufferizable for TestVertex {
+    const ATTRS: &'static [wgpu::VertexAttribute] =
+        &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x3];
 
-#[derive(Debug)]
-pub struct QuadDrawResources {
-    pub shader: Shader,
-    pub vertices: glium::VertexBuffer<QuadVertex>,
-    pub indices: glium::IndexBuffer<u16>,
+    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: mem::size_of::<Self>() as u64,
+        step_mode: wgpu::VertexStepMode::Vertex,
+        attributes: &Self::ATTRS,
+    };
 }
 
-/// Struct that handles graphics.
+const TEST_VERTICES: [TestVertex; 3] = [
+    TestVertex { position: [ 0.0,  0.5], color: [1.0, 0.0, 0.0] },
+    TestVertex { position: [-0.5, -0.5], color: [0.0, 1.0, 0.0] },
+    TestVertex { position: [ 0.5, -0.5], color: [0.0, 0.0, 1.0] },
+];
+
+/// Graphics handler.
 pub struct Graphics {
-    /* Gluim main struct */
-    pub display: Pin<Box<glium::Display>>,
+    pub window: Window,
+    pub surface: wgpu::Surface,
+    pub adapter: Adapter,
+    pub device: Arc<Device>,
+    pub queue: Queue,
+    pub config: wgpu::SurfaceConfiguration,
 
-    /* OpenGL pipeline stuff */
+    pub test_mesh: Mesh<TestVertex>,
+
     pub event_loop:	Option<EventLoop<()>>,
 
-    /* ImGui stuff */
-    pub imguic: imgui::Context,
-    pub imguip: imgui_winit_support::WinitPlatform,
-    pub imguir: ImguiRendererWrapper,
-
-    /* Deferred rendering stuff */
-    pub surface: Surface<'static>,
-    pub quad_draw_resources: QuadDrawResources,
+    pub imgui: ImGui,
 }
 
 impl Graphics {
     /// Creates new [`Graphics`] that holds some renderer stuff.
-    pub fn new() -> Result<Self, GraphicsError> {
+    pub async fn new() -> Result<Self, winit::error::OsError> {
         let _log_guard = logger::work("graphics", "initialization");
 
-        /* Glutin event loop */
-        let event_loop = EventLoop::new();
-
         const DEFAULT_SIZES: USize2 = cfg::window::default::SIZES;
+        
+        // Window creation
+        let event_loop = EventLoop::new();
+        let window = Window::from(&event_loop, DEFAULT_SIZES)?;
 
-        /* Window creation */
-        let window = Window::from(&event_loop, DEFAULT_SIZES).take_window();
+        // ------------ WGPU initialization ------------
 
-        /* Create ImGui context ant set settings file name. */
-        let mut imgui_context = imgui::Context::create();
-        imgui_context.set_ini_filename(Some(PathBuf::from(r"src/imgui_settings.ini")));
+        let wgpu_instance = WgpuInstance::new(
+            wgpu::InstanceDescriptor {
+                backends: wgpu::Backends::DX12 | wgpu::Backends::VULKAN,
+                dx12_shader_compiler: Default::default(),
+            }
+        );
 
-        /* Bound ImGui to winit. */
-        let mut winit_platform = imgui_winit_support::WinitPlatform::init(&mut imgui_context);
-        winit_platform.attach_window(imgui_context.io_mut(), window.window(), imgui_winit_support::HiDpiMode::Rounded);
-
-        /* Bad start size fix */
-        let dummy_event: Event<()> = Event::WindowEvent {
-            window_id: window.window().id(),
-            event: WindowEvent::Resized(dpi::PhysicalSize::new(DEFAULT_SIZES.x as u32, DEFAULT_SIZES.y as u32))
+        // # Safety
+        //
+        // `Graphics` owns both the `window` and the `surface` so it
+        // lives as long as wgpu's `Surface`.
+        let surface = unsafe {
+            wgpu_instance.create_surface(&*window)
+                .expect("context should be not WebGL2")
         };
-        winit_platform.handle_event(imgui_context.io_mut(), window.window(), &dummy_event);
 
-        /* Style configuration. */
+        let adapter = wgpu_instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: Default::default(),
+                force_fallback_adapter: false,
+                compatible_surface: Some(&surface)
+            })
+            .await
+            .expect("failed to find an appropriate adapter");
+
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                label: None,
+                features: wgpu::Features::empty(),
+                limits: wgpu::Limits::default(),
+            }, None)
+            .await
+            .expect("failed to create device");
+        let device = Arc::new(device);
+
+        let swapchain_capabilities = surface.get_capabilities(&adapter);
+        let swapchain_format = *swapchain_capabilities.formats.get(0)
+            .expect("failed to get swap chain format 0: the surface is incompatible with the adapter");
+        
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format: swapchain_format,
+            width: DEFAULT_SIZES.x as u32,
+            height: DEFAULT_SIZES.y as u32,
+            present_mode: swapchain_capabilities.present_modes[0],
+            alpha_mode: swapchain_capabilities.alpha_modes[0],
+            view_formats: vec![],
+        };
+
+        surface.configure(&device, &config);
+
+        let shader = Shader::load_from_file(Arc::clone(&device), "triangle shader", "shader.wgsl")
+            .await
+            .expect("failed to load shader from file");
+
+        let mesh = Mesh::new(
+            Arc::clone(&device),
+            &TEST_VERTICES,
+            Arc::new(shader),
+            "test mesh",
+            &[Some(wgpu::ColorTargetState {
+                format: config.format,
+                blend: Some(wgpu::BlendState::REPLACE),
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+            wgpu::PrimitiveTopology::TriangleList,
+            wgpu::PolygonMode::Fill,
+        );
+
+        // ------------ Dear ImGui initialization ------------
+
+        // Create ImGui context and set `.ini` file name.
+        let mut imgui_context = imgui::Context::create();
+        imgui_context.set_ini_filename(Some(PathBuf::from("src/imgui_settings.ini")));
+
+        // Bound ImGui to winit.
+        let mut winit_platform = imgui_winit_support::WinitPlatform::init(&mut imgui_context);
+        winit_platform.attach_window(imgui_context.io_mut(), &window, imgui_winit_support::HiDpiMode::Rounded);
+
+        // Style configuration.
         imgui_context.fonts().add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
         imgui_context.io_mut().font_global_scale = (1.0 / winit_platform.hidpi_factor()) as f32;
         imgui_context.style_mut().window_rounding = 16.0;
 
-        /* Glium setup. */
-        let display = Box::pin(glium::Display::from_gl_window(window)?);
-
-        /* ImGui glium renderer setup. */
-        let imgui_renderer = ImguiRenderer::init(&mut imgui_context, display.as_ref().get_ref())?;
-
-        let quad_draw_resources = {
-            let vertices = glium::VertexBuffer::new(display.as_ref().get_ref(), &[
-                QuadVertex { position: [-1.0, -1.0, 0.0, 1.0], texcoord: [0.0, 0.0] },
-                QuadVertex { position: [-1.0,  1.0, 0.0, 1.0], texcoord: [0.0, 1.0] },
-                QuadVertex { position: [ 1.0,  1.0, 0.0, 1.0], texcoord: [1.0, 1.0] },
-                QuadVertex { position: [ 1.0, -1.0, 0.0, 1.0], texcoord: [1.0, 0.0] },
-            ]).map_err(GraphicsError::VertexBufferCreation)?;
-    
-            let indices = glium::IndexBuffer::new(
-                display.as_ref().get_ref(),
-                glium::index::PrimitiveType::TrianglesList,
-                &[0_u16, 1, 2, 0, 2, 3],
-            ).map_err(GraphicsError::IndexBuffferCreation)?;
-
-            let shader = Shader::new("postprocessing", "postprocessing", display.as_ref().get_ref())?;
-
-            QuadDrawResources { shader, vertices, indices }
-        };
-
-        let surface = Surface::new(display.as_ref().get_ref(), UInt2::from(DEFAULT_SIZES))?;
+        // Create ImGui renderer.
+        let imgui_renderer = imgui_wgpu::Renderer::new(
+            &mut imgui_context,
+            &device,
+            &queue,
+            imgui_wgpu::RendererConfig {
+                texture_format: config.format,
+                ..Default::default()
+            },
+        );
 
         Ok(Self {
-            display,
-            imguic: imgui_context,
-            imguir: ImguiRendererWrapper(imgui_renderer),
-            imguip: winit_platform,
             event_loop: Some(event_loop),
+            test_mesh: mesh,
+            window,
             surface,
-            quad_draw_resources,
+            adapter,
+            device,
+            queue,
+            config,
+            imgui: ImGui {
+                context: imgui_context,
+                platform: winit_platform,
+                renderer: ImGuiRendererWrapper(imgui_renderer),
+            },
         })
     }
 
-    pub fn refresh_postprocessing_shaders(&mut self) -> Result<(), ShaderError> {
-        self.quad_draw_resources.shader =
-            Shader::new("postprocessing", "postprocessing", self.display.as_ref().get_ref())?;
+    // pub fn refresh_postprocessing_shaders(&mut self) -> Result<(), ShaderError> {
+    //     self.quad_draw_resources.shader =
+    //         Shader::new("postprocessing", "postprocessing", self.display.as_ref().get_ref())?;
+
+    //     Ok(())
+    // }
+
+    pub fn render(
+        &mut self,
+        use_ui: impl FnOnce(&mut imgui::Ui),
+    ) -> Result<(), wgpu::SurfaceError> {
+        let output = self.surface.get_current_texture()?;
+        let view = output.texture.create_view(&Default::default());
+        let mut encoder = self.device.create_command_encoder(
+            &wgpu::CommandEncoderDescriptor {
+                label: Some("Render encoder"),
+            },
+        );
+
+        {
+            let (r, g, b, a) = cfg::shader::CLEAR_COLOR;
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                            r: r as f64,
+                            g: g as f64,
+                            b: b as f64,
+                            a: a as f64,
+                        }),
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: None,
+            });
+
+            self.test_mesh.render(&mut render_pass);
+        }
+
+        {
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("ImGui render pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: None,
+            });
+
+            let ui = self.imgui.context.new_frame();
+            use_ui(ui);
+
+            self.imgui.platform.prepare_render(&ui, &self.window);
+
+            let draw_data = self.imgui.context.render();
+            self.imgui.renderer.render(draw_data, &self.queue, &self.device, &mut render_pass)
+                .expect("failed to render imgui");
+        }
+    
+        self.queue.submit(std::iter::once(encoder.finish()));
+        output.present();
 
         Ok(())
     }
 
-    pub fn on_window_resize(&mut self, new_size: UInt2) -> Result<(), SurfaceError> {
-        self.surface.on_window_resize(self.display.as_ref().get_ref(), new_size)
+    pub fn on_window_resize(&mut self, new_size: UInt2) {
+        if new_size.x > 0 && new_size.y > 0 {
+            (self.config.width, self.config.height) = (new_size.x, new_size.y);
+            self.surface.configure(&self.device, &self.config);
+        }
     }
 
     /// Gives event_loop and removes it from graphics struct.
@@ -156,33 +274,24 @@ impl Graphics {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum GraphicsError {
-    #[error("failed to initialize imgui glium renderer: {0}")]
-    GliumRenderer(#[from] ImguiRendererError),
+#[derive(Debug)]
+pub struct ImGui {
+    // ImGui context.
+    pub context: imgui::Context,
 
-    #[error("opengl should be compatible: {0}")]
-    IncompatibleOpenGl(#[from] glium::IncompatibleOpenGl),
+    // ImGui winit support.
+    pub platform: imgui_winit_support::WinitPlatform,
 
-    #[error("failed to create quad vertex buffer: {0}")]
-    VertexBufferCreation(VertexCreationError),
-
-    #[error("failed to create quad index buffer: {0}")]
-    IndexBuffferCreation(IndexCreationError),
-
-    #[error("failed to create shader: {0}")]
-    ShaderCreation(#[from] ShaderError),
-
-    #[error("failed to create surface: {0}")]
-    Surface(#[from] SurfaceError),
+    // ImGui WGPU renderer.
+    pub renderer: ImGuiRendererWrapper,
 }
 
 #[derive(Deref)]
-pub struct ImguiRendererWrapper(pub ImguiRenderer);
+pub struct ImGuiRendererWrapper(imgui_wgpu::Renderer);
 
-impl std::fmt::Debug for ImguiRendererWrapper {
+impl std::fmt::Debug for ImGuiRendererWrapper {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "imgui_glium_renderer::Renderer {{...}}")
+        write!(f, "imgui_wgpu::Renderer {{ ... }}")
     }
 }
 

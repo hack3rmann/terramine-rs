@@ -3,8 +3,8 @@ pub mod chunk_array;
 
 use {
     crate::app::utils::graphics::{
-        mesh::UnindexedMesh,
-        shader::Shader,
+        glium_mesh::UnindexedMesh,
+        glium_shader::Shader,
     },
     glium::{
         DrawParameters,

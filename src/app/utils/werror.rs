@@ -5,6 +5,7 @@ use {
 
 pub fn set_panic_hook() {
     std::panic::set_hook(Box::new(|panic_info| {
+        eprintln!("Panic occured: {panic_info}");
         error_message("Panic occured", panic_info)
             .expect("failed to make error message");
     }))

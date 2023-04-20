@@ -2,8 +2,8 @@ use {
     crate::{
         prelude::*,
         graphics::{
-            mesh::{Mesh, UnindexedMesh},
-            shader::Shader,
+            glium_mesh::{Mesh, UnindexedMesh},
+            glium_shader::Shader,
         },
         terrain::chunk::prelude::*,
     },

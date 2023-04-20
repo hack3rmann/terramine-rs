@@ -1,77 +1,46 @@
-//!
-//! This module contains [`Shader`] struct.
-//!
+#![allow(dead_code)]
 
 use {
-    crate::app::utils::{
-        logger,
-        cfg::shader::{
-            DIRECTORY,
-            VERTEX_FILE_EXTENTION,
-            FRAGMENT_FILE_EXTENTION
-        },
-    },
-    std::{fs, io},
-    thiserror::Error,
-    glium::ProgramCreationError,
-    derive_deref_rs::Deref,
+    crate::prelude::*,
+    std::path::Path,
+    wgpu::{ShaderModule, Device},
+    tokio::{fs, io},
 };
 
-/// Shader struct is container for shader source code.
+/// Wrapper around [`wgpu`]'s [`ShaderModule`].
 #[derive(Debug, Deref)]
 pub struct Shader {
-    pub vertex_src: String,
-    pub fragment_src: String,
-
     #[deref]
-    pub program: glium::Program,
+    inner: ShaderModule,
+
+    device: Arc<Device>,
+    label: String,
 }
 
 impl Shader {
-    /// Returns new Shader object that contains shader source code from their path.
-    /// It adds [`DIRECTORY`] before the name and special extention (a.g. `.vert` for vertex) after.
-    pub fn new(
-        vertex_name: &str,
-        fragment_name: &str,
-        display: &dyn glium::backend::Facade
-    ) -> Result<Self, ShaderError> {
-        let _work_guard = logger::work("shader loader", format!("{vertex_name}, {fragment_name}."));
+    pub fn from_source(device: Arc<Device>, source_code: String, label: impl Into<String>) -> Self {
+        let label = label.into();
 
-        let vertex_src = fs::read_to_string(
-            format!("{DIRECTORY}{}.{VERTEX_FILE_EXTENTION}", vertex_name)
-        ).map_err(|err| ShaderError::FileRead { io_err: err, shader_name: vertex_name.into() })?;
+        let shader = device.create_shader_module(
+            wgpu::ShaderModuleDescriptor {
+                label: Some(&label),
+                source: wgpu::ShaderSource::Wgsl(Cow::Owned(source_code)),
+            },
+        );
 
-        let fragment_src = fs::read_to_string(
-            format!("{DIRECTORY}{}.{FRAGMENT_FILE_EXTENTION}", fragment_name)
-        ).map_err(|err| ShaderError::FileRead { io_err: err, shader_name: fragment_name.into() })?;
-
-        Self::from_source(vertex_src, fragment_src, display)
+        Self { label, device, inner: shader }
     }
 
-    pub fn from_source(
-        vertex_src: String,
-        fragment_src: String,
-        display: &dyn glium::backend::Facade
-    ) -> Result<Self, ShaderError> {
-        let program = glium::Program::from_source(
-            display,
-            vertex_src.as_str(),
-            fragment_src.as_str(),
-            None,
-        )?;
+    pub async fn load_from_file(
+        device: Arc<Device>, label: impl Into<String>, file_name: impl AsRef<Path>,
+    ) -> io::Result<Self> {
+        use cfg::shader::DIRECTORY;
+        let file_name = file_name.as_ref();
 
-        Ok(Shader { vertex_src, fragment_src, program })
+        let _work_guard = logger::work!(from = "shader loader", "loading from {file_name:?}");
+
+        let source = fs::read_to_string(Path::new(DIRECTORY).join(file_name)).await?;
+
+        Ok(Self::from_source(device, source, label))
     }
-}
-
-#[derive(Debug, Error)]
-pub enum ShaderError {
-    #[error("failed to create gl shader program: {0}")]
-    ProgramCreation(#[from] ProgramCreationError),
-
-    #[error("failed to read shader file, shader name: {shader_name}, io_err: {io_err}")]
-    FileRead {
-        io_err: io::Error,
-        shader_name: String,
-    },
 }

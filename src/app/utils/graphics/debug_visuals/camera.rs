@@ -3,7 +3,7 @@ use {
         cfg,
         graphics::{
             camera::Camera,
-            mesh::UnindexedMesh,
+            glium_mesh::UnindexedMesh,
         },
     },
     super::*,

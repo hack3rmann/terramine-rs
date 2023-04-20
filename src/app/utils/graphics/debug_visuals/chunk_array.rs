@@ -1,7 +1,7 @@
 use {
     crate::{
         prelude::*,
-        graphics::mesh::Mesh,
+        graphics::glium_mesh::Mesh,
         terrain::{
             chunk::{
                 Chunk,

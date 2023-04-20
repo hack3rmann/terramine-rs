@@ -10,9 +10,11 @@ pub mod prelude;
 
 pub use app::utils::*;
 
-use app::{App, utils::runtime::RUNTIME};
+use app::App;
+use runtime::RUNTIME;
 
 fn main() {
+    env_logger::init();
     app::utils::werror::set_panic_hook();
 
     RUNTIME.block_on(App::new()).run();

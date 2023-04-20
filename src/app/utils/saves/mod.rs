@@ -3,17 +3,12 @@ use tokio::io::AsyncSeekExt;
 pub mod stack_heap;
 
 use {
-    crate::app::utils::{
+    crate::{
+        prelude::*,
         cfg::save::META_FILE_NAME,
-        reinterpreter::{
-            AsBytes,
-            FromBytes,
-            StaticSize
-        },
     },
     std::{
         marker::PhantomData, 
-        collections::HashMap,
         future::Future,
     },
     tokio::{
@@ -21,7 +16,6 @@ use {
         fs::{File, OpenOptions},
     },
     stack_heap::{StackHeap, StackHeapError},
-    thiserror::Error,
 };
 
 pub type Offset = u64;
@@ -149,7 +143,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     }
 
     /// Writes enum-named value to stack file.
-    pub async fn write<T: AsBytes + StaticSize>(mut self, value: &T, enumerator: E) -> Self {
+    pub async fn write<T: AsBytes>(mut self, value: &T, enumerator: E) -> Self {
         /* Write value to file stack */
         let bytes = value.as_bytes();
         let offset = self.file.push(&bytes).await
@@ -164,7 +158,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
     /// Assigns enum-named value to value on stack.
     #[allow(dead_code)]
-    pub async fn assign<T: AsBytes + StaticSize>(&mut self, value: &T, enumerator: E) {
+    pub async fn assign<T: AsBytes>(&mut self, value: &T, enumerator: E) {
         /* Get bytes and offset */
         let bytes = value.as_bytes();
         let offset = self.load_offset(enumerator);
@@ -290,7 +284,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         /* Read all elements to `result` */
         for i in 0..length {
             /* Read to buffer */
-            StackHeap::seek_read(&mut self.file.stack, &mut buffer, offset + i * T::static_size() as Size)
+            StackHeap::seek_read(&mut self.file.stack_file, &mut buffer, offset + i * T::static_size() as Size)
                 .await
                 .expect("failed to seek-read");
 
@@ -342,7 +336,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
                 .await
                 .expect("failed to write to heap");
 
-            alloc.get_stack_offset()
+            alloc.stack_offset
         };
 
         /* Save offset */
@@ -565,7 +559,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     /// Saves the save.
     pub async fn save(mut self) -> io::Result<Self> {
         /* Sync all changes to file */
-        self.file.sync().await?;
+        self.file.sync_all().await?;
 
         /* Save offsets length to `meta.off` file */
         let n_offsets = self.offsets.len() as Size;
