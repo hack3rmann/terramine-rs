@@ -1,24 +1,23 @@
 pub mod glium_shader;
-pub mod texture;
+pub mod glium_texture;
 pub mod camera;
 pub mod glium_mesh;
 pub mod debug_visuals;
 pub mod ui;
 pub mod light;
 pub mod surface;
-pub mod mesh;
+pub mod failed_mesh;
 pub mod shader;
+pub mod texture;
 
 use {
     crate::{
         prelude::*,
         window::Window,
     },
-    mesh::{Mesh, Bufferizable},
-    shader::Shader,
-    wgpu::{
-        Device, Queue, Adapter, Instance as WgpuInstance,
-    },
+    failed_mesh::{Mesh, Bufferizable, MeshDescriptor, Renderable},
+    shader::Shader, texture::Texture,
+    wgpu::{*, util::DeviceExt},
     winit::event_loop::EventLoop,
     std::path::PathBuf,
 };
@@ -27,35 +26,106 @@ use {
 #[derive(Clone, Copy, Debug, PartialEq, Default, Pod, Zeroable)]
 pub struct TestVertex {
     position: [f32; 2],
-    color: [f32; 3],
+    tex_coords: [f32; 2],
 }
 
 impl Bufferizable for TestVertex {
-    const ATTRS: &'static [wgpu::VertexAttribute] =
-        &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x3];
+    const ATTRS: &'static [VertexAttribute] =
+        &vertex_attr_array![0 => Float32x2, 1 => Float32x2];
 
-    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+    const BUFFER_LAYOUT: VertexBufferLayout<'static> = VertexBufferLayout {
         array_stride: mem::size_of::<Self>() as u64,
-        step_mode: wgpu::VertexStepMode::Vertex,
-        attributes: &Self::ATTRS,
+        step_mode: VertexStepMode::Vertex,
+        attributes: Self::ATTRS,
     };
 }
 
-const TEST_VERTICES: [TestVertex; 3] = [
-    TestVertex { position: [ 0.0,  0.5], color: [1.0, 0.0, 0.0] },
-    TestVertex { position: [-0.5, -0.5], color: [0.0, 1.0, 0.0] },
-    TestVertex { position: [ 0.5, -0.5], color: [0.0, 0.0, 1.0] },
+const TEST_VERTICES: &[TestVertex] = &[
+    TestVertex { position: [-0.5, -0.5], tex_coords: [0.0, 1.0] },
+    TestVertex { position: [ 0.5, -0.5], tex_coords: [1.0, 1.0] },
+    TestVertex { position: [ 0.5,  0.5], tex_coords: [1.0, 0.0] },
+    
+    TestVertex { position: [-0.5, -0.5], tex_coords: [0.0, 1.0] },
+    TestVertex { position: [ 0.5,  0.5], tex_coords: [1.0, 0.0] },
+    TestVertex { position: [-0.5,  0.5], tex_coords: [0.0, 0.0] },
 ];
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+pub struct CommonUniforms {
+    pub time: f32,
+    pub screen_resolution: vec2,
+}
+
+#[derive(Debug)]
+pub struct CommonUniformsBuffer {
+    pub bind_group_layout: Arc<BindGroupLayout>,
+    pub bind_group: BindGroup,
+    pub buffer: Buffer,
+}
+
+impl CommonUniformsBuffer {
+    pub fn new(device: &Device, initial_value: CommonUniforms) -> Self {
+        let buffer = device.create_buffer_init(
+            &util::BufferInitDescriptor {
+                label: Some("common_uniforms_buffer"),
+                contents: bytemuck::bytes_of(&initial_value),
+                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            },
+        );
+
+        let layout = device.create_bind_group_layout(
+            &BindGroupLayoutDescriptor {
+                label: Some("common_uniforms_bind_group_layout"),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::VERTEX_FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            },
+        );
+
+        let bind_group = device.create_bind_group(
+            &BindGroupDescriptor {
+                label: Some("common_uniforms_bind_group"),
+                layout: &layout,
+                entries: &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: buffer.as_entire_binding(),
+                    },
+                ],
+            },
+        );
+
+        Self { bind_group_layout: Arc::new(layout), bind_group, buffer }
+    }
+
+    pub fn update(&self, queue: &Queue, uniforms: CommonUniforms) {
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[uniforms]));
+        queue.submit(std::iter::empty());
+    }
+}
 
 /// Graphics handler.
 pub struct Graphics {
     pub window: Window,
-    pub surface: wgpu::Surface,
+    pub surface: Surface,
     pub adapter: Adapter,
     pub device: Arc<Device>,
-    pub queue: Queue,
-    pub config: wgpu::SurfaceConfiguration,
+    pub queue: Arc<Queue>,
+    pub config: SurfaceConfiguration,
 
+    pub common_uniforms: CommonUniformsBuffer,
+    
+    pub test_texture: Texture,
     pub test_mesh: Mesh<TestVertex>,
 
     pub event_loop:	Option<EventLoop<()>>,
@@ -76,9 +146,9 @@ impl Graphics {
 
         // ------------ WGPU initialization ------------
 
-        let wgpu_instance = WgpuInstance::new(
-            wgpu::InstanceDescriptor {
-                backends: wgpu::Backends::DX12 | wgpu::Backends::VULKAN,
+        let wgpu_instance = Instance::new(
+            InstanceDescriptor {
+                backends: Backends::DX12 | Backends::VULKAN,
                 dx12_shader_compiler: Default::default(),
             }
         );
@@ -93,7 +163,7 @@ impl Graphics {
         };
 
         let adapter = wgpu_instance
-            .request_adapter(&wgpu::RequestAdapterOptions {
+            .request_adapter(&RequestAdapterOptions {
                 power_preference: Default::default(),
                 force_fallback_adapter: false,
                 compatible_surface: Some(&surface)
@@ -102,21 +172,22 @@ impl Graphics {
             .expect("failed to find an appropriate adapter");
 
         let (device, queue) = adapter
-            .request_device(&wgpu::DeviceDescriptor {
+            .request_device(&DeviceDescriptor {
                 label: None,
-                features: wgpu::Features::empty(),
-                limits: wgpu::Limits::default(),
+                features: Features::empty(),
+                limits: Limits::default(),
             }, None)
             .await
             .expect("failed to create device");
         let device = Arc::new(device);
+        let queue = Arc::new(queue);
 
         let swapchain_capabilities = surface.get_capabilities(&adapter);
         let swapchain_format = *swapchain_capabilities.formats.get(0)
             .expect("failed to get swap chain format 0: the surface is incompatible with the adapter");
         
-        let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+        let config = SurfaceConfiguration {
+            usage: TextureUsages::RENDER_ATTACHMENT,
             format: swapchain_format,
             width: DEFAULT_SIZES.x as u32,
             height: DEFAULT_SIZES.y as u32,
@@ -127,22 +198,44 @@ impl Graphics {
 
         surface.configure(&device, &config);
 
+        // ------------ Renderng tests stuff ------------
+
+        let test_texture = Texture::load_from_file(
+            Arc::clone(&device),
+            Arc::clone(&queue),
+            "TerramineIcon32p.png",
+            "test_texture",
+            0, 1,
+        ).await
+            .expect("failed to load an image");
+
+        let common_uniforms = CommonUniformsBuffer::new(
+            &device,
+            CommonUniforms { time: 0.0, screen_resolution: vec2::from(DEFAULT_SIZES) },
+        );
+
         let shader = Shader::load_from_file(Arc::clone(&device), "triangle shader", "shader.wgsl")
             .await
             .expect("failed to load shader from file");
 
         let mesh = Mesh::new(
-            Arc::clone(&device),
-            &TEST_VERTICES,
-            Arc::new(shader),
-            "test mesh",
-            &[Some(wgpu::ColorTargetState {
-                format: config.format,
-                blend: Some(wgpu::BlendState::REPLACE),
-                write_mask: wgpu::ColorWrites::ALL,
-            })],
-            wgpu::PrimitiveTopology::TriangleList,
-            wgpu::PolygonMode::Fill,
+            MeshDescriptor {
+                device: Arc::clone(&device),
+                shader: Arc::new(shader),
+                label: Arc::new(String::from("test mesh")),
+                fragment_targets: Arc::new([Some(ColorTargetState {
+                    format: config.format,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                })]),
+                primitive_topology: PrimitiveTopology::TriangleList,
+                polygon_mode: PolygonMode::Fill,
+                bind_group_layouts: Arc::new([
+                    Arc::clone(&common_uniforms.bind_group_layout),
+                    Arc::clone(&test_texture.bind_group_layout),
+                ]),
+            },
+            TEST_VERTICES
         );
 
         // ------------ Dear ImGui initialization ------------
@@ -151,7 +244,7 @@ impl Graphics {
         let mut imgui_context = imgui::Context::create();
         imgui_context.set_ini_filename(Some(PathBuf::from("src/imgui_settings.ini")));
 
-        // Bound ImGui to winit.
+        // Bind ImGui to winit.
         let mut winit_platform = imgui_winit_support::WinitPlatform::init(&mut imgui_context);
         winit_platform.attach_window(imgui_context.io_mut(), &window, imgui_winit_support::HiDpiMode::Rounded);
 
@@ -180,6 +273,8 @@ impl Graphics {
             device,
             queue,
             config,
+            common_uniforms,
+            test_texture,
             imgui: ImGui {
                 context: imgui_context,
                 platform: winit_platform,
@@ -188,34 +283,45 @@ impl Graphics {
         })
     }
 
-    // pub fn refresh_postprocessing_shaders(&mut self) -> Result<(), ShaderError> {
-    //     self.quad_draw_resources.shader =
-    //         Shader::new("postprocessing", "postprocessing", self.display.as_ref().get_ref())?;
+    pub async fn refresh_test_shader(&mut self) {
+        let shader = Shader::load_from_file(
+            Arc::clone(&self.device),
+            "test_shader",
+            "shader.wgsl",
+        ).await;
 
-    //     Ok(())
-    // }
+        match shader {
+            Ok(shader) => self.test_mesh.reload_shader(Arc::new(shader)),
+            Err(err) => logger::log!(Error, from = "graphics", "failed to reload test shader: {err}"),
+        }
+    }
 
-    pub fn render(
-        &mut self,
-        use_ui: impl FnOnce(&mut imgui::Ui),
-    ) -> Result<(), wgpu::SurfaceError> {
+    pub fn render<UseUi: FnOnce(&mut imgui::Ui)>(
+        &mut self, desc: RenderDescriptor<UseUi>,
+    ) -> Result<(), SurfaceError> {
+        let size = self.window.inner_size();
+        self.common_uniforms.update(&self.queue, CommonUniforms {
+            time: desc.time,
+            screen_resolution: (size.width as f32, size.height as f32).into(),
+        });
+
         let output = self.surface.get_current_texture()?;
         let view = output.texture.create_view(&Default::default());
         let mut encoder = self.device.create_command_encoder(
-            &wgpu::CommandEncoderDescriptor {
-                label: Some("Render encoder"),
+            &CommandEncoderDescriptor {
+                label: Some("render_encoder"),
             },
         );
 
         {
             let (r, g, b, a) = cfg::shader::CLEAR_COLOR;
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("Render pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("render_pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
+                    ops: Operations {
+                        load: LoadOp::Clear(wgpu::Color {
                             r: r as f64,
                             g: g as f64,
                             b: b as f64,
@@ -227,17 +333,19 @@ impl Graphics {
                 depth_stencil_attachment: None,
             });
 
-            self.test_mesh.render(&mut render_pass);
+            render_pass.set_bind_group(0, &self.common_uniforms.bind_group, &[]);
+            render_pass.set_bind_group(1, &self.test_texture.bind_group, &[]);
+            let Ok(()) = self.test_mesh.render(&mut render_pass);
         }
 
         {
-            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("ImGui render pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+            let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: Some("imgui_render_pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
                     view: &view,
                     resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Load,
+                    ops: Operations {
+                        load: LoadOp::Load,
                         store: true,
                     },
                 })],
@@ -245,9 +353,9 @@ impl Graphics {
             });
 
             let ui = self.imgui.context.new_frame();
-            use_ui(ui);
+            (desc.use_imgui_ui)(ui);
 
-            self.imgui.platform.prepare_render(&ui, &self.window);
+            self.imgui.platform.prepare_render(ui, &self.window);
 
             let draw_data = self.imgui.context.render();
             self.imgui.renderer.render(draw_data, &self.queue, &self.device, &mut render_pass)
@@ -291,78 +399,12 @@ pub struct ImGuiRendererWrapper(imgui_wgpu::Renderer);
 
 impl std::fmt::Debug for ImGuiRendererWrapper {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "imgui_wgpu::Renderer {{ ... }}")
+        write!(f, "imgui_Renderer {{ ... }}")
     }
 }
 
-pub use crate::draw;
-
-/// Draw to target macro.
-/// It will execute draw calls passed it after clearing target and before finishing it.
-#[macro_export]
-macro_rules! draw {
-    (
-        render_shadows: $render_shadows:expr,
-        $graphics:expr,
-        $make_target:expr,
-        let $uniforms_name:ident = {
-            $(
-                $($uniform_name:ident : $uniform_def:expr),+
-                $(,)?
-            )?
-        },
-        |&mut $fb_name:ident| $fb_draw_call:expr,
-        |mut $target_name:ident| $target_draw_call:expr
-        $(,)?
-    ) => {{
-        use $crate::app::utils::cfg::shader::{CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL};
-
-        let $uniforms_name = ::glium::uniform! {
-            render_shadows: $render_shadows,
-            $(
-                $($uniform_name : $uniform_def,)+
-            )?
-        };
-
-        let result1 = if $render_shadows {
-            $graphics.surface.shadow_buffer.clear_all(CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL);
-            {
-                let $uniforms_name = $uniforms_name.add("is_shadow_pass", true);
-                let $fb_name = &mut $graphics.surface.shadow_buffer;
-                $fb_draw_call
-            }
-        } else { };
-        
-        $graphics.surface.frame_buffer.clear_all(CLEAR_COLOR, CLEAR_DEPTH, CLEAR_STENCIL);
-        let result2 = {
-            let $uniforms_name = $uniforms_name.add("is_shadow_pass", false);
-            let $fb_name = &mut $graphics.surface.frame_buffer;
-            $fb_draw_call
-        };
-
-        let mut $target_name = { $make_target };
-            let quad_uniforms = ::glium::uniform! {
-                render_shadows: $render_shadows,
-                depth_texture:       &$graphics.surface.get_textures().depth,
-                albedo_texture:      &$graphics.surface.get_textures().albedo,
-                normal_texture:      &$graphics.surface.get_textures().normal,
-                light_depth_texture: &$graphics.surface.get_textures().light_depth,
-                position_texture:    &$graphics.surface.get_textures().position,
-                $(
-                    $($uniform_name : $uniform_def,)+
-                )?
-            };
-
-            $target_name.draw(
-                &$graphics.quad_draw_resources.vertices,
-                &$graphics.quad_draw_resources.indices,
-                &$graphics.quad_draw_resources.shader.program,
-                &quad_uniforms,
-                &Default::default()
-            ).expect("failed to draw to target");
-            let result3 = { $target_draw_call };
-        $target_name.finish().expect("failed to finish target");
-
-        (result1, result2, result3)
-    }};
+#[derive(Debug)]
+pub struct RenderDescriptor<UseImguiUi> {
+    pub use_imgui_ui: UseImguiUi,
+    pub time: f32,
 }

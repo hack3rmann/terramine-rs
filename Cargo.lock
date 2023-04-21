@@ -1124,16 +1124,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "imgui-glium-renderer"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e25883dd9f02125af7167a07effe4aab4072e9f3857a63fb3c3f5572f7af5ac"
-dependencies = [
- "glium",
- "imgui",
-]
-
-[[package]]
 name = "imgui-sys"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1329,6 +1319,7 @@ dependencies = [
 name = "math_linear"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "directx_math",
  "doc-comment",
 ]
@@ -2289,7 +2280,6 @@ dependencies = [
  "huffman-compress",
  "image",
  "imgui",
- "imgui-glium-renderer",
  "imgui-wgpu",
  "imgui-winit-support",
  "itertools",

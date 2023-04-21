@@ -46,10 +46,13 @@ pub fn recv_all() {
 }
 
 pub fn log(msg_type: MsgType, from: impl Into<CowStr>, content: impl Into<CowStr>) {
+    let (from, content) = (from.into(), content.into());
+
+    eprintln!("{msg_type} from {from}: {content}");
     CHANNEL.lock()
         .expect("channel mutex should be not poisoned")
         .sender
-        .send(Message { msg_type, from: from.into(), content: content.into() })
+        .send(Message { msg_type, from, content})
         .expect("failed to send message");
 }
 

@@ -44,6 +44,8 @@ impl Timer {
         self.dt = now.duration_since(self.last_frame).as_secs_f32();
         self.last_frame = now;
         
+        self.time += self.dt;
+
         self.frame_idx += 1;
         self.frames_sum += self.dt;
 

@@ -87,6 +87,7 @@ pub mod terrain {
     pub mod default {
         use math_linear::prelude::Int3;
         pub const WORLD_SIZES_IN_CHUNKS: Int3 = veci!(7, 1, 7);
+        pub const LOD_THREASHOLD: f32 = 5.8;
     }
 
     #[cfg(test)]
@@ -99,6 +100,8 @@ pub mod terrain {
 }
 
 pub mod texture {
+    pub const DIRECTORY: &str = "src/image/";
+
     pub mod atlas {
         pub const ITEM_SIZE_IN_PIXELS:    usize = 8;
         pub const ITEM_PADDING_IN_PIXELS: usize = 4;
@@ -115,7 +118,7 @@ pub mod shader {
     pub const CLEAR_STENCIL: i32 = 0;
     
     /// That constant is shared with shader. See `postprocessing.frag`.
-    pub const CLEAR_COLOR: (f32, f32, f32, f32) = (0.03, 0.03, 0.03, 1.0);
+    pub const CLEAR_COLOR: (f32, f32, f32, f32) = (0.02, 0.02, 0.02, 1.0);
 
     pub mod voxel {
         pub mod light {

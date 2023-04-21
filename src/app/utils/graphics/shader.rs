@@ -37,7 +37,7 @@ impl Shader {
         use cfg::shader::DIRECTORY;
         let file_name = file_name.as_ref();
 
-        let _work_guard = logger::work!(from = "shader loader", "loading from {file_name:?}");
+        let _work_guard = logger::work!(from = "shader-loader", "loading from {file_name:?}");
 
         let source = fs::read_to_string(Path::new(DIRECTORY).join(file_name)).await?;
 

@@ -1,24 +1,16 @@
 pub mod utils;
 
 use {
-    /* Other files */
     crate::{
         prelude::*,
         graphics::{
-            self,
-            light::DirectionalLight,
             Graphics,
             camera::Camera,
-            texture::Texture,
-            debug_visuals::{self, DebugVisualizedStatic},
-        },
-        terrain::chunk::{
-            chunk_array::ChunkArray,
-            ChunkDrawBundle,
+            RenderDescriptor,
+            debug_visuals,
         },
     },
 
-    /* Glium includes */
     winit::{
         event::{Event, WindowEvent, StartCause},
         event_loop::{ControlFlow, EventLoopWindowTarget},
@@ -26,10 +18,10 @@ use {
     },
 };
 
-/// Struct that handles everything.
+/// Struct that handles application stuff.
 pub struct App {
     graphics: Graphics,
-//    camera: DebugVisualizedStatic<Camera>,
+    camera: Camera,
 //    lights: [DirectionalLight; 5],
 //    render_shadows: bool,
     draw_timer: Timer,
@@ -53,12 +45,9 @@ impl App {
             .await
             .expect("failed to create graphics");
 
-        // let camera = DebugVisualizedStatic::new_camera(
-        //     Camera::new()
-        //         .with_position(0.0, 16.0, 2.0)
-        //         .with_rotation(0.0, 0.0, std::f32::consts::PI),
-        //     graphics.display.as_ref().get_ref(),
-        // );
+        let camera = Camera::new()
+            .with_position(0.0, 16.0, 2.0)
+            .with_rotation(0.0, 0.0, std::f32::consts::PI);
 
         // let texture_atlas = Texture::from_path("src/image/texture_atlas.png", graphics.display.as_ref().get_ref())
         //     .expect("path should be valid and file is readable");
@@ -82,7 +71,7 @@ impl App {
             //chunk_arr,
             //chunk_draw_bundle,
             graphics,
-            //camera,
+            camera,
             //lights: Default::default(),
             //render_shadows: false,
             //texture_atlas,
@@ -121,7 +110,6 @@ impl App {
                 WindowEvent::CloseRequested => {
                     *control_flow = ControlFlow::Exit;
                     //self.chunk_arr.drop_tasks();
-                    return;
                 },
 
                 WindowEvent::Resized(new_size) => {
@@ -171,31 +159,29 @@ impl App {
         // }
 
         // Control camera by user input
-        // if keyboard::just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
-        //     if self.camera.grabbes_cursor {
-        //         mouse::release_cursor(self.graphics.display.gl_window().window());
-        //     } else {
-        //         mouse::grab_cursor(self.graphics.display.gl_window().window());
-        //     }
-
-        //     self.camera.grabbes_cursor = !self.camera.grabbes_cursor;
-        // }
+        if keyboard::just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
+            if self.camera.grabbes_cursor {
+                mouse::release_cursor(&self.graphics.window);
+            } else {
+                mouse::grab_cursor(&self.graphics.window);
+            }
+            self.camera.grabbes_cursor = !self.camera.grabbes_cursor;
+        }
 
         // if keyboard::just_pressed(cfg::key_bindings::SWITCH_RENDER_SHADOWS) {
         //     self.render_shadows = !self.render_shadows;
         // }
 
-        // if keyboard::just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
+        if keyboard::just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
         //     self.chunk_draw_bundle = ChunkDrawBundle::new(self.graphics.display.as_ref().get_ref());
 
-        //     self.graphics.refresh_postprocessing_shaders()
-        //         .log_error("app", "failed to reload postprocessing shaders");
+            self.graphics.refresh_test_shader().await;
 
         //     match Texture::from_path("src/image/normal_atlas.png", self.graphics.display.as_ref().get_ref()) {
         //         Ok(normals) => self.normal_atlas = normals,
         //         Err(err) => logger::log!(Error, from = "app", "failed to reload normal atlas: {err}"),
         //     }
-        // }
+        }
 
         // // Update save/load tasks of `ChunkArray`
         // self.chunk_arr.update(self.graphics.display.as_ref().get_ref(), &self.camera).await
@@ -220,11 +206,10 @@ impl App {
         // InGui draw data
         let use_ui = |ui: &mut imgui::Ui| {
             // Camera window
-            // self.camera.spawn_control_window(ui);
+            self.camera.spawn_control_window(ui);
 
             // Profiler window
             profiler::update_and_build_window(ui, &self.draw_timer);
-            ui.show_demo_window(&mut true);
 
             // Chunk array control window
             // self.chunk_arr.spawn_control_window(ui);
@@ -240,60 +225,12 @@ impl App {
             // }
         };
 
-        self.graphics.render(use_ui)
-            .expect("failed to render graphics");
-
-        // let resolution = vec2::from(UInt2::from(
-        //     self.graphics.display.get_framebuffer_dimensions()
-        // ));
-
-        // graphics::draw! {
-        //     render_shadows: self.render_shadows,
-        //     self.graphics,
-        //     self.graphics.display.draw(),
-
-        //     let uniforms = {
-        //         screen_resolution: resolution.as_array(),
-
-        //         texture_atlas: self.texture_atlas.get_sampler(),
-        //         normal_atlas:  self.normal_atlas.get_sampler(),
-
-        //         light_proj0: self.lights[0].cam.get_ortho(64.0, 64.0),
-        //         light_view0: self.lights[0].cam.get_view(),
-        //         light_dir0:  self.lights[0].cam.front.as_array(),
-        //         light_pose0: self.lights[0].cam.pos.as_array(),
-
-        //         light_proj1: self.lights[1].cam.get_ortho(512.0, 512.0),
-        //         light_view1: self.lights[1].cam.get_view(),
-        //         light_dir1:  self.lights[1].cam.front.as_array(),
-        //         light_pose1: self.lights[1].cam.pos.as_array(),
-
-        //         time: self.draw_timer.time,
-        //         cam_pos: self.camera.pos.as_array(),
-        //         proj: self.camera.get_proj(),
-        //         view: self.camera.get_view(),
-        //     },
-
-        //     |&mut frame_buffer| {
-        //         let display = self.graphics.display.as_ref().get_ref();
-
-        //         self.chunk_arr.render(frame_buffer, &self.chunk_draw_bundle, &uniforms, display, &mut self.camera)
-        //             .await
-        //             .log_error("app", "failed to render chunk array");
-
-        //         self.chunk_arr.render_chunk_debug(display, frame_buffer, &uniforms)
-        //             .await
-        //             .log_error("app", "failed to render chunk array debug visuals");
-        
-        //         self.camera.render_camera_debug_visuals(display, frame_buffer, &uniforms)
-        //             .log_error("app", "failed to render camera");
-        //     },
-
-        //     |mut target| {
-        //         self.graphics.imguir.render(&mut target, draw_data)
-        //             .log_error("app", "failed to render imgui");
-        //     },
-        // };
+        self.graphics.render(
+            RenderDescriptor {
+                use_imgui_ui: use_ui,
+                time: self.draw_timer.time,
+            }
+        ).expect("failed to render graphics");
 
         self.draw_timer.update();
         self.graphics.imgui.context
@@ -306,10 +243,11 @@ impl App {
         self.update_timer.update();
 
         // Rotating camera.
-        // self.camera.update(self.update_timer.dt);
+        self.camera.update(self.update_timer.dt);
         // for light in self.lights.iter_mut() {
         //     light.update(self.camera.pos);
         // }
+
         // Debug visuals switcher.
         if keyboard::just_pressed(cfg::key_bindings::DEBUG_VISUALS_SWITCH) {
             debug_visuals::switch_enable();
