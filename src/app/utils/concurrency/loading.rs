@@ -1,13 +1,9 @@
 #![allow(dead_code)]
 
 use {
-    std::{
-        collections::HashMap,
-        sync::Mutex,
-    },
+    crate::prelude::*,
+    std::sync::Mutex,
     tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
-    thiserror::Error,
-    lazy_static::lazy_static,
 };
 
 #[derive(Error, Debug, Clone, PartialEq)]
@@ -25,16 +21,11 @@ pub enum LoadingError {
     LoadingNotFinished(String, f32),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Loadings {
     pub list: HashMap<String, f32>,
 }
-
-impl Default for Loadings {
-    fn default() -> Self {
-        Self::new()
-    }
-}
+assert_impl_all!(Loadings: Send, Sync);
 
 impl Loadings {
     pub fn new() -> Self {
@@ -118,6 +109,7 @@ pub struct ChannelLoadings<'s> {
     pub tx: UnboundedSender<Command<'s>>,
     pub loads: Loadings,
 }
+assert_impl_all!(ChannelLoadings: Send, Sync);
 
 pub type CommandSender<'s> = UnboundedSender<Command<'s>>;
 
@@ -175,6 +167,7 @@ pub struct LoadingGuard {
     name: &'static str,
     sender: UnboundedSender<Command<'static>>,
 }
+assert_impl_all!(LoadingGuard: Send, Sync);
 
 impl Drop for LoadingGuard {
     fn drop(&mut self) {

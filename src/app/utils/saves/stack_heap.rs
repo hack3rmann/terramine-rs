@@ -28,7 +28,7 @@ pub enum StackHeapError {
         alloc_size: usize,
     },
 
-    #[error("io failed: {0}")]
+    #[error(transparent)]
     Io(#[from] io::Error),
 }
 

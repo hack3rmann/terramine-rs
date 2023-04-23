@@ -154,9 +154,8 @@ impl<'s> Surface<'s> {
 
 #[derive(Debug, Error)]
 pub enum SurfaceError {
-    #[error("failed to create texture: {0}")]
+    #[error(transparent)]
     TextureCreation(#[from] TextureCreationError),
-
-    #[error("failed to validate frame buffer")]
+    #[error(transparent)]
     Validation(#[from] ValidationError),
 }

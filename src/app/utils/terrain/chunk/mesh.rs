@@ -67,19 +67,10 @@ impl ChunkDetailedMesh {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct ChunkMesh {
     pub detailed_mesh: Option<ChunkDetailedMesh>,
     pub low_meshes: [Option<UnindexedMesh<LowVertex>>; Chunk::N_LODS],
-}
-
-impl Default for ChunkMesh {
-    fn default() -> Self {
-        Self {
-            detailed_mesh: None,
-            low_meshes: array_init(|_| None),
-        }
-    }
 }
 
 impl ChunkMesh {

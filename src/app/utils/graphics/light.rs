@@ -10,6 +10,7 @@ pub struct DirectionalLight {
     pub cam: Camera,
     pub relative_pos: vec3,
 }
+assert_impl_all!(DirectionalLight: Send, Sync);
 
 impl DirectionalLight {
     pub fn spawn_control_window(&mut self, ui: &imgui::Ui) {

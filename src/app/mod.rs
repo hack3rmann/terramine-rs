@@ -72,7 +72,7 @@ impl App {
             //chunk_draw_bundle,
             graphics,
             camera,
-            //lights: Default::default(),
+            //lights: default(),
             //render_shadows: false,
             //texture_atlas,
             //normal_atlas,
@@ -136,7 +136,7 @@ impl App {
             Event::NewEvents(start_cause) =>
                 self.new_events(start_cause).await,
 
-            _ => ()
+            _ => (),
         }
     }
 
@@ -158,7 +158,7 @@ impl App {
         //     self.chunk_arr.drop_tasks();
         // }
 
-        // Control camera by user input
+        // Control camera cursor grab.
         if keyboard::just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
             if self.camera.grabbes_cursor {
                 mouse::release_cursor(&self.graphics.window);
@@ -199,19 +199,19 @@ impl App {
         self.graphics.window.request_redraw();
     }
 
-    /// Prepares the frame.
+    /// Renders an image.
     async fn redraw_requested(&mut self, window_id: WindowId) {
         if window_id != self.graphics.window.id() { return }
 
-        // InGui draw data
+        // InGui draw data.
         let use_ui = |ui: &mut imgui::Ui| {
             // Camera window
             self.camera.spawn_control_window(ui);
 
-            // Profiler window
+            // Profiler window.
             profiler::update_and_build_window(ui, &self.draw_timer);
 
-            // Chunk array control window
+            // Chunk array control window.
             // self.chunk_arr.spawn_control_window(ui);
 
             // Draw all windows by callbacks.
@@ -219,7 +219,7 @@ impl App {
                 builder(ui)
             }
 
-            // Light control window
+            // Light control window.
             // for light in self.lights.iter_mut().take(1) {
             //     light.spawn_control_window(ui);
             // }
@@ -262,7 +262,7 @@ impl App {
 
         // Update keyboard inputs.
         keyboard::update_input();
-        mouse::update(&self.graphics.window)
+        mouse::update(&self.graphics.window).await
             .log_error("app", "failed to update mouse input");
     }
 }

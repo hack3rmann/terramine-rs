@@ -1,46 +1,32 @@
-#![allow(dead_code)]
-
 use {
-    crate::prelude::*,
-    std::path::Path,
-    wgpu::{ShaderModule, Device},
-    tokio::{fs, io},
+    crate::{
+        prelude::*,
+        assets::FromSource,
+    },
 };
 
-/// Wrapper around [`wgpu`]'s [`ShaderModule`].
-#[derive(Debug, Deref)]
+/// A shader defined by is's source code.
+#[derive(Clone, Debug, PartialEq, Eq, Default, TypeUuid)]
+#[uuid = "8faec540-e1d6-11ed-b9fb-0800200c9a66"]
 pub struct Shader {
-    #[deref]
-    inner: ShaderModule,
-
-    device: Arc<Device>,
-    label: String,
+    pub source: Source,
 }
+assert_impl_all!(Shader: Send, Sync);
 
 impl Shader {
-    pub fn from_source(device: Arc<Device>, source_code: String, label: impl Into<String>) -> Self {
-        let label = label.into();
-
-        let shader = device.create_shader_module(
-            wgpu::ShaderModuleDescriptor {
-                label: Some(&label),
-                source: wgpu::ShaderSource::Wgsl(Cow::Owned(source_code)),
-            },
-        );
-
-        Self { label, device, inner: shader }
+    pub fn new(source: impl Into<Source>) -> Self {
+        Self { source: source.into() }
     }
+}
 
-    pub async fn load_from_file(
-        device: Arc<Device>, label: impl Into<String>, file_name: impl AsRef<Path>,
-    ) -> io::Result<Self> {
-        use cfg::shader::DIRECTORY;
-        let file_name = file_name.as_ref();
+/// A shader source code string.
+pub type Source = Cow<'static, str>;
+assert_impl_all!(Source: Send, Sync);
 
-        let _work_guard = logger::work!(from = "shader-loader", "loading from {file_name:?}");
-
-        let source = fs::read_to_string(Path::new(DIRECTORY).join(file_name)).await?;
-
-        Ok(Self::from_source(device, source, label))
+impl FromSource for Shader {
+    type Error = !;
+    type Source = String;
+    fn from_source(source: Self::Source) -> Result<Self, Self::Error> {
+        Ok(Self::new(source))
     }
 }

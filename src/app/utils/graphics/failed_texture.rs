@@ -18,8 +18,7 @@ pub struct Texture {
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,
 }
-
-static_assertions::assert_impl_all!(Texture: Send, Sync);
+assert_impl_all!(Texture: Send, Sync);
 
 impl Texture {
     pub fn from_image_bytes(
@@ -66,7 +65,7 @@ impl Texture {
             size,
         );
 
-        let view = texture.create_view(&Default::default());
+        let view = texture.create_view(&default());
 
         let sampler = device.create_sampler(
             &SamplerDescriptor {
@@ -77,7 +76,7 @@ impl Texture {
                 mag_filter: FilterMode::Nearest,
                 min_filter: FilterMode::Linear,
                 mipmap_filter: FilterMode::Nearest,
-                ..Default::default()
+                ..default()
             },
         );
 

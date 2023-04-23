@@ -1,6 +1,6 @@
 use {
-    crate::app::utils::{
-        cfg,
+    crate::{
+        prelude::*,
         graphics::{
             camera::Camera,
             glium_mesh::UnindexedMesh,
@@ -12,8 +12,6 @@ use {
         index::PrimitiveType, VertexBuffer,
         uniforms::Uniforms,
     },
-    std::sync::atomic::Ordering,
-    lazy_static::lazy_static,
 };
 
 pub mod data {
@@ -29,10 +27,10 @@ pub mod data {
                 depth: Depth {
                     test: DepthTest::IfLessOrEqual,
                     write: true,
-                    .. Default::default()
+                    ..default()
                 },
                 backface_culling: BackfaceCullingMode::CullingDisabled,
-                .. Default::default()
+                ..default()
             }
         );
     }
@@ -117,7 +115,7 @@ impl DebugVisualized<'_, Camera> {
         target: &mut impl glium::Surface,
         uniforms: &impl Uniforms
     ) -> Result<(), DrawError> {
-        if ENABLED.load(Ordering::Relaxed) {
+        if ENABLED.load(Relaxed) {
             let mesh = data::construct_mesh(&mut self.inner, facade);
             mesh.render(target, self.static_data.shader, self.static_data.draw_params, uniforms)
         } else { Ok(()) }

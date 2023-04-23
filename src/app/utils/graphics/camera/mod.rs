@@ -45,11 +45,12 @@ pub struct Camera {
     /* Frustum */
     frustum: Option<Frustum>,
 }
+assert_impl_all!(Camera: Send, Sync);
 
 #[allow(dead_code)]
 impl Camera {
     /// Creates camera.
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self { default() }
 
     /// Gives camera positioned to given coordinates
     pub fn with_position(mut self, x: f32, y: f32, z: f32) -> Self {
@@ -201,7 +202,7 @@ impl Camera {
     }
 
     /// Checks if AABB is in camera frustum
-    pub fn is_aabb_in_view(&mut self, aabb: AABB) -> bool {
+    pub fn is_aabb_in_view(&mut self, aabb: Aabb) -> bool {
         self.get_frustum().is_aabb_in_frustum(aabb)
     }
 
@@ -281,8 +282,8 @@ impl Default for Camera {
             aspect_ratio: window_def::HEIGHT as f32 / window_def::WIDTH as f32,
 
             pos:      vecf!(0, 0, -3),
-            speed:    vec3::zero(),
-            rotation: Default::default(),
+            speed:    vec3::ZERO,
+            rotation: default(),
 
             up:     vecf!(0, 1, 0),
             front:  vecf!(0, 0, -1),

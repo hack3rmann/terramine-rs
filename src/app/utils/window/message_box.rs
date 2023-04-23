@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use {
-    derive_deref_rs::Deref,
+    crate::prelude::*,
     winapi::{
         um::{
             winuser::MessageBoxA,
@@ -40,7 +40,7 @@ impl MessageBox {
 
     /// Constructs new [`MessageBox`] with default flags.
     pub fn new(title: &str, body: &str) -> Self {
-        Self::with_flags(title, body, Default::default())
+        Self::with_flags(title, body, default())
     }
 
     /// Configures error flags.
@@ -53,7 +53,7 @@ impl MessageBox {
 
     /// Configures info flags.
     pub fn infod(mut self) -> Self {
-        self.flags = Default::default();
+        self.flags = default();
         self
     }
 

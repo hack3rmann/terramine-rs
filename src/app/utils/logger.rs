@@ -24,6 +24,7 @@ pub struct Message {
     pub from: CowStr,
     pub msg_type: MsgType,
 }
+assert_impl_all!(Message: Send, Sync);
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default, Display)]
 #[display(style = "UPPERCASE")]
@@ -66,6 +67,7 @@ pub struct WorkLogGuard {
     pub from: CowStr,
     pub work: CowStr,
 }
+assert_impl_all!(WorkLogGuard: Send, Sync);
 
 impl WorkLogGuard {
     pub fn new(from: impl Into<CowStr>, work: impl Into<CowStr>) -> Self {
@@ -217,7 +219,7 @@ impl<T, E: std::error::Error> LogError<T> for Result<T, E> {
             Err(err) => {
                 let msg = msg.into();
                 log!(Error, from = from, "{msg}: {err}");
-                Default::default()
+                default()
             }
         }
     }

@@ -71,8 +71,7 @@ pub mod keyboard {
     }
 
     pub fn is_pressed_combo(keys: impl IntoIterator<Item = Key>) -> bool {
-        keys.into_iter()
-            .all(is_pressed)
+        keys.into_iter().all(is_pressed)
     }
 
     pub fn just_pressed_combo<Iter>(keys: Iter) -> bool
@@ -119,7 +118,8 @@ pub mod mouse {
 
     lazy_static! {
         pub(super) static ref INPUTS: RwLock<HashSet<MouseButton>> = RwLock::new(HashSet::new());
-        pub(super) static ref RELEASED_KEYS: Mutex<HashSet<MouseButton>> = Mutex::new(HashSet::new());
+        pub(super) static ref RELEASED_KEYS: tokio::sync::Mutex<HashSet<MouseButton>> =
+            tokio::sync::Mutex::new(HashSet::new());
     }
 
     pub(super) static DX: AtomicF32 = AtomicF32::new(0.0);
@@ -153,8 +153,11 @@ pub mod mouse {
         let is_pressed = is_pressed(button);
 
         if is_pressed {
-            RELEASED_KEYS.lock().unwrap()
-                .insert(button);
+            tokio::task::block_in_place(|| RUNTIME.block_on(async {
+                RELEASED_KEYS.lock()
+                    .await
+                    .insert(button);
+            }));
         }
 
         is_pressed
@@ -185,9 +188,9 @@ pub mod mouse {
     }
 
     /// Update mouse delta.
-    pub fn update(window: &glium::glutin::window::Window) -> Result<(), MouseError> {
+    pub async fn update(window: &glium::glutin::window::Window) -> Result<(), MouseError> {
         {
-            let mut released_keys = RELEASED_KEYS.lock().unwrap();
+            let mut released_keys = RELEASED_KEYS.lock().await;
 
             let mut inputs = INPUTS.write()
                 .expect("rwlock should be not poisoned");
@@ -273,7 +276,7 @@ pub mod mouse {
         #[error("failed to get cursor position, error code: {0}")]
         GetCursorPos(i32),
 
-        #[error("not supported: {0}")]
+        #[error(transparent)]
         NotSupported(#[from] glium::glutin::error::NotSupportedError),
     }
 }

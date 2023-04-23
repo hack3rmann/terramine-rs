@@ -24,10 +24,10 @@ pub type Enumerator = u64;
 
 #[derive(Error, Debug)]
 pub enum SaveError {
-    #[error("io failed: {0}")]
+    #[error(transparent)]
     Io(#[from] io::Error),
     
-    #[error("error from `StackHeap`")]
+    #[error(transparent)]
     StackHeap(#[from] StackHeapError),
 
     #[error("index shpuld be in 0..{size} but {idx}")]

@@ -57,8 +57,8 @@ pub struct Chunk {
 impl Default for Chunk {
     fn default() -> Self {
         Self {
-            voxel_ids: Default::default(),
-            pos: Default::default(),
+            voxel_ids: default(),
+            pos: default(),
             info: Atomic::new(Info {
                 fill_type: FillType::AllSame(AIR_VOXEL_DATA.id),
                 is_filled: true,
@@ -466,7 +466,7 @@ impl Chunk {
         let lo = global_chunk_pos - 0.5 * vec3::all(Voxel::SIZE);
         let hi = lo + vec3::all(Chunk::GLOBAL_SIZE) - 0.5 * vec3::all(Voxel::SIZE);
 
-        camera.is_aabb_in_view(AABB::from_float3(lo, hi))
+        camera.is_aabb_in_view(Aabb::from_float3(lo, hi))
     }
 
     /// Checks if [`Chunk`] is not already generated.
@@ -533,7 +533,7 @@ impl Chunk {
         Self {
             pos: Atomic::new(chunk_pos),
             voxel_ids,
-            info: Default::default(),
+            info: default(),
         }.as_optimized()
     }
 
@@ -674,7 +674,7 @@ impl Chunk {
         
         let mut info = Info {
             active_lod: self.info.load(Acquire).active_lod,
-            ..Default::default()
+            ..default()
         };
 
         /* All-same pass */
@@ -883,10 +883,10 @@ impl<'s> ChunkDrawBundle<'s> {
             depth: gl::Depth {
                 test: gl::DepthTest::IfLess,
                 write: true,
-                .. Default::default()
+                ..default()
             },
             backface_culling: gl::BackfaceCullingMode::CullClockwise,
-            .. Default::default()
+            ..default()
         };
         
         /* Create shaders */

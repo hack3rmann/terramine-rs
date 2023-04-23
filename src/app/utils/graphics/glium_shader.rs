@@ -3,8 +3,8 @@
 //!
 
 use {
-    crate::app::utils::{
-        logger,
+    crate::{
+        prelude::*,
         cfg::shader::{
             DIRECTORY,
             VERTEX_FILE_EXTENTION,
@@ -12,9 +12,7 @@ use {
         },
     },
     std::{fs, io},
-    thiserror::Error,
     glium::ProgramCreationError,
-    derive_deref_rs::Deref,
 };
 
 /// Shader struct is container for shader source code.
@@ -65,7 +63,7 @@ impl Shader {
 
 #[derive(Debug, Error)]
 pub enum ShaderError {
-    #[error("failed to create gl shader program: {0}")]
+    #[error(transparent)]
     ProgramCreation(#[from] ProgramCreationError),
 
     #[error("failed to read shader file, shader name: {shader_name}, io_err: {io_err}")]

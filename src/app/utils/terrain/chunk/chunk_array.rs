@@ -33,7 +33,7 @@ impl From<ChunkArrSaveType> for u64 {
 pub type ReadingHandle = JoinHandle<io::Result<(USize3, Vec<(Vec<Atomic<Id>>, FillType)>)>>;
 
 /// Represents 3d array of [`Chunk`]s. Can control their mesh generation, etc.
-#[derive(Debug)]
+#[derive(Debug, SmartDefault)]
 pub struct ChunkArray {
     pub chunks: Vec<ChunkRef>,
     pub meshes: Vec<MeshRef>,
@@ -44,27 +44,11 @@ pub struct ChunkArray {
     pub voxels_gen_tasks: HashMap<Int3, GenTask>,
     pub partition_tasks: HashMap<Int3, PartitionTask>,
 
+    #[default = 5.8]
     pub lod_threashold: f32,
 
     pub reading_handle: Option<ReadingHandle>,
     pub saving_handle: Option<JoinHandle<io::Result<()>>>,
-}
-
-impl Default for ChunkArray {
-    fn default() -> Self {
-        Self {
-            chunks: Default::default(),
-            meshes: Default::default(),
-            sizes: Default::default(),
-            full_tasks: Default::default(),
-            low_tasks: Default::default(),
-            partition_tasks: Default::default(),
-            voxels_gen_tasks: Default::default(),
-            lod_threashold: 5.8,
-            reading_handle: None,
-            saving_handle: None,
-        }
-    }
 }
 
 impl ChunkArray {
@@ -105,7 +89,7 @@ impl ChunkArray {
             .map(|_| Rc::new(RefCell::new(ChunkMesh::default())))
             .collect();
         
-        Ok(Self { chunks, sizes, meshes, ..Default::default() })
+        Ok(Self { chunks, sizes, meshes, ..default() })
     }
 
     /// Constructs [`ChunkArray`] with empty chunks.
@@ -1135,7 +1119,7 @@ impl ChunkArray {
 
 #[derive(Debug, Error)]
 pub enum UpdateError {
-    #[error("failed to join task: {0}")]
+    #[error(transparent)]
     Join(#[from] JoinError),
 
     #[error("failed to save chunk array: {0}")]

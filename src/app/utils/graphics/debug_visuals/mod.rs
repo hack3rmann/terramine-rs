@@ -2,19 +2,18 @@ pub mod camera;
 pub mod chunk_array;
 
 use {
-    crate::app::utils::graphics::{
-        glium_mesh::UnindexedMesh,
-        glium_shader::Shader,
+    crate::{
+        prelude::*,
+        graphics::{
+            glium_mesh::UnindexedMesh,
+            glium_shader::Shader,
+        }
     },
     glium::{
         DrawParameters,
         implement_vertex,
     },
-    std::{
-        marker::PhantomData,
-        sync::atomic::{AtomicBool, Ordering}
-    },
-    derive_deref_rs::Deref,
+    std::marker::PhantomData,
 };
 
 /// Adds debug visuals to type `T`.
@@ -41,8 +40,7 @@ pub struct DebugVisualsStatics<'s, T> {
 static ENABLED: AtomicBool = AtomicBool::new(false);
 
 pub fn switch_enable() {
-    let is_enabled = ENABLED.load(Ordering::Acquire);
-    ENABLED.store(!is_enabled, Ordering::Release);
+    ENABLED.fetch_update(AcqRel, Relaxed, |old| Some(!old)).unwrap();
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -50,6 +48,7 @@ pub struct Vertex {
     pos: [f32; 3],
     color: [f32; 4],
 }
+assert_impl_all!(Vertex: Send, Sync);
 
 implement_vertex!(Vertex, pos, color);
 

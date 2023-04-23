@@ -1,7 +1,7 @@
 use {
     crate::{
         prelude::*,
-        graphics::shader::Shader,
+        graphics::failed_shader::Shader,
     },
     wgpu::{*, util::DeviceExt},
 };
@@ -39,6 +39,7 @@ pub struct MeshSharedResources {
     pub polygon_mode: PolygonMode,
     pub primitive_topology: PrimitiveTopology,
 }
+assert_impl_all!(MeshSharedResources: Send, Sync);
 
 impl MeshSharedResources {
     pub fn new<V>(desc: MeshDescriptor) -> Self
@@ -101,6 +102,7 @@ pub struct MeshDescriptor {
     pub fragment_targets: Arc<[Option<ColorTargetState>]>,
     pub bind_group_layouts: Arc<[Arc<BindGroupLayout>]>,
 }
+assert_impl_all!(MeshDescriptor: Send, Sync);
 
 impl<V> Mesh<V> {
     pub fn from_shared_src(shared: MeshSharedResources, vertices: &[V]) -> Self

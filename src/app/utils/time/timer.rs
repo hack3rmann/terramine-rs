@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 
 use {
-    crate::cfg::timer::N_FAMES_TO_MEASURE,
+    crate::prelude::*,
+    cfg::timer::N_FAMES_TO_MEASURE,
     std::time::{Instant, Duration},
 };
 
@@ -56,6 +57,6 @@ impl Timer {
         }
     }
 
-    /// Gives duration from last `update()` call
+    /// Gives duration since `update()` call
     pub fn duration(&self) -> Duration { Duration::from_secs_f32(self.dt) }
 }

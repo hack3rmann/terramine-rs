@@ -7,8 +7,11 @@ pub mod ui;
 pub mod light;
 pub mod surface;
 pub mod failed_mesh;
+pub mod failed_shader;
+pub mod failed_texture;
+pub mod mesh;
+pub mod render_resource;
 pub mod shader;
-pub mod texture;
 
 use {
     crate::{
@@ -16,7 +19,7 @@ use {
         window::Window,
     },
     failed_mesh::{Mesh, Bufferizable, MeshDescriptor, Renderable},
-    shader::Shader, texture::Texture,
+    failed_shader::Shader, failed_texture::Texture,
     wgpu::{*, util::DeviceExt},
     winit::event_loop::EventLoop,
     std::path::PathBuf,
@@ -25,9 +28,10 @@ use {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Default, Pod, Zeroable)]
 pub struct TestVertex {
-    position: [f32; 2],
-    tex_coords: [f32; 2],
+    position: vec2,
+    tex_coords: vec2,
 }
+assert_impl_all!(TestVertex: Send, Sync);
 
 impl Bufferizable for TestVertex {
     const ATTRS: &'static [VertexAttribute] =
@@ -41,21 +45,22 @@ impl Bufferizable for TestVertex {
 }
 
 const TEST_VERTICES: &[TestVertex] = &[
-    TestVertex { position: [-0.5, -0.5], tex_coords: [0.0, 1.0] },
-    TestVertex { position: [ 0.5, -0.5], tex_coords: [1.0, 1.0] },
-    TestVertex { position: [ 0.5,  0.5], tex_coords: [1.0, 0.0] },
-    
-    TestVertex { position: [-0.5, -0.5], tex_coords: [0.0, 1.0] },
-    TestVertex { position: [ 0.5,  0.5], tex_coords: [1.0, 0.0] },
-    TestVertex { position: [-0.5,  0.5], tex_coords: [0.0, 0.0] },
+    TestVertex { position: vecf![-0.5, -0.5], tex_coords: vecf![0.0, 1.0] },
+    TestVertex { position: vecf![ 0.5, -0.5], tex_coords: vecf![1.0, 1.0] },
+    TestVertex { position: vecf![ 0.5,  0.5], tex_coords: vecf![1.0, 0.0] },
+    TestVertex { position: vecf![-0.5, -0.5], tex_coords: vecf![0.0, 1.0] },
+    TestVertex { position: vecf![ 0.5,  0.5], tex_coords: vecf![1.0, 0.0] },
+    TestVertex { position: vecf![-0.5,  0.5], tex_coords: vecf![0.0, 0.0] },
 ];
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct CommonUniforms {
-    pub time: f32,
     pub screen_resolution: vec2,
+    pub time: f32,
+    pub _pad: u32,
 }
+assert_impl_all!(CommonUniforms: Send, Sync);
 
 #[derive(Debug)]
 pub struct CommonUniformsBuffer {
@@ -63,13 +68,14 @@ pub struct CommonUniformsBuffer {
     pub bind_group: BindGroup,
     pub buffer: Buffer,
 }
+assert_impl_all!(CommonUniformsBuffer: Send, Sync);
 
 impl CommonUniformsBuffer {
-    pub fn new(device: &Device, initial_value: CommonUniforms) -> Self {
+    pub fn new(device: &Device, initial_value: &CommonUniforms) -> Self {
         let buffer = device.create_buffer_init(
             &util::BufferInitDescriptor {
                 label: Some("common_uniforms_buffer"),
-                contents: bytemuck::bytes_of(&initial_value),
+                contents: bytemuck::bytes_of(initial_value),
                 usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             },
         );
@@ -149,7 +155,7 @@ impl Graphics {
         let wgpu_instance = Instance::new(
             InstanceDescriptor {
                 backends: Backends::DX12 | Backends::VULKAN,
-                dx12_shader_compiler: Default::default(),
+                dx12_shader_compiler: default(),
             }
         );
 
@@ -164,7 +170,7 @@ impl Graphics {
 
         let adapter = wgpu_instance
             .request_adapter(&RequestAdapterOptions {
-                power_preference: Default::default(),
+                power_preference: default(),
                 force_fallback_adapter: false,
                 compatible_surface: Some(&surface)
             })
@@ -175,7 +181,7 @@ impl Graphics {
             .request_device(&DeviceDescriptor {
                 label: None,
                 features: Features::empty(),
-                limits: Limits::default(),
+                limits: default(),
             }, None)
             .await
             .expect("failed to create device");
@@ -211,7 +217,7 @@ impl Graphics {
 
         let common_uniforms = CommonUniformsBuffer::new(
             &device,
-            CommonUniforms { time: 0.0, screen_resolution: vec2::from(DEFAULT_SIZES) },
+            &CommonUniforms { time: 0.0, screen_resolution: vec2::from(DEFAULT_SIZES), _pad: 0 },
         );
 
         let shader = Shader::load_from_file(Arc::clone(&device), "triangle shader", "shader.wgsl")
@@ -260,7 +266,7 @@ impl Graphics {
             &queue,
             imgui_wgpu::RendererConfig {
                 texture_format: config.format,
-                ..Default::default()
+                ..default()
             },
         );
 
@@ -303,10 +309,11 @@ impl Graphics {
         self.common_uniforms.update(&self.queue, CommonUniforms {
             time: desc.time,
             screen_resolution: (size.width as f32, size.height as f32).into(),
+            _pad: 0,
         });
 
         let output = self.surface.get_current_texture()?;
-        let view = output.texture.create_view(&Default::default());
+        let view = output.texture.create_view(&default());
         let mut encoder = self.device.create_command_encoder(
             &CommandEncoderDescriptor {
                 label: Some("render_encoder"),

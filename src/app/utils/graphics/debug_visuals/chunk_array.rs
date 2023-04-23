@@ -31,10 +31,10 @@ pub mod data {
                 depth: Depth {
                     test: DepthTest::IfLessOrEqual,
                     write: true,
-                    .. Default::default()
+                    ..default()
                 },
                 backface_culling: BackfaceCullingMode::CullingDisabled,
-                .. Default::default()
+                ..default()
             }
         );
     }
@@ -174,7 +174,7 @@ impl<'s> DebugVisualized<'s, ChunkArray> {
         &mut self, facade: &dyn glium::backend::Facade,
         target: &mut impl glium::Surface, uniforms: &impl Uniforms,
     ) -> Result<(), glium::DrawError> {
-        if ENABLED.load(Ordering::Relaxed) {
+        if ENABLED.load(Relaxed) {
             self.mesh = data::construct_mesh(self, facade).await;
         
             let shader = data::get(facade).shader;

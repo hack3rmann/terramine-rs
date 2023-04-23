@@ -1,8 +1,9 @@
 use {
-    crate::app::utils::{
+    crate::{
+        prelude::*,
         graphics::camera::Camera,
     },
-    math_linear::{prelude::*, math::ray::space_3d::Line},
+    math_linear::math::ray::space_3d::Line,
 };
 
 /// Represents the camera frustum
@@ -17,6 +18,7 @@ pub struct Frustum {
 
     pub courner_rays: [Line; 4]
 }
+assert_impl_all!(Frustum: Send, Sync);
 
 impl Frustum {
     /// Creates frustum struct from camera data
@@ -47,7 +49,7 @@ impl Frustum {
     }
 
     /// Frustum check
-    pub fn is_aabb_in_frustum(&self, aabb: AABB) -> bool {
+    pub fn is_aabb_in_frustum(&self, aabb: Aabb) -> bool {
         /* Frirst pass
          * 1) Checks if camera position is in AABB
          * 2) Checks if center of chunk is in frustum
