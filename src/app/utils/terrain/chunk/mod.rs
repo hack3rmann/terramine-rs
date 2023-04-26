@@ -29,7 +29,7 @@ use {
         DrawError,
         uniforms::Uniforms,
     },
-    iterator::{CubeBorder, Sides},
+    iterator::{CubeBoundary, Sides},
 };
 
 pub mod prelude {
@@ -126,10 +126,10 @@ impl Chunk {
             return true
         }
 
-        match self.info.load(Relaxed).fill_type {
-            FillType::AllSame(id) => id == AIR_VOXEL_DATA.id,
-            _ => false,
-        }
+        matches!(
+            self.info.load(Relaxed).fill_type,
+            FillType::AllSame(id) if id == AIR_VOXEL_DATA.id
+        )
     }
 
     /// Gives `Some()` with fill id or returns `None`.
@@ -157,13 +157,13 @@ impl Chunk {
 
         let info = self.info.load(Relaxed);
         let pos_iter: Box<dyn Iterator<Item = Int3>> = match info.fill_type {
-            FillType::Default =>
+            FillType::Unspecified =>
                 Box::new(Chunk::local_pos_iter()),
 
             FillType::AllSame(id) => if id == AIR_VOXEL_DATA.id {
                 Box::new(std::iter::empty())
             } else {
-                Box::new(CubeBorder::new(Chunk::SIZE as i32))
+                Box::new(CubeBoundary::new(Chunk::SIZE as i32))
             },
         };
 
@@ -308,21 +308,17 @@ impl Chunk {
     }
 
     pub fn is_adj_filled(adj: &ChunkAdj) -> bool {
-        adj.inner.iter()
-            .all(|chunk| match chunk {
-                None => false,
-                Some(chunk) => chunk.is_filled(),
-            })
+        adj.inner.iter().all(|chunk| matches!(chunk, Some(chunk) if chunk.is_filled()))
     }
 
     /// Gives [`Vec`] with full detail vertices mesh of [`Chunk`].
     pub fn make_partitioned_vertices(&self, chunk_adj: ChunkAdj) -> [Vec<FullVertex>; 8] {
         let is_filled_and_blocked = self.is_filled() && Self::is_adj_filled(&chunk_adj);
         if self.is_empty() || is_filled_and_blocked {
-            return array_init::array_init(|_| vec![])
+            return array_init(|_| vec![])
         }
 
-        array_init::array_init(|partition_idx| self.make_partition(&chunk_adj, partition_idx))
+        array_init(|partition_idx| self.make_partition(&chunk_adj, partition_idx))
     }
 
     /// Makes vertices for *low detail* mesh from voxel array.
@@ -376,9 +372,6 @@ impl Chunk {
                     let start_pos = global_pos + offset * sub_chunk_size;
                     let end_pos   = global_pos + (offset + Int3::ONE) * sub_chunk_size;
 
-                    let pred = |pos| is_blocking_voxel(pos, offset);
-                    let mut iter = SpaceIter::new(start_pos..end_pos);
-
                     let is_on_surface = match offset.as_tuple() {
                         (-1, 0, 0) if 0 == local_pos.x => true,
                         (0, -1, 0) if 0 == local_pos.y => true,
@@ -389,6 +382,9 @@ impl Chunk {
                         _ => false,
                     };
                     
+                    let mut iter = SpaceIter::new(start_pos..end_pos);
+                    let pred = |pos| is_blocking_voxel(pos, offset);
+
                     match chunk_adj.by_offset(offset) {
                         Some(_) if is_on_surface =>
                             iter.all(pred),
@@ -418,10 +414,10 @@ impl Chunk {
     pub fn get_id(&self, idx: usize) -> Option<Id> {
         if Chunk::VOLUME <= idx { return None }
 
-        match self.info.load(Relaxed).fill_type {
-            FillType::AllSame(id) => Some(id),
-            FillType::Default => Some(self.voxel_ids[idx].load(Relaxed))
-        }
+        Some(match self.info.load(Relaxed).fill_type {
+            FillType::AllSame(id) => id,
+            FillType::Unspecified => self.voxel_ids[idx].load(Relaxed)
+        })
     }
 
     /// Givex voxel from global position.
@@ -526,7 +522,7 @@ impl Chunk {
     pub fn from_voxels(voxel_ids: Vec<Atomic<Id>>, chunk_pos: Int3) -> Self {
         let len = voxel_ids.len();
         assert!(
-            len == Self::VOLUME || len == 0,
+            matches!(len, Self::VOLUME | 0),
             "`voxel_ids.len()` should be equal to `Chunk::VOLUME` or `0`, but it's {len}",
         );
 
@@ -553,7 +549,7 @@ impl Chunk {
         }
 
         let old_id = match self.info.load(Relaxed).fill_type {
-            FillType::Default => {
+            FillType::Unspecified => {
                 let old_id = self.voxel_ids[idx].swap(new_id, AcqRel);
                 if old_id != new_id { self.optimize() }
                 old_id
@@ -699,19 +695,17 @@ impl Chunk {
         let mut info = self.info.load(Acquire);
 
         match info.fill_type {
-            FillType::Default => (),
+            FillType::Unspecified => (),
             FillType::AllSame(id) =>
                 self.voxel_ids = std::iter::from_fn(|| Some(Atomic::new(id)))
                     .take(Self::VOLUME)
                     .collect(),
         }
 
-        info.fill_type = FillType::Default;
+        info.fill_type = FillType::Unspecified;
 
         self.info.store(info, Release);
     }
-
-    
 
     /// Converts chunk position to world position.
     pub fn global_pos(chunk_pos: Int3) -> Int3 {
@@ -734,7 +728,9 @@ impl Chunk {
     }
 
     /// Computes local (relative to chunk) position from global position.
+    /// 
     /// # Error
+    /// 
     /// Returns [`Err`] if local position is out of [chunk][Chunk] bounds.
     pub fn global_to_local_pos_checked(chunk_pos: Int3, global_voxel_pos: Int3) -> Result<Int3, EditError> {
         let local_pos = Self::global_to_local_pos(chunk_pos, global_voxel_pos);
@@ -744,14 +740,15 @@ impl Chunk {
             local_pos.y < 0 || Self::SIZES.y as i32 <= local_pos.y ||
             local_pos.z < 0 || Self::SIZES.z as i32 <= local_pos.z;
 
-        match is_out_of_bounds {
-            true => Err(EditError::PosOutOfBounds { pos: global_voxel_pos, chunk_pos }),
-            false => Ok(local_pos),
-        }
+        is_out_of_bounds
+            .then_some(local_pos)
+            .ok_or(EditError::PosOutOfBounds { pos: global_voxel_pos, chunk_pos })
     }
 
     /// Gives index in voxel array by it's 3D-index (or relative to chunk position)
+    /// 
     /// # Error
+    /// 
     /// Returns [`None`] if `pos` < [`Int3::ZERO`][Int3] or `pos` >= [`Chunk::SIZES`][Chunk].
     pub fn voxel_pos_to_idx(pos: Int3) -> Option<usize> {
         if pos.x < 0 || pos.y < 0 || pos.z < 0 {
@@ -777,7 +774,7 @@ impl Chunk {
                 mesh.upload_full_detail_vertices(&vertices, facade);
             },
             
-            lod => {
+            _ => {
                 let vertices = self.make_vertices_low(chunk_adj, lod);
                 mesh.upload_low_detail_vertices(&vertices, lod, facade);
             }
@@ -788,7 +785,7 @@ impl Chunk {
     pub fn partition_mesh(&self, mesh: &mut ChunkMesh, chunk_adj: ChunkAdj, facade: &dyn gl::backend::Facade) {
         let vertices = self.make_partitioned_vertices(chunk_adj);
         mesh.upload_partitioned_vertices(
-            array_init::array_init(|i| vertices[i].as_slice()),
+            array_init(|i| vertices[i].as_slice()),
             facade,
         );
     }
@@ -803,6 +800,10 @@ impl Chunk {
     }
 
     /// Sets active LOD to given value.
+    /// 
+    /// # Panic
+    /// 
+    /// Panics if `lod` is not available.
     pub fn set_active_lod(&self, mesh: &ChunkMesh, lod: Lod) {
         self.try_set_active_lod(mesh, lod)
             .expect("new LOD value should be available")
@@ -812,10 +813,10 @@ impl Chunk {
     pub fn try_set_active_lod(&self, mesh: &ChunkMesh, lod: Lod) -> Result<(), SetLodError> {
         let mut info = self.info.load(Acquire);
 
-        match mesh.get_available_lods().contains(&lod) {
-            true => info.active_lod = Some(lod),
-            false => return Err(SetLodError::SetActiveLod { tried: lod, active: info.active_lod }),
-        }
+        mesh.get_available_lods()
+            .contains(&lod)
+            .then(|| info.active_lod = Some(lod))
+            .ok_or(SetLodError::SetActiveLod { tried: lod, active: info.active_lod })?;
 
         self.info.store(info, Release);
         Ok(())
@@ -839,18 +840,16 @@ impl Chunk {
     }
 
     pub fn can_render_active_lod(&self, mesh: &ChunkMesh) -> bool {
-        match self.info.load(Relaxed).active_lod {
-            Some(lod) => mesh.get_available_lods()
-                .contains(&lod),
-            None => false,
-        }
+        matches!(
+            self.info.load(Relaxed).active_lod,
+            Some(lod) if mesh.get_available_lods().contains(&lod)
+        )
     }
 }
 
 #[derive(Error, Debug)]
 pub enum SetLodError {
-    #[error("failed to set LOD value to {tried} because \
-             there's no mesh for it. Active LOD value is {active:?}")]
+    #[error("failed to set LOD value to {tried} because there's no mesh for it. Active LOD value is {active:?}")]
     SetActiveLod {
         tried: Lod,
         active: Option<Lod>,
@@ -909,7 +908,7 @@ pub struct Info {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub enum FillType {
     #[default]
-    Default,
+    Unspecified,
     AllSame(Id),
 }
 
@@ -918,7 +917,7 @@ pub enum FillType {
 impl AsBytes for FillType {
     fn as_bytes(&self) -> Vec<u8> {
         match self {
-            Self::Default => vec![0],
+            Self::Unspecified => vec![0],
             Self::AllSame(id) => compose! {
                 std::iter::once(1),
                 id.as_bytes(),
@@ -933,7 +932,7 @@ impl FromBytes for FillType {
         let variant: u8 = reader.read()?;
 
         match variant {
-            0 => Ok(Self::Default),
+            0 => Ok(Self::Unspecified),
             1 => Ok(Self::AllSame(reader.read()?)),
             _ => Err(ReinterpretError::Conversion(
                 format!("conversion of too large byte ({variant}) to FillType")
@@ -946,7 +945,7 @@ impl DynamicSize for FillType {
     fn dynamic_size(&self) -> usize {
         u8::static_size() +
         match self {
-            Self::Default => 0,
+            Self::Unspecified => 0,
             Self::AllSame(_) => Id::static_size(),
         }
     }

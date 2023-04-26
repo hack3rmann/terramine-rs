@@ -25,7 +25,7 @@ where
     T: FromSource<Source = String, Error = E>,
 {
     type Error = WithIoError<E>;
-    fn from_file<'p>(path: impl AsRef<Path> + Send + Sync + 'p) -> BoxFuture<'p, Result<Self, Self::Error>> {
+    default fn from_file<'p>(path: impl AsRef<Path> + Send + Sync + 'p) -> BoxFuture<'p, Result<Self, Self::Error>> {
         Box::pin(async move {
             let file_content = fs::read_to_string(path.as_ref()).await?;
             Self::from_source(file_content)

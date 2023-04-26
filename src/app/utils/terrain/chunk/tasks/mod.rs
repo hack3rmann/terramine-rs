@@ -60,10 +60,10 @@ impl<Item: Send + 'static> Task<Item> {
         V: AsMut<Self> + AsRef<Self>,
     {
         let futs = tasks.into_iter()
-            .filter(|(_, task)| match task.as_ref().handle {
-                Some(ref handle) => handle.is_finished(),
-                None => false,
-            })
+            .filter(|(_, task)| matches!(
+                task.as_ref().handle,
+                Some(ref handle) if handle.is_finished()
+            ))
             .map(|(key, mut task)| async move {
                 (key, task.as_mut().take_result().await)
             });

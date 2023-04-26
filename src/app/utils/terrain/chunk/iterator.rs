@@ -3,9 +3,8 @@
 #![allow(dead_code)]
 
 use {
-    math_linear::prelude::*,
+    crate::prelude::*,
     std::ops::{Range, RangeBounds},
-    smallvec::SmallVec,
 };
 
 /// Iterator over chunk border.
@@ -17,38 +16,36 @@ use {
 ///     iterator::CubeBorder,
 /// };
 /// 
-/// fn test2() {
-///     /* [`CubeBorder`] iterator */
-///     let border = CubeBorder::new(16);
+/// // [`CubeBorder`] iterator
+/// let border = CubeBorder::new(16);
 /// 
-///     const MAX: i32 = 16 - 1;
-///     let classic_iter = (0 .. 16_i32.pow(3))
-///         .map(|i| position_function(i))
-///         .filter(|pos|
-///             /* Check 'bordered' condition */
-///             pos.x() == 0 || pos.x() == MAX ||
-///             pos.y() == 0 || pos.y() == MAX ||
-///             pos.z() == 0 || pos.z() == MAX
-///         );
+/// const MAX: i32 = 16 - 1;
+/// let classic_iter = (0 .. 16_i32.pow(3))
+///     .map(|i| position_function(i))
+///     .filter(|pos|
+///         // Check 'boundary' condition
+///         pos.x() == 0 || pos.x() == MAX ||
+///         pos.y() == 0 || pos.y() == MAX ||
+///         pos.z() == 0 || pos.z() == MAX
+///     );
 /// 
-///     /* Walk over both together */
-///     for (b, w) in border.zip(classic_iter) {
-///         assert_eq!(b, w)
-///     }
+/// // Walk over both together
+/// for (b, w) in border.zip(classic_iter) {
+///     assert_eq!(b, w)
 /// }
 /// ```
 #[derive(Clone, Debug)]
-pub struct CubeBorder {
+pub struct CubeBoundary {
     prev: Int3,
     size: i32,
 }
 
-impl CubeBorder {
+impl CubeBoundary {
     const INITIAL_STATE: i32 = -1;
     pub fn new(size: i32) -> Self { Self { prev: Int3::all(Self::INITIAL_STATE), size } }
 }
 
-impl Iterator for CubeBorder {
+impl Iterator for CubeBoundary {
     type Item = Int3;
     fn next(&mut self) -> Option<Self::Item> {
         /* Maximun corrdinate value in border */
@@ -189,7 +186,7 @@ impl Iterator for CubeBorder {
     }
 }
 
-/// Full equivalent of 3-fold cycle.
+/// Iterator that yields cartesian product.
 /// 
 /// # Example:
 /// 
@@ -199,24 +196,22 @@ impl Iterator for CubeBorder {
 ///     terrain::chunk::iterator::SpaceIter,
 /// };
 /// 
-/// fn test() {
-///     let mut res1 = vec![];
-///     let mut res2 = vec![];
+/// let mut res1 = vec![];
+/// let mut res2 = vec![];
 /// 
-///     /* [`SpaceIter`] equivalent */
-///     for pos in SpaceIter::new(Int3::ZERO..Int3::all(16)) {
-///         res1.push(pos)
-///     }
-/// 
-///     /* Classic 3-fold cycle */
-///     for x in 0..16 {
-///     for y in 0..16 {
-///     for z in 0..16 {
-///         res2.push(veci!(x, y, z))
-///     }}}
-/// 
-///     assert_eq!(res1, res2);
+/// // [`SpaceIter`] equivalent
+/// for pos in SpaceIter::new(Int3::ZERO..Int3::all(16)) {
+///     res1.push(pos)
 /// }
+/// 
+/// // Classic 3-fold loop
+/// for x in 0..16 {
+/// for y in 0..16 {
+/// for z in 0..16 {
+///     res2.push(veci!(x, y, z))
+/// }}}
+/// 
+/// assert_eq!(res1, res2);
 /// ```
 #[derive(Debug, Clone)]
 pub struct SpaceIter {
@@ -313,35 +308,15 @@ impl SpaceIter {
 impl Iterator for SpaceIter {
     type Item = Int3;
     fn next(&mut self) -> Option<Self::Item> {
-        match self.idx < self.size {
-            true => {
-                let pos = Self::pos_from_idx(self.idx, self.back_shift, self.sizes);
-                self.idx += 1;
-                Some(pos)
-            },
-
-            false => None,
-        }
+        (self.idx < self.size).then(|| {
+            self.idx += 1;
+            Self::pos_from_idx(self.idx - 1, self.back_shift, self.sizes)
+        })
     }
 }
 
 impl ExactSizeIterator for SpaceIter {
     fn len(&self) -> usize { self.size }
-}
-
-impl DoubleEndedIterator for SpaceIter {
-    // FIXME: wrong next_back() impl
-    fn next_back(&mut self) -> Option<Self::Item> {
-        match self.idx < self.size {
-            true if 0 < self.size => {
-                let pos = Self::pos_from_idx(self.size - 1, self.back_shift, self.sizes);
-                self.size -= 1;
-                Some(pos)
-            },
-
-            _ => None,
-        }
-    }
 }
 
 /// Position function.
@@ -439,7 +414,7 @@ impl<T> std::iter::FromIterator<T> for Sides<T> {
     fn from_iter<Iter: IntoIterator<Item = T>>(iter: Iter) -> Self {
         let mut iter = iter.into_iter();
 
-        let arr = array_init::array_init(|_|
+        let arr = array_init(|_|
             iter.next()
                 .expect("iterator should have exactly 6 elements")
         );
@@ -537,15 +512,29 @@ impl<T> std::ops::IndexMut<usize> for Sides<T> {
 }
 
 #[allow(dead_code)]
-pub fn offsets_from_border(pos: Int3, bounds: Range<Int3>) -> SmallVec<[Int3; 6]> {
+pub fn offsets_from_border(pos: Int3, bounds: impl RangeBounds<Int3>) -> SmallVec<[Int3; 6]> {
     let mut result = SmallVec::new();
 
-    if pos.x == bounds.start.x { result.push(veci!(-1, 0, 0)) }
-    if pos.y == bounds.start.y { result.push(veci!(0, -1, 0)) }
-    if pos.z == bounds.start.z { result.push(veci!(0, 0, -1)) }
-    if pos.x == bounds.end.x - 1 { result.push(veci!(1, 0, 0)) }
-    if pos.y == bounds.end.y - 1 { result.push(veci!(0, 1, 0)) }
-    if pos.z == bounds.end.z - 1 { result.push(veci!(0, 0, 1)) }
+    use std::ops::Bound::*;
+
+    let start = match bounds.start_bound() {
+        Included(&bound) => bound,
+        Excluded(&bound) => bound + Int3::ONE,
+        Unbounded => panic!("unbounded can't be implemented"),
+    };
+
+    let end = match bounds.end_bound() {
+        Included(&bound) => bound + Int3::ONE,
+        Excluded(&bound) => bound,
+        Unbounded => panic!("unbounded can't be implemented"),
+    };
+
+    if pos.x == start.x { result.push(veci!(-1, 0, 0)) }
+    if pos.y == start.y { result.push(veci!(0, -1, 0)) }
+    if pos.z == start.z { result.push(veci!(0, 0, -1)) }
+    if pos.x == end.x - 1 { result.push(veci!(1, 0, 0)) }
+    if pos.y == end.y - 1 { result.push(veci!(0, 1, 0)) }
+    if pos.z == end.z - 1 { result.push(veci!(0, 0, 1)) }
 
     result
 }
@@ -580,16 +569,14 @@ mod space_iter_tests {
             .collect();
     
         for pos in sample.iter() {
-            match chunked.contains(pos) {
-                true => (),
-                false => panic!("chunked.contains(&pos): {:?}", pos),
+            if !chunked.contains(pos) {
+                panic!("chunked.contains(&pos): {:?}", pos);
             }
         }
     
         for pos in chunked.iter() {
-            match sample.contains(pos) {
-                true => (),
-                false => panic!("sample.contains(&pos): {:?}", pos),
+            if !sample.contains(pos) {
+                panic!("sample.contains(&pos): {:?}", pos);
             }
         }
     }
@@ -716,7 +703,7 @@ mod border_test {
 
     #[test]
     fn test1() {
-        let border = CubeBorder::new(Chunk::SIZE as i32);
+        let border = CubeBoundary::new(Chunk::SIZE as i32);
         const MAX: i32 = Chunk::SIZE as i32 - 1;
 
         for pos in border {
@@ -732,7 +719,7 @@ mod border_test {
 
     #[test]
     fn test2() {
-        let border = CubeBorder::new(Chunk::SIZE as i32);
+        let border = CubeBoundary::new(Chunk::SIZE as i32);
         const MAX: i32 = Chunk::SIZE as i32 - 1;
 
         let works = (0..Chunk::VOLUME)

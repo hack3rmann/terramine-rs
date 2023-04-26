@@ -67,6 +67,7 @@ impl ChunkDetailedMesh {
     }
 }
 
+
 #[derive(Debug, Default)]
 pub struct ChunkMesh {
     pub detailed_mesh: Option<ChunkDetailedMesh>,
@@ -76,14 +77,7 @@ pub struct ChunkMesh {
 impl ChunkMesh {
     /// Checks if [chunk][Chunk]'s mesh is partitioned.
     pub fn is_partitioned(&self) -> bool {
-        match self.detailed_mesh {
-            Some(ref mesh) => match mesh {
-                ChunkDetailedMesh::Partial(_) => true,
-                ChunkDetailedMesh::Standart(_) => false,
-            },
-
-            None => false,
-        }
+        matches!(self.detailed_mesh, Some(ChunkDetailedMesh::Partial(_)))
     }
 
     /// Connects mesh partitions into one mesh. If [chunk][Chunk] is not
@@ -119,19 +113,14 @@ impl ChunkMesh {
         partition_idx: usize, facade: &dyn Facade,
     ) {
         match self.detailed_mesh {
-            None => panic!("cannot upload only one partition"),
-            Some(ref mut mesh) => match mesh {
-                ChunkDetailedMesh::Standart(_) =>
-                    panic!("cannot upload only one partititon"),
+            Some(ChunkDetailedMesh::Partial(ref mut meshes)) => {
+                let vbuffer = VertexBuffer::new(facade, partition)
+                    .expect("failed to create vertex buffer");
+                let mesh = Mesh::new_unindexed(vbuffer, PrimitiveType::TrianglesList);
 
-                ChunkDetailedMesh::Partial(ref mut meshes) => {
-                    let vbuffer = VertexBuffer::new(facade, partition)
-                        .expect("failed to create vertex buffer");
-                    let mesh = Mesh::new_unindexed(vbuffer, PrimitiveType::TrianglesList);
-
-                    meshes[partition_idx] = mesh;
-                },
-            }
+                meshes[partition_idx] = mesh;
+            },
+            _ => panic!("cannot upload only one partition"),
         }
     }
 
@@ -157,6 +146,8 @@ impl ChunkMesh {
 
     /// Sets mesh to chunk.
     pub fn upload_low_detail_vertices(&mut self, vertices: &[LowVertex], lod: Lod, facade: &dyn Facade) {
+        assert_ne!(lod, 0, "`lod` in upload_low_detail_vertices() should be not 0");
+
         let vbuffer = VertexBuffer::new(facade, vertices)
             .expect("failed to create vertex buffer");
         let mesh = Mesh::new_unindexed(vbuffer, PrimitiveType::TrianglesList);
@@ -180,7 +171,7 @@ impl ChunkMesh {
                 }
             },
             
-            lod => {
+            _ => {
                 let mesh = self.low_meshes
                     .get(lod as usize - 1)
                     .ok_or(Err::TooBigLod(lod))?

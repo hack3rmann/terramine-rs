@@ -19,14 +19,14 @@ pub use {
     math_linear::prelude::*,
     user_error::UserFacingError,
     std::{
-        sync::Arc, rc::Rc, cell::{RefCell, Cell}, mem, pin::Pin,
+        sync::Arc, rc::Rc, cell::{RefCell, Cell}, mem, pin::Pin, fmt::Debug,
         collections::{HashMap, HashSet, VecDeque},
         sync::atomic::{
             AtomicUsize, AtomicBool, AtomicI16, AtomicI32, AtomicI64,
             AtomicI8, AtomicIsize, AtomicPtr, AtomicU16, AtomicU32, AtomicU64, AtomicU8,
         },
         convert::{TryFrom, TryInto},
-        borrow::Cow,
+        borrow::Cow, any::Any,
         marker::PhantomData,
     },
     itertools::Itertools,
@@ -38,5 +38,5 @@ pub use {
     bytemuck::{Pod, Zeroable},
     type_uuid::TypeUuid,
     smart_default::SmartDefault,
-    static_assertions::assert_impl_all,
+    static_assertions::{assert_impl_all, assert_obj_safe},
 };

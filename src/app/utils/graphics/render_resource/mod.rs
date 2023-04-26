@@ -7,18 +7,25 @@ pub mod texture;
 pub mod macros;
 pub mod buffer_vec;
 pub mod uniform_buffer;
+pub mod pipeline;
+pub mod shader;
+pub mod pipeline_cache;
+pub mod render_pass;
 
 use wgpu::{VertexBufferLayout, BufferAddress, VertexStepMode, VertexAttribute};
 
 pub use {
-    render_device::{RenderDevice, RenderQueue, RenderAdapter, RenderAdapterInfo, RenderInstance},
-    bind_group::{BindGroup, BindGroupId, PreparedBindGroup},
-    bind_group_layout::{BindGroupLayout, BindGroupLayoutId},
-    buffer::{Buffer, BufferSlice, BufferId},
-    storage_buffer::{StorageBuffer, DynamicStorageBuffer},
-    texture::{Sampler, SamplerId, Texture, TextureId, TextureView, TextureViewId, SurfaceTexture},
-    buffer_vec::BufferVec,
-    uniform_buffer::{UniformBuffer, DynamicUniformBuffer},
+    render_device::*,
+    bind_group::*,
+    bind_group_layout::*,
+    buffer::*,
+    storage_buffer::*,
+    texture::*,
+    buffer_vec::*,
+    uniform_buffer::*,
+    shader::*,
+    pipeline::*,
+    pipeline_cache::*,
 };
 
 /// Describes how the vertex buffer is interpreted.

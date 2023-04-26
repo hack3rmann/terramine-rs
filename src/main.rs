@@ -1,7 +1,8 @@
 #![cfg_attr(feature = "release", windows_subsystem = "windows")]
+#![allow(incomplete_features)]
 #![feature(
     generators, generator_trait, get_mut_unchecked, exhaustive_patterns,
-    associated_type_defaults, never_type, const_trait_impl,
+    associated_type_defaults, never_type, const_trait_impl, specialization,
 )]
 
 #[allow(unused_imports)]

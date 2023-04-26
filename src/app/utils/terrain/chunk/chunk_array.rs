@@ -150,12 +150,12 @@ impl ChunkArray {
             result
         };
 
-        assert!(is_all_generated, "Chunks should be generated to save them to file");
+        assert!(is_all_generated, "chunks should be generated to save them to file");
 
         let volume = Self::volume(sizes);
         assert_eq!(volume, chunks.len(), "chunks should have same length as sizes volume");
 
-        let loading = loading::start_new("Chunks saving");
+        let loading = loading::start_new("Saving chunks");
 
         Save::builder(save_name.clone())
             .create(save_path).await?
@@ -180,7 +180,7 @@ impl ChunkArray {
     ) -> io::Result<(USize3, Vec<(Vec<Atomic<Id>>, FillType)>)> {
         let _work_guard = logger::work("chunk-array", format!("reading chunks from {save_name} in {save_path}"));
 
-        let loading = loading::start_new("Chunks reading");
+        let loading = loading::start_new("Reading chunks");
 
         let mut save = Save::builder(save_name)
             .open(save_path)
@@ -208,7 +208,7 @@ impl ChunkArray {
             FillType::AllSame(id) =>
                 FillType::AllSame(id).as_bytes(),
 
-            FillType::Default => {
+            FillType::Unspecified => {
                 let n_voxels = chunk.voxel_ids.len();
                 assert_eq!(
                     n_voxels, Chunk::VOLUME,
@@ -232,7 +232,7 @@ impl ChunkArray {
                 }
 
                 itertools::chain! {
-                    FillType::Default.as_bytes(),
+                    FillType::Unspecified.as_bytes(),
                     freqs.as_bytes(),
                     bits.as_bytes(),
                 }.collect()
@@ -249,7 +249,7 @@ impl ChunkArray {
             .expect("failed to reinterpret bytes");
 
         match fill_type {
-            FillType::Default => {
+            FillType::Unspecified => {
                 let freqs: HashMap<Id, usize> = reader.read()
                     .expect("failed to read frequencies map from bytes");
 
@@ -268,7 +268,7 @@ impl ChunkArray {
                 assert!(is_id_valid, "Voxel ids in voxel array should be valid");
                 assert_eq!(voxel_ids.len(), Chunk::VOLUME, "There's should be Chunk::VOLUME voxels");
 
-                (voxel_ids, FillType::Default)
+                (voxel_ids, FillType::Unspecified)
             },
 
             FillType::AllSame(id) =>
@@ -385,7 +385,7 @@ impl ChunkArray {
             .map(|(idx, (voxel_ids, fill_type))| {
                 let chunk_pos = Self::idx_to_pos(idx, sizes);
                 match fill_type {
-                    FillType::Default =>
+                    FillType::Unspecified =>
                         Chunk::from_voxels(voxel_ids, chunk_pos),
                     FillType::AllSame(id) =>
                         Chunk::new_same_filled(chunk_pos, id),

@@ -111,14 +111,19 @@ pub mod texture {
 }
 
 pub mod shader {
-    pub const DIRECTORY: &str = "src/shaders/";
-    pub const VERTEX_FILE_EXTENTION:   &str = "vert";
-    pub const FRAGMENT_FILE_EXTENTION: &str = "frag";
     pub const CLEAR_DEPTH:   f32 = 1.0;
     pub const CLEAR_STENCIL: i32 = 0;
     
+    pub const DIRECTORY: &str = "src/shaders/";
+    
+    pub const VERTEX_FILE_EXTENTION:   &str = "vert";
+    pub const FRAGMENT_FILE_EXTENTION: &str = "frag";
+
+    pub const WGSL_VERTEX_ENTRY: &str = "vs_main";
+    pub const WGSL_FRAGMENT_ENTRY: &str = "fs_main";
+    
     /// That constant is shared with shader. See `postprocessing.frag`.
-    pub const CLEAR_COLOR: (f32, f32, f32, f32) = (0.02, 0.02, 0.02, 1.0);
+    pub const CLEAR_COLOR: wgpu::Color = wgpu::Color { r: 0.02, g: 0.02, b: 0.02, a: 1.0 };
 
     pub mod voxel {
         pub mod light {

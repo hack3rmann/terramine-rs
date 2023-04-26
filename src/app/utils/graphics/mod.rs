@@ -11,7 +11,10 @@ pub mod failed_shader;
 pub mod failed_texture;
 pub mod mesh;
 pub mod render_resource;
-pub mod shader;
+pub mod pipeline;
+pub mod pass;
+pub mod gpu_conversions;
+pub mod material;
 
 use {
     crate::{
@@ -23,6 +26,10 @@ use {
     wgpu::{*, util::DeviceExt},
     winit::event_loop::EventLoop,
     std::path::PathBuf,
+};
+
+pub use {
+    material::*, gpu_conversions::*, pass::{*, RenderPass},
 };
 
 #[repr(C)]
@@ -120,13 +127,19 @@ impl CommonUniformsBuffer {
     }
 }
 
-/// Graphics handler.
-pub struct Graphics {
-    pub window: Window,
-    pub surface: Surface,
-    pub adapter: Adapter,
+#[derive(Debug)]
+pub struct RenderContext {
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,
+    pub adapter: Adapter,
+    pub surface: Surface,
+}
+
+/// Graphics handler.
+#[derive(Debug)]
+pub struct Graphics {
+    pub window: Window,
+    pub context: RenderContext,
     pub config: SurfaceConfiguration,
 
     pub common_uniforms: CommonUniformsBuffer,
@@ -134,21 +147,19 @@ pub struct Graphics {
     pub test_texture: Texture,
     pub test_mesh: Mesh<TestVertex>,
 
-    pub event_loop:	Option<EventLoop<()>>,
-
     pub imgui: ImGui,
 }
+assert_impl_all!(Graphics: Send, Sync);
 
 impl Graphics {
     /// Creates new [`Graphics`] that holds some renderer stuff.
-    pub async fn new() -> Result<Self, winit::error::OsError> {
+    pub async fn new(event_loop: &EventLoop<()>) -> Result<Self, winit::error::OsError> {
         let _log_guard = logger::work("graphics", "initialization");
 
         const DEFAULT_SIZES: USize2 = cfg::window::default::SIZES;
         
         // Window creation
-        let event_loop = EventLoop::new();
-        let window = Window::from(&event_loop, DEFAULT_SIZES)?;
+        let window = Window::from(event_loop, DEFAULT_SIZES)?;
 
         // ------------ WGPU initialization ------------
 
@@ -229,19 +240,24 @@ impl Graphics {
                 device: Arc::clone(&device),
                 shader: Arc::new(shader),
                 label: Arc::new(String::from("test mesh")),
+
                 fragment_targets: Arc::new([Some(ColorTargetState {
+                    // TODO: think about how transfer config.format everywhere.
                     format: config.format,
                     blend: Some(BlendState::ALPHA_BLENDING),
                     write_mask: ColorWrites::ALL,
                 })]),
+
                 primitive_topology: PrimitiveTopology::TriangleList,
                 polygon_mode: PolygonMode::Fill,
+
+                // TODO: remind this ->
                 bind_group_layouts: Arc::new([
                     Arc::clone(&common_uniforms.bind_group_layout),
                     Arc::clone(&test_texture.bind_group_layout),
                 ]),
             },
-            TEST_VERTICES
+            TEST_VERTICES,
         );
 
         // ------------ Dear ImGui initialization ------------
@@ -271,13 +287,14 @@ impl Graphics {
         );
 
         Ok(Self {
-            event_loop: Some(event_loop),
             test_mesh: mesh,
             window,
-            surface,
-            adapter,
-            device,
-            queue,
+            context: RenderContext {
+                device,
+                queue,
+                adapter,
+                surface,
+            },
             config,
             common_uniforms,
             test_texture,
@@ -291,7 +308,7 @@ impl Graphics {
 
     pub async fn refresh_test_shader(&mut self) {
         let shader = Shader::load_from_file(
-            Arc::clone(&self.device),
+            Arc::clone(&self.context.device),
             "test_shader",
             "shader.wgsl",
         ).await;
@@ -306,58 +323,29 @@ impl Graphics {
         &mut self, desc: RenderDescriptor<UseUi>,
     ) -> Result<(), SurfaceError> {
         let size = self.window.inner_size();
-        self.common_uniforms.update(&self.queue, CommonUniforms {
+        self.common_uniforms.update(&self.context.queue, CommonUniforms {
             time: desc.time,
             screen_resolution: (size.width as f32, size.height as f32).into(),
             _pad: 0,
         });
 
-        let output = self.surface.get_current_texture()?;
+        let output = self.context.surface.get_current_texture()?;
         let view = output.texture.create_view(&default());
-        let mut encoder = self.device.create_command_encoder(
-            &CommandEncoderDescriptor {
-                label: Some("render_encoder"),
-            },
-        );
+        let mut encoder = self.context.device.create_command_encoder(&default());
+
+        let _ = ClearPass::new(&mut encoder, [&view]);
 
         {
-            let (r, g, b, a) = cfg::shader::CLEAR_COLOR;
-            let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some("render_pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Clear(wgpu::Color {
-                            r: r as f64,
-                            g: g as f64,
-                            b: b as f64,
-                            a: a as f64,
-                        }),
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: None,
-            });
+            let mut pass = RenderPass::new(&mut encoder, "logo_draw_pass", [&view]);
 
-            render_pass.set_bind_group(0, &self.common_uniforms.bind_group, &[]);
-            render_pass.set_bind_group(1, &self.test_texture.bind_group, &[]);
-            let Ok(()) = self.test_mesh.render(&mut render_pass);
+            pass.set_bind_group(0, &self.common_uniforms.bind_group, &[]);
+            pass.set_bind_group(1, &self.test_texture.bind_group, &[]);
+            
+            let Ok(()) = self.test_mesh.render(&mut pass);
         }
 
         {
-            let mut render_pass = encoder.begin_render_pass(&RenderPassDescriptor {
-                label: Some("imgui_render_pass"),
-                color_attachments: &[Some(RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: Operations {
-                        load: LoadOp::Load,
-                        store: true,
-                    },
-                })],
-                depth_stencil_attachment: None,
-            });
+            let mut render_pass = RenderPass::new(&mut encoder, "imgui_draw_pass", [&view]);
 
             let ui = self.imgui.context.new_frame();
             (desc.use_imgui_ui)(ui);
@@ -365,11 +353,11 @@ impl Graphics {
             self.imgui.platform.prepare_render(ui, &self.window);
 
             let draw_data = self.imgui.context.render();
-            self.imgui.renderer.render(draw_data, &self.queue, &self.device, &mut render_pass)
+            self.imgui.renderer.render(draw_data, &self.context.queue, &self.context.device, &mut render_pass)
                 .expect("failed to render imgui");
         }
     
-        self.queue.submit(std::iter::once(encoder.finish()));
+        self.context.queue.submit([encoder.finish()]);
         output.present();
 
         Ok(())
@@ -378,17 +366,13 @@ impl Graphics {
     pub fn on_window_resize(&mut self, new_size: UInt2) {
         if new_size.x > 0 && new_size.y > 0 {
             (self.config.width, self.config.height) = (new_size.x, new_size.y);
-            self.surface.configure(&self.device, &self.config);
+            self.context.surface.configure(&self.context.device, &self.config);
         }
-    }
-
-    /// Gives event_loop and removes it from graphics struct.
-    pub fn take_event_loop(&mut self) -> EventLoop<()> {
-        self.event_loop.take()
-            .expect("event loop can't be taken twice")
     }
 }
 
+/// imgui-wgpu uses only wgpu stuff that are Send and Sync
+/// but imgui context is not Send nor Sync. Use carefully.
 #[derive(Debug)]
 pub struct ImGui {
     // ImGui context.
@@ -400,6 +384,11 @@ pub struct ImGui {
     // ImGui WGPU renderer.
     pub renderer: ImGuiRendererWrapper,
 }
+
+// imgui-wgpu uses only wgpu stuff that are Send and Sync
+// but imgui context is not Send nor Sync. Use carefully.
+unsafe impl Send for ImGui { }
+unsafe impl Sync for ImGui { }
 
 #[derive(Deref)]
 pub struct ImGuiRendererWrapper(imgui_wgpu::Renderer);
