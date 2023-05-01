@@ -1,10 +1,7 @@
 use {
     crate::{
         prelude::*,
-        graphics::render_resource::{
-            texture::{TextureView, Sampler},
-            buffer::Buffer,
-        },
+        graphics::{TextureView, Sampler, Buffer},
         // prelude::Image,
         // render_asset::RenderAssets,
         // render_resource::{resource_macros::*, BindGroupLayout, Buffer, Sampler, TextureView},
@@ -101,10 +98,11 @@ assert_impl_all!(OwnedBindingResource: Send, Sync);
 
 impl OwnedBindingResource {
     pub fn get_binding(&self) -> wgpu::BindingResource<'_> {
+        use OwnedBindingResource::*;
         match self {
-            OwnedBindingResource::Buffer(buffer) => buffer.as_entire_binding(),
-            OwnedBindingResource::TextureView(view) => wgpu::BindingResource::TextureView(view),
-            OwnedBindingResource::Sampler(sampler) => wgpu::BindingResource::Sampler(sampler),
+            Buffer(buffer) => buffer.as_entire_binding(),
+            TextureView(view) => wgpu::BindingResource::TextureView(view),
+            Sampler(sampler) => wgpu::BindingResource::Sampler(sampler),
         }
     }
 }

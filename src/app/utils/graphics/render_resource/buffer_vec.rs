@@ -1,6 +1,6 @@
 use crate::{
     prelude::*,
-    graphics::render_resource::{Buffer, RenderDevice, RenderQueue},
+    graphics::{Buffer, render_resource::{RenderDevice, RenderQueue}},
 };
 
 /// A structure for storing raw bytes that have already been properly formatted

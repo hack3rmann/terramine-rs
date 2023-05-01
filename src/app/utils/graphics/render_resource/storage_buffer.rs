@@ -3,10 +3,7 @@ use std::marker::PhantomData;
 use {
     crate::{
         prelude::*,
-        graphics::render_resource::{
-            render_device::{RenderDevice, RenderQueue},
-            buffer::Buffer,
-        },
+        graphics::{Buffer, render_resource::{RenderDevice, RenderQueue}},
     },
     encase::{
         internal::WriteInto, DynamicStorageBuffer as DynamicStorageBufferWrapper, ShaderType,

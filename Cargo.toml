@@ -44,6 +44,7 @@ bytemuck = { version = "1.13.1", features = ["derive"] }
 type-uuid = "0.1.2"
 smart-default = "0.6.0"
 encase = "0.5.0"
+bevy_ecs = "0.10.1"
 
 [dependencies.spin]
 version = "0.9.8"

@@ -8,9 +8,9 @@ crate::define_atomic_id!(TextureId);
 /// Can be created via [`RenderDevice::create_texture`](crate::renderer::RenderDevice::create_texture).
 #[derive(Clone, Debug, Deref)]
 pub struct Texture {
-    pub id: TextureId,
     #[deref]
     pub inner: Arc<wgpu::Texture>,
+    pub id: TextureId,
 }
 
 impl Texture {

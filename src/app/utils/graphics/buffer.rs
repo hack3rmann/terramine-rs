@@ -7,9 +7,9 @@ crate::define_atomic_id!(BufferId);
 
 #[derive(Clone, Debug, Deref)]
 pub struct Buffer {
-    pub id: BufferId,
     #[deref]
     pub inner: Arc<wgpu::Buffer>,
+    pub id: BufferId,
 }
 assert_impl_all!(Buffer: Send, Sync);
 
@@ -39,9 +39,9 @@ impl From<wgpu::Buffer> for Buffer {
 
 #[derive(Clone, Debug, Deref)]
 pub struct BufferSlice<'s> {
-    pub id: BufferId,
-    pub offset: wgpu::BufferAddress,
     #[deref]
     pub inner: wgpu::BufferSlice<'s>,
+    pub offset: wgpu::BufferAddress,
+    pub id: BufferId,
 }
 assert_impl_all!(BufferSlice: Send, Sync);

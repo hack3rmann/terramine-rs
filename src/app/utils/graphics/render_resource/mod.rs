@@ -1,10 +1,7 @@
 pub mod render_device;
 pub mod bind_group;
-pub mod buffer;
 pub mod storage_buffer;
 pub mod bind_group_layout;
-pub mod texture;
-pub mod macros;
 pub mod buffer_vec;
 pub mod uniform_buffer;
 pub mod pipeline;
@@ -18,9 +15,7 @@ pub use {
     render_device::*,
     bind_group::*,
     bind_group_layout::*,
-    buffer::*,
     storage_buffer::*,
-    texture::*,
     buffer_vec::*,
     uniform_buffer::*,
     shader::*,

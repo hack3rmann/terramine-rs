@@ -16,7 +16,7 @@ use {
 };
 
 /// Camera handler.
-#[derive(Debug)]
+#[derive(Debug, Resource)]
 pub struct Camera {
     /* Screen needs */
     pub fov: Angle,

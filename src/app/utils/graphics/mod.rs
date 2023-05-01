@@ -15,6 +15,10 @@ pub mod pipeline;
 pub mod pass;
 pub mod gpu_conversions;
 pub mod material;
+pub mod bind_group;
+pub mod macros;
+pub mod buffer;
+pub mod texture;
 
 use {
     crate::{
@@ -23,13 +27,14 @@ use {
     },
     failed_mesh::{Mesh, Bufferizable, MeshDescriptor, Renderable},
     failed_shader::Shader, failed_texture::Texture,
-    wgpu::{*, util::DeviceExt},
+    wgpu::util::DeviceExt,
     winit::event_loop::EventLoop,
     std::path::PathBuf,
 };
 
 pub use {
     material::*, gpu_conversions::*, pass::{*, RenderPass},
+    bind_group::{*, BindGroup}, buffer::{*, Buffer}, texture::*,
 };
 
 #[repr(C)]
@@ -41,12 +46,12 @@ pub struct TestVertex {
 assert_impl_all!(TestVertex: Send, Sync);
 
 impl Bufferizable for TestVertex {
-    const ATTRS: &'static [VertexAttribute] =
-        &vertex_attr_array![0 => Float32x2, 1 => Float32x2];
+    const ATTRS: &'static [wgpu::VertexAttribute] =
+        &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2];
 
-    const BUFFER_LAYOUT: VertexBufferLayout<'static> = VertexBufferLayout {
+    const BUFFER_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
         array_stride: mem::size_of::<Self>() as u64,
-        step_mode: VertexStepMode::Vertex,
+        step_mode: wgpu::VertexStepMode::Vertex,
         attributes: Self::ATTRS,
     };
 }
@@ -71,31 +76,31 @@ assert_impl_all!(CommonUniforms: Send, Sync);
 
 #[derive(Debug)]
 pub struct CommonUniformsBuffer {
-    pub bind_group_layout: Arc<BindGroupLayout>,
-    pub bind_group: BindGroup,
+    pub bind_group_layout: Arc<wgpu::BindGroupLayout>,
+    pub bind_group: wgpu::BindGroup,
     pub buffer: Buffer,
 }
 assert_impl_all!(CommonUniformsBuffer: Send, Sync);
 
 impl CommonUniformsBuffer {
-    pub fn new(device: &Device, initial_value: &CommonUniforms) -> Self {
+    pub fn new(device: &wgpu::Device, initial_value: &CommonUniforms) -> Self {
         let buffer = device.create_buffer_init(
-            &util::BufferInitDescriptor {
+            &wgpu::util::BufferInitDescriptor {
                 label: Some("common_uniforms_buffer"),
                 contents: bytemuck::bytes_of(initial_value),
-                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             },
         );
 
         let layout = device.create_bind_group_layout(
-            &BindGroupLayoutDescriptor {
+            &wgpu::BindGroupLayoutDescriptor {
                 label: Some("common_uniforms_bind_group_layout"),
                 entries: &[
-                    BindGroupLayoutEntry {
+                    wgpu::BindGroupLayoutEntry {
                         binding: 0,
-                        visibility: ShaderStages::VERTEX_FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
+                        visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Uniform,
                             has_dynamic_offset: false,
                             min_binding_size: None,
                         },
@@ -106,11 +111,11 @@ impl CommonUniformsBuffer {
         );
 
         let bind_group = device.create_bind_group(
-            &BindGroupDescriptor {
+            &wgpu::BindGroupDescriptor {
                 label: Some("common_uniforms_bind_group"),
                 layout: &layout,
                 entries: &[
-                    BindGroupEntry {
+                    wgpu::BindGroupEntry {
                         binding: 0,
                         resource: buffer.as_entire_binding(),
                     },
@@ -118,10 +123,10 @@ impl CommonUniformsBuffer {
             },
         );
 
-        Self { bind_group_layout: Arc::new(layout), bind_group, buffer }
+        Self { bind_group_layout: Arc::new(layout), bind_group, buffer: Buffer::from(buffer) }
     }
 
-    pub fn update(&self, queue: &Queue, uniforms: CommonUniforms) {
+    pub fn update(&self, queue: &wgpu::Queue, uniforms: CommonUniforms) {
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[uniforms]));
         queue.submit(std::iter::empty());
     }
@@ -129,18 +134,18 @@ impl CommonUniformsBuffer {
 
 #[derive(Debug)]
 pub struct RenderContext {
-    pub device: Arc<Device>,
-    pub queue: Arc<Queue>,
-    pub adapter: Adapter,
-    pub surface: Surface,
+    pub device: Arc<wgpu::Device>,
+    pub queue: Arc<wgpu::Queue>,
+    pub adapter: wgpu::Adapter,
+    pub surface: wgpu::Surface,
 }
 
 /// Graphics handler.
-#[derive(Debug)]
+#[derive(Debug, bevy_ecs::prelude::Resource)]
 pub struct Graphics {
     pub window: Window,
     pub context: RenderContext,
-    pub config: SurfaceConfiguration,
+    pub config: wgpu::SurfaceConfiguration,
 
     pub common_uniforms: CommonUniformsBuffer,
     
@@ -163,9 +168,9 @@ impl Graphics {
 
         // ------------ WGPU initialization ------------
 
-        let wgpu_instance = Instance::new(
-            InstanceDescriptor {
-                backends: Backends::DX12 | Backends::VULKAN,
+        let wgpu_instance = wgpu::Instance::new(
+            wgpu::InstanceDescriptor {
+                backends: wgpu::Backends::DX12 | wgpu::Backends::VULKAN,
                 dx12_shader_compiler: default(),
             }
         );
@@ -180,7 +185,7 @@ impl Graphics {
         };
 
         let adapter = wgpu_instance
-            .request_adapter(&RequestAdapterOptions {
+            .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: default(),
                 force_fallback_adapter: false,
                 compatible_surface: Some(&surface)
@@ -189,9 +194,9 @@ impl Graphics {
             .expect("failed to find an appropriate adapter");
 
         let (device, queue) = adapter
-            .request_device(&DeviceDescriptor {
+            .request_device(&wgpu::DeviceDescriptor {
                 label: None,
-                features: Features::empty(),
+                features: wgpu::Features::empty(),
                 limits: default(),
             }, None)
             .await
@@ -203,8 +208,8 @@ impl Graphics {
         let swapchain_format = *swapchain_capabilities.formats.get(0)
             .expect("failed to get swap chain format 0: the surface is incompatible with the adapter");
         
-        let config = SurfaceConfiguration {
-            usage: TextureUsages::RENDER_ATTACHMENT,
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format: swapchain_format,
             width: DEFAULT_SIZES.x as u32,
             height: DEFAULT_SIZES.y as u32,
@@ -241,15 +246,15 @@ impl Graphics {
                 shader: Arc::new(shader),
                 label: Arc::new(String::from("test mesh")),
 
-                fragment_targets: Arc::new([Some(ColorTargetState {
+                fragment_targets: Arc::new([Some(wgpu::ColorTargetState {
                     // TODO: think about how transfer config.format everywhere.
                     format: config.format,
-                    blend: Some(BlendState::ALPHA_BLENDING),
-                    write_mask: ColorWrites::ALL,
+                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                    write_mask: wgpu::ColorWrites::ALL,
                 })]),
 
-                primitive_topology: PrimitiveTopology::TriangleList,
-                polygon_mode: PolygonMode::Fill,
+                primitive_topology: wgpu::PrimitiveTopology::TriangleList,
+                polygon_mode: wgpu::PolygonMode::Fill,
 
                 // TODO: remind this ->
                 bind_group_layouts: Arc::new([
@@ -321,11 +326,11 @@ impl Graphics {
 
     pub fn render<UseUi: FnOnce(&mut imgui::Ui)>(
         &mut self, desc: RenderDescriptor<UseUi>,
-    ) -> Result<(), SurfaceError> {
+    ) -> Result<(), wgpu::SurfaceError> {
         let size = self.window.inner_size();
         self.common_uniforms.update(&self.context.queue, CommonUniforms {
             time: desc.time,
-            screen_resolution: (size.width as f32, size.height as f32).into(),
+            screen_resolution: vecf!(size.width, size.height),
             _pad: 0,
         });
 
@@ -368,6 +373,19 @@ impl Graphics {
             (self.config.width, self.config.height) = (new_size.x, new_size.y);
             self.context.surface.configure(&self.context.device, &self.config);
         }
+    }
+
+    pub fn handle_event(&mut self, event: &winit::event::Event<()>) {
+        self.imgui.platform.handle_event(
+            self.imgui.context.io_mut(),
+            &self.window,
+            event,
+        );
+    }
+
+    pub fn prepare_frame(&mut self) -> Result<(), winit::error::ExternalError> {
+        self.imgui.platform
+            .prepare_frame(self.imgui.context.io_mut(), &self.window)
     }
 }
 

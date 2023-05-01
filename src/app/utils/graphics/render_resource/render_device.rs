@@ -1,8 +1,8 @@
 use {
     crate::{
-        graphics::render_resource::{
-            buffer::Buffer, texture::{Texture, Sampler}, bind_group::BindGroup,
-            bind_group_layout::BindGroupLayout,
+        graphics::{
+            Buffer, texture::Texture, Sampler,
+            render_resource::{bind_group::BindGroup, bind_group_layout::BindGroupLayout},
         },
         prelude::*,
     },
@@ -129,18 +129,14 @@ impl RenderDevice {
         desc: &wgpu::TextureDescriptor,
         data: &[u8],
     ) -> Texture {
-        let wgpu_texture = self
-            .device
-            .create_texture_with_data(render_queue.as_ref(), desc, data);
-        Texture::from(wgpu_texture)
+        self.device.create_texture_with_data(render_queue.as_ref(), desc, data).into()
     }
 
     /// Creates a new [`Texture`].
     ///
     /// `desc` specifies the general format of the texture.
     pub fn create_texture(&self, desc: &wgpu::TextureDescriptor) -> Texture {
-        let wgpu_texture = self.device.create_texture(desc);
-        Texture::from(wgpu_texture)
+        self.device.create_texture(desc).into()
     }
 
     /// Creates a new [`Sampler`].

@@ -16,17 +16,21 @@ use {
         event_loop::{ControlFlow, EventLoopWindowTarget, EventLoop},
         window::WindowId,
     },
+
+    bevy_ecs::prelude::*,
 };
+
+#[derive(Debug, Resource, Deref, Default)]
+pub struct DrawTimer(pub Timer);
+
+#[derive(Debug, Resource, Deref, Default)]
+pub struct UpdateTimer(pub Timer);
 
 /// Struct that handles application stuff.
 #[derive(Debug)]
 pub struct App {
-    graphics: Graphics,
-    camera: Camera,
-    draw_timer: Timer,
-    update_timer: Timer,
+    world: World,
 
-    event_loop: Option<EventLoop<()>>,
     imgui_window_builders: Vec<fn(&imgui::Ui)>,
 }
 
@@ -35,15 +39,22 @@ impl App {
     pub async fn new() -> Self {
         let _work_guard = logger::work("app", "initialize");
 
-        let event_loop = default();
+        let mut world = World::new();
+        world.init_resource::<DrawTimer>();
+        world.init_resource::<UpdateTimer>();
 
-        let graphics = Graphics::new(&event_loop)
-            .await
-            .expect("failed to create graphics");
-
-        let camera = Camera::new()
-            .with_position(0.0, 16.0, 2.0)
-            .with_rotation(0.0, 0.0, std::f32::consts::PI);
+        let event_loop = EventLoop::default();
+        world.insert_resource(
+            Graphics::new(&event_loop).await
+            .expect("failed to create graphics")
+        );
+        world.insert_non_send_resource(event_loop);
+        
+        world.insert_resource(
+            Camera::new()
+                .with_position(0.0, 16.0, 2.0)
+                .with_rotation(0.0, 0.0, std::f32::consts::PI)
+        );
 
         let imgui_window_builders = vec![
             logger::spawn_window,
@@ -52,18 +63,14 @@ impl App {
         ];
 
         Self {
-            graphics,
-            camera,
-            event_loop: Some(event_loop),
-            draw_timer: default(),
-            update_timer: default(),
+            world,
             imgui_window_builders,
         }
     }
 
     /// Runs app. Runs glium's `event_loop`.
     pub fn run(mut self) -> ! {
-        let event_loop = self.event_loop.take().expect("failed to take event_loop twice");
+        let event_loop = self.world.remove_non_send_resource::<EventLoop<()>>().unwrap();
         event_loop.run(move |event, elw_target, control_flow| RUNTIME.block_on(
             self.run_frame_loop(event, elw_target, control_flow)
         ))
@@ -75,24 +82,21 @@ impl App {
         _elw_target: &EventLoopWindowTarget<()>, control_flow: &mut ControlFlow,
     ) {
         *control_flow = ControlFlow::Poll;
+        let mut graphics = self.world.get_resource_mut::<Graphics>().unwrap();
 
-        self.graphics.imgui.platform.handle_event(
-            self.graphics.imgui.context.io_mut(),
-            &self.graphics.window,
-            &event
-        );
-        user_io::handle_event(&event, &self.graphics.window);
+        graphics.handle_event(&event);
+        user_io::handle_event(&event, &graphics.window);
 
         match event {
             Event::WindowEvent { event, window_id }
-                if window_id == self.graphics.window.id() => match event
+                if window_id == graphics.window.id() => match event
             {
                 WindowEvent::CloseRequested =>
                     *control_flow = ControlFlow::Exit,
 
                 WindowEvent::Resized(new_size) => {
                     let (width, height) = (new_size.width, new_size.height);
-                    self.graphics.on_window_resize(UInt2::new(width, height));
+                    graphics.on_window_resize(UInt2::new(width, height));
                 },
 
                 _ => (),
@@ -113,8 +117,11 @@ impl App {
 
     /// Main events cleared.
     async fn main_events_cleared(&mut self, control_flow: &mut ControlFlow) {
+        let world = self.world.cell();
+        let mut graphics = world.get_resource_mut::<Graphics>().unwrap();
+
         // ImGui can capture keyboard, if needed.
-        keyboard::set_input_capture(self.graphics.imgui.context.io().want_capture_keyboard);
+        keyboard::set_input_capture(graphics.imgui.context.io().want_capture_keyboard);
         
         // Close window if `escape` pressed
         if keyboard::just_pressed(cfg::key_bindings::APP_EXIT) {
@@ -124,41 +131,53 @@ impl App {
 
         // Control camera cursor grab.
         if keyboard::just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
-            if self.camera.grabbes_cursor {
-                mouse::release_cursor(&self.graphics.window);
+            let mut camera = world.get_resource_mut::<Camera>().unwrap();
+
+            if camera.grabbes_cursor {
+                mouse::release_cursor(&graphics.window);
             } else {
-                mouse::grab_cursor(&self.graphics.window);
+                mouse::grab_cursor(&graphics.window);
             }
-            self.camera.grabbes_cursor = !self.camera.grabbes_cursor;
+            camera.grabbes_cursor = !camera.grabbes_cursor;
         }
 
         if keyboard::just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
-            self.graphics.refresh_test_shader().await;
+            graphics.refresh_test_shader().await;
         }
 
-        // Display FPS
-        self.graphics.window.set_title(&format!("Terramine: {0:.0} FPS", self.draw_timer.fps));
+        // Display FPS.
+        {
+            let draw_timer = world.get_resource::<DrawTimer>().unwrap();
+            graphics.window.set_title(&format!("Terramine: {0:.0} FPS", draw_timer.fps));
+        }
 
-        // Prepare ImGui to render a frame.
-        self.graphics.imgui.platform
-            .prepare_frame(self.graphics.imgui.context.io_mut(), &self.graphics.window)
-            .expect("failed to prepare frame");
+        // Prepare frame to render.
+        graphics.prepare_frame().expect("failed to prepare a frame");
 
-        // Moves to `RedrawRequested` stage
-        self.graphics.window.request_redraw();
+        // Moves to `RedrawRequested` stage.
+        graphics.window.request_redraw();
     }
 
     /// Renders an image.
     async fn redraw_requested(&mut self, window_id: WindowId) {
-        if window_id != self.graphics.window.id() { return }
+        use std::ops::DerefMut;
+
+        let world = self.world.cell();
+        let mut graphics = world.get_resource_mut::<Graphics>().unwrap();
+        let mut draw_timer = world.get_resource_mut::<DrawTimer>().unwrap();
+
+        if window_id != graphics.window.id() { return }
 
         // InGui draw data.
         let use_ui = |ui: &mut imgui::Ui| {
-            // Camera window
-            self.camera.spawn_control_window(ui);
+            // Camera window.
+            world.get_resource_mut::<Camera>()
+                .unwrap()
+                .deref_mut()
+                .spawn_control_window(ui);
 
             // Profiler window.
-            profiler::update_and_build_window(ui, &self.draw_timer);
+            profiler::update_and_build_window(ui, &draw_timer);
 
             // Draw all windows by callbacks.
             for builder in self.imgui_window_builders.iter() {
@@ -166,25 +185,35 @@ impl App {
             }
         };
 
-        self.graphics.render(
+        graphics.render(
             RenderDescriptor {
                 use_imgui_ui: use_ui,
-                time: self.draw_timer.time,
+                time: draw_timer.time,
             }
         ).expect("failed to render graphics");
 
-        self.draw_timer.update();
-        self.graphics.imgui.context
+        draw_timer.update();
+        graphics.imgui.context
             .io_mut()
-            .update_delta_time(self.draw_timer.duration());
+            .update_delta_time(draw_timer.duration());
     }
 
     /// Updates things.
     async fn new_events(&mut self, _start_cause: StartCause) {
-        self.update_timer.update();
+        {
+            let world = self.world.cell();
+            let mut update_timer = world.get_resource_mut::<UpdateTimer>().unwrap();
+            let mut camera = world.get_resource_mut::<Camera>().unwrap();
 
-        // Rotating camera.
-        self.camera.update(self.update_timer.dt);
+            update_timer.update();
+            camera.update(update_timer.dt);
+        }
+
+        {
+            let graphics = self.world.get_resource::<Graphics>().unwrap();
+            mouse::update(&graphics.window).await
+                .log_error("app", "failed to update mouse input");
+        }
 
         // Debug visuals switcher.
         if keyboard::just_pressed(cfg::key_bindings::DEBUG_VISUALS_SWITCH) {
@@ -200,7 +229,5 @@ impl App {
 
         // Update keyboard inputs.
         keyboard::update_input();
-        mouse::update(&self.graphics.window).await
-            .log_error("app", "failed to update mouse input");
     }
 }

@@ -1,7 +1,7 @@
 use {
     crate::{
         prelude::*,
-        graphics::render_resource::{Buffer, RenderDevice, RenderQueue},
+        graphics::{Buffer, render_resource::{RenderDevice, RenderQueue}},
     },
     encase::{
         internal::WriteInto, DynamicUniformBuffer as DynamicUniformBufferWrapper, ShaderType,
