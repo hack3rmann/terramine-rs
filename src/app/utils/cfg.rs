@@ -22,16 +22,22 @@ pub mod camera {
         pub const SPEED:	      f32 = 10.0;
         pub const SPEED_FALLOFF:  f32 = 0.88;
         pub const FOV_IN_DEGREES: f32 = 60.0;
+        pub const MOUSE_SENSETIVITY: f32 = 0.2;
     }
 }
 
 pub mod window {
+    pub const fn aspect_ratio(width: f32, height: f32) -> f32 {
+        width / height
+    }
+
     pub mod default {
         use math_linear::prelude::*;
         
         pub const WIDTH:  usize = 1024;
         pub const HEIGHT: usize = 768;
         pub const SIZES: USize2 = vecs!(WIDTH, HEIGHT);
+        pub const ASPECT_RATIO: f32 = super::aspect_ratio(WIDTH as f32, HEIGHT as f32);
     }
 }
 
@@ -75,17 +81,18 @@ pub mod terrain {
             math_linear::prelude::Color,
         };
 
-        pub const VOXEL_DATA: [VoxelData; 5] = [
-            VoxelData { name: "Air",    id: 0, avarage_color: Color::new(0.00, 0.00, 0.00), textures: TextureSides::all(0) },
-            VoxelData { name: "Log",    id: 1, avarage_color: Color::new(0.62, 0.52, 0.30), textures: TextureSides::vertical(3, 1, 1) },
-            VoxelData { name: "Stone",  id: 2, avarage_color: Color::new(0.45, 0.45, 0.45), textures: TextureSides::all(2) },
-            VoxelData { name: "Grass",  id: 3, avarage_color: Color::new(0.40, 0.64, 0.24), textures: TextureSides::vertical(4, 6, 5) },
-            VoxelData { name: "Dirt",   id: 4, avarage_color: Color::new(0.59, 0.42, 0.29), textures: TextureSides::all(5) },
+        pub const VOXEL_DATA: &[VoxelData] = &[
+            VoxelData::new("Air",    0, Color::new(0.00, 0.00, 0.00), TextureSides::all(0)),
+            VoxelData::new("Log",    1, Color::new(0.62, 0.52, 0.30), TextureSides::vertical(3, 1, 1)),
+            VoxelData::new("Stone",  2, Color::new(0.45, 0.45, 0.45), TextureSides::all(2)),
+            VoxelData::new("Grass",  3, Color::new(0.40, 0.64, 0.24), TextureSides::vertical(4, 6, 5)),
+            VoxelData::new("Dirt",   4, Color::new(0.59, 0.42, 0.29), TextureSides::all(5)),
         ];
     }
 
     pub mod default {
         use math_linear::prelude::Int3;
+        
         pub const WORLD_SIZES_IN_CHUNKS: Int3 = veci!(7, 1, 7);
         pub const LOD_THREASHOLD: f32 = 5.8;
     }
@@ -124,17 +131,6 @@ pub mod shader {
     
     /// That constant is shared with shader. See `postprocessing.frag`.
     pub const CLEAR_COLOR: wgpu::Color = wgpu::Color { r: 0.02, g: 0.02, b: 0.02, a: 1.0 };
-
-    pub mod voxel {
-        pub mod light {
-            pub const FRONT:  f32 = 0.9;
-            pub const BACK:   f32 = 0.5;
-            pub const TOP:    f32 = 1.0;
-            pub const BOTTOM: f32 = 0.3;
-            pub const LEFT:   f32 = 0.6;
-            pub const RIGHT:  f32 = 0.7;
-        }
-    }
 }
 
 pub mod key_bindings {

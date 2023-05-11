@@ -39,5 +39,5 @@ pub use {
     type_uuid::TypeUuid,
     smart_default::SmartDefault,
     static_assertions::{assert_impl_all, assert_obj_safe},
-    bevy_ecs::prelude::*,
+    terramine_ecs::*,
 };

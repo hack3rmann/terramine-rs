@@ -10,7 +10,7 @@ use {
             voxel::{self, Voxel, voxel_data::data::*},
         },
         saves::Save,
-        graphics::camera::Camera,
+        graphics::camera_resource::Camera,
     },
     math_linear::math::ray::space_3d::Line,
     std::{io, mem, sync::Mutex},
@@ -1078,7 +1078,7 @@ impl ChunkArray {
             .find(|voxel| !voxel.is_air());
 
         match first_voxel {
-            Some(voxel) if mouse::just_left_pressed() && cam.grabbes_cursor =>
+            Some(voxel) if mouse::just_left_pressed() && cam.captures_mouse =>
                 command(Command::SetVoxel { pos: voxel.pos, new_id: AIR_VOXEL_DATA.id }),
 
             _ => (),

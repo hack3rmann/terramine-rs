@@ -1,10 +1,11 @@
-use {
-    crate::app::utils::cfg::terrain::voxel_types::VOXEL_DATA as CFG_VOXEL_DATA,
-    math_linear::prelude::*,
-};
+use crate::prelude::*;
+
+
 
 /// IDs type.
 pub type Id = u16;
+
+
 
 /// Represents shared data for group of voxels
 #[derive(Debug, PartialEq)]
@@ -15,6 +16,15 @@ pub struct VoxelData {
     pub textures: TextureSides,
     pub avarage_color: Color,
 }
+assert_impl_all!(VoxelData: Send, Sync);
+
+impl VoxelData {
+    pub const fn new(name: &'static str, id: Id, color: Color, textures: TextureSides) -> Self {
+        Self { name, id, textures, avarage_color: color }
+    }
+}
+
+
 
 /// Represents textured sides of the voxel.
 #[derive(Debug, PartialEq)]
@@ -51,11 +61,13 @@ impl TextureSides {
     }
 }
 
+
+
 pub mod data {
     use super::*;
     
-    pub const VOXEL_DATA: &[VoxelData] = &CFG_VOXEL_DATA;
-
+    pub use crate::cfg::terrain::voxel_types::VOXEL_DATA;
+    
     pub const AIR_VOXEL_DATA:    		&VoxelData = &VOXEL_DATA[0];
     pub const LOG_VOXEL_DATA:			&VoxelData = &VOXEL_DATA[1];
     pub const STONE_VOXEL_DATA:			&VoxelData = &VOXEL_DATA[2];

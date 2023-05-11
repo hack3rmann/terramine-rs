@@ -11,7 +11,7 @@ use {
         prelude::*,
         graphics::{
             glium_shader::Shader,
-            camera::Camera,
+            camera_resource::Camera,
         },
     },
     super::voxel::{

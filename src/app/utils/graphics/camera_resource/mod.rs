@@ -1,6 +1,6 @@
-/**
- * Camera handler.
- */
+//! 
+//! Camera handler.
+//! 
 
 pub mod frustum;
 
@@ -16,7 +16,7 @@ use {
 };
 
 /// Camera handler.
-#[derive(Debug, Resource)]
+#[derive(Debug)]
 pub struct Camera {
     /* Screen needs */
     pub fov: Angle,
@@ -26,7 +26,7 @@ pub struct Camera {
 
     /* Additional control */
     pub speed_factor: f32,
-    pub grabbes_cursor: bool,
+    pub captures_mouse: bool,
 
     /* Position */
     pub pos: vec3,
@@ -123,9 +123,9 @@ impl Camera {
     /// This function updates camera vectors from rotatiion matrix.
     pub fn update_vectors(&mut self) {
         /* Transform basic vectors with rotation matrix */
-        self.up    = &self.rotation * vecf!(0,  1,  0);
-        self.front = &self.rotation * vecf!(0,  0, -1);
-        self.right = &self.rotation * vecf!(1,  0,  0);
+        self.up    = self.rotation * vecf!(0,  1,  0);
+        self.front = self.rotation * vecf!(0,  0, -1);
+        self.right = self.rotation * vecf!(1,  0,  0);
 
         /* Frustum update */
         self.frustum = Some(Frustum::new(self));
@@ -167,7 +167,7 @@ impl Camera {
         }
 
         /* Cursor borrow */
-        if self.grabbes_cursor {
+        if self.captures_mouse {
             self.rotate(
                  0.0,
                 -mouse::get_dy_dt() * dt * 0.2,
@@ -269,17 +269,17 @@ impl Default for Camera {
             pitch: 0.0,
             yaw: 0.0,
 
-            fov: Angle::new_degrees(cam_def::FOV_IN_DEGREES),
+            fov: Angle::from_degrees(cam_def::FOV_IN_DEGREES),
 
             near_plane_dist: cam_def::NEAR_PLANE,
             far_plane_dist: cam_def::FAR_PLANE,
 
-            grabbes_cursor: false,
+            captures_mouse: false,
 
             speed_factor: cam_def::SPEED,
             speed_falloff: cam_def::SPEED_FALLOFF,
 
-            aspect_ratio: window_def::HEIGHT as f32 / window_def::WIDTH as f32,
+            aspect_ratio: window_def::ASPECT_RATIO,
 
             pos:      vecf!(0, 0, -3),
             speed:    vec3::ZERO,

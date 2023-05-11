@@ -12,6 +12,8 @@ pub mod werror;
 pub mod cfg;
 pub mod logger;
 pub mod assets;
+pub mod transform;
+pub mod camera;
 
 use {
     crate::prelude::*,

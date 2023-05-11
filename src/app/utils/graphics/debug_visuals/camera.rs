@@ -2,7 +2,7 @@ use {
     crate::{
         prelude::*,
         graphics::{
-            camera::Camera,
+            camera_resource::Camera,
             glium_mesh::UnindexedMesh,
         },
     },

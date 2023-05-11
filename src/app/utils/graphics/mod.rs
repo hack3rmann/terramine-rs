@@ -1,6 +1,6 @@
 pub mod glium_shader;
 pub mod glium_texture;
-pub mod camera;
+pub mod camera_resource;
 pub mod glium_mesh;
 pub mod debug_visuals;
 pub mod ui;
@@ -19,6 +19,7 @@ pub mod bind_group;
 pub mod macros;
 pub mod buffer;
 pub mod texture;
+pub mod sprite;
 
 use {
     crate::{
@@ -28,7 +29,7 @@ use {
     failed_mesh::{Mesh, Bufferizable, MeshDescriptor, Renderable},
     failed_shader::Shader, failed_texture::Texture,
     wgpu::util::DeviceExt,
-    winit::event_loop::EventLoop,
+    winit::{event_loop::EventLoop, event::Event},
     std::path::PathBuf,
 };
 
@@ -141,7 +142,7 @@ pub struct RenderContext {
 }
 
 /// Graphics handler.
-#[derive(Debug, bevy_ecs::prelude::Resource)]
+#[derive(Debug)]
 pub struct Graphics {
     pub window: Window,
     pub context: RenderContext,
@@ -375,7 +376,7 @@ impl Graphics {
         }
     }
 
-    pub fn handle_event(&mut self, event: &winit::event::Event<()>) {
+    pub fn handle_event(&mut self, event: &Event<()>) {
         self.imgui.platform.handle_event(
             self.imgui.context.io_mut(),
             &self.window,

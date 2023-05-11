@@ -4,10 +4,7 @@ pub extern crate profiler as profiler_target_macro;
 pub use profiler_target_macro::profiler_target;
 
 use {
-    crate::{
-        prelude::*,
-        time::timer::Timer,
-    },
+    crate::prelude::*,
     std::{
         time::Instant,
         sync::Mutex,
@@ -123,7 +120,7 @@ pub fn start_capture(target_name: impl Into<String>, id: MeasureId) -> Measure {
 }
 
 /// Updates profiler and builds ImGui window.
-pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer) {
+pub fn update_and_build_window(ui: &imgui::Ui, dt: f32) {
     if keyboard::just_pressed(cfg::key_bindings::ENABLE_PROFILER_WINDOW) {
         let _ = IS_DRAWING_ENABLED.fetch_update(AcqRel, Relaxed, |prev| Some(!prev));
     }
@@ -144,7 +141,7 @@ pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer) {
             Data {
                 name: profile.target_name.as_str(),
                 call_freq: profile.measures.len(),
-                frame_time: time_summary / timer.dt as f64,
+                frame_time: time_summary / dt as f64,
                 time: time_summary,
                 max_time: profile.max_time,
             }

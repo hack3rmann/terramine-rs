@@ -1,7 +1,7 @@
 use {
     crate::{
         prelude::*,
-        graphics::camera::Camera,
+        graphics::camera_resource::Camera,
     },
     math_linear::math::ray::space_3d::Line,
 };
@@ -22,9 +22,9 @@ assert_impl_all!(Frustum: Send, Sync);
 
 impl Frustum {
     /// Creates frustum struct from camera data
-    pub fn new(cam: &Camera) -> Frustum {
+    pub fn new(cam: &Camera) -> Self {
         /* Far rectangle half size */
-        let half_vertical_side = (cam.fov.get_radians() / 2.0).tan() * cam.far_plane_dist;
+        let half_vertical_side = f32::tan(cam.fov.get_radians() / 2.0) * cam.far_plane_dist;
         let half_horizontal_side = half_vertical_side / cam.aspect_ratio;
         
         let front_far = cam.front * cam.far_plane_dist;
@@ -45,7 +45,7 @@ impl Frustum {
             Line::from_2_points(cam.pos, cam.pos + (front_far - cam.right * half_horizontal_side - cam.up * half_vertical_side)),
         ];
 
-        Frustum { near, far, left, right, top, bottom, courner_rays }
+        Self { near, far, left, right, top, bottom, courner_rays }
     }
 
     /// Frustum check
@@ -98,25 +98,21 @@ impl Frustum {
 
     /// Checks if given vector is in frustum
     pub fn is_in_frustum(&self, vec: vec3) -> bool {
-        self.near	.is_in_positive_side(vec) &&
-        self.far	.is_in_positive_side(vec) &&
-        self.left	.is_in_positive_side(vec) &&
-        self.right	.is_in_positive_side(vec) &&
-        self.top	.is_in_positive_side(vec) &&
-        self.bottom	.is_in_positive_side(vec)
+        self.planes()
+            .into_iter()
+            .all(|plane| plane.is_in_positive_side(vec))
     }
 
-    /// Gives signed distance sum
+    pub fn planes(&self) -> [Plane; 6] {
+        [self.near, self.far, self.left, self.right, self.top, self.bottom]
+    }
+
+    /// Gives signed distance sum.
     #[allow(dead_code)]
     pub fn signed_distance_sum(&self, vec: vec3) -> f32 {
-        let mut sum = 0.0;
-        sum += self.near	.signed_distance(vec);
-        sum += self.far		.signed_distance(vec);
-        sum += self.left	.signed_distance(vec);
-        sum += self.right	.signed_distance(vec);
-        sum += self.top		.signed_distance(vec);
-        sum += self.bottom	.signed_distance(vec);
-
-        sum
+        self.planes()
+            .into_iter()
+            .map(|plane| plane.signed_distance(vec))
+            .sum()
     }
 }

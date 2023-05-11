@@ -1,7 +1,7 @@
 use {
     crate::{
         prelude::*,
-        graphics::camera::Camera,
+        graphics::camera_resource::Camera,
     }
 };
 
