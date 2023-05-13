@@ -20,7 +20,7 @@ impl Shader {
 }
 
 /// A shader source code string.
-pub type Source = Cow<'static, str>;
+pub type Source = StaticStr;
 assert_impl_all!(Source: Send, Sync);
 
 impl FromSource for Shader {

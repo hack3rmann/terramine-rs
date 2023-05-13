@@ -18,49 +18,62 @@ use {
     },
 };
 
-/// Struct that handles application stuff.
-pub struct App {
-    world: World,
-    camera: Camera,
 
-    imgui_window_builders: Vec<fn(&imgui::Ui)>,
-    event_loop: Option<EventLoop<()>>,
+
+/// Struct that handles [application][App] stuff.
+pub struct App {
+    pub world: World,
+    pub camera: CameraHandle,
+
+    pub update_functions: Vec<fn()>,
+    pub event_loop: Option<EventLoop<()>>,
 }
 
 impl App {
     /// Constructs [`App`].
     pub async fn new() -> Self {
-        let _work_guard = logger::work("app", "initialize");
+        let _work_guard = logger::work("app", "new");
 
-        let mut world = World::new();
+        let mut app = Self {
+            update_functions: vec![
+                debug_visuals::update,
+                loading::update,
+                logger::update,
+                keyboard::update,
+            ],
+            camera: CameraHandle::from_entity_unchecked(Entity::DANGLING),
+            world: World::new(),
+            event_loop: Some(default()),
+        };
 
-        world.init_resource::<Timer>();
+        app.setup().await;
 
-        let event_loop = EventLoop::default();
-        world.insert_resource(
-            Graphics::new(&event_loop).await
+        app
+    }
+
+    /// Setups an [`App`] after creation.
+    pub async fn setup(&mut self) {
+        let _work_guard = logger::work("app", "setup");
+
+
+        self.world.init_resource::<Timer>();
+
+        self.world.insert_resource(
+            Graphics::new(self.event_loop.as_ref().unwrap())
+                .await
                 .expect("failed to create graphics")
         );
 
-        let camera = Camera::spawn_default(&mut world);
-        
-        Camera::spawn_default(&mut world);
-        Camera::spawn_default(&mut world);
-        Camera::spawn_default(&mut world);
-        Camera::spawn_default(&mut world);
+        self.camera = CameraHandle::spawn_default(&mut self.world);
 
-        let imgui_window_builders = vec![
+
+        let mut graphics = self.world.resource::<&mut Graphics>().unwrap();
+
+        graphics.imgui.add_window_builder_bunch([
             logger::spawn_window,
             loading::spawn_info_window,
             crate::terrain::voxel::generator::spawn_control_window,
-        ];
-
-        Self {
-            camera,
-            world,
-            event_loop: Some(event_loop),
-            imgui_window_builders,
-        }
+        ]);
     }
 
     /// Runs app. Runs glium's `event_loop`.
@@ -71,126 +84,106 @@ impl App {
         ))
     }
 
+    /// Exits app. Runs any destructor or deinitializer functions.
+    pub async fn exit(&mut self, control_flow: &mut ControlFlow) {
+        control_flow.set_exit();
+    }
+
     /// Event loop run function.
     pub async fn run_frame_loop(
         &mut self, event: Event<'_, ()>,
         _elw_target: &EventLoopWindowTarget<()>, control_flow: &mut ControlFlow,
     ) {
         *control_flow = ControlFlow::Poll;
-        let mut graphics = self.world.resource::<&mut Graphics>().unwrap();
 
-        graphics.handle_event(&event);
-        user_io::handle_event(&event, &graphics.window);
+        let cur_window_id = {
+            let mut graphics = self.world.resource::<&mut Graphics>().unwrap();
+
+            graphics.handle_event(&event);
+            user_io::handle_event(&event, &graphics.window);
+
+            graphics.window.id()
+        };
 
         match event {
-            Event::WindowEvent { event, window_id }
-                if window_id == graphics.window.id() => match event
+            Event::WindowEvent { event: WindowEvent::CloseRequested, window_id }
+                if window_id == cur_window_id =>
             {
-                WindowEvent::CloseRequested =>
-                    *control_flow = ControlFlow::Exit,
-
-                WindowEvent::Resized(new_size) => {
-                    let (width, height) = (new_size.width, new_size.height);
-                    graphics.on_window_resize(UInt2::new(width, height));
-                },
-
-                _ => (),
+                self.exit(control_flow).await;
             },
 
             Event::MainEventsCleared => {
                 if keyboard::just_pressed(cfg::key_bindings::APP_EXIT) {
-                    control_flow.set_exit();
+                    self.exit(control_flow).await;
+                    return;
                 }
+
+                let graphics = self.world.resource::<&Graphics>().unwrap();
                 graphics.window.request_redraw();
             },
 
-            Event::RedrawRequested(window_id) => {
-                drop(graphics);
-                self.do_frame(window_id).await
-            },
+            Event::RedrawRequested(window_id) =>
+                self.do_frame(window_id).await,
 
             _ => (),
         }
     }
 
-    async fn update_systems(&mut self, _window_id: WindowId) {
-        let duration = {
-            let mut timer = self.world.resource::<&mut Timer>().unwrap();
-            timer.update();
-            timer.duration()
-        };
+    /// Updates `ecs`'s systems. Note that non of resources can be borrowed at this point.
+    async fn update_systems(&mut self) {
+        CameraHandle::update_all(&self.world);
+    }
 
-        Camera::update_all(&self.world);
+    /// Updates all in the [app][App].
+    async fn update(&mut self, _window_id: WindowId) {
+        for update in self.update_functions.iter() {
+            update();
+        }
 
         {
+            let mut timer = self.world.resource::<&mut Timer>().unwrap();
             let mut graphics = self.world.resource::<&mut Graphics>().unwrap();
+            
+            timer.update();
+            graphics.update(timer.duration()).await;
 
             mouse::update(&graphics.window).await
                 .log_error("app", "failed to update mouse input");
 
-            graphics.imgui.context
-                .io_mut()
-                .update_delta_time(duration);
+            keyboard::set_input_capture(graphics.imgui.context.io().want_capture_keyboard);
+    
+            if keyboard::just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
+                mouse::set_capture(
+                    &graphics.window,
+                    self.camera.switch_mouse_capture(&self.world),
+                )
+            }
         }
 
-        // Debug visuals switcher.
-        if keyboard::just_pressed(cfg::key_bindings::DEBUG_VISUALS_SWITCH) {
-            debug_visuals::switch_enable();
-        }
-
-        // Loading recieve.
-        loading::recv_all()
-            .log_error("app", "failed to receive all loadings");
-
-        // Log messages receive.
-        logger::recv_all();
-
-        // Update keyboard inputs.
-        keyboard::update_input();
+        self.update_systems().await;
     }
 
+    /// Prepares a frame.
     async fn prepare_frame(&mut self, _window_id: WindowId) {
         let fps = self.world.resource::<&Timer>().unwrap().fps;
         let mut graphics = self.world.resource::<&mut Graphics>().unwrap();
 
-        graphics.window.set_title(&format!("Terramine: {fps:.0} FPS"));
-
-        keyboard::set_input_capture(graphics.imgui.context.io().want_capture_keyboard);
-
-        if keyboard::just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
-            if self.camera.switch_mouse_capture(&self.world) {
-                mouse::grab_cursor(&graphics.window);
-            } else {
-                mouse::release_cursor(&graphics.window);
-            }
-        }
-
-        if keyboard::just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
-            graphics.refresh_test_shader().await;
-        }
-
         // Prepare frame to render.
-        graphics.prepare_frame().expect("failed to prepare a frame");
+        graphics.prepare_frame(fps)
+            .expect("failed to prepare a frame");
     }
 
+    /// Draws a frame on main window.
     async fn draw_frame(&mut self, _window_id: WindowId) {
-        let mut graphics = self.world.resource::<&mut Graphics>().unwrap();
         let timer = self.world.resource::<&Timer>().unwrap();
 
         // InGui draw data.
         let use_ui = |ui: &mut imgui::Ui| {
-            // Camera window.
-            Camera::spawn_control_windows(&self.world, ui);
-
-            // Profiler window.
+            CameraHandle::spawn_control_windows(&self.world, ui);
             profiler::update_and_build_window(ui, timer.dt);
-
-            // Draw all windows by callbacks.
-            for builder in self.imgui_window_builders.iter() {
-                builder(ui)
-            }
         };
 
+        let mut graphics = self.world.resource::<&mut Graphics>().unwrap();
         graphics.render(
             RenderDescriptor {
                 use_imgui_ui: use_ui,
@@ -199,14 +192,15 @@ impl App {
         ).expect("failed to render graphics");
     }
 
-    // Does a frame.
+    /// Does a frame.
     async fn do_frame(&mut self, window_id: WindowId) {
+        // Skip a frame if the window is not main.
         {
             let graphics = self.world.resource::<&Graphics>().unwrap();
             if window_id != graphics.window.id() { return }
         }
 
-        self.update_systems(window_id).await;
+        self.update(window_id).await;
         self.prepare_frame(window_id).await;
         self.draw_frame(window_id).await;
     }

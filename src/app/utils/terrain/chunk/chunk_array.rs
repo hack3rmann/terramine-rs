@@ -492,12 +492,12 @@ impl ChunkArray {
     }
 
     /// Gives iterator over all chunk's adjacents.
-    pub fn adj_iter(&self) -> impl Iterator<Item = ChunkAdj> + '_ {
+    pub fn adj_iter(&self) -> impl ExactSizeIterator<Item = ChunkAdj> + '_ {
         Self::adj_iter_unbounded(&self.chunks, self.sizes)
     }
 
     /// Gives iterator over all chunk's adjacents.
-    fn adj_iter_unbounded(chunks: &[ChunkRef], sizes: USize3) -> impl Iterator<Item = ChunkAdj> + '_ {
+    fn adj_iter_unbounded(chunks: &[ChunkRef], sizes: USize3) -> impl ExactSizeIterator<Item = ChunkAdj> + '_ {
         Self::pos_iter(sizes)
             .map(move |pos| Self::get_adj_chunks_unbounded(chunks, sizes, pos))
     }
@@ -516,7 +516,7 @@ impl ChunkArray {
     }
 
     /// Gives iterator over desired LOD for each chunk.
-    pub fn desired_lod_iter(chunk_array_sizes: USize3, cam_pos: vec3, threashold: f32) -> impl Iterator<Item = Lod> {
+    pub fn desired_lod_iter(chunk_array_sizes: USize3, cam_pos: vec3, threashold: f32) -> impl ExactSizeIterator<Item = Lod> {
         Self::pos_iter(chunk_array_sizes)
             .map(move |chunk_pos| Self::desired_lod_at(chunk_pos, cam_pos, threashold))
     }
@@ -528,14 +528,14 @@ impl ChunkArray {
     }
 
     /// Gives iterator over mutable chunks and their adjacents.
-    pub fn chunks_with_adj(&self) -> impl Iterator<Item = (ChunkRef, ChunkAdj)> + '_ {
+    pub fn chunks_with_adj(&self) -> impl ExactSizeIterator<Item = (ChunkRef, ChunkAdj)> + '_ {
         Self::chunks_with_adj_unbounded(&self.chunks, self.sizes)
     }
 
     /// Gives iterator over mutable chunks and their adjacents.
     pub fn chunks_with_adj_unbounded(
         chunks: &[ChunkRef], sizes: USize3,
-    ) -> impl Iterator<Item = (ChunkRef, ChunkAdj)> + '_ {
+    ) -> impl ExactSizeIterator<Item = (ChunkRef, ChunkAdj)> + '_ {
         chunks.iter()
             .map(Arc::clone)
             .zip(Self::adj_iter_unbounded(chunks, sizes))

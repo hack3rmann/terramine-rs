@@ -85,7 +85,7 @@ impl Chunk {
     pub const GLOBAL_SIZE: f32 = Self::SIZE as f32 * Voxel::SIZE;
     
     /// Gives iterator over all voxels in chunk.
-    pub fn voxels(&self) -> impl Iterator<Item = Voxel> + '_ {
+    pub fn voxels(&self) -> impl ExactSizeIterator<Item = Voxel> + '_ {
         self.voxel_ids.iter()
             .map(|id| id.load(Relaxed))
             .zip(Chunk::global_pos_iter(self.pos.load(Relaxed)))
@@ -93,7 +93,7 @@ impl Chunk {
     }
 
     /// Gives iterator over low-detail voxels with their coords.
-    pub fn low_voxel_iter(&self, lod: Lod) -> impl Iterator<Item = (LoweredVoxel, Int3)> + '_ {
+    pub fn low_voxel_iter(&self, lod: Lod) -> impl ExactSizeIterator<Item = (LoweredVoxel, Int3)> + '_ {
         let sub_chunk_size = 2_i32.pow(lod);
 
         Chunk::chunked_pos_iter(sub_chunk_size as usize)
@@ -643,13 +643,13 @@ impl Chunk {
     }
 
     /// Gives iterator over all id-vectors in chunk (or relative to chunk voxel positions).
-    pub fn global_pos_iter(chunk_pos: Int3) -> impl Iterator<Item = Int3> {
+    pub fn global_pos_iter(chunk_pos: Int3) -> impl ExactSizeIterator<Item = Int3> {
         Self::local_pos_iter()
             .map(move |pos| Self::local_to_global_pos(chunk_pos, pos))
     }
 
     /// Gives iterator that yields iterator over some chunk of voxels.
-    pub fn chunked_pos_iter(sub_chunk_size: usize) -> impl Iterator<Item = SpaceIter> {
+    pub fn chunked_pos_iter(sub_chunk_size: usize) -> impl ExactSizeIterator<Item = SpaceIter> {
         SpaceIter::split_chunks(
             Self::SIZES.into(),
             Int3::all(sub_chunk_size as i32),

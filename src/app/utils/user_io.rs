@@ -95,7 +95,7 @@ pub mod keyboard {
         is_pressed && !is_captured
     }
 
-    pub fn update_input() {
+    pub fn update() {
         let mut input = INPUTS.write().unwrap();
 
         let mut released_keys = RELEASED_KEYS.lock().unwrap();
@@ -216,7 +216,7 @@ pub mod mouse {
         /* Get window size */
         let wsize = window.inner_size();
 
-        /* If cursor grabbed then not change mouse position and put cursor on center */
+        /* If mouse is captured then not change mouse position and put cursor on center */
         if IS_GRABBED.load(Relaxed) {
             window.set_cursor_position(
                 PhysicalPosition::new(wsize.width / 2, wsize.height / 2)
@@ -253,7 +253,7 @@ pub mod mouse {
     }
 
     /// Grabs the cursor for camera control.
-    pub fn grab_cursor(window: &glium::glutin::window::Window) {
+    pub fn capture(window: &glium::glutin::window::Window) {
         window.set_cursor_grab(CursorGrabMode::Confined)
             .or_else(|_| window.set_cursor_grab(CursorGrabMode::Locked))
             .expect("failed to set cursor grab");
@@ -263,12 +263,21 @@ pub mod mouse {
     }
 
     /// Releases cursor for standart input.
-    pub fn release_cursor(window: &glium::glutin::window::Window) {
+    pub fn uncapture(window: &glium::glutin::window::Window) {
         window.set_cursor_grab(CursorGrabMode::None)
             .expect("failed to release cursor");
         window.set_cursor_visible(true);
 
         IS_GRABBED.store(false, Relaxed);
+    }
+
+    /// Sets capture mode.
+    pub fn set_capture(window: &glium::glutin::window::Window, is_captured: bool) {
+        if is_captured {
+            capture(window);
+        } else {
+            uncapture(window);
+        }
     }
 
     #[derive(Debug, Error)]
@@ -318,10 +327,10 @@ pub fn handle_event(event: &Event<()>, window: &glium::glutin::window::Window) {
 
                 let is_grabbed = mouse::IS_GRABBED.load(Relaxed);
                 if *focused && *is_regrabbed && !is_grabbed {
-                    mouse::grab_cursor(window);
+                    mouse::capture(window);
                     *is_regrabbed = false;
                 } else if is_grabbed {
-                    mouse::release_cursor(window);
+                    mouse::uncapture(window);
                     *is_regrabbed = true;
                 }
             }

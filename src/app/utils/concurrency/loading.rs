@@ -96,6 +96,10 @@ pub fn recv_all() -> Result<(), LoadingError> {
         .recv_all()
 }
 
+pub fn update() {
+    recv_all().log_error("loading", "failed to receive all loadings");
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Command<'s> {
     Add(String),

@@ -1,6 +1,8 @@
 pub mod camera;
 pub mod chunk_array;
 
+
+
 use {
     crate::{
         prelude::*,
@@ -16,6 +18,8 @@ use {
     std::marker::PhantomData,
 };
 
+
+
 /// Adds debug visuals to type `T`.
 #[derive(Debug, Deref)]
 pub struct DebugVisualized<'s, T> {
@@ -26,8 +30,12 @@ pub struct DebugVisualized<'s, T> {
     pub static_data: DebugVisualsStatics<'s, T>,
 }
 
+
+
 /// [`DebugVisualized`] with `'static` lifetime of debug visuals.
 pub type DebugVisualizedStatic<T> = DebugVisualized<'static, T>;
+
+
 
 #[derive(Debug)]
 pub struct DebugVisualsStatics<'s, T> {
@@ -37,11 +45,21 @@ pub struct DebugVisualsStatics<'s, T> {
     _phantom: PhantomData<fn() -> T>
 }
 
+
+
 static ENABLED: AtomicBool = AtomicBool::new(false);
 
-pub fn switch_enable() {
+pub fn switch() {
     ENABLED.fetch_update(AcqRel, Relaxed, |old| Some(!old)).unwrap();
 }
+
+pub fn update() {
+    if keyboard::just_pressed(cfg::key_bindings::DEBUG_VISUALS_SWITCH) {
+        self::switch();
+    }
+}
+
+
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Vertex {
@@ -52,12 +70,16 @@ assert_impl_all!(Vertex: Send, Sync);
 
 implement_vertex!(Vertex, pos, color);
 
+
+
 #[repr(transparent)]
 #[derive(Debug, Deref)]
 struct ShaderWrapper(Shader);
 
 unsafe impl Send for ShaderWrapper { }
 unsafe impl Sync for ShaderWrapper { }
+
+
 
 #[repr(transparent)]
 #[derive(Debug, Deref)]

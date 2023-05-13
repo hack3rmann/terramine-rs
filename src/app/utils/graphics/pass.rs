@@ -1,16 +1,10 @@
 use {
-    crate::prelude::*,
+    crate::{
+        prelude::*,
+        graphics::TextureView,
+    },
     std::fmt::Debug,
 };
-
-
-
-pub trait Renderable: type_uuid::TypeUuidDynamic + Debug {
-    fn render<'s, 'rp>(
-        &'s self, render_pass: &mut wgpu::RenderPass<'rp>,
-    ) -> Result<(), Box<dyn std::error::Error>> where 's: 'rp;
-}
-assert_obj_safe!(Renderable);
 
 
 
@@ -19,7 +13,10 @@ pub struct ClearPass<'s>(pub wgpu::RenderPass<'s>);
 assert_impl_all!(ClearPass: Send, Sync);
 
 impl<'s> ClearPass<'s> {
-    pub fn new(encoder: &'s mut wgpu::CommandEncoder, target_views: impl IntoIterator<Item = &'s wgpu::TextureView>) -> Self {
+    pub fn new(
+        encoder: &'s mut wgpu::CommandEncoder,
+        target_views: impl IntoIterator<Item = &'s TextureView>,
+    ) -> Self {
         use wgpu::{RenderPassColorAttachment, Operations, LoadOp, RenderPassDescriptor};
 
         let color_attachments: Vec<_> = target_views.into_iter()
@@ -43,6 +40,14 @@ impl<'s> ClearPass<'s> {
 
         Self(render_pass)
     }
+
+    /// Does a [`ClearPass`] creation and then drops it.
+    pub fn clear(
+        encoder: &'s mut wgpu::CommandEncoder,
+        target_views: impl IntoIterator<Item = &'s TextureView>,
+    ) {
+        let _ = Self::new(encoder, target_views);
+    }
 }
 
 
@@ -55,7 +60,7 @@ impl<'s> RenderPass<'s> {
     pub fn new(
         encoder: &'s mut wgpu::CommandEncoder,
         label: &str,
-        target_views: impl IntoIterator<Item = &'s wgpu::TextureView>
+        target_views: impl IntoIterator<Item = &'s TextureView>
     ) -> Self {
         use wgpu::{RenderPassColorAttachment, Operations, LoadOp, RenderPassDescriptor};
 

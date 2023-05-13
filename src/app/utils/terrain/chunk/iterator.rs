@@ -265,7 +265,7 @@ impl SpaceIter {
         Self::new_cubed(0..end)
     }
 
-    pub fn split_chunks(iter_size: Int3, chunk_size: Int3) -> impl Iterator<Item = Self> {
+    pub fn split_chunks(iter_size: Int3, chunk_size: Int3) -> impl ExactSizeIterator<Item = Self> {
         assert_eq!(
             iter_size % chunk_size, Int3::ZERO,
             "iter_size (value is {iter_size:?}) should be divisible by chunk_size (value is {chunk_size:?})"

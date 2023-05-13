@@ -7,12 +7,12 @@ use crate::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, TypeUuid)]
 #[uuid = "40b56f60-c643-4193-abaa-9b370c8b6672"]
-pub struct Camera {
+pub struct CameraHandle {
     pub entity: Entity,
 }
-assert_impl_all!(Camera: Send, Sync);
+assert_impl_all!(CameraHandle: Send, Sync);
 
-impl Camera {
+impl CameraHandle {
     pub fn spawn_default(world: &mut World) -> Self {
         Self { entity: world.spawn(CameraBundle::default()) }
     }
@@ -21,7 +21,7 @@ impl Camera {
         let mut query = world.query_one::<(&CameraComponent, &Transform, &Speed)>(entity)
             .expect("camera entity should exist");
         query.get().expect("camera entity should have CameraComponent, Transfrom and Speed components");
-        
+
         Self::from_entity_unchecked(entity)
     }
 
@@ -49,9 +49,9 @@ impl Camera {
     pub fn spawn_control_windows(world: &World, ui: &imgui::Ui) {
         use crate::graphics::ui::imgui_constructor::make_window;
 
-        let mut query = world.query::<(&mut CameraComponent, &mut Transform, &mut Speed)>();
-        for (entity, (camera, transform, speed)) in query.into_iter() {
-            make_window(ui, format!("Camera #_{}", entity.id())).build(|| {
+        let mut query = world.query::<(&mut CameraComponent, &mut Transform)>();
+        for (entity, (camera, transform)) in query.into_iter() {
+            make_window(ui, format!("Camera #{}", entity.id())).build(|| {
                 ui.text("Position");
                 ui.text(transform.translation.to_string());
 
@@ -60,15 +60,9 @@ impl Camera {
 
                 ui.separator();
 
-                {
-                    let mut speed_module = speed.len();
-
-                    ui.slider_config("Speed", 5.0, 300.0)
-                        .display_format("%.1f")
-                        .build(&mut speed_module);
-
-                    *speed = speed.with_len(speed_module).into();
-                }
+                ui.slider_config("Speed", 5.0, 300.0)
+                    .display_format("%.1f")
+                    .build(&mut camera.speed_factor);
 
                 ui.slider_config("Speed falloff", 0.0, 1.0)
                     .display_format("%.3f")
@@ -105,7 +99,7 @@ pub struct CameraComponent {
     pub mouse_sensetivity: f32,
     pub captures_mouse: bool,
 }
-assert_impl_all!(Camera: Send, Sync);
+assert_impl_all!(CameraHandle: Send, Sync);
 
 impl CameraComponent {
     /// Returns projection matrix.

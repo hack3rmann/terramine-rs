@@ -1,12 +1,17 @@
 use {
     crate::{
         prelude::*,
-        graphics::{ToGpu, Material, Renderable},
+        graphics::ToGpu,
     },
     std::{hash::Hash, fmt::Debug},
 };
 
-pub use wgpu::{PrimitiveTopology, PrimitiveState};
+
+
+pub use wgpu::{
+    PrimitiveTopology, PrimitiveState, PolygonMode, VertexStepMode, VertexAttribute, vertex_attr_array,
+    VertexBufferLayout,
+};
 
 
 
@@ -18,7 +23,7 @@ pub struct Mesh<V> {
     pub indices: Option<Indices>,
     pub primitive_topology: PrimitiveTopology,
 }
-assert_impl_all!(Mesh<f32>: Send, Sync);
+assert_impl_all!(Mesh<f32>: Send, Sync, Component);
 
 impl<V: Vertex> Mesh<V> {
     pub fn new(vertices: Vec<V>, indices: Option<Indices>, primitive_topology: PrimitiveTopology) -> Self {
@@ -36,7 +41,7 @@ impl<V: Vertex> ToGpu for Mesh<V> {
     type Error = !;
     
     /// Creates new [`GpuMesh`] instance from [`Mesh`].
-    fn to_gpu(&self, desc: Self::Descriptor) -> Result<Self::GpuType, Self::Error> {
+    fn to_gpu(&self, desc: GpuMeshDescriptor) -> Result<GpuMesh, !> {
         use wgpu::{
             BufferUsages, IndexFormat, FrontFace, Face,
             util::{DeviceExt, BufferInitDescriptor},
@@ -83,10 +88,10 @@ impl<V: Vertex> ToGpu for Mesh<V> {
         };
 
         Ok(GpuMesh {
+            is_enabled: AtomicBool::from(true),
             buffer: vertices,
             n_vertices: self.vertices.len(),
             indices,
-            meterial: desc.material,
             label: desc.label,
             primitive_state,
         })
@@ -99,8 +104,7 @@ impl<V: Vertex> ToGpu for Mesh<V> {
 #[uuid = "a529a8b9-4e2b-40ee-b689-654a26066acd"]
 pub struct GpuMeshDescriptor {
     pub device: Arc<wgpu::Device>,
-    pub label: Cow<'static, str>,
-    pub material: Arc<dyn Material>,
+    pub label: StaticStr,
     pub polygon_mode: wgpu::PolygonMode,
 }
 assert_impl_all!(GpuMeshDescriptor: Send, Sync);
@@ -115,7 +119,7 @@ pub enum Indices {
     U16(Vec<u16>),
     U32(Vec<u32>),
 }
-assert_impl_all!(Indices: Send, Sync);
+assert_impl_all!(Indices: Send, Sync, Component);
 
 impl From<Vec<u16>> for Indices {
     fn from(value: Vec<u16>) -> Self {
@@ -135,29 +139,49 @@ impl From<Vec<u32>> for Indices {
 #[derive(Debug, TypeUuid)]
 #[uuid = "286ff010-e38a-11ed-b9fb-0800200c9a66"]
 pub struct GpuMesh {
+    pub is_enabled: AtomicBool,
+
     pub buffer: wgpu::Buffer,
     pub n_vertices: usize,
 
     pub indices: GpuIndices,
 
-    pub meterial: Arc<dyn Material>,
-    pub label: Cow<'static, str>,
+    pub label: StaticStr,
     pub primitive_state: wgpu::PrimitiveState,
 }
-assert_impl_all!(GpuMesh: Send, Sync);
+assert_impl_all!(GpuMesh: Send, Sync, Component);
 
 impl GpuMesh {
     pub fn is_empty(&self) -> bool {
         self.n_vertices == 0
     }
+
+    pub fn switch_visibility(&self) {
+        let _ = self.is_enabled.fetch_update(AcqRel, Relaxed, |old| Some(!old));
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.is_enabled.load(Acquire)
+    }
+
+    pub fn enable(&self) {
+        self.is_enabled.store(true, Release);
+    }
+
+    pub fn disable(&self) {
+        self.is_enabled.store(false, Release);
+    }
 }
 
 impl Renderable for GpuMesh {
     type Error = !;
-    fn render<'rp, 's: 'rp>(&'s self, render_pass: &mut wgpu::RenderPass<'rp>) -> Result<(), Self::Error> {
+
+    fn render<'rp, 's: 'rp>(
+        &'s self, pipeline: &'rp wgpu::RenderPipeline, render_pass: &mut wgpu::RenderPass<'rp>,
+    ) -> Result<(), Self::Error> {
         if self.is_empty() { return Ok(()) }
 
-        render_pass.set_pipeline(self.meterial.get_pipeline());
+        render_pass.set_pipeline(pipeline);
         render_pass.set_vertex_buffer(0, self.buffer.slice(..));
         render_pass.draw(0..self.n_vertices as u32, 0..1);
 
@@ -173,7 +197,7 @@ pub enum GpuIndices {
     Unindexed,
     Indexed(wgpu::Buffer),
 }
-assert_impl_all!(GpuIndices: Send, Sync);
+assert_impl_all!(GpuIndices: Send, Sync, Component);
 
 impl From<wgpu::Buffer> for GpuIndices {
     fn from(buffer: wgpu::Buffer) -> Self {
@@ -184,4 +208,24 @@ impl From<wgpu::Buffer> for GpuIndices {
 
 
 /// Trait that all vertices should satisfy to allow usage on GPU.
-pub trait Vertex: Pod + Hash + PartialEq { }
+pub trait Vertex: Pod + PartialEq {
+    const ATTRIBUTES: &'static [VertexAttribute];
+    const STEP_MODE: VertexStepMode;
+
+    const BUFFER_LAYOUT: VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+        array_stride: mem::size_of::<Self>() as u64,
+        step_mode: Self::STEP_MODE,
+        attributes: Self::ATTRIBUTES,
+    };
+}
+
+
+
+pub trait Renderable {
+    type Error: std::error::Error;
+
+    fn render<'rp, 's: 'rp>(
+        &'s self, pipeline: &'rp wgpu::RenderPipeline, render_pass: &mut wgpu::RenderPass<'rp>,
+    ) -> Result<(), Self::Error>;
+}
+assert_obj_safe!(Renderable<Error = ()>);

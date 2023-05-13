@@ -14,6 +14,9 @@ pub mod logger;
 pub mod assets;
 pub mod transform;
 pub mod camera;
+pub mod str_view;
+
+
 
 use {
     crate::prelude::*,
@@ -22,6 +25,8 @@ use {
         collections::hash_map::RandomState,
     },
 };
+
+
 
 /// A pre-hashed value of a specific type. Pre-hashing enables memoization of hashes that are expensive to compute.
 /// It also enables faster [`PartialEq`] comparisons by short circuiting on hash equality.
@@ -36,6 +41,7 @@ pub struct Hashed<V, H = RandomState> {
     hash: u64,
     _state_marker: PhantomData<H>,
 }
+assert_impl_all!(Hashed<i32>: Send, Sync);
 
 impl<V: Hash, H: BuildHasher + Default> Hashed<V, H> {
     /// Pre-hashes the given value using the [`BuildHasher`] configured in the [`Hashed`] type.
@@ -64,9 +70,35 @@ impl<V, H> Hash for Hashed<V, H> {
 }
 
 
+
 /// Returns the "default value" for a type.
 /// Default values are often some kind of initial value,
 /// identity value, or anything else that may make sense as a default
 pub fn default<T: Default>() -> T {
     T::default()
+}
+
+
+
+pub trait ToPhisicalSize<P: winit::dpi::Pixel> {
+    fn to_phisical_size(&self) -> winit::dpi::PhysicalSize<P>;
+}
+assert_obj_safe!(ToPhisicalSize<u32>);
+
+impl ToPhisicalSize<u32> for UInt2 {
+    fn to_phisical_size(&self) -> winit::dpi::PhysicalSize<u32> {
+        winit::dpi::PhysicalSize::new(self.x, self.y)
+    }
+}
+
+
+
+pub trait ToVec2 {
+    fn to_vec2(&self) -> UInt2;
+}
+
+impl ToVec2 for winit::dpi::PhysicalSize<u32> {
+    fn to_vec2(&self) -> UInt2 {
+        UInt2::new(self.width, self.height)
+    }
 }

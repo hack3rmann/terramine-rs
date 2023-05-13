@@ -2,19 +2,17 @@ use {
     crate::{
         prelude::*,
         graphics::failed_shader::Shader,
+        graphics::mesh::Renderable,
     },
     wgpu::{*, util::DeviceExt},
 };
+
 
 pub trait Bufferizable {
     const ATTRS: &'static [VertexAttribute];
     const BUFFER_LAYOUT: VertexBufferLayout<'static>;
 }
 
-pub trait Renderable {
-    type Error: std::error::Error;
-    fn render<'rp, 's: 'rp>(&'s self, render_pass: &mut RenderPass<'rp>) -> Result<(), Self::Error>;
-}
 
 /// Generic mesh. Contains vertex buffer, shader and pipeline
 #[derive(Debug)]
@@ -194,15 +192,17 @@ impl<V> Mesh<V> {
 
                 layout: Some(pipeline_layout),
 
+
+
                 vertex: VertexState {
                     module: shader,
-                    entry_point: "vs_main",
+                    entry_point: cfg::shader::WGSL_VERTEX_ENTRY,
                     buffers: &[V::BUFFER_LAYOUT],
                 },
 
                 fragment: Some(FragmentState {
                     module: shader,
-                    entry_point: "fs_main",
+                    entry_point: cfg::shader::WGSL_FRAGMENT_ENTRY,
                     targets: fragment_targets,
                 }),
 
@@ -215,6 +215,8 @@ impl<V> Mesh<V> {
                     unclipped_depth: false,
                     conservative: false,
                 },
+
+
 
                 depth_stencil: None,
 
@@ -232,7 +234,7 @@ impl<V> Mesh<V> {
 
 impl<V: Bufferizable> Renderable for Mesh<V> {
     type Error = !;
-    fn render<'rp, 's: 'rp>(&'s self, render_pass: &mut RenderPass<'rp>) -> Result<(), !> {
+    fn render<'rp, 's: 'rp>(&'s self, _: &RenderPipeline, render_pass: &mut RenderPass<'rp>) -> Result<(), !> {
         if self.is_empty() { return Ok(()) }
 
         render_pass.set_pipeline(&self.shared.pipeline);

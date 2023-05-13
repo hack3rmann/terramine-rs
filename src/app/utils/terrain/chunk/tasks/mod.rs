@@ -55,7 +55,7 @@ impl<Item: Send + 'static> Task<Item> {
             .expect("task thread panicked")
     }
 
-    pub async fn try_take_results<K, V>(tasks: impl Iterator<Item = (K, V)>) -> SmallVec<[(K, Item); 16]>
+    pub async fn try_take_results<K, V>(tasks: impl IntoIterator<Item = (K, V)>) -> SmallVec<[(K, Item); 16]>
     where
         V: AsMut<Self> + AsRef<Self>,
     {
