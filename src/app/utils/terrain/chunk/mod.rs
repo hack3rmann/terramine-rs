@@ -4,6 +4,7 @@ pub mod iterator;
 pub mod chunk_array;
 pub mod tasks;
 pub mod commands;
+pub mod old_mesh;
 pub mod mesh;
 
 use {
@@ -22,7 +23,7 @@ use {
         voxel_data::{data::*, Id},
         generator as gen,
     },
-    mesh::{LowVertex, FullVertex, ChunkMesh},
+    old_mesh::{LowVertex, FullVertex, ChunkMesh},
     chunk_array::ChunkAdj,
     glium::{
         self as gl,

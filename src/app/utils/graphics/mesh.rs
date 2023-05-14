@@ -1,16 +1,16 @@
 use {
     crate::{
         prelude::*,
-        graphics::{ToGpu, Device, Buffer, RenderPipeline, RenderPass},
+        graphics::{Device, Buffer, RenderPipeline, RenderPass},
     },
-    std::{hash::Hash, fmt::Debug},
+    std::{hash::Hash, fmt::Debug, any::TypeId},
 };
 
 
 
 pub use wgpu::{
     PrimitiveTopology, PrimitiveState, PolygonMode, VertexStepMode, VertexAttribute, vertex_attr_array,
-    VertexBufferLayout,
+    VertexBufferLayout, BufferView, IndexFormat,
 };
 
 
@@ -33,81 +33,44 @@ impl<V: Vertex> Mesh<V> {
     pub fn new_empty(primitive_topology: PrimitiveTopology) -> Self {
         Self::new(vec![], None, primitive_topology)
     }
-}
 
-impl<V: Vertex> ToGpu for Mesh<V> {
-    type Descriptor = GpuMeshDescriptor;
-    type GpuType = GpuMesh;
-    type Error = !;
-    
-    /// Creates new [`GpuMesh`] instance from [`Mesh`].
-    fn to_gpu(&self, desc: GpuMeshDescriptor) -> Result<GpuMesh, !> {
-        use crate::graphics::{
-            BufferUsages, IndexFormat, FrontFace, Face,
-            DeviceExt, BufferInitDescriptor,
+    pub fn connect(meshes: impl IntoIterator<Item = Self>) -> Self {
+        let mut meshes = meshes.into_iter();
+        
+        let first = match meshes.next() {
+            Some(mesh) => mesh,
+            None => return default(),
         };
 
-        let vertices = desc.device.create_buffer_init(
-            &BufferInitDescriptor {
-                label: desc.label.as_deref(),
-                contents: bytemuck::cast_slice(&self.vertices),
-                usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
-            },
-        ).into();
+        let mut vertices = first.vertices;
+        let mut indices = first.indices;
+        let primitive_topology = first.primitive_topology;
 
-        let (indices, idx_format) = match self.indices {
-            Some(ref indices) => {
-                let (contents, idx_format) = match indices {
-                    Indices::U16(indices) => (bytemuck::cast_slice(indices), IndexFormat::Uint16),
-                    Indices::U32(indices) => (bytemuck::cast_slice(indices), IndexFormat::Uint32),
-                };
+        for mut mesh in meshes {
+            vertices.append(&mut mesh.vertices);
 
-                let indices = GpuIndices::Indexed(desc.device.create_buffer_init(
-                    &BufferInitDescriptor {
-                        label: desc.label.as_deref(),
-                        contents,
-                        usage: BufferUsages::INDEX | BufferUsages::COPY_DST,
-                    },
-                ).into());
+            match (&mut indices, &mut mesh.indices) {
+                (Some(to), Some(from)) => to.append(from),
+                (None, None) => (),
+                _ => panic!("can not connect with different indices containment"),
+            }
 
-                (indices, Some(idx_format))
-            },
+            assert_eq!(
+                mesh.primitive_topology,
+                primitive_topology,
+                "all primitive topologies should be the same to connect meshes",
+            )
+        }
 
-            None => (GpuIndices::Unindexed, None),
-        };
-
-        let primitive_state = PrimitiveState {
-            topology: self.primitive_topology,
-            strip_index_format: idx_format,
-            front_face: FrontFace::Ccw,
-            cull_mode: Some(Face::Back),
-            unclipped_depth: false,
-            polygon_mode: desc.polygon_mode,
-            conservative: false,
-
-        };
-
-        Ok(GpuMesh {
-            is_enabled: AtomicBool::from(true),
-            buffer: vertices,
-            n_vertices: self.vertices.len(),
-            indices,
-            label: desc.label,
-            primitive_state,
-        })
+        Self::new(vertices, indices, primitive_topology)
     }
 }
 
-
-
-#[derive(Debug, TypeUuid)]
-#[uuid = "a529a8b9-4e2b-40ee-b689-654a26066acd"]
-pub struct GpuMeshDescriptor {
-    pub device: Arc<Device>,
-    pub label: Option<StaticStr>,
-    pub polygon_mode: PolygonMode,
+impl<V: Vertex> FromIterator<Mesh<V>> for Mesh<V> {
+    fn from_iter<T: IntoIterator<Item = Mesh<V>>>(iter: T) -> Self {
+        Self::connect(iter)
+    }
 }
-assert_impl_all!(GpuMeshDescriptor: Send, Sync);
 
 
 
@@ -120,6 +83,23 @@ pub enum Indices {
     U32(Vec<u32>),
 }
 assert_impl_all!(Indices: Send, Sync, Component);
+
+impl Indices {
+    pub fn format(&self) -> IndexFormat {
+        match self {
+            Self::U16(_) => IndexFormat::Uint16,
+            Self::U32(_) => IndexFormat::Uint32,
+        }
+    }
+
+    pub fn append(&mut self, from: &mut Self) {
+        match (self, from) {
+            (Self::U16(to), Self::U16(from)) => to.append(from),
+            (Self::U32(to), Self::U32(from)) => to.append(from),
+            _ => panic!("appending different types if indices is unsupported"),
+        }
+    }
+}
 
 impl From<Vec<u16>> for Indices {
     fn from(value: Vec<u16>) -> Self {
@@ -135,9 +115,19 @@ impl From<Vec<u32>> for Indices {
 
 
 
+#[derive(Debug)]
+pub struct GpuMeshDescriptor<'s, V> {
+    pub device: &'s Device,
+    pub label: Option<StaticStr>,
+    pub polygon_mode: PolygonMode,
+    pub mesh: &'s Mesh<V>,
+}
+assert_impl_all!(GpuMeshDescriptor<f32>: Send, Sync);
+
+
+
 /// GPU-side [mesh][Mesh] containing information of it's [material][Material] and [gpu-buffer][wgpu::Buffer].
-#[derive(Debug, TypeUuid)]
-#[uuid = "286ff010-e38a-11ed-b9fb-0800200c9a66"]
+#[derive(Debug)]
 pub struct GpuMesh {
     pub is_enabled: AtomicBool,
 
@@ -148,10 +138,97 @@ pub struct GpuMesh {
 
     pub label: Option<StaticStr>,
     pub primitive_state: PrimitiveState,
+
+    pub vertex_type_id: TypeId,
 }
 assert_impl_all!(GpuMesh: Send, Sync, Component);
 
 impl GpuMesh {
+    pub fn new<V: Vertex>(desc: GpuMeshDescriptor<'_, V>) -> Self {
+        use crate::graphics::{
+            BufferUsages, FrontFace, Face,
+            DeviceExt, BufferInitDescriptor,
+        };
+
+        let vertices = desc.device.create_buffer_init(
+            &BufferInitDescriptor {
+                label: desc.label.as_deref(),
+                contents: bytemuck::cast_slice(&desc.mesh.vertices),
+                usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
+            },
+        ).into();
+
+        let indices = match desc.mesh.indices {
+            Some(ref indices) => {
+                let (contents, idx_format) = match indices {
+                    Indices::U16(indices) => (bytemuck::cast_slice(indices), IndexFormat::Uint16),
+                    Indices::U32(indices) => (bytemuck::cast_slice(indices), IndexFormat::Uint32),
+                };
+
+                GpuIndices::Indexed(desc.device.create_buffer_init(
+                    &BufferInitDescriptor {
+                        label: desc.label.as_deref(),
+                        contents,
+                        usage: BufferUsages::INDEX | BufferUsages::COPY_DST,
+                    },
+                ).into(), idx_format)
+            },
+
+            None => GpuIndices::Unindexed,
+        };
+
+        let primitive_state = PrimitiveState {
+            topology: desc.mesh.primitive_topology,
+            strip_index_format: indices.format(),
+            front_face: FrontFace::Ccw,
+            cull_mode: Some(Face::Back),
+            unclipped_depth: false,
+            polygon_mode: desc.polygon_mode,
+            conservative: false,
+
+        };
+
+        Self {
+            vertex_type_id: TypeId::of::<V>(),
+            is_enabled: AtomicBool::from(true),
+            buffer: vertices,
+            n_vertices: desc.mesh.vertices.len(),
+            indices,
+            label: desc.label,
+            primitive_state,
+        }
+    }
+
+    pub fn get_vertex_buffer_view(&self) -> BufferView {
+        self.buffer.slice(..).get_mapped_range()
+    }
+
+    pub fn read_vertices<V: Vertex>(&self) -> Mesh<V> {
+        if TypeId::of::<V>() != self.vertex_type_id {
+            panic!("incompatible vertex type in GpuMesh::read_vertices_unindexed");
+        }
+
+        let vertices_view = self.get_vertex_buffer_view();
+        let vertices: &[V] = bytemuck::cast_slice(&vertices_view);
+
+        let indices = match self.indices {
+            GpuIndices::Unindexed => None,
+            GpuIndices::Indexed(ref buffer, format) => {
+                let indices_view = buffer.slice(..).get_mapped_range();
+                Some(match format {
+                    IndexFormat::Uint16 => Indices::U16(
+                        bytemuck::cast_slice(&indices_view).to_vec()
+                    ),
+                    IndexFormat::Uint32 => Indices::U32(
+                        bytemuck::cast_slice(&indices_view).to_vec()
+                    ),
+                })
+            },
+        };
+        
+        Mesh::new(vertices.to_vec(), indices, self.primitive_state.topology)
+    }
+
     pub fn is_empty(&self) -> bool {
         self.n_vertices == 0
     }
@@ -173,7 +250,7 @@ impl GpuMesh {
     }
 }
 
-impl Renderable for GpuMesh {
+impl Render for GpuMesh {
     type Error = !;
 
     fn render<'rp, 's: 'rp>(
@@ -195,20 +272,23 @@ impl Renderable for GpuMesh {
 #[uuid = "abf45a60-e39a-11ed-b9fb-0800200c9a66"]
 pub enum GpuIndices {
     Unindexed,
-    Indexed(Buffer),
+    Indexed(Buffer, IndexFormat),
 }
 assert_impl_all!(GpuIndices: Send, Sync, Component);
 
-impl From<Buffer> for GpuIndices {
-    fn from(buffer: Buffer) -> Self {
-        Self::Indexed(buffer)
+impl GpuIndices {
+    pub fn format(&self) -> Option<IndexFormat> {
+        match self {
+            Self::Unindexed => None,
+            Self::Indexed(_, format) => Some(*format),
+        }
     }
 }
 
 
 
 /// Trait that all vertices should satisfy to allow usage on GPU.
-pub trait Vertex: Pod + PartialEq {
+pub trait Vertex: Default + Pod + PartialEq {
     const ATTRIBUTES: &'static [VertexAttribute];
     const STEP_MODE: VertexStepMode;
 
@@ -272,11 +352,11 @@ impl Vertex for TexturedVertex {
 
 
 
-pub trait Renderable {
+pub trait Render {
     type Error: std::error::Error;
 
     fn render<'rp, 's: 'rp>(
         &'s self, pipeline: &'rp RenderPipeline, render_pass: &mut RenderPass<'rp>,
     ) -> Result<(), Self::Error>;
 }
-assert_obj_safe!(Renderable<Error = ()>);
+assert_obj_safe!(Render<Error = ()>);

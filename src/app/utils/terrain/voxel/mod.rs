@@ -5,7 +5,7 @@ pub mod generator;
 use {
     crate::{
         prelude::*,
-        terrain::chunk::mesh::{FullVertex, LowVertex},
+        terrain::chunk::old_mesh::{FullVertex, LowVertex},
     },
     voxel_data::{data::*, VoxelData, Id},
 };

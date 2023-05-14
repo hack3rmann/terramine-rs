@@ -5,7 +5,7 @@ use {
             chunk::{
                 prelude::*, EditError, Sides, Id,
                 tasks::{FullTask, LowTask, Task, GenTask, PartitionTask},
-                mesh::ChunkMesh,
+                old_mesh::ChunkMesh,
             },
             voxel::{self, Voxel, voxel_data::data::*},
         },
@@ -18,7 +18,11 @@ use {
     tokio::task::{JoinHandle, JoinError},
 };
 
+
+
 pub static GENERATOR_SIZES: Mutex<[usize; 3]> = Mutex::new(USize3::ZERO.as_array());
+
+
 
 #[derive(Clone, Copy, Debug)]
 enum ChunkArrSaveType {
@@ -30,12 +34,18 @@ impl From<ChunkArrSaveType> for u64 {
     fn from(value: ChunkArrSaveType) -> Self { value as u64 }
 }
 
+
+
 pub type ReadingHandle = JoinHandle<io::Result<(USize3, Vec<(Vec<Atomic<Id>>, FillType)>)>>;
+
+
 
 /// Represents 3d array of [`Chunk`]s. Can control their mesh generation, etc.
 #[derive(Debug, SmartDefault)]
 pub struct ChunkArray {
+    pub chunk_entities: Vec<Entity>,
     pub chunks: Vec<ChunkRef>,
+
     pub meshes: Vec<MeshRef>,
     pub sizes: USize3,
 
@@ -50,6 +60,7 @@ pub struct ChunkArray {
     pub reading_handle: Option<ReadingHandle>,
     pub saving_handle: Option<JoinHandle<io::Result<()>>>,
 }
+// assert_impl_all!(ChunkArray: Send, Sync, Component);
 
 impl ChunkArray {
     const MAX_TRACE_STEPS: usize = 1024;
@@ -1117,17 +1128,13 @@ impl ChunkArray {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum UpdateError {
-    #[error(transparent)]
-    Join(#[from] JoinError),
 
-    #[error("failed to save chunk array: {0}")]
-    Save(#[from] io::Error),
 
-    #[error("error occured: {0}")]
-    Other(#[from] UserFacingError),
+crate::sum_errors! {
+    UpdateError { Join => JoinError, Save => io::Error, Other => UserFacingError }
 }
+
+
 
 #[derive(Debug, Error)]
 pub enum TaskError {
@@ -1140,6 +1147,8 @@ pub enum TaskError {
         pos: Int3,
     },
 }
+
+
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChangeTracker {
@@ -1227,6 +1236,8 @@ impl ChangeTracker {
         result
     }
 }
+
+
 
 pub type ChunkRef = Arc<Chunk>;
 pub type MeshRef = Rc<RefCell<ChunkMesh>>;

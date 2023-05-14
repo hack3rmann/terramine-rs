@@ -227,18 +227,14 @@ impl Graphics {
 
         let mesh = Mesh::new(TEST_VERTICES.to_vec(), None, PrimitiveTopology::TriangleList);
 
-        let make_mesh = || -> GpuMesh {
-            let Ok(ret) = mesh.to_gpu(
-                GpuMeshDescriptor {
-                    device: Arc::clone(&context.device),
-                    label: Some("test_mesh".into()),
-                    polygon_mode: default(),
-                },
-            );
-            ret
-        };
-
-        let gpu_mesh = make_mesh();
+        let gpu_mesh = GpuMesh::new(
+            GpuMeshDescriptor {
+                mesh: &mesh,
+                device: &context.device,
+                label: Some("test_mesh".into()),
+                polygon_mode: default(),
+            },
+        );
 
         let layout = {
             let bind_group_layouts: Vec<_> = itertools::chain!(
@@ -382,7 +378,7 @@ impl Graphics {
             self.common_uniforms.bind_group.bind(&mut pass, 0);
             binds.bind(&mut pass, 1);
             
-            let Ok(()) = mesh.render(&pipeline, &mut pass);
+            let Ok(()) = mesh.render(pipeline, &mut pass);
         }
     }
 
