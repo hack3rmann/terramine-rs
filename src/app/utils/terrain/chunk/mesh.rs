@@ -18,11 +18,15 @@ pub struct FullVertex {
 }
 assert_impl_all!(FullVertex: Send, Sync);
 
-impl Vertex for FullVertex {
-    const ATTRIBUTES: &'static [wgpu::VertexAttribute] =
-        &vertex_attr_array![0 => Float32x3, 1 => Float32x2, 2 => Uint32];
+impl FullVertex {
+    pub const fn new(position: vec3, tex_coords: vec2, face_idx: u32) -> Self {
+        Self { position, tex_coords, face_idx }
+    }
+}
 
-    const STEP_MODE: VertexStepMode = VertexStepMode::Vertex;
+impl Vertex for FullVertex {
+    const ATTRIBUTES: &'static [VertexAttribute] =
+        &vertex_attr_array![0 => Float32x3, 1 => Float32x2, 2 => Uint32];
 }
 
 
@@ -37,11 +41,15 @@ pub struct LowVertex {
 }
 assert_impl_all!(LowVertex: Send, Sync);
 
-impl Vertex for LowVertex {
-    const ATTRIBUTES: &'static [wgpu::VertexAttribute] =
-        &vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Uint32];
+impl LowVertex {
+    pub const fn new(position: vec3, color: Color, face_idx: u32) -> Self {
+        Self { position, color, face_idx }
+    }
+}
 
-    const STEP_MODE: VertexStepMode = VertexStepMode::Vertex;
+impl Vertex for LowVertex {
+    const ATTRIBUTES: &'static [VertexAttribute] =
+        &vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Uint32];
 }
 
 
@@ -84,21 +92,40 @@ impl Render for ChunkFullMesh {
 
 
 
-#[derive(Debug, Default)]
+#[derive(Debug, SmartDefault)]
 pub struct ChunkMesh {
     pub full_mesh: Option<ChunkFullMesh>,
     pub low_meshes: [Option<GpuMesh>; Chunk::N_LODS],
     pub active_lod: Option<Lod>,
+
+    #[default(AtomicBool::new(true))]
+    pub is_enabled: AtomicBool,
 }
 assert_impl_all!(ChunkMesh: Send, Sync);
 
 impl ChunkMesh {
+    pub fn switch(&self) {
+        let _ = self.is_enabled.fetch_update(AcqRel, Relaxed, |old| Some(!old));
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.is_enabled.load(Acquire)
+    }
+
+    pub fn disable(&self) {
+        self.is_enabled.store(false, Release);
+    }
+
+    pub fn enable(&self) {
+        self.is_enabled.store(true, Release);
+    }
+
     /// Checks if [chunk][Chunk]'s mesh is partitioned.
-    pub fn is_partitioned(&self) -> bool {
+    pub fn is_partial(&self) -> bool {
         matches!(self.full_mesh, Some(ChunkFullMesh::Partial(_)))
     }
 
-    /// Connects mesh partitions into one mesh. If [chunk][Chunk] is not
+    /// Connects [mesh][Mesh] partitions into one [mesh][Mesh]. If [chunk][Chunk] is not
     /// partitioned then it will do nothing.
     pub fn connect_partitions(&mut self, device: &Device) {
         let mesh = if let Some(ChunkFullMesh::Partial(ref meshes)) = self.full_mesh {
@@ -157,21 +184,21 @@ impl ChunkMesh {
     }
 
     /// Sets mesh to [chunk][Chunk].
-    pub fn upload_partial_mesh(&mut self, device: &Device, meshes: [&Mesh<FullVertex>; 8]) {
+    pub fn upload_partial_meshes(&mut self, device: &Device, meshes: &[Mesh<FullVertex>; 8]) {
         let partitions = array_init(|i| {
-            GpuMesh::new(Self::make_partition_desc(device, meshes[i]))
+            GpuMesh::new(Self::make_partition_desc(device, &meshes[i]))
         });
         self.full_mesh.replace(ChunkFullMesh::Partial(Box::new(partitions)));
     }
 
     /// Sets mesh to [chunk][Chunk].
-     pub fn upload_full_detail_vertices(&mut self, device: &Device, mesh: &Mesh<FullVertex>) {
+     pub fn upload_full_mesh(&mut self, device: &Device, mesh: &Mesh<FullVertex>) {
          let mesh = GpuMesh::new(Self::make_full_desc(device, mesh));
          self.full_mesh.replace(ChunkFullMesh::Standart(mesh));
      }
 
     /// Sets mesh to [chunk][Chunk].
-    pub fn upload_low_detail_vertices(&mut self, device: &Device, mesh: &Mesh<LowVertex>, lod: Lod) {
+    pub fn upload_low_mesh(&mut self, device: &Device, mesh: &Mesh<LowVertex>, lod: Lod) {
         assert_ne!(lod, 0, "`lod` in upload_low_detail_vertices() should be not 0");
     
         let mesh = GpuMesh::new(Self::make_low_desc(device, mesh));
@@ -204,6 +231,8 @@ impl Render for ChunkMesh {
         &'s self, pipeline: &'rp RenderPipeline, render_pass: &mut RenderPass<'rp>,
     ) -> Result<(), Self::Error> {
         use ChunkRenderError as Err;
+
+        if !self.is_enabled() { return Ok(()) }
 
         match self.active_lod {
             None => return Ok(()),

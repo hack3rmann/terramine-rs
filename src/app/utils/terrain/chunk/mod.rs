@@ -1,18 +1,15 @@
-// #![allow(dead_code)]
-
 pub mod iterator;
 pub mod chunk_array;
 pub mod tasks;
 pub mod commands;
-pub mod old_mesh;
 pub mod mesh;
 
 use {
     crate::{
         prelude::*,
         graphics::{
-            glium_shader::Shader,
             camera_resource::Camera,
+            Mesh, Device, RenderPipeline, RenderPass, Render,
         },
     },
     super::voxel::{
@@ -23,22 +20,18 @@ use {
         voxel_data::{data::*, Id},
         generator as gen,
     },
-    old_mesh::{LowVertex, FullVertex, ChunkMesh},
+    mesh::{FullVertex, LowVertex, ChunkMesh},
     chunk_array::ChunkAdj,
-    glium::{
-        self as gl,
-        DrawError,
-        uniforms::Uniforms,
-    },
     iterator::{CubeBoundary, Sides},
 };
+
+
 
 pub mod prelude {
     pub use super::{
         Chunk,
         SetLodError,
         ChunkRenderError,
-        ChunkDrawBundle,
         Info as ChunkInfo,
         Lod,
         ChunkOption,
@@ -47,6 +40,8 @@ pub mod prelude {
         iterator::{SpaceIter, self},
     };
 }
+
+
 
 #[derive(Debug)]
 pub struct Chunk {
@@ -152,9 +147,9 @@ impl Chunk {
     }
 
     /// Gives [`Vec`] with full detail vertices mesh of [`Chunk`].
-    pub fn make_vertices_detailed(&self, chunk_adj: ChunkAdj) -> Vec<FullVertex> {
+    pub fn make_full_mesh(&self, chunk_adj: ChunkAdj) -> Mesh<FullVertex> {
         let is_filled_and_blocked = self.is_filled() && Self::is_adj_filled(&chunk_adj);
-        if self.is_empty() || is_filled_and_blocked { return vec![] }
+        if self.is_empty() || is_filled_and_blocked { return default() }
 
         let info = self.info.load(Relaxed);
         let pos_iter: Box<dyn Iterator<Item = Int3>> = match info.fill_type {
@@ -168,7 +163,7 @@ impl Chunk {
             },
         };
 
-        pos_iter
+        let vertices = pos_iter
             .filter_map(|pos| match self.get_voxel_local(pos) {
                 None => {
                     logger::log!(Error, from = "chunk", "failed to get voxel from pos {pos}");
@@ -222,7 +217,9 @@ impl Chunk {
 
                 vertices
             })
-            .collect()
+            .collect();
+
+        Mesh::new(vertices, None, default())
     }
 
     fn optimize_chunk_adj_for_partitioning(mut chunk_adj: ChunkAdj, partition_coord: USize3) -> ChunkAdj {
@@ -244,14 +241,14 @@ impl Chunk {
         chunk_adj
     }
 
-    pub fn make_partition(&self, chunk_adj: &ChunkAdj, partition_idx: usize) -> Vec<FullVertex> {
+    pub fn make_partition(&self, chunk_adj: &ChunkAdj, partition_idx: usize) -> Mesh<FullVertex> {
         let coord_idx = iterator::idx_to_coord_idx(partition_idx, USize3::all(2));
         let chunk_adj = Self::optimize_chunk_adj_for_partitioning(chunk_adj.clone(), coord_idx);
 
         let start_pos = Int3::from(coord_idx * Chunk::SIZES / 2);
         let end_pos   = start_pos + Int3::from(Chunk::SIZES / 2);
 
-        SpaceIter::new(start_pos..end_pos)
+        let vertices = SpaceIter::new(start_pos..end_pos)
             .filter_map(|pos| match self.get_voxel_local(pos) {
                 some @ Some(_) => some,
                 None => {
@@ -305,7 +302,9 @@ impl Chunk {
 
                 vertices
             })
-            .collect()
+            .collect();
+
+        Mesh::new(vertices, None, default())
     }
 
     pub fn is_adj_filled(adj: &ChunkAdj) -> bool {
@@ -313,25 +312,25 @@ impl Chunk {
     }
 
     /// Gives [`Vec`] with full detail vertices mesh of [`Chunk`].
-    pub fn make_partitioned_vertices(&self, chunk_adj: ChunkAdj) -> [Vec<FullVertex>; 8] {
+    pub fn make_partitial_meshes(&self, chunk_adj: ChunkAdj) -> [Mesh<FullVertex>; 8] {
         let is_filled_and_blocked = self.is_filled() && Self::is_adj_filled(&chunk_adj);
         if self.is_empty() || is_filled_and_blocked {
-            return array_init(|_| vec![])
+            return default();
         }
 
-        array_init(|partition_idx| self.make_partition(&chunk_adj, partition_idx))
+        array_init(|idx| self.make_partition(&chunk_adj, idx))
     }
 
     /// Makes vertices for *low detail* mesh from voxel array.
-    pub fn make_vertices_low(&self, chunk_adj: ChunkAdj, lod: Lod) -> Vec<LowVertex> {
+    pub fn make_low_mesh(&self, chunk_adj: ChunkAdj, lod: Lod) -> Mesh<LowVertex> {
         assert!(lod > 0, "There's a separate function for LOD = 0! Use .make_vertices_detailed() instead!");
         
         let is_filled_and_blocked = self.is_filled() && Self::is_adj_filled(&chunk_adj);
-        if self.is_empty() || is_filled_and_blocked { return vec![] }
+        if self.is_empty() || is_filled_and_blocked { return default() }
 
         // TODO: optimize for same-filled chunks
         let sub_chunk_size = 2_i32.pow(lod);
-        self.low_voxel_iter(lod)
+        let vertices = self.low_voxel_iter(lod)
             .filter_map(|(voxel, p)| match voxel {
                 LoweredVoxel::Transparent => None,
                 LoweredVoxel::Colored(color) => Some((color, p)),
@@ -407,7 +406,9 @@ impl Chunk {
 
                 vertices
             })
-            .collect()
+            .collect();
+
+        Mesh::new(vertices, None, default())
     }
 
     /// Gives [voxel id][Id] by it's index in array.
@@ -768,36 +769,35 @@ impl Chunk {
     }
 
     /// Generates and sets [mesh][Mesh] to [chunk][Chunk].
-    pub fn generate_mesh(&self, mesh: &mut ChunkMesh, lod: Lod, chunk_adj: ChunkAdj, facade: &dyn gl::backend::Facade) {
+    pub fn generate_mesh(&self, chunk_mesh: &mut ChunkMesh, lod: Lod, chunk_adj: ChunkAdj, device: &Device) {
         match lod {
             0 => {
-                let vertices = self.make_vertices_detailed(chunk_adj);
-                mesh.upload_full_detail_vertices(&vertices, facade);
+                let mesh = self.make_full_mesh(chunk_adj);
+                chunk_mesh.upload_full_mesh(device, &mesh);
             },
             
             _ => {
-                let vertices = self.make_vertices_low(chunk_adj, lod);
-                mesh.upload_low_detail_vertices(&vertices, lod, facade);
+                let mesh = self.make_low_mesh(chunk_adj, lod);
+                chunk_mesh.upload_low_mesh(device, &mesh, lod);
             }
         }
     }
 
     /// Partitions [mesh][crate::graphics::mesh::Mesh] of this [chunk][Chunk].
-    pub fn partition_mesh(&self, mesh: &mut ChunkMesh, chunk_adj: ChunkAdj, facade: &dyn gl::backend::Facade) {
-        let vertices = self.make_partitioned_vertices(chunk_adj);
-        mesh.upload_partitioned_vertices(
-            array_init(|i| vertices[i].as_slice()),
-            facade,
-        );
+    pub fn partition_mesh(&self, mesh: &mut ChunkMesh, chunk_adj: ChunkAdj, device: &Device) {
+        let meshes = self.make_partitial_meshes(chunk_adj);
+        mesh.upload_partial_meshes(device, &meshes);
     }
 
     /// Renders a [`Chunk`].
-    pub fn render(
-        &self, mesh: &mut ChunkMesh, target: &mut impl glium::Surface,
-        draw_info: &ChunkDrawBundle<'_>, uniforms: &impl Uniforms, lod: Lod,
+    pub fn render<'rp>(
+        &self, mesh: &'rp mut ChunkMesh, lod: Lod,
+        pipeline: &'rp RenderPipeline, pass: &mut RenderPass<'rp>,
     ) -> Result<(), ChunkRenderError> {
         if self.is_empty() { return Ok(()) }
-        mesh.render(target, draw_info, uniforms, lod)
+
+        mesh.active_lod = Some(lod);
+        mesh.render(pipeline, pass)
     }
 
     /// Sets active LOD to given value.
@@ -848,6 +848,8 @@ impl Chunk {
     }
 }
 
+
+
 #[derive(Error, Debug)]
 pub enum SetLodError {
     #[error("failed to set LOD value to {tried} because there's no mesh for it. Active LOD value is {active:?}")]
@@ -857,11 +859,10 @@ pub enum SetLodError {
     },
 }
 
+
+
 #[derive(Error, Debug, Clone)]
 pub enum ChunkRenderError {
-    #[error(transparent)]
-    GliumRender(#[from] DrawError),
-
     #[error("Expected a mesh with LOD value {0}")]
     NoMesh(Lod),
 
@@ -869,35 +870,7 @@ pub enum ChunkRenderError {
     TooBigLod(Lod),
 }
 
-#[derive(Debug)]
-pub struct ChunkDrawBundle<'s> {
-    full_shader: Shader,
-    low_shader:  Shader,
-    draw_params: gl::DrawParameters<'s>,
-}
 
-impl<'s> ChunkDrawBundle<'s> {
-    pub fn new(facade: &dyn gl::backend::Facade) -> ChunkDrawBundle<'s> {
-        /* Chunk draw parameters */
-        let draw_params = gl::DrawParameters {
-            depth: gl::Depth {
-                test: gl::DepthTest::IfLess,
-                write: true,
-                ..default()
-            },
-            backface_culling: gl::BackfaceCullingMode::CullClockwise,
-            ..default()
-        };
-        
-        /* Create shaders */
-        let full_shader = Shader::new("full_detail", "full_detail", facade)
-            .expect("failed to make full detail shader for ChunkDrawBundle");
-        let low_shader  = Shader::new("low_detail", "low_detail", facade)
-            .expect("failed to make low detail shader for ChunkDrawBundle");
-
-        ChunkDrawBundle { full_shader, low_shader, draw_params }
-    }
-}
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub struct Info {
@@ -906,14 +879,14 @@ pub struct Info {
     pub active_lod: Option<Lod>,
 }
 
+
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub enum FillType {
     #[default]
     Unspecified,
     AllSame(Id),
 }
-
-
 
 impl AsBytes for FillType {
     fn as_bytes(&self) -> Vec<u8> {

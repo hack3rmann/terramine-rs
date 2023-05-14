@@ -5,16 +5,16 @@ use {
             chunk::{
                 prelude::*, EditError, Sides, Id,
                 tasks::{FullTask, LowTask, Task, GenTask, PartitionTask},
-                old_mesh::ChunkMesh,
+                mesh::ChunkMesh,
+                commands::Command,
             },
             voxel::{self, Voxel, voxel_data::data::*},
         },
         saves::Save,
-        graphics::camera_resource::Camera,
+        graphics::{camera_resource::Camera, Device, CommandEncoder, TextureView, BindsRef, RenderPipeline},
     },
     math_linear::math::ray::space_3d::Line,
     std::{io, mem, sync::Mutex},
-    glium::{self as gl, backend::Facade},
     tokio::task::{JoinHandle, JoinError},
 };
 
@@ -37,6 +37,7 @@ impl From<ChunkArrSaveType> for u64 {
 
 
 pub type ReadingHandle = JoinHandle<io::Result<(USize3, Vec<(Vec<Atomic<Id>>, FillType)>)>>;
+pub type SavingHandle = JoinHandle<io::Result<()>>;
 
 
 
@@ -46,7 +47,6 @@ pub struct ChunkArray {
     pub chunk_entities: Vec<Entity>,
     pub chunks: Vec<ChunkRef>,
 
-    pub meshes: Vec<MeshRef>,
     pub sizes: USize3,
 
     pub full_tasks: HashMap<Int3, FullTask>,
@@ -54,21 +54,26 @@ pub struct ChunkArray {
     pub voxels_gen_tasks: HashMap<Int3, GenTask>,
     pub partition_tasks: HashMap<Int3, PartitionTask>,
 
+    pub binds: Nullable<BindsRef>,
+    pub pipeline: Nullable<RenderPipeline>,
+
     #[default = 5.8]
     pub lod_threashold: f32,
 
-    pub reading_handle: Option<ReadingHandle>,
-    pub saving_handle: Option<JoinHandle<io::Result<()>>>,
+    pub reading_handle: Nullable<ReadingHandle>,
+    pub saving_handle: Nullable<SavingHandle>,
 }
-// assert_impl_all!(ChunkArray: Send, Sync, Component);
+assert_impl_all!(ChunkArray: Send, Sync, Component);
 
 impl ChunkArray {
     const MAX_TRACE_STEPS: usize = 1024;
 
     /// Generates new chunks.
+    /// 
     /// # Panic
+    /// 
     /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
-    pub fn new(sizes: USize3) -> Result<Self, UserFacingError> {
+    pub fn new(world: &mut World, sizes: USize3) -> Result<Self, UserFacingError> {
         Self::validate_sizes(sizes)?;
         let (start_pos, end_pos) = Self::pos_bounds(sizes);
 
@@ -77,13 +82,15 @@ impl ChunkArray {
             .map(Arc::new)
             .collect();
 
-        Self::from_chunks(sizes, chunks)
+        Self::from_chunks(world, sizes, chunks)
     }
 
     /// Constructs [`ChunkArray`] with passed in chunks.
+    /// 
     /// # Panic
+    /// 
     /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
-    pub fn from_chunks(sizes: USize3, chunks: Vec<Arc<Chunk>>) -> Result<Self, UserFacingError> {
+    pub fn from_chunks(world: &mut World, sizes: USize3, chunks: Vec<Arc<Chunk>>) -> Result<Self, UserFacingError> {
         Self::validate_sizes(sizes)?;
         let volume = Self::volume(sizes);
         if chunks.len() != volume {
@@ -96,17 +103,19 @@ impl ChunkArray {
             )
         }
 
-        let meshes = (0..chunks.len())
-            .map(|_| Rc::new(RefCell::new(ChunkMesh::default())))
+        let chunk_entities = (0..chunks.len())
+            .map(|_| world.spawn((ChunkMesh::default(),)))
             .collect();
         
-        Ok(Self { chunks, sizes, meshes, ..default() })
+        Ok(Self { chunks, sizes, chunk_entities, ..default() })
     }
 
     /// Constructs [`ChunkArray`] with empty chunks.
+    /// 
     /// # Panic
+    /// 
     /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
-    pub fn new_empty_chunks(sizes: USize3) -> Result<Self, UserFacingError> {
+    pub fn new_empty_chunks(world: &mut World, sizes: USize3) -> Result<Self, UserFacingError> {
         Self::validate_sizes(sizes)?;
         let (start_pos, end_pos) = Self::pos_bounds(sizes);
 
@@ -115,7 +124,7 @@ impl ChunkArray {
             .map(Arc::new)
             .collect();
 
-        Self::from_chunks(sizes, chunks)
+        Self::from_chunks(world, sizes, chunks)
     }
 
     /// Computes start and end poses from chunk array sizes.
@@ -127,7 +136,9 @@ impl ChunkArray {
     }
 
     /// Checks that sizes is valid.
+    /// 
     /// # Panic
+    /// 
     /// Panics if `sizes.x * sizes.y * sizes.z` > `MAX_CHUNKS`.
     pub fn validate_sizes(sizes: USize3) -> Result<(), UserFacingError> {
         let volume = Self::volume(sizes);
@@ -318,7 +329,7 @@ impl ChunkArray {
     }
 
     /// Fills volume of voxels to same [id][Id] and returnes `is_changed`.
-    pub fn fill_voxels(&mut self, pos_from: Int3, pos_to: Int3, new_id: Id) -> Result<bool, EditError> {
+    pub fn fill_voxels(&mut self, world: &World, pos_from: Int3, pos_to: Int3, new_id: Id) -> Result<bool, EditError> {
         let chunk_pos_from = Chunk::local_pos(pos_from);
         let chunk_pos_to   = Chunk::local_pos(pos_to + Int3::from(Chunk::SIZES) - Int3::ONE);
 
@@ -358,7 +369,8 @@ impl ChunkArray {
                 is_changed = true;
                 
                 for idx in Self::get_adj_chunks_idxs(self.sizes, chunk_pos).as_array().into_iter().flatten() {
-                    self.meshes[idx].borrow_mut().drop_all();
+                    let mut mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
+                    *mesh = default();
                 }
             }
         }
@@ -366,10 +378,16 @@ impl ChunkArray {
         Ok(is_changed)
     }
 
+    pub fn chunk_component<'w, T: ComponentRef<'w>>(&self, world: &'w World, idx: usize) -> T::Ref {
+        world.get::<T>(self.chunk_entities[idx])
+            .expect("failed to get a component from chunk entity")
+    }
+
     /// Drops all meshes from each [chunk][Chunk].
-    pub fn drop_all_meshes(&self) {
-        for mesh in self.meshes.iter() {
-            mesh.borrow_mut().drop_all();
+    pub fn drop_all_meshes(&self, world: &World) {
+        for idx in 0..self.chunk_entities.len() {
+            let mut mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
+            *mesh = default();
         }
     }
 
@@ -386,7 +404,7 @@ impl ChunkArray {
         result
     }
 
-    pub fn apply_new(&mut self, sizes: USize3, chunk_arr: Vec<(Vec<Atomic<Id>>, FillType)>) -> Result<(), UserFacingError> {
+    pub fn apply_new(&mut self, world: &mut World, sizes: USize3, chunk_arr: Vec<(Vec<Atomic<Id>>, FillType)>) -> Result<(), UserFacingError> {
         if Self::volume(sizes) != chunk_arr.len() {
             return Err(UserFacingError::new("chunk-array should have same len as sizes"));
         }
@@ -405,7 +423,7 @@ impl ChunkArray {
             .map(Arc::new)
             .collect();
 
-        let new_chunks = ChunkArray::from_chunks(sizes, chunks)?;
+        let new_chunks = ChunkArray::from_chunks(world, sizes, chunks)?;
         self.drop_tasks();
         let _ = mem::replace(self, new_chunks);
 
@@ -553,10 +571,10 @@ impl ChunkArray {
     }
 
     /// Gives [`Vec`] with [`ChunkRef`]s [`ChunkAdj`]s desired [lod][Lod].
-    fn get_targets_sorted(&self, cam_pos: vec3) -> Vec<(ChunkRef, ChunkAdj, MeshRef, Lod)> {
+    fn get_targets_sorted(&self, cam_pos: vec3) -> Vec<(ChunkRef, ChunkAdj, Lod, usize)> {
         let mut result: Vec<_> = self.chunks_with_adj()
-            .zip(self.meshes.iter().cloned())
             .zip(Self::desired_lod_iter(self.sizes, cam_pos, self.lod_threashold))
+            .zip(0_usize..)
             .map(|(((a, b), c), d)| (a, b, c, d))
             .collect();
 
@@ -580,21 +598,19 @@ impl ChunkArray {
     /// [LOD][Lod] then it will start async task that generates desired mesh.
     /// If task is incomplete then it will render active [LOD][Lod]
     /// of concrete [chunk][Chunk]. If it can't then it will do nothing.
-    pub async fn render(
-        &mut self, target: &mut impl gl::Surface, draw_bundle: &ChunkDrawBundle<'_>,
-        uniforms: &impl gl::uniforms::Uniforms, facade: &dyn gl::backend::Facade, cam: &mut Camera,
+    pub async fn control_meshes(
+        &mut self, world: &World, device: &Device, cam: &mut Camera,
     ) -> Result<(), ChunkRenderError> {
         #![allow(clippy::await_holding_refcell_ref)]
 
         let sizes = self.sizes;
         if sizes == USize3::ZERO { return Ok(()) }
 
-        self.try_finish_all_tasks(facade).await;
+        self.try_finish_all_tasks(world, device).await;
 
-        let targets = self.get_targets_sorted(cam.pos);
-
-        for (mut chunk, chunk_adj, mesh, lod) in targets {
+        for (mut chunk, chunk_adj, lod, idx) in self.get_targets_sorted(cam.pos) {
             let chunk_pos = chunk.pos.load(Relaxed);
+            let mut mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
 
             if !chunk.is_generated() {
                 if Self::is_voxels_gen_task_running(&self.voxels_gen_tasks, chunk_pos) {
@@ -628,30 +644,30 @@ impl ChunkArray {
 
             if chunk_is_close_to_be_partitioned &&
                !self.partition_tasks.contains_key(&chunk_pos) &&
-               !mesh.borrow().is_partitioned()
+               !mesh.is_partial()
             {
                 Self::start_task_partitioning(&mut self.partition_tasks, Arc::clone(&chunk), chunk_adj.clone());
             }
 
             let chunnk_can_be_connected =
                 lod == 0 &&
-                mesh.borrow().is_partitioned() &&
+                mesh.is_partial() &&
                 !chunk_is_close_to_be_partitioned;
 
             if chunnk_can_be_connected {
-                mesh.borrow_mut().connect_partitions(facade);
+                mesh.connect_partitions(device);
             }
 
             let can_set_new_lod =
-                mesh.borrow().get_available_lods().contains(&lod) ||
+                mesh.get_available_lods().contains(&lod) ||
                 Self::is_mesh_task_running(&self.full_tasks, &self.low_tasks, chunk_pos, lod) &&
                 Self::try_finish_mesh_task(
                     &mut self.full_tasks, &mut self.low_tasks,
-                    chunk_pos, lod, &mut mesh.borrow_mut(), facade,
+                    chunk_pos, lod, &mut mesh, device,
                 ).await.is_ok();
 
             if can_set_new_lod {
-                chunk.set_active_lod(&mesh.borrow(), lod);
+                chunk.set_active_lod(&mesh, lod);
             }
             
             else if self.can_start_tasks() {
@@ -666,18 +682,32 @@ impl ChunkArray {
 
             Self::drop_all_useless_tasks(&mut self.full_tasks, &mut self.low_tasks, lod, chunk_pos);
 
-            if !chunk.can_render_active_lod(&mesh.borrow()) {
-                chunk.try_set_best_fit_lod(&mesh.borrow(), lod);
+            if !chunk.can_render_active_lod(&mesh) {
+                chunk.try_set_best_fit_lod(&mesh, lod);
             }
 
             // FIXME: make cam vis-check for light.
-            if chunk.can_render_active_lod(&mesh.borrow()) && chunk.is_visible_by_camera(cam) {
-                let active_lod = chunk.info.load(Relaxed).active_lod.unwrap();
-                chunk.render(&mut mesh.borrow_mut(), target, draw_bundle, uniforms, active_lod)?
+            if chunk.can_render_active_lod(&mesh) && chunk.is_visible_by_camera(cam) {
+                mesh.active_lod = chunk.info.load(Relaxed).active_lod;
+                mesh.enable();
             }
         }
 
         Ok(())
+    }
+
+    pub fn pass(&self, world: &World, encoder: &mut CommandEncoder, target_view: TextureView) {
+        use crate::graphics::{RenderPass, Render};
+
+        let mut query = world.query::<(&ChunkMesh, &RenderPipeline, &BindsRef)>();
+
+        let mut pass = RenderPass::new(encoder, "chunk_array_pass", [&target_view]);
+
+        for (_entity, (mesh, pipeline, binds)) in query.iter() {
+            binds.bind(&mut pass, 0);
+            mesh.render(pipeline, &mut pass)
+                .expect("failed to render a chunk mesh");
+        }
     }
 
     pub fn drop_all_useless_tasks(
@@ -719,33 +749,33 @@ impl ChunkArray {
         }
     }
 
-    pub async fn try_finish_full_tasks(&mut self, facade: &dyn Facade) {
+    pub async fn try_finish_full_tasks(&mut self, world: &World, device: &Device) {
         let iter = self.full_tasks.iter_mut()
             .map(|(&pos, task)| (pos, task));
 
-        for (pos, vertices) in Task::try_take_results(iter).await {
+        for (pos, mesh) in Task::try_take_results(iter).await {
             self.full_tasks.remove(&pos);
 
             let idx = Self::pos_to_idx(self.sizes, pos)
                 .expect("pos should be valid");
 
-            self.meshes[idx].borrow_mut()
-                .upload_full_detail_vertices(&vertices, facade);
+            let mut chunk_mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
+            chunk_mesh.upload_full_mesh(device, &mesh);
         }
     }
 
-    pub async fn try_finish_low_tasks(&mut self, facade: &dyn Facade) {
+    pub async fn try_finish_low_tasks(&mut self, world: &World, device: &Device) {
         let iter = self.low_tasks.iter_mut()
             .map(|(&idx, task)| (idx, task));
 
-        for ((pos, lod), vertices) in Task::try_take_results(iter).await {
+        for ((pos, lod), mesh) in Task::try_take_results(iter).await {
             self.low_tasks.remove(&(pos, lod));
 
             let idx = Self::pos_to_idx(self.sizes, pos)
                 .expect("pos should be valid");
 
-            self.meshes[idx].borrow_mut()
-                .upload_low_detail_vertices(&vertices, lod, facade);
+            let mut chunk_mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
+            chunk_mesh.upload_low_mesh(device, &mesh, lod);
         }
     }
 
@@ -769,28 +799,26 @@ impl ChunkArray {
         }
     }
 
-    pub async fn try_finish_partition_tasks(&mut self, facade: &dyn Facade) {
+    pub async fn try_finish_partition_tasks(&mut self, world: &World, device: &Device) {
         let iter = self.partition_tasks.iter_mut()
             .map(|(&pos, task)| (pos, task));
 
         for (pos, partitions) in Task::try_take_results(iter).await {
             self.partition_tasks.remove(&pos);
 
-            let partitions = array_init(|i| partitions[i].as_slice());
-
             let idx = Self::pos_to_idx(self.sizes, pos)
                 .expect("pos should be valid");
 
-            self.meshes[idx].borrow_mut()
-                .upload_partitioned_vertices(partitions, facade);
+            let mut chunk_mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
+            chunk_mesh.upload_partial_meshes(device, &partitions);
         }
     }
 
-    pub async fn try_finish_all_tasks(&mut self, facade: &dyn Facade) {
-        self.try_finish_full_tasks(facade).await;
-        self.try_finish_low_tasks(facade).await;
+    pub async fn try_finish_all_tasks(&mut self, world: &World, device: &Device) {
+        self.try_finish_full_tasks(world, device).await;
+        self.try_finish_low_tasks(world, device).await;
+        self.try_finish_partition_tasks(world, device).await;
         self.try_finish_gen_tasks().await;
-        self.try_finish_partition_tasks(facade).await;
     }
 
     pub fn is_voxels_gen_task_running(tasks: &HashMap<Int3, GenTask>, pos: Int3) -> bool {
@@ -840,14 +868,14 @@ impl ChunkArray {
         match lod {
             0 => {
                 let prev = full_tasks.insert(chunk_pos, Task::spawn(async move {
-                    chunk.make_vertices_detailed(adj)
+                    chunk.make_full_mesh(adj)
                 }));
                 assert!(prev.is_none(), "there should be only one task");
             },
 
             lod => {
                 let prev = low_tasks.insert((chunk_pos, lod), Task::spawn(async move {
-                    chunk.make_vertices_low(adj, lod)
+                    chunk.make_low_mesh(adj, lod)
                 }));
                 assert!(prev.is_none(), "there should be only one task");
             },
@@ -859,7 +887,7 @@ impl ChunkArray {
         chunk: ChunkRef, adj: ChunkAdj,
     ) {
         let prev_value = tasks.insert(chunk.pos.load(Relaxed), Task::spawn(async move {
-            chunk.make_partitioned_vertices(adj)
+            chunk.make_partitial_meshes(adj)
         }));
         assert!(prev_value.is_none(), "there should be only one task");
     }
@@ -881,22 +909,22 @@ impl ChunkArray {
         full_tasks: &mut HashMap<Int3, FullTask>,
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
         pos: Int3, lod: Lod,
-        mesh: &mut ChunkMesh, facade: &dyn gl::backend::Facade,
+        mesh: &mut ChunkMesh, device: &Device,
     ) -> Result<(), TaskError> {
         match lod {
-            0   => Self::try_finish_full_mesh_task(full_tasks, pos, mesh, facade).await,
-            lod => Self::try_finish_low_mesh_task(low_tasks, pos, lod, mesh, facade).await,
+            0   => Self::try_finish_full_mesh_task(full_tasks, pos, mesh, device).await,
+            lod => Self::try_finish_low_mesh_task(low_tasks, pos, lod, mesh, device).await,
         }
     }
 
     pub async fn try_finish_full_mesh_task(
         full_tasks: &mut HashMap<Int3, FullTask>,
-        pos: Int3, mesh: &mut ChunkMesh, facade: &dyn gl::backend::Facade,
+        pos: Int3, mesh: &mut ChunkMesh, device: &Device,
     ) -> Result<(), TaskError> {
         match full_tasks.get_mut(&pos) {
             Some(task) => match task.try_take_result().await {
                 Some(vertices) => {
-                    mesh.upload_full_detail_vertices(&vertices, facade);
+                    mesh.upload_full_mesh(device, &vertices);
                     let _ = full_tasks.remove(&pos)
                         .expect("there should be a task");
                     Ok(())
@@ -910,12 +938,12 @@ impl ChunkArray {
     pub async fn try_finish_low_mesh_task(
         low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
         pos: Int3, lod: Lod,
-        mesh: &mut ChunkMesh, facade: &dyn gl::backend::Facade,
+        mesh: &mut ChunkMesh, device: &Device,
     ) -> Result<(), TaskError> {
         match low_tasks.get_mut(&(pos, lod)) {
             Some(task) => match task.try_take_result().await {
                 Some(vertices) => {
-                    mesh.upload_low_detail_vertices(&vertices, lod, facade);
+                    mesh.upload_low_mesh(device, &vertices, lod);
                     let _ = low_tasks.remove(&(pos, lod))
                         .expect("there should be a task");
                     Ok(())
@@ -927,7 +955,7 @@ impl ChunkArray {
     }
 
     pub fn can_start_tasks(&self) -> bool {
-        self.saving_handle.is_none() && self.reading_handle.is_none() &&
+        self.saving_handle.is_null() && self.reading_handle.is_null() &&
         self.low_tasks.len() + self.full_tasks.len() <= cfg::terrain::MAX_TASKS
     }
 
@@ -945,7 +973,7 @@ impl ChunkArray {
         !self.partition_tasks.is_empty()
     }
 
-    pub fn spawn_control_window(&mut self, ui: &imgui::Ui) {
+    pub fn spawn_control_window(&mut self, world: &mut World, ui: &imgui::Ui) {
         use crate::app::utils::graphics::ui::imgui_constructor::make_window;
 
         make_window(ui, "Chunk array")
@@ -983,7 +1011,7 @@ impl ChunkArray {
 
                 if ui.button("Generate") {
                     self.drop_tasks();
-                    match Self::new_empty_chunks(USize3::from(*sizes)) {
+                    match Self::new_empty_chunks(world, USize3::from(*sizes)) {
                         Ok(new_chunks) => {
                             let _ = mem::replace(self, new_chunks);
                         },
@@ -993,47 +1021,44 @@ impl ChunkArray {
             });
     }
 
-    pub async fn process_commands(&mut self, facade: &dyn Facade) {
+    pub async fn proccess_command(
+        &mut self, world: &World,
+        command: Command, change_tracker: &mut ChangeTracker,
+    ) {
+        match command {
+            Command::SetVoxel { pos, new_id } => {
+                let old_id = self.set_voxel(pos, new_id)
+                    .log_error("chunk-array", "failed to set voxel");
+
+                if old_id != new_id {
+                    change_tracker.track_voxel(pos);
+                }
+            },
+
+            Command::FillVoxels { pos_from, pos_to, new_id } => {
+                let _is_changed = self.fill_voxels(world, pos_from, pos_to, new_id)
+                    .log_error("chunk-arrat", "failed to fill voxels");
+            }
+
+            Command::DropAllMeshes => self.drop_all_meshes(world),
+        }
+    }
+
+    pub async fn process_commands(&mut self, world: &World, device: &Device) {
         #![allow(clippy::await_holding_lock)]
 
-        use crate::app::utils::terrain::chunk::commands::*;
+        use crate::terrain::chunk::commands::*;
 
-        let mut commands = COMMAND_CHANNEL.lock().unwrap();
         let mut change_tracker = ChangeTracker::new(self.sizes);
-
-        use Command::*;
-        while let Ok(command) = commands.receiver.try_recv() {
-            match command {
-                SetVoxel { pos, new_id } => {
-                    let old_id = self.set_voxel(pos, new_id)
-                        .unwrap_or_else(|err| {
-                            logger::log!(Error, from = "chunk-array", "failed to set voxel: {err}");
-                            0
-                        });
-
-                    if old_id != new_id {
-                        change_tracker.track_voxel(pos);
-                    }
-                },
-
-                FillVoxels { pos_from, pos_to, new_id } => {
-                    let _is_changed = self.fill_voxels(pos_from, pos_to, new_id)
-                        .unwrap_or_else(|err| {
-                            logger::log!(Error, from = "chunk-array", "failed to fill voxels: {err}");
-                            false
-                        });
-                }
-
-                DropAllMeshes => self.drop_all_meshes(),
-            }
+        
+        while let Ok(command) = COMMAND_CHANNEL.lock().unwrap().receiver.try_recv() {
+            self.proccess_command(world, command, &mut change_tracker).await;
         }
-
-        drop(commands);
 
         let idxs_to_reload = change_tracker.idxs_to_reload_partitioning();
         let n_changed = idxs_to_reload.len();
         for (idx, partition_idx) in idxs_to_reload {
-            self.reload_chunk_partitioning(idx, partition_idx, facade).await;
+            self.reload_chunk_partitioning(device, world, idx, partition_idx).await;
         }
 
         if n_changed != 0 {
@@ -1041,29 +1066,30 @@ impl ChunkArray {
         }
     }
 
-    pub async fn reload_chunk(&self, idx: usize, facade: &dyn Facade) {
+    pub async fn reload_chunk(&self, device: &Device, world: &World, idx: usize) {
         let chunk_pos = Self::idx_to_pos(idx, self.sizes);
         let adj = self.get_adj_chunks(chunk_pos);
 
         if let Some(chunk) = self.chunks.get(idx) {
-            let mut mesh = self.meshes[idx].borrow_mut();
-            chunk.generate_mesh(&mut mesh, 0, adj, facade);
+            let mut mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
+            chunk.generate_mesh(&mut mesh, 0, adj, device);
         }
     }
 
     pub async fn reload_chunk_partitioning(
-        &self, chunk_idx: usize, partition_idx: usize, facade: &dyn Facade,
+        &self, device: &Device, world: &World, chunk_idx: usize, partition_idx: usize,
     ) {
         let chunk_pos = Self::idx_to_pos(chunk_idx, self.sizes);
         let adj = self.get_adj_chunks(chunk_pos);
 
         if let Some(chunk) = self.chunks.get(chunk_idx) {
-            let mut mesh = self.meshes[chunk_idx].borrow_mut();
-            if mesh.is_partitioned() {
-                let partial_vertices = chunk.make_partition(&adj, partition_idx);
-                mesh.upload_partition(&partial_vertices, partition_idx, facade);
+            let mut chunk_mesh = self.chunk_component::<&mut ChunkMesh>(world, chunk_idx);
+
+            if chunk_mesh.is_partial() {
+                let mesh = chunk.make_partition(&adj, partition_idx);
+                chunk_mesh.upload_partition(device, &mesh, partition_idx);
             } else {
-                chunk.partition_mesh(&mut mesh, adj, facade);
+                chunk.partition_mesh(&mut chunk_mesh, adj, device);
             }
         }
     }
@@ -1083,7 +1109,7 @@ impl ChunkArray {
     }
 
     pub async fn proccess_camera_input(&mut self, cam: &Camera) {
-        use super::commands::{command, Command};
+        use super::commands::command;
 
         let first_voxel = self.trace_ray(Line::new(cam.pos, cam.front), Self::MAX_TRACE_STEPS)
             .find(|voxel| !voxel.is_air());
@@ -1096,32 +1122,32 @@ impl ChunkArray {
         }
     }
 
-    pub async fn update(&mut self, facade: &dyn Facade, cam: &Camera) -> Result<(), UpdateError> {
+    pub async fn update(&mut self, device: &Device, world: &mut World, cam: &Camera) -> Result<(), UpdateError> {
         self.proccess_camera_input(cam).await;
-        self.process_commands(facade).await;
+        self.process_commands(world, device).await;
 
         if keyboard::just_pressed_combo([Key::LControl, Key::S]) {
             let chunks: Vec<_> = self.chunks.iter().map(Arc::clone).collect();
             let handle = tokio::spawn(
                 ChunkArray::save_to_file(self.sizes, chunks, "world", "world")
             );
-            self.saving_handle = Some(handle);
+            self.saving_handle = Nullable::new(handle);
         }
 
-        if self.saving_handle.is_some() && self.saving_handle.as_ref().unwrap().is_finished() {
-            let handle = self.saving_handle.take().unwrap();
+        if !self.saving_handle.is_null() && self.saving_handle.is_finished() {
+            let handle = self.saving_handle.take();
             handle.await??;
         }
 
         if keyboard::just_pressed_combo([Key::LControl, Key::O]) {
             let handle = tokio::spawn(ChunkArray::read_from_file("world", "world"));
-            self.reading_handle = Some(handle);
+            self.reading_handle = Nullable::new(handle);
         }
 
-        if self.reading_handle.is_some() && self.reading_handle.as_ref().unwrap().is_finished() {
-            let handle = self.reading_handle.take().unwrap();
+        if !self.reading_handle.is_null() && self.reading_handle.is_finished() {
+            let handle = self.reading_handle.take();
             let (sizes, arr) = handle.await??;
-            self.apply_new(sizes, arr)?;
+            self.apply_new(world, sizes, arr)?;
         }
 
         Ok(())

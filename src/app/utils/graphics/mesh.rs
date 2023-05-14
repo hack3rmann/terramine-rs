@@ -290,7 +290,8 @@ impl GpuIndices {
 /// Trait that all vertices should satisfy to allow usage on GPU.
 pub trait Vertex: Default + Pod + PartialEq {
     const ATTRIBUTES: &'static [VertexAttribute];
-    const STEP_MODE: VertexStepMode;
+
+    const STEP_MODE: VertexStepMode = VertexStepMode::Vertex;
 
     const BUFFER_LAYOUT: VertexBufferLayout<'static> = VertexBufferLayout {
         array_stride: mem::size_of::<Self>() as u64,
@@ -323,8 +324,6 @@ impl From<vec3> for DefaultVertex {
 impl Vertex for DefaultVertex {
     const ATTRIBUTES: &'static [VertexAttribute] =
         &vertex_attr_array![0 => Float32x3];
-
-    const STEP_MODE: VertexStepMode = VertexStepMode::Vertex;
 }
 
 
@@ -346,8 +345,6 @@ impl TexturedVertex {
 impl Vertex for TexturedVertex {
     const ATTRIBUTES: &'static [VertexAttribute] =
         &vertex_attr_array![0 => Float32x3, 1 => Float32x2];
-
-    const STEP_MODE: VertexStepMode = VertexStepMode::Vertex;
 }
 
 

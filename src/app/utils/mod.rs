@@ -102,3 +102,89 @@ impl ToVec2 for winit::dpi::PhysicalSize<u32> {
         UInt2::new(self.width, self.height)
     }
 }
+
+
+
+/// [`Nullable`] type like in `C#`.
+#[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Hash, SmartDefault)]
+pub struct Nullable<T> {
+    #[default(None)]
+    pub inner: Option<T>,
+}
+assert_impl_all!(Nullable<f32>: Send, Sync);
+
+impl<T> Nullable<T> {
+    /// A `null` value for [`Nullable`].
+    pub const NULL: Self = Self::null();
+
+    /// Constructs new non-`null` [`Nullable`].
+    pub const fn new(value: T) -> Self {
+        Self { inner: Some(value) }
+    }
+
+    /// Constructs `null` [`Nullable`].
+    pub const fn null() -> Self {
+        Self { inner: None }
+    }
+
+    /// Checks if [`Nullable`] is `null`.
+    pub const fn is_null(&self) -> bool {
+        self.inner.is_none()
+    }
+
+    /// Takes inner value and leaves [`Nullable`] with `null` value.
+    pub fn take(&mut self) -> T {
+        self.inner.take().expect("called take on null Nullable")
+    }
+
+    /// Unwraps [`Nullable`] value into a type.
+    pub fn into_inner(self) -> T {
+        self.inner.expect("called into_inner on null Nullable")
+    }
+
+    /// Gives shared reference to inner type without `null`-check.
+    pub const unsafe fn get_unchecked(&self) -> &T {
+        self.inner.as_ref().unwrap_unchecked()
+    }
+
+    /// Gives `mut` reference to inner type without `null`-check.
+    pub unsafe fn get_mut_unchecked(&mut self) -> &mut T {
+        self.inner.as_mut().unwrap_unchecked()
+    }
+
+    /// Unwraps [`Nullable`] value into a type without `null`-check.
+    pub unsafe fn into_inner_unchecked(self) -> T {
+        self.inner.unwrap_unchecked()
+    }
+}
+
+impl<T> From<T> for Nullable<T> {
+    fn from(value: T) -> Self {
+        Self::new(value)
+    }
+}
+
+impl<T> From<Option<T>> for Nullable<T> {
+    fn from(value: Option<T>) -> Self {
+        Self { inner: value }
+    }
+}
+
+impl<T> From<Nullable<T>> for Option<T> {
+    fn from(value: Nullable<T>) -> Self {
+        value.inner
+    }
+}
+
+impl<T> Deref for Nullable<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref().expect("called deref on null Nullable")
+    }
+}
+
+impl<T> DerefMut for Nullable<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner.as_mut().expect("called deref_mut on null Nullable")
+    }
+}

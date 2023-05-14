@@ -43,7 +43,7 @@ pub struct Camera {
     pub right:	vec3,
 
     /* Frustum */
-    frustum: Option<Frustum>,
+    frustum: Nullable<Frustum>,
 }
 assert_impl_all!(Camera: Send, Sync);
 
@@ -128,7 +128,7 @@ impl Camera {
         self.right = self.rotation * vecf!(1,  0,  0);
 
         /* Frustum update */
-        self.frustum = Some(Frustum::new(self));
+        self.frustum = Nullable::new(Frustum::new(self));
     }
 
     /// Updates camera (key press checking, etc).
@@ -210,7 +210,8 @@ impl Camera {
 
     /// Gives frustum from camera.
     pub fn get_frustum(&mut self) -> &Frustum {
-        self.frustum.get_or_insert(Frustum::new(self))
+        self.frustum = Nullable::new(Frustum::new(self));
+        &self.frustum
     }
 
     /// Returns X component of pos vector.
@@ -291,7 +292,7 @@ impl Default for Camera {
             front:  vecf!(0, 0, -1),
             right:  vecf!(1, 0, 0),
             
-            frustum: None,
+            frustum: default(),
         };
         cam.update_vectors();
 

@@ -1,15 +1,18 @@
 use {
     crate::{
         prelude::*,
-        terrain::chunk::{FullVertex, LowVertex, Id},
+        terrain::chunk::{Id, mesh::{FullVertex, LowVertex}},
+        graphics::Mesh,
     },
     std::future::Future,
     tokio::task::JoinHandle,
 };
 
+
+
 #[derive(Debug)]
 pub struct Task<Item> {
-    pub handle: Option<JoinHandle<Item>>,
+    pub handle: Nullable<JoinHandle<Item>>,
 }
 
 impl<Item> AsRef<Task<Item>> for Task<Item> {
@@ -24,35 +27,23 @@ impl<Item> AsMut<Task<Item>> for Task<Item> {
     }
 }
 
-pub type FullTask = Task<Vec<FullVertex>>;
-pub type LowTask  = Task<Vec<LowVertex>>;
-pub type GenTask  = Task<Vec<Atomic<Id>>>;
-pub type PartitionTask = Task<[Vec<FullVertex>; 8]>;
+
 
 impl<Item: Send + 'static> Task<Item> {
     pub fn spawn(f: impl Future<Output = Item> + Send + 'static) -> Self {
-        Self { handle: Some(tokio::spawn(f)) }
+        Self { handle: Nullable::new(tokio::spawn(f)) }
     }
 
     pub async fn try_take_result(&mut self) -> Option<Item> {
-        match self.handle.take() {
-            Some(handle) if handle.is_finished() =>
-                handle.await.ok(),
+        if self.handle.is_null() || !self.handle.is_finished() { return None }
 
-            Some(handle) => {
-                self.handle = Some(handle);
-                None
-            },
-
-            None => None,
-        }
+        let handle = self.handle.take();
+        handle.await.ok()
     }
 
     pub async fn take_result(&mut self) -> Item {
-        self.handle.take()
-            .expect("task cannot be taken twice!")
-            .await
-            .expect("task thread panicked")
+        self.try_take_result().await
+            .expect("cannot take a result twice")
     }
 
     pub async fn try_take_results<K, V>(tasks: impl IntoIterator<Item = (K, V)>) -> SmallVec<[(K, Item); 16]>
@@ -60,10 +51,10 @@ impl<Item: Send + 'static> Task<Item> {
         V: AsMut<Self> + AsRef<Self>,
     {
         let futs = tasks.into_iter()
-            .filter(|(_, task)| matches!(
-                task.as_ref().handle,
-                Some(ref handle) if handle.is_finished()
-            ))
+            .filter(|(_, task)| {
+                let handle = &task.as_ref().handle;
+                !handle.is_null() && handle.is_finished()
+            })
             .map(|(key, mut task)| async move {
                 (key, task.as_mut().take_result().await)
             });
@@ -80,8 +71,15 @@ impl<Item: Send + 'static> Task<Item> {
 
 impl<Item> Drop for Task<Item> {
     fn drop(&mut self) {
-        if let Some(handle) = self.handle.take() {
-            handle.abort();
+        if !self.handle.is_null() {
+            self.handle.abort();
         }
     }
 }
+
+
+
+pub type FullTask = Task<Mesh<FullVertex>>;
+pub type LowTask  = Task<Mesh<LowVertex>>;
+pub type GenTask  = Task<Vec<Atomic<Id>>>;
+pub type PartitionTask = Task<[Mesh<FullVertex>; 8]>;

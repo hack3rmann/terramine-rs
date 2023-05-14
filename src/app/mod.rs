@@ -6,7 +6,6 @@ use {
         graphics::{
             Graphics,
             RenderDescriptor,
-            debug_visuals,
         },
         camera::*,
     },
@@ -26,7 +25,7 @@ pub struct App {
     pub camera: CameraHandle,
 
     pub update_functions: Vec<fn()>,
-    pub event_loop: Option<EventLoop<()>>,
+    pub event_loop: Nullable<EventLoop<()>>,
 }
 
 impl App {
@@ -36,14 +35,13 @@ impl App {
 
         let mut app = Self {
             update_functions: vec![
-                debug_visuals::update,
                 loading::update,
                 logger::update,
                 keyboard::update,
             ],
             camera: CameraHandle::from_entity_unchecked(Entity::DANGLING),
             world: World::new(),
-            event_loop: Some(default()),
+            event_loop: Nullable::new(default()),
         };
 
         app.setup().await;
@@ -59,7 +57,7 @@ impl App {
         self.world.init_resource::<Timer>();
 
         self.world.insert_resource(
-            Graphics::new(self.event_loop.as_ref().unwrap())
+            Graphics::new(&self.event_loop)
                 .await
                 .expect("failed to create graphics")
         );
@@ -78,7 +76,7 @@ impl App {
 
     /// Runs app. Runs glium's `event_loop`.
     pub fn run(mut self) -> ! {
-        let event_loop = self.event_loop.take().unwrap();
+        let event_loop = self.event_loop.take();
         event_loop.run(move |event, elw_target, control_flow| RUNTIME.block_on(
             self.run_frame_loop(event, elw_target, control_flow)
         ))
