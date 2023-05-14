@@ -3,6 +3,12 @@ use {
     std::ops::{Bound, RangeBounds},
 };
 
+
+
+pub use wgpu::BufferUsages;
+
+
+
 crate::define_atomic_id!(BufferId);
 
 #[derive(Clone, Debug, Deref)]
@@ -36,6 +42,8 @@ impl From<wgpu::Buffer> for Buffer {
         }
     }
 }
+
+
 
 #[derive(Clone, Debug, Deref)]
 pub struct BufferSlice<'s> {

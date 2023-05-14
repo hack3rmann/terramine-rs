@@ -1,6 +1,6 @@
 struct VertexInput {
     @location(0)
-    pos: vec2<f32>,
+    pos: vec3<f32>,
 
     @location(1)
     tex_coords: vec2<f32>,
@@ -29,12 +29,12 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 
     let aspect_ratio = common_uniform.resolution.y / common_uniform.resolution.x;
 
-    var pos: vec2<f32> = input.pos;
+    var pos: vec3<f32> = input.pos;
     pos.x *= aspect_ratio;
 
     output.tex_coords = input.tex_coords;
     let sin_time = sin(common_uniform.time) * 0.5 + 0.5;
-    output.clip_pos = vec4<f32>(pos * sin_time, 0.0, 1.0);
+    output.clip_pos = vec4<f32>(pos * sin_time, 1.0);
 
     return output;
 }

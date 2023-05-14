@@ -46,6 +46,24 @@ pub enum ShaderRef {
 }
 assert_impl_all!(ShaderRef: Send, Sync);
 
+impl From<Shader> for ShaderRef {
+    fn from(value: Shader) -> Self {
+        Self::from(Arc::new(value))
+    }
+}
+
+impl From<&Arc<Shader>> for ShaderRef {
+    fn from(value: &Arc<Shader>) -> Self {
+        Self::from(Arc::clone(value))
+    }
+}
+
+impl From<Arc<Shader>> for ShaderRef {
+    fn from(value: Arc<Shader>) -> Self {
+        Self::Module(value)
+    }
+}
+
 impl ShaderRef {
     pub fn as_module(&self) -> Arc<Shader> {
         match self {

@@ -1,13 +1,13 @@
 use {
-    std::pin::Pin,
+    crate::prelude::*,
     glium::{
         texture::{DepthTexture2d, Texture2d, TextureCreationError},
         framebuffer::{MultiOutputFrameBuffer, SimpleFrameBuffer, ValidationError},
         backend::Facade,
     },
-    math_linear::prelude::*,
-    thiserror::Error,
 };
+
+
 
 #[derive(Debug)]
 pub struct DeferredTextures {
@@ -68,6 +68,8 @@ impl DeferredTextures {
         Ok(Self { depth, albedo, normal, position, light_depth })
     }
 }
+
+
 
 pub struct Surface<'s> {
     render_textures: Pin<Box<DeferredTextures>>,
@@ -152,10 +154,11 @@ impl<'s> Surface<'s> {
     }
 }
 
-#[derive(Debug, Error)]
-pub enum SurfaceError {
-    #[error(transparent)]
-    TextureCreation(#[from] TextureCreationError),
-    #[error(transparent)]
-    Validation(#[from] ValidationError),
+
+
+crate::sum_errors! {
+    SurfaceError {
+        TextureCreation => TextureCreationError,
+        Validation => ValidationError,
+    }
 }

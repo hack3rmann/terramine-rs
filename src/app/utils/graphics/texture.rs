@@ -1,4 +1,15 @@
-use crate::prelude::*;
+use crate::{
+    prelude::*,
+    graphics::{Device, Queue, Image},
+};
+
+
+
+pub use wgpu::{
+    TextureDescriptor, TextureViewDescriptor, ImageCopyTexture, ImageDataLayout, Origin2d, Origin3d,
+    TextureAspect, TextureSampleType, TextureViewDimension, SamplerBindingType, TextureDimension,
+    SamplerDescriptor, FilterMode, TextureUsages,
+};
 
 
 
@@ -16,16 +27,44 @@ pub struct Texture {
 assert_impl_all!(Texture: Send, Sync);
 
 impl Texture {
-    /// Creates a view of this texture.
-    pub fn create_view(&self, desc: &wgpu::TextureViewDescriptor) -> TextureView {
-        TextureView::from(self.inner.create_view(desc))
+    /// Makes new [texture][Texture].
+    pub fn new_empty(device: &Device, desc: &TextureDescriptor) -> Self {
+        let texture = device.create_texture(desc);
+        Self::from(texture)
     }
-}
 
-impl Deref for Texture {
-    type Target = wgpu::Texture;
-    fn deref(&self) -> &Self::Target {
-        self.inner.as_ref()
+    /// Makes new [texture][Texture] with data.
+    pub fn new(device: &Device, queue: &Queue, image: &Image, desc: &TextureDescriptor) -> Self {
+        let texture = Self::new_empty(device, desc);
+        texture.write(queue, image);
+        texture
+    }
+
+    /// Writes data to the [texture][Texture] from loaded [image][Image].
+    pub fn write(&self, queue: &Queue, image: &Image) {
+        let (width, height) = image.dimensions().as_tuple();
+        let size = image.extent_size();
+
+        queue.write_texture(
+            ImageCopyTexture {
+                texture: &self.inner,
+                mip_level: 0,
+                origin: Origin3d::ZERO,
+                aspect: TextureAspect::All,
+            },
+            image,
+            ImageDataLayout {
+                offset: 0,
+                bytes_per_row: std::num::NonZeroU32::new(width * mem::size_of::<f32>() as u32),
+                rows_per_image: std::num::NonZeroU32::new(height),
+            },
+            size,
+        );
+    }
+
+    /// Creates a [view][TextureView] of this [texture][Texture].
+    pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
+        TextureView::from(self.inner.create_view(desc))
     }
 }
 
@@ -35,6 +74,13 @@ impl From<wgpu::Texture> for Texture {
             id: TextureId::new(),
             inner: Arc::new(value),
         }
+    }
+}
+
+impl Deref for Texture {
+    type Target = wgpu::Texture;
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref()
     }
 }
 
@@ -50,6 +96,15 @@ pub struct TextureView {
 }
 assert_impl_all!(TextureView: Send, Sync);
 
+impl From<wgpu::TextureView> for TextureView {
+    fn from(value: wgpu::TextureView) -> Self {
+        Self {
+            id: TextureViewId::new(),
+            inner: Arc::new(value),
+        }
+    }
+}
+
 impl Deref for TextureView {
     type Target = wgpu::TextureView;
     fn deref(&self) -> &Self::Target {
@@ -63,26 +118,18 @@ impl Deref for TextureView {
 pub struct SurfaceTexture {
     pub inner: Arc<wgpu::SurfaceTexture>,
 }
+assert_impl_all!(SurfaceTexture: Send, Sync);
+
+impl From<wgpu::SurfaceTexture> for SurfaceTexture {
+    fn from(value: wgpu::SurfaceTexture) -> Self {
+        Self { inner: Arc::new(value) }
+    }
+}
 
 impl Deref for SurfaceTexture {
     type Target = wgpu::SurfaceTexture;
     fn deref(&self) -> &Self::Target {
         self.inner.as_ref()
-    }
-}
-
-impl From<wgpu::TextureView> for TextureView {
-    fn from(value: wgpu::TextureView) -> Self {
-        Self {
-            id: TextureViewId::new(),
-            inner: Arc::new(value),
-        }
-    }
-}
-
-impl From<wgpu::SurfaceTexture> for SurfaceTexture {
-    fn from(value: wgpu::SurfaceTexture) -> Self {
-        Self { inner: Arc::new(value) }
     }
 }
 
@@ -95,13 +142,19 @@ crate::define_atomic_id!(SamplerId);
 ///
 /// May be converted from and dereferences to a wgpu [`Sampler`](wgpu::Sampler).
 /// Can be created via [`RenderDevice::create_sampler`](crate::renderer::RenderDevice::create_sampler).
-#[derive(Clone, Debug, Deref)]
+#[derive(Clone, Debug)]
 pub struct Sampler {
     pub id: SamplerId,
-    #[deref]
     pub inner: Arc<wgpu::Sampler>,
 }
 assert_impl_all!(Sampler: Send, Sync);
+
+impl Sampler {
+    pub fn new(device: &Device, desc: &SamplerDescriptor) -> Self {
+        let sampler = device.create_sampler(desc);
+        Self::from(sampler)
+    }
+}
 
 impl From<wgpu::Sampler> for Sampler {
     fn from(value: wgpu::Sampler) -> Self {
@@ -109,5 +162,12 @@ impl From<wgpu::Sampler> for Sampler {
             id: SamplerId::new(),
             inner: Arc::new(value),
         }
+    }
+}
+
+impl Deref for Sampler {
+    type Target = wgpu::Sampler;
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref()
     }
 }

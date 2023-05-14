@@ -6,9 +6,6 @@ pub mod debug_visuals;
 pub mod ui;
 pub mod light;
 pub mod surface;
-pub mod failed_mesh;
-pub mod failed_shader;
-pub mod failed_texture;
 pub mod mesh;
 pub mod render_resource;
 pub mod pipeline;
@@ -22,11 +19,11 @@ pub mod texture;
 pub mod sprite;
 pub mod shader;
 pub mod asset;
+pub mod image;
 
 use {
     crate::prelude::*,
     std::sync::RwLock,
-    failed_texture::Texture,
 };
 
 
@@ -34,15 +31,14 @@ use {
 pub use {
     material::*, gpu_conversions::*, pass::*,
     bind_group::*, buffer::*, texture::*, window::Window,
-    mesh::*, shader::*, asset::*, pipeline::*,
+    mesh::*, shader::*, asset::*, pipeline::*, self::image::*,
 
     wgpu::{
-        SurfaceError, CommandEncoder, TextureUsages, Features,
+        SurfaceError, CommandEncoder, Features,
         DeviceDescriptor, RequestAdapterOptions, Backends, InstanceDescriptor, Instance,
-        BindGroupLayout, BindGroup, SurfaceConfiguration, Adapter, Surface, Queue,
-        BindGroupEntry, BindGroupDescriptor, ShaderStages, BufferBindingType, BindingType,
-        BindGroupLayoutDescriptor, BindGroupLayoutEntry, Device, BufferUsages,
-        util::{DeviceExt, BufferInitDescriptor}, IndexFormat, FrontFace, Face,
+        SurfaceConfiguration, Adapter, Surface, Queue,
+        BufferBindingType, BindingType, Device,
+        util::{DeviceExt, BufferInitDescriptor}, IndexFormat, FrontFace, Face, Extent3d,
     },
     winit::window::Window as WinitWindow,
     imgui_wgpu::{Renderer as ImguiRenderer, RendererConfig as ImguiRendererConfig},
@@ -51,13 +47,13 @@ pub use {
 
 
 
-const TEST_VERTICES: &[DefaultVertex] = &[
-    DefaultVertex::new(vecf![-0.5, -0.5, 0.0]),
-    DefaultVertex::new(vecf![ 0.5, -0.5, 0.0]),
-    DefaultVertex::new(vecf![ 0.5,  0.5, 0.0]),
-    DefaultVertex::new(vecf![-0.5, -0.5, 0.0]),
-    DefaultVertex::new(vecf![ 0.5,  0.5, 0.0]),
-    DefaultVertex::new(vecf![-0.5,  0.5, 0.0]),
+const TEST_VERTICES: &[TexturedVertex] = &[
+    TexturedVertex::new(vecf![-0.5, -0.5, 0.0], vecf!(0.0, 1.0)),
+    TexturedVertex::new(vecf![ 0.5, -0.5, 0.0], vecf!(1.0, 1.0)),
+    TexturedVertex::new(vecf![ 0.5,  0.5, 0.0], vecf!(1.0, 0.0)),
+    TexturedVertex::new(vecf![-0.5, -0.5, 0.0], vecf!(0.0, 1.0)),
+    TexturedVertex::new(vecf![ 0.5,  0.5, 0.0], vecf!(1.0, 0.0)),
+    TexturedVertex::new(vecf![-0.5,  0.5, 0.0], vecf!(0.0, 0.0)),
 ];
 
 
@@ -75,7 +71,7 @@ assert_impl_all!(CommonUniforms: Send, Sync);
 
 #[derive(Debug)]
 pub struct CommonUniformsBuffer {
-    pub bind_group_layout: Arc<BindGroupLayout>,
+    pub bind_group_layout: BindGroupLayout,
     pub bind_group: BindGroup,
     pub buffer: Buffer,
 }
@@ -122,7 +118,11 @@ impl CommonUniformsBuffer {
             },
         );
 
-        Self { bind_group_layout: Arc::new(layout), bind_group, buffer: Buffer::from(buffer) }
+        Self {
+            bind_group_layout: layout.into(),
+            bind_group: bind_group.into(),
+            buffer: Buffer::from(buffer)
+        }
     }
 
     pub fn update(&self, queue: &Queue, uniforms: CommonUniforms) {
@@ -190,10 +190,6 @@ impl Graphics {
         // * so assets can not been used before or been initialized.
         unsafe { asset::load_default_assets(&context.device) }.await;
 
-
-
-        // ------------ Renderng tests stuff ------------
-
         let common_uniforms = CommonUniformsBuffer::new(
             &context.device,
             &CommonUniforms {
@@ -203,49 +199,86 @@ impl Graphics {
             },
         );
 
+
+
+        // ------------ Renderng tests stuff ------------
+
         let mut sandbox = World::new();
 
-        let test_texture = Texture::load_from_file(
-            Arc::clone(&context.device),
-            Arc::clone(&context.queue),
-            "TerramineIcon32p.png",
-            "test_texture",
-            0, 1,
-        ).await
-            .expect("failed to load an image");
+        let image = Image::from_file("TerramineIcon32p.png")
+            .await
+            .expect("failed to load TerramineIcon32p.png image");
+
+        let gpu_image = GpuImage::new(
+            GpuImageDescriptor {
+                device: &context.device,
+                queue: &context.queue,
+                image: &image,
+                label: Some("test_image".into()),
+            }
+        );
+
+        let gpu_image_bind_layout = GpuImage::bind_group_layout(&context.device);
+        let gpu_image_bind_group = gpu_image.as_bind_group(&context.device, &gpu_image_bind_layout);
+
+        let binds = Binds::from_iter([
+            (gpu_image_bind_group, Some(gpu_image_bind_layout)),
+        ]);
 
         let mesh = Mesh::new(TEST_VERTICES.to_vec(), None, PrimitiveTopology::TriangleList);
 
-        let Ok(gpu_mesh) = mesh.to_gpu(GpuMeshDescriptor {
-            device: Arc::clone(&context.device),
-            label: Some("test_mesh".into()),
-            polygon_mode: default(),
-        });
+        let make_mesh = || -> GpuMesh {
+            let Ok(ret) = mesh.to_gpu(
+                GpuMeshDescriptor {
+                    device: Arc::clone(&context.device),
+                    label: Some("test_mesh".into()),
+                    polygon_mode: default(),
+                },
+            );
+            ret
+        };
 
-        let layout = PipelineLayout::new(
-            &context.device,
-            &wgpu::PipelineLayoutDescriptor {
-                label: Some("test_pipeline_layout"),
-                bind_group_layouts: &[
-                    &common_uniforms.bind_group_layout,
-                ],
-                push_constant_ranges: &[],
-            },
-        );
+        let gpu_mesh = make_mesh();
+
+        let layout = {
+            let bind_group_layouts: Vec<_> = itertools::chain!(
+                [common_uniforms.bind_group_layout.deref()],
+                binds.layouts(),
+            ).collect();
+
+            PipelineLayout::new(
+                &context.device,
+                &PipelineLayoutDescriptor {
+                    label: Some("test_pipeline_layout"),
+                    bind_group_layouts: &bind_group_layouts,
+                    push_constant_ranges: &[],
+                },
+            )
+        };
+
+        let material = {
+            let source = ShaderSource::from_file("shader.wgsl")
+                .await
+                .expect("failed to load shader.wgsl from file");
+
+            let shader = Shader::new(&context.device, source, vec![TexturedVertex::BUFFER_LAYOUT]);
+
+            StandartMaterial::from(shader).to_arc()
+        };
 
         let pipeline = RenderPipeline::new(
             RenderPipelineDescriptor {
                 device: &context.device,
-                material: &DefaultMaterial,
+                material: material.as_ref(),
                 primitive_state: gpu_mesh.primitive_state,
                 label: Some("test_render_pipeline".into()),
                 layout: &layout,
             },
         );
 
-        sandbox.insert_resource(gpu_mesh);
-        sandbox.insert_resource(pipeline);
-        sandbox.insert_resource(test_texture);
+        let binds_ref = BindsRef::from(binds);
+
+        sandbox.spawn((gpu_mesh, pipeline, binds_ref));
 
         
         
@@ -341,16 +374,16 @@ impl Graphics {
     }
 
     pub fn render_sandbox(&mut self, encoder: &mut CommandEncoder, view: TextureView) {
-        let texture = self.sandbox.resource::<&Texture>().unwrap();
-        let mesh = self.sandbox.resource::<&GpuMesh>().unwrap();
-        let pipeline = self.sandbox.resource::<&RenderPipeline>().unwrap();
+        let mut query = self.sandbox.query::<(&BindsRef, &GpuMesh, &RenderPipeline)>();
 
         let mut pass = RenderPass::new(encoder, "logo_draw_pass", [&view]);
 
-        pass.set_bind_group(0, &self.common_uniforms.bind_group, &[]);
-        pass.set_bind_group(1, &texture.bind_group, &[]);
-        
-        let Ok(()) = mesh.render(&pipeline, &mut pass);
+        for (_entity, (binds, mesh, pipeline)) in query.iter() {
+            self.common_uniforms.bind_group.bind(&mut pass, 0);
+            binds.bind(&mut pass, 1);
+            
+            let Ok(()) = mesh.render(&pipeline, &mut pass);
+        }
     }
 
     pub fn render<UseUi: FnOnce(&mut imgui::Ui)>(
@@ -466,7 +499,7 @@ impl ImGui {
 
         // Bind ImGui to winit.
         let mut platform = imgui_winit_support::WinitPlatform::init(&mut context);
-        platform.attach_window(context.io_mut(), window.deref(), imgui_winit_support::HiDpiMode::Rounded);
+        platform.attach_window(context.io_mut(), window, imgui_winit_support::HiDpiMode::Rounded);
 
         // Style configuration.
         context.fonts().add_font(&[imgui::FontSource::DefaultFontData { config: None }]);

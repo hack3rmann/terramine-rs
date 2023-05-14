@@ -8,7 +8,7 @@ use {
 
 
 
-pub use wgpu::ShaderModuleDescriptor;
+pub use wgpu::{ShaderModuleDescriptor, ShaderStages};
 
 
 

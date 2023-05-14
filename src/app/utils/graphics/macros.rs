@@ -26,3 +26,26 @@ macro_rules! define_atomic_id {
         }
     };
 }
+
+#[macro_export]
+macro_rules! sum_errors {
+    () => { };
+
+    (
+        $ErrName:ident { $($VariantName:ident => $ErrType:ty),+ $(,)? },
+        $rest:tt $(,)?
+    ) => {
+        sum_errors! { $ErrName { $($VariantName => $ErrType,)+ } }
+        sum_errors! { rest }
+    };
+
+    ($ErrName:ident { $($VariantName:ident => $ErrType:ty),+ $(,)? }) => {
+        #[derive(Debug, thiserror::Error)]
+        pub enum $ErrName {
+            $(
+                #[error(transparent)]
+                $VariantName(#[from] $ErrType),
+            )+
+        }
+    };
+}

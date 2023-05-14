@@ -2,8 +2,7 @@ use crate::prelude::*;
 
 
 
-#[derive(Debug, Clone, PartialEq, Default, Display, TypeUuid)]
-#[uuid = "92a577ad-4152-4b10-b03b-78b142d74e8c"]
+#[derive(Debug, Clone, PartialEq, Default, Display)]
 #[display("translation: {translation}; rotation: {rotation}; scaling: {scaling}")]
 pub struct Transform {
     pub translation: Translation,
@@ -34,8 +33,7 @@ impl AsMatrix for Transform {
 
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Default, Deref, Display, TypeUuid)]
-#[uuid = "ee6d03c0-9ac1-435c-a25b-8d4fe2bf3a00"]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Deref, Display)]
 #[display("x: {offset.x:.3}, y: {offset.y:.3}, z: {offset.z:.3}")]
 pub struct Translation {
     pub offset: vec3,
@@ -56,8 +54,7 @@ impl AsMatrix for Translation {
 
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Default, Deref, Display, TypeUuid)]
-#[uuid = "3cf29db0-3c57-4b13-a7ab-92e228117806"]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Deref, Display)]
 #[display("roll: {angles.x:.3}, pitch: {angles.y:.3}, yaw: {angles.z:.3}")]
 pub struct Rotation {
     /// Rotation in `vec3 { x: roll, y: pitch, z: yaw }`.
@@ -86,8 +83,7 @@ impl AsMatrix for Rotation {
 
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Deref, SmartDefault, Display, TypeUuid)]
-#[uuid = "3cf29db0-3c57-4b13-a7ab-92e228117806"]
+#[derive(Debug, Clone, Copy, PartialEq, Deref, SmartDefault, Display)]
 #[display("x: {amount.x:.3}, y: {amount.y:.3}, z: {amount.z:.3}")]
 pub struct Scaling {
     #[default(vec3::ONE)]
@@ -116,8 +112,7 @@ assert_obj_safe!(AsMatrix);
 
 
 
-#[derive(Clone, Copy, Deref, Default, PartialEq, Debug, TypeUuid)]
-#[uuid = "02e06374-1036-4fa8-8372-76f9921e4305"]
+#[derive(Clone, Copy, Deref, Default, PartialEq, Debug)]
 pub struct Speed {
     pub inner: vec3,
 }
@@ -137,8 +132,7 @@ impl GetOffset for Speed {
 
 
 
-#[derive(Clone, Copy, Deref, Default, PartialEq, Debug, TypeUuid)]
-#[uuid = "9714431b-f71f-4dc9-9484-07e66dba464e"]
+#[derive(Clone, Copy, Deref, Default, PartialEq, Debug)]
 pub struct Acceleration {
     pub inner: vec3,
 }

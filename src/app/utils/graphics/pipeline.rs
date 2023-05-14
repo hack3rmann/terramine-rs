@@ -20,10 +20,9 @@ pub struct RenderPipelineDescriptor<'s> {
 
 
 
-#[derive(Debug, Deref)]
+#[derive(Debug, Clone)]
 pub struct RenderPipeline {
-    #[deref]
-    pub inner: wgpu::RenderPipeline,
+    pub inner: Arc<wgpu::RenderPipeline>,
     pub label: Option<StaticStr>,
 }
 assert_impl_all!(RenderPipeline: Send, Sync);
@@ -63,13 +62,20 @@ impl RenderPipeline {
             },
         );
 
-        Self { inner: pipeline, label: desc.label }
+        Self { inner: Arc::new(pipeline), label: desc.label }
     }
 }
 
 impl From<wgpu::RenderPipeline> for RenderPipeline {
     fn from(value: wgpu::RenderPipeline) -> Self {
-        Self { inner: value, label: None }
+        Self { inner: Arc::new(value), label: None }
+    }
+}
+
+impl Deref for RenderPipeline {
+    type Target = wgpu::RenderPipeline;
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref()
     }
 }
 

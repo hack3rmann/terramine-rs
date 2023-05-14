@@ -249,6 +249,29 @@ impl Vertex for DefaultVertex {
 
 
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable, PartialEq, Default)]
+pub struct TexturedVertex {
+    pub position: vec3,
+    pub uv: vec2,
+}
+assert_impl_all!(TexturedVertex: Send, Sync);
+
+impl TexturedVertex {
+    pub const fn new(position: vec3, uv: vec2) -> Self {
+        Self { position, uv }
+    }
+}
+
+impl Vertex for TexturedVertex {
+    const ATTRIBUTES: &'static [VertexAttribute] =
+        &vertex_attr_array![0 => Float32x3, 1 => Float32x2];
+
+    const STEP_MODE: VertexStepMode = VertexStepMode::Vertex;
+}
+
+
+
 pub trait Renderable {
     type Error: std::error::Error;
 
