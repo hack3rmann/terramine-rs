@@ -145,7 +145,7 @@ impl App {
             let mut graphics = self.world.resource::<&mut Graphics>().unwrap();
             
             timer.update();
-            graphics.update(timer.duration()).await;
+            graphics.update(timer.dt()).await;
 
             mouse::update(&graphics.window).await
                 .log_error("app", "failed to update mouse input");
@@ -165,7 +165,7 @@ impl App {
 
     /// Prepares a frame.
     async fn prepare_frame(&mut self, _window_id: WindowId) {
-        let fps = self.world.resource::<&Timer>().unwrap().fps;
+        let fps = self.world.resource::<&Timer>().unwrap().fps();
         let mut graphics = self.world.resource::<&mut Graphics>().unwrap();
 
         // Prepare frame to render.
@@ -180,14 +180,14 @@ impl App {
         // InGui draw data.
         let use_ui = |ui: &mut imgui::Ui| {
             CameraHandle::spawn_control_windows(&self.world, ui);
-            profiler::update_and_build_window(ui, timer.dt);
+            profiler::update_and_build_window(ui, timer.dt());
         };
 
         let mut graphics = self.world.resource::<&mut Graphics>().unwrap();
         graphics.render(
             RenderDescriptor {
                 use_imgui_ui: use_ui,
-                time: timer.time,
+                time: timer.time(),
             }
         ).expect("failed to render graphics");
     }

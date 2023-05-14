@@ -1,7 +1,7 @@
 use {
     crate::{
         prelude::*,
-        graphics::ShaderRef,
+        graphics::{ShaderRef, SURFACE_CFG},
     },
     std::fmt::Debug,
 };
@@ -20,17 +20,24 @@ assert_obj_safe!(Material);
 
 
 
+lazy_static! {
+    static ref DEFAULT_MATERIAL_COLOR_TARGET_STATES: Vec<Option<ColorTargetState>> = vec![Some({
+        let format = SURFACE_CFG.read().unwrap().format;
+        ColorTargetState {
+            format,
+            blend: None,
+            write_mask: ColorWrites::ALL,
+        }
+    })];
+}
+
+
+
 #[derive(Debug)]
 pub struct DefaultMaterial;
 assert_impl_all!(DefaultMaterial: Send, Sync, Component);
 
 impl DefaultMaterial {
-    pub const COLOR_TARGET_STATES: &'static [Option<ColorTargetState>] = &[Some(ColorTargetState {
-        format: TextureFormat::Bgra8Unorm,
-        blend: None,
-        write_mask: ColorWrites::ALL,
-    })];
-
     pub fn new_arc() -> Arc<dyn Material> {
         Arc::from(Self)
     }
@@ -45,8 +52,8 @@ impl Material for DefaultMaterial {
         default()
     }
 
-    fn get_color_states(&self) -> &[Option<ColorTargetState>] {
-        Self::COLOR_TARGET_STATES
+    fn get_color_states(&self) -> &'static [Option<ColorTargetState>] {
+        &DEFAULT_MATERIAL_COLOR_TARGET_STATES
     }
 }
 

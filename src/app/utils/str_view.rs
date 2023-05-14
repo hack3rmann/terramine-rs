@@ -5,9 +5,15 @@ use crate::prelude::*;
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Display, Default)]
 #[display("{inner}")]
 pub struct StrView<'s> {
-    inner: Cow<'s, str>,
+    pub inner: Cow<'s, str>,
 }
 assert_impl_all!(StrView: Send, Sync);
+
+impl<'s> From<StrView<'s>> for Cow<'s, str> {
+    fn from(value: StrView<'s>) -> Self {
+        value.inner
+    }
+}
 
 impl<'s> From<&'s str> for StrView<'s> {
     fn from(value: &'s str) -> Self {

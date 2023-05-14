@@ -132,7 +132,9 @@ impl Camera {
     }
 
     /// Updates camera (key press checking, etc).
-    pub fn update(&mut self, dt: f32) {
+    pub fn update(&mut self, dt: TimeStep) {
+        let dt = dt.as_secs_f32();
+
         /* Camera move vector */
         let mut new_speed = vec3::all(0.0);
 

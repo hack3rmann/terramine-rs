@@ -38,7 +38,7 @@ impl CameraHandle {
     }
 
     pub fn update_all(world: &World) {
-        let dt = world.resource::<&Timer>().unwrap().dt;
+        let dt = world.resource::<&Timer>().unwrap().dt();
         let mut query = world.query::<(&mut CameraComponent, &mut Transform, &mut Speed)>();
 
         for (_entity, (camera, transform, speed)) in query.into_iter() {
@@ -112,7 +112,9 @@ impl CameraComponent {
         )
     }
 
-    pub fn update(&mut self, dt: f32, transform: &mut Transform, speed: &mut Speed) {
+    pub fn update(&mut self, dt: TimeStep, transform: &mut Transform, speed: &mut Speed) {
+        let dt_secs = dt.as_secs_f32();
+
         let (front, right) = {
             let rotation = transform.rotation.as_matrix();
             let right = vec3::from(cfg::terrain::RIGHT_NORMAL);
@@ -134,7 +136,7 @@ impl CameraComponent {
         *speed = if new_speed != vec3::ZERO {
             **speed / 2.0 + new_speed / 2.0
         } else if speed.len() > 0.1 {
-            **speed * self.speed_falloff.powf(dt + 1.0)
+            **speed * self.speed_falloff.powf(dt_secs + 1.0)
         } else {
             vec3::ZERO
         }.into();
@@ -143,7 +145,7 @@ impl CameraComponent {
 
         if self.captures_mouse {
             let mouse_delta = vec3::new(0.0, -mouse::get_dy_dt(), mouse::get_dx_dt());
-            transform.rotation.rotate(dt * self.mouse_sensetivity * mouse_delta);
+            transform.rotation.rotate(dt_secs * self.mouse_sensetivity * mouse_delta);
         }
 
         if keyboard::just_pressed(Key::P) {

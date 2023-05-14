@@ -234,7 +234,11 @@ impl<V> Mesh<V> {
 
 impl<V: Bufferizable> Renderable for Mesh<V> {
     type Error = !;
-    fn render<'rp, 's: 'rp>(&'s self, _: &RenderPipeline, render_pass: &mut RenderPass<'rp>) -> Result<(), !> {
+    fn render<'rp, 's: 'rp>(
+        &'s self,
+        _: &crate::graphics::RenderPipeline,
+        render_pass: &mut crate::graphics::RenderPass<'rp>,
+    ) -> Result<(), !> {
         if self.is_empty() { return Ok(()) }
 
         render_pass.set_pipeline(&self.shared.pipeline);

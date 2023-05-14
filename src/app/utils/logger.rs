@@ -84,7 +84,7 @@ assert_impl_all!(WorkLogGuard: Send, Sync);
 impl WorkLogGuard {
     pub fn new(from: impl Into<StaticStr>, work: impl Into<StaticStr>) -> Self {
         let (from, work) = (from.into(), work.into());
-        log!(Info, from = from.clone(), "Start {work}");
+        log!(Info, from = from.clone(), "start {work}.");
         Self { from, work }
     }
 }
@@ -92,7 +92,7 @@ impl WorkLogGuard {
 impl Drop for WorkLogGuard {
     fn drop(&mut self) {
         let from = mem::take(&mut self.from);
-        log!(Info, from = from, "End {work}", work = self.work);
+        log!(Info, from = from, "end {work}.", work = self.work);
     }
 }
 

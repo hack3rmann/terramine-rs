@@ -9,14 +9,14 @@ use {
 /// Provides easy time management.
 #[derive(Debug)]
 pub struct Timer {
-    pub dt: f32,
+    dt: TimeStep,
 
-    pub time: f32,
-    pub last_frame: Instant,
+    time: Time,
+    last_frame: Instant,
 
-    pub fps: f32,
-    pub frame_idx: usize,
-    pub frames_sum: f32,
+    fps: f32,
+    frame_idx: usize,
+    frames_sum: Duration,
 }
 
 impl Default for Timer {
@@ -29,20 +29,19 @@ impl Timer {
     /// Constructs new timer.
     pub fn new() -> Self {
         Self {
-            dt: 0.0,
-            time: 0.0,
+            dt: default(),
+            time: default(),
             last_frame: Instant::now(),
             fps: 0.0,
             frame_idx: 0,
-            frames_sum: 0.0,
+            frames_sum: default(),
         }
     }
 
     /// Updates delta and full time.
     pub fn update(&mut self) {
-        /* Now updates */
         let now = Instant::now();
-        self.dt = now.duration_since(self.last_frame).as_secs_f32();
+        self.dt = now.duration_since(self.last_frame);
         self.last_frame = now;
         
         self.time += self.dt;
@@ -50,13 +49,25 @@ impl Timer {
         self.frame_idx += 1;
         self.frames_sum += self.dt;
 
+        // Measure fps once per `N_FAMES_TO_MEASURE` frames.
         if self.frame_idx >= N_FAMES_TO_MEASURE {
             self.frame_idx = 0;
-            self.fps = N_FAMES_TO_MEASURE as f32 / self.frames_sum;
-            self.frames_sum = 0.0;
+            self.fps = N_FAMES_TO_MEASURE as f32 / self.frames_sum.as_secs_f32();
+            self.frames_sum = default();
         }
     }
 
     /// Gives duration since `update()` call
-    pub fn duration(&self) -> Duration { Duration::from_secs_f32(self.dt) }
+    pub fn dt(&self) -> TimeStep { self.dt }
+
+    /// Gives `fps` measured by [timer][Timer].
+    pub fn fps(&self) -> f32 { self.fps }
+
+    /// Gives time since [timer][Timer] creation.
+    pub fn time(&self) -> Time { self.time }
 }
+
+
+
+pub type TimeStep = Duration;
+pub type Time = Duration;

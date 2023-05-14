@@ -1,7 +1,7 @@
 use {
     crate::{
         prelude::*,
-        graphics::TextureView,
+        graphics::{TextureView, CommandEncoder},
     },
     std::fmt::Debug,
 };
@@ -43,7 +43,7 @@ impl<'s> ClearPass<'s> {
 
     /// Does a [`ClearPass`] creation and then drops it.
     pub fn clear(
-        encoder: &'s mut wgpu::CommandEncoder,
+        encoder: &'s mut CommandEncoder,
         target_views: impl IntoIterator<Item = &'s TextureView>,
     ) {
         let _ = Self::new(encoder, target_views);
@@ -58,7 +58,7 @@ assert_impl_all!(ClearPass: Send, Sync);
 
 impl<'s> RenderPass<'s> {
     pub fn new(
-        encoder: &'s mut wgpu::CommandEncoder,
+        encoder: &'s mut CommandEncoder,
         label: &str,
         target_views: impl IntoIterator<Item = &'s TextureView>
     ) -> Self {

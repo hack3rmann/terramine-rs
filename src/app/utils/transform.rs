@@ -130,8 +130,8 @@ impl From<vec3> for Speed {
 }
 
 impl GetOffset for Speed {
-    fn get_offset(&self, dt: f32) -> vec3 {
-        dt * self.inner
+    fn get_offset(&self, dt: TimeStep) -> vec3 {
+        dt.as_secs_f32() * self.inner
     }
 }
 
@@ -151,8 +151,9 @@ impl From<vec3> for Acceleration {
 }
 
 impl GetOffset for Acceleration {
-    fn get_offset(&self, dt: f32) -> vec3 {
+    fn get_offset(&self, dt: TimeStep) -> vec3 {
         // FIXME: wrong delta
+        let dt = dt.as_secs_f32();
         0.5 * dt * dt * self.inner
     }
 }
@@ -160,13 +161,13 @@ impl GetOffset for Acceleration {
 
 
 pub trait GetOffset {
-    fn get_offset(&self, dt: f32) -> vec3;
+    fn get_offset(&self, dt: TimeStep) -> vec3;
 
-    fn affect_translation(&self, dt: f32, translation: &mut Translation) {
+    fn affect_translation(&self, dt: TimeStep, translation: &mut Translation) {
         translation.offset += self.get_offset(dt);
     }
 
-    fn affect_multiple<Offsets, Offset>(offsets: Offsets, dt: f32, translation: &mut Translation)
+    fn affect_multiple<Offsets, Offset>(offsets: Offsets, dt: TimeStep, translation: &mut Translation)
     where
         Self: Sized,
         Offset: GetOffset,

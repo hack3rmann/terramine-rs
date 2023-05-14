@@ -25,6 +25,7 @@ pub mod asset;
 
 use {
     crate::prelude::*,
+    std::sync::RwLock,
     failed_texture::Texture,
 };
 
@@ -33,7 +34,7 @@ use {
 pub use {
     material::*, gpu_conversions::*, pass::*,
     bind_group::*, buffer::*, texture::*, window::Window,
-    mesh::*, shader::*, asset::*, pipeline::RenderPipeline,
+    mesh::*, shader::*, asset::*, pipeline::*,
 
     wgpu::{
         SurfaceError, CommandEncoder, TextureUsages, Features,
@@ -41,7 +42,7 @@ pub use {
         BindGroupLayout, BindGroup, SurfaceConfiguration, Adapter, Surface, Queue,
         BindGroupEntry, BindGroupDescriptor, ShaderStages, BufferBindingType, BindingType,
         BindGroupLayoutDescriptor, BindGroupLayoutEntry, Device, BufferUsages,
-        util::{DeviceExt, BufferInitDescriptor},
+        util::{DeviceExt, BufferInitDescriptor}, IndexFormat, FrontFace, Face,
     },
     winit::window::Window as WinitWindow,
     imgui_wgpu::{Renderer as ImguiRenderer, RendererConfig as ImguiRendererConfig},
@@ -50,28 +51,13 @@ pub use {
 
 
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq, Default, Pod, Zeroable)]
-pub struct TestVertex {
-    position: vec2,
-    tex_coords: vec2,
-}
-assert_impl_all!(TestVertex: Send, Sync);
-
-impl Vertex for TestVertex {
-    const ATTRIBUTES: &'static [VertexAttribute] =
-        &vertex_attr_array![0 => Float32x2, 1 => Float32x2];
-
-    const STEP_MODE: VertexStepMode = VertexStepMode::Vertex;
-}
-
-const TEST_VERTICES: &[TestVertex] = &[
-    TestVertex { position: vecf![-0.5, -0.5], tex_coords: vecf![0.0, 1.0] },
-    TestVertex { position: vecf![ 0.5, -0.5], tex_coords: vecf![1.0, 1.0] },
-    TestVertex { position: vecf![ 0.5,  0.5], tex_coords: vecf![1.0, 0.0] },
-    TestVertex { position: vecf![-0.5, -0.5], tex_coords: vecf![0.0, 1.0] },
-    TestVertex { position: vecf![ 0.5,  0.5], tex_coords: vecf![1.0, 0.0] },
-    TestVertex { position: vecf![-0.5,  0.5], tex_coords: vecf![0.0, 0.0] },
+const TEST_VERTICES: &[DefaultVertex] = &[
+    DefaultVertex::new(vecf![-0.5, -0.5, 0.0]),
+    DefaultVertex::new(vecf![ 0.5, -0.5, 0.0]),
+    DefaultVertex::new(vecf![ 0.5,  0.5, 0.0]),
+    DefaultVertex::new(vecf![-0.5, -0.5, 0.0]),
+    DefaultVertex::new(vecf![ 0.5,  0.5, 0.0]),
+    DefaultVertex::new(vecf![-0.5,  0.5, 0.0]),
 ];
 
 
@@ -141,7 +127,7 @@ impl CommonUniformsBuffer {
 
     pub fn update(&self, queue: &Queue, uniforms: CommonUniforms) {
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[uniforms]));
-        queue.submit(std::iter::empty());
+        queue.submit(None);
     }
 }
 
@@ -158,6 +144,10 @@ assert_impl_all!(RenderContext: Send, Sync);
 
 
 
+pub static SURFACE_CFG: RwLock<GlobalAsset<SurfaceConfiguration>> = RwLock::new(GlobalAsset::unloaded());
+
+
+
 /// Graphics handler.
 #[derive(Debug)]
 pub struct Graphics {
@@ -166,7 +156,6 @@ pub struct Graphics {
     pub context: RenderContext,
     pub imgui: ImGui,
 
-    pub config: SurfaceConfiguration,
     pub common_uniforms: CommonUniformsBuffer,
 
     pub sandbox: World,
@@ -189,6 +178,17 @@ impl Graphics {
         // * `Graphics` owns both the `window` and the `surface` so it's
         // * live as long as wgpu's `Surface`.
         let (context, config) = unsafe { Self::make_render_context(&window) }.await;
+
+        // * # Safety
+        // * 
+        // * We've got unique access to `SURFACE_CFG` so it is safe.
+        unsafe { SURFACE_CFG.write().unwrap().upload(config) };
+
+        // * # Safety
+        // * 
+        // * This is graphics intialization so device does not exists anywhere before
+        // * so assets can not been used before or been initialized.
+        unsafe { asset::load_default_assets(&context.device) }.await;
 
 
 
@@ -214,46 +214,42 @@ impl Graphics {
         ).await
             .expect("failed to load an image");
 
-        sandbox.insert_resource(test_texture);
-
-        // let mesh = Mesh::new(
-        //     MeshDescriptor {
-        //         device: Arc::clone(&device),
-        //         shader: Arc::new(shader),
-        //         label: Arc::new(String::from("test mesh")),
-
-        //         fragment_targets: Arc::new([Some(wgpu::ColorTargetState {
-        //             // TODO: think about how transfer config.format everywhere.
-        //             format: config.format,
-        //             blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-        //             write_mask: wgpu::ColorWrites::ALL,
-        //         })]),
-
-        //         primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-        //         polygon_mode: wgpu::PolygonMode::Fill,
-
-        //         // TODO: remind this ->
-        //         bind_group_layouts: Arc::new([
-        //             Arc::clone(&common_uniforms.bind_group_layout),
-        //             Arc::clone(&test_texture.bind_group_layout),
-        //         ]),
-        //     },
-        //     TEST_VERTICES,
-        // );
-
         let mesh = Mesh::new(TEST_VERTICES.to_vec(), None, PrimitiveTopology::TriangleList);
 
         let Ok(gpu_mesh) = mesh.to_gpu(GpuMeshDescriptor {
             device: Arc::clone(&context.device),
-            label: "test_mesh".into(),
+            label: Some("test_mesh".into()),
             polygon_mode: default(),
         });
 
+        let layout = PipelineLayout::new(
+            &context.device,
+            &wgpu::PipelineLayoutDescriptor {
+                label: Some("test_pipeline_layout"),
+                bind_group_layouts: &[
+                    &common_uniforms.bind_group_layout,
+                ],
+                push_constant_ranges: &[],
+            },
+        );
+
+        let pipeline = RenderPipeline::new(
+            RenderPipelineDescriptor {
+                device: &context.device,
+                material: &DefaultMaterial,
+                primitive_state: gpu_mesh.primitive_state,
+                label: Some("test_render_pipeline".into()),
+                layout: &layout,
+            },
+        );
+
         sandbox.insert_resource(gpu_mesh);
+        sandbox.insert_resource(pipeline);
+        sandbox.insert_resource(test_texture);
 
         
         
-        let imgui = ImGui::new(&context, &config, &window);
+        let imgui = ImGui::new(&context, &SURFACE_CFG.read().unwrap(), &window);
 
 
 
@@ -261,7 +257,6 @@ impl Graphics {
             sandbox,
             window,
             context,
-            config,
             common_uniforms,
             imgui,
         })
@@ -363,7 +358,7 @@ impl Graphics {
     ) -> Result<(), SurfaceError> {
         let size = self.window.inner_size();
         self.common_uniforms.update(&self.context.queue, CommonUniforms {
-            time: desc.time,
+            time: desc.time.as_secs_f32(),
             screen_resolution: vecf!(size.width, size.height),
             _pad: 0,
         });
@@ -402,8 +397,9 @@ impl Graphics {
     /// Handles window resize event by [`Graphics`].
     pub fn on_window_resize(&mut self, new_size: UInt2) {
         if new_size.x > 0 && new_size.y > 0 {
-            (self.config.width, self.config.height) = (new_size.x, new_size.y);
-            self.context.surface.configure(&self.context.device, &self.config);
+            let mut config = SURFACE_CFG.write().unwrap();
+            (config.width, config.height) = (new_size.x, new_size.y);
+            self.context.surface.configure(&self.context.device, &config);
         }
     }
 
@@ -421,7 +417,7 @@ impl Graphics {
         );
     }
 
-    pub async fn update(&mut self, dt: Duration) {
+    pub async fn update(&mut self, dt: TimeStep) {
         if keyboard::just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
             self.refresh_test_shader().await;
         }
@@ -524,8 +520,10 @@ impl std::fmt::Debug for ImGuiRendererWrapper {
     }
 }
 
+
+
 #[derive(Debug)]
 pub struct RenderDescriptor<UseImguiUi> {
     pub use_imgui_ui: UseImguiUi,
-    pub time: f32,
+    pub time: Time,
 }

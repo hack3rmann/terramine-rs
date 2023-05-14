@@ -1,7 +1,7 @@
 use {
     crate::{
         prelude::*,
-        graphics::ToGpu,
+        graphics::{ToGpu, Device, Buffer, RenderPipeline, RenderPass},
     },
     std::{hash::Hash, fmt::Debug},
 };
@@ -42,18 +42,18 @@ impl<V: Vertex> ToGpu for Mesh<V> {
     
     /// Creates new [`GpuMesh`] instance from [`Mesh`].
     fn to_gpu(&self, desc: GpuMeshDescriptor) -> Result<GpuMesh, !> {
-        use wgpu::{
+        use crate::graphics::{
             BufferUsages, IndexFormat, FrontFace, Face,
-            util::{DeviceExt, BufferInitDescriptor},
+            DeviceExt, BufferInitDescriptor,
         };
 
         let vertices = desc.device.create_buffer_init(
             &BufferInitDescriptor {
-                label: Some(&desc.label),
+                label: desc.label.as_deref(),
                 contents: bytemuck::cast_slice(&self.vertices),
                 usage: BufferUsages::VERTEX | BufferUsages::COPY_DST,
             },
-        );
+        ).into();
 
         let (indices, idx_format) = match self.indices {
             Some(ref indices) => {
@@ -64,11 +64,11 @@ impl<V: Vertex> ToGpu for Mesh<V> {
 
                 let indices = GpuIndices::Indexed(desc.device.create_buffer_init(
                     &BufferInitDescriptor {
-                        label: Some(&desc.label),
+                        label: desc.label.as_deref(),
                         contents,
                         usage: BufferUsages::INDEX | BufferUsages::COPY_DST,
                     },
-                ));
+                ).into());
 
                 (indices, Some(idx_format))
             },
@@ -103,9 +103,9 @@ impl<V: Vertex> ToGpu for Mesh<V> {
 #[derive(Debug, TypeUuid)]
 #[uuid = "a529a8b9-4e2b-40ee-b689-654a26066acd"]
 pub struct GpuMeshDescriptor {
-    pub device: Arc<wgpu::Device>,
-    pub label: StaticStr,
-    pub polygon_mode: wgpu::PolygonMode,
+    pub device: Arc<Device>,
+    pub label: Option<StaticStr>,
+    pub polygon_mode: PolygonMode,
 }
 assert_impl_all!(GpuMeshDescriptor: Send, Sync);
 
@@ -141,13 +141,13 @@ impl From<Vec<u32>> for Indices {
 pub struct GpuMesh {
     pub is_enabled: AtomicBool,
 
-    pub buffer: wgpu::Buffer,
+    pub buffer: Buffer,
     pub n_vertices: usize,
 
     pub indices: GpuIndices,
 
-    pub label: StaticStr,
-    pub primitive_state: wgpu::PrimitiveState,
+    pub label: Option<StaticStr>,
+    pub primitive_state: PrimitiveState,
 }
 assert_impl_all!(GpuMesh: Send, Sync, Component);
 
@@ -177,12 +177,12 @@ impl Renderable for GpuMesh {
     type Error = !;
 
     fn render<'rp, 's: 'rp>(
-        &'s self, pipeline: &'rp wgpu::RenderPipeline, render_pass: &mut wgpu::RenderPass<'rp>,
+        &'s self, pipeline: &'rp RenderPipeline, render_pass: &mut RenderPass<'rp>,
     ) -> Result<(), Self::Error> {
         if self.is_empty() { return Ok(()) }
 
         render_pass.set_pipeline(pipeline);
-        render_pass.set_vertex_buffer(0, self.buffer.slice(..));
+        render_pass.set_vertex_buffer(0, *self.buffer.slice(..));
         render_pass.draw(0..self.n_vertices as u32, 0..1);
 
         Ok(())
@@ -195,12 +195,12 @@ impl Renderable for GpuMesh {
 #[uuid = "abf45a60-e39a-11ed-b9fb-0800200c9a66"]
 pub enum GpuIndices {
     Unindexed,
-    Indexed(wgpu::Buffer),
+    Indexed(Buffer),
 }
 assert_impl_all!(GpuIndices: Send, Sync, Component);
 
-impl From<wgpu::Buffer> for GpuIndices {
-    fn from(buffer: wgpu::Buffer) -> Self {
+impl From<Buffer> for GpuIndices {
+    fn from(buffer: Buffer) -> Self {
         Self::Indexed(buffer)
     }
 }
@@ -212,7 +212,7 @@ pub trait Vertex: Pod + PartialEq {
     const ATTRIBUTES: &'static [VertexAttribute];
     const STEP_MODE: VertexStepMode;
 
-    const BUFFER_LAYOUT: VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
+    const BUFFER_LAYOUT: VertexBufferLayout<'static> = VertexBufferLayout {
         array_stride: mem::size_of::<Self>() as u64,
         step_mode: Self::STEP_MODE,
         attributes: Self::ATTRIBUTES,
@@ -221,11 +221,39 @@ pub trait Vertex: Pod + PartialEq {
 
 
 
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable, PartialEq, Default)]
+pub struct DefaultVertex {
+    pub position: vec3,
+}
+assert_impl_all!(DefaultVertex: Send, Sync);
+
+impl DefaultVertex {
+    pub const fn new(position: vec3) -> Self {
+        Self { position }
+    }
+}
+
+impl From<vec3> for DefaultVertex {
+    fn from(value: vec3) -> Self {
+        Self::new(value)
+    }
+}
+
+impl Vertex for DefaultVertex {
+    const ATTRIBUTES: &'static [VertexAttribute] =
+        &vertex_attr_array![0 => Float32x3];
+
+    const STEP_MODE: VertexStepMode = VertexStepMode::Vertex;
+}
+
+
+
 pub trait Renderable {
     type Error: std::error::Error;
 
     fn render<'rp, 's: 'rp>(
-        &'s self, pipeline: &'rp wgpu::RenderPipeline, render_pass: &mut wgpu::RenderPass<'rp>,
+        &'s self, pipeline: &'rp RenderPipeline, render_pass: &mut RenderPass<'rp>,
     ) -> Result<(), Self::Error>;
 }
 assert_obj_safe!(Renderable<Error = ()>);

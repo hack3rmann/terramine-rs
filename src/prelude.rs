@@ -9,7 +9,7 @@ pub use {
         terrain::{chunk::iterator::SpaceIter, voxel::voxel_data::data as voxels},
         concurrency::loading,
         runtime::RUNTIME,
-        time::timer::Timer,
+        time::timer::{Timer, Time, TimeStep},
         str_view::{StrView, StaticStr},
     },
     smallvec::{SmallVec, smallvec},
@@ -44,4 +44,5 @@ pub use {
     smart_default::SmartDefault,
     static_assertions::{assert_impl_all, assert_obj_safe},
     terramine_ecs::*,
+    async_trait::async_trait,
 };

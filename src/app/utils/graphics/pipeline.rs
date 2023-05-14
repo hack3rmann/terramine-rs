@@ -5,6 +5,10 @@ use crate::{
 
 
 
+pub use wgpu::PipelineLayoutDescriptor;
+
+
+
 #[derive(Debug)]
 pub struct RenderPipelineDescriptor<'s> {
     pub device: &'s Device,
@@ -18,7 +22,9 @@ pub struct RenderPipelineDescriptor<'s> {
 
 #[derive(Debug, Deref)]
 pub struct RenderPipeline {
+    #[deref]
     pub inner: wgpu::RenderPipeline,
+    pub label: Option<StaticStr>,
 }
 assert_impl_all!(RenderPipeline: Send, Sync);
 
@@ -57,12 +63,33 @@ impl RenderPipeline {
             },
         );
 
-        Self::from(pipeline)
+        Self { inner: pipeline, label: desc.label }
     }
 }
 
 impl From<wgpu::RenderPipeline> for RenderPipeline {
     fn from(value: wgpu::RenderPipeline) -> Self {
+        Self { inner: value, label: None }
+    }
+}
+
+
+
+#[derive(Debug, Deref)]
+pub struct PipelineLayout {
+    pub inner: wgpu::PipelineLayout,
+}
+assert_impl_all!(PipelineLayout: Send, Sync);
+
+impl PipelineLayout {
+    pub fn new(device: &Device, desc: &PipelineLayoutDescriptor) -> Self {
+        let layout = device.create_pipeline_layout(desc);
+        Self::from(layout)
+    }
+}
+
+impl From<wgpu::PipelineLayout> for PipelineLayout {
+    fn from(value: wgpu::PipelineLayout) -> Self {
         Self { inner: value }
     }
 }
