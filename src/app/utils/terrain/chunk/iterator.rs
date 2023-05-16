@@ -214,14 +214,14 @@ impl Iterator for CubeBoundary {
 /// assert_eq!(res1, res2);
 /// ```
 #[derive(Debug, Clone)]
-pub struct SpaceIter {
+pub struct Range3d {
     back_shift: Int3,
     sizes: USize3,
     idx: usize,
     size: usize,
 }
 
-impl SpaceIter {
+impl Range3d {
     pub fn new(range: impl RangeBounds<Int3>) -> Self {
         use std::ops::Bound::*;
 
@@ -274,7 +274,7 @@ impl SpaceIter {
         Self::zeroed(iter_size / chunk_size)
             .map(move |chunk_pos| {
                 let min = chunk_pos * chunk_size;
-                SpaceIter::new(min .. min + chunk_size)
+                Range3d::new(min .. min + chunk_size)
             })
     }
 
@@ -305,7 +305,7 @@ impl SpaceIter {
     }
 }
 
-impl Iterator for SpaceIter {
+impl Iterator for Range3d {
     type Item = Int3;
     fn next(&mut self) -> Option<Self::Item> {
         (self.idx < self.size).then(|| {
@@ -315,7 +315,7 @@ impl Iterator for SpaceIter {
     }
 }
 
-impl ExactSizeIterator for SpaceIter {
+impl ExactSizeIterator for Range3d {
     fn len(&self) -> usize { self.size }
 }
 
@@ -358,8 +358,8 @@ pub fn idx_to_coord_idx(idx: usize, sizes: USize3) -> USize3 {
 /// ```
 #[derive(Debug)]
 pub struct ChunkSplitten {
-    inner: SpaceIter,
-    outer: SpaceIter,
+    inner: Range3d,
+    outer: Range3d,
     current: Option<Int3>,
 
     chunk_size: Int3,
@@ -376,11 +376,11 @@ impl ChunkSplitten {
         /* Check that entire chunk are divisible into smaller ones */
         assert_eq!(entire % chunk_size, Int3::ZERO);
 
-        let mut outer = SpaceIter::new(Int3::ZERO .. entire / chunk_size);
+        let mut outer = Range3d::new(Int3::ZERO .. entire / chunk_size);
         let current = outer.next().unwrap();
 
         Self {
-            inner: SpaceIter::new(Int3::ZERO..chunk_size),
+            inner: Range3d::new(Int3::ZERO..chunk_size),
             outer, current: Some(current), chunk_size,
         }
     }
@@ -392,7 +392,7 @@ impl Iterator for ChunkSplitten {
     fn next(&mut self) -> Option<Self::Item> {
         let inner = self.inner.next().unwrap_or_else(|| {
             self.current = self.outer.next();
-            self.inner = SpaceIter::new(Int3::ZERO..self.chunk_size);
+            self.inner = Range3d::new(Int3::ZERO..self.chunk_size);
 
             self.inner.next().unwrap()
         });
@@ -546,9 +546,9 @@ mod space_iter_tests {
     #[test]
     fn test_new() {
         let range = veci!(-10, -3, -1)..veci!(-3, 4, 2);
-        let poses1: Vec<_> = SpaceIter::new(range.clone())
+        let poses1: Vec<_> = Range3d::new(range.clone())
             .collect();
-        let poses2: Vec<_> = SpaceIter::new(range)
+        let poses2: Vec<_> = Range3d::new(range)
             .collect();
 
         for pos in poses1.iter() {
@@ -562,9 +562,9 @@ mod space_iter_tests {
 
     #[test]
     fn test_split_chunks() {
-        let sample: Vec<_> = SpaceIter::zeroed_cubed(4)
+        let sample: Vec<_> = Range3d::zeroed_cubed(4)
             .collect();
-        let chunked: Vec<_> = SpaceIter::split_chunks(Int3::all(4), Int3::all(2))
+        let chunked: Vec<_> = Range3d::split_chunks(Int3::all(4), Int3::all(2))
             .flatten()
             .collect();
     
@@ -586,7 +586,7 @@ mod space_iter_tests {
         let mut res1 = vec![];
         let mut res2 = vec![];
 
-        for pos in SpaceIter::new(Int3::zero() .. Int3::all(5)) {
+        for pos in Range3d::new(Int3::zero() .. Int3::all(5)) {
             res1.push(pos)
         }
 
@@ -604,7 +604,7 @@ mod space_iter_tests {
         let mut res1 = vec![];
         let mut res2 = vec![];
 
-        for pos in SpaceIter::new(Int3::zero() .. Int3::new(16, 4, 9)) {
+        for pos in Range3d::new(Int3::zero() .. Int3::new(16, 4, 9)) {
             res1.push(pos)
         }
 
@@ -622,7 +622,7 @@ mod space_iter_tests {
         let mut res1 = vec![];
         let mut res2 = vec![];
 
-        for pos in SpaceIter::new(Int3::all(-5) .. Int3::all(5)) {
+        for pos in Range3d::new(Int3::all(-5) .. Int3::all(5)) {
             res1.push(pos)
         }
 
@@ -640,7 +640,7 @@ mod space_iter_tests {
         let mut res1 = vec![];
         let mut res2 = vec![];
 
-        for pos in SpaceIter::new(Int3::new(-8, 2, -10) .. Int3::new(9, 5, -5)) {
+        for pos in Range3d::new(Int3::new(-8, 2, -10) .. Int3::new(9, 5, -5)) {
             res1.push(pos)
         }
 
@@ -655,7 +655,7 @@ mod space_iter_tests {
 
     #[test]
     fn uniqueness() {
-        let iter = SpaceIter::new(veci!(-8, 2, -10) .. veci!(9, 5, -5));
+        let iter = Range3d::new(veci!(-8, 2, -10) .. veci!(9, 5, -5));
         let mut map = std::collections::HashSet::new();
 
         for pos in iter {
@@ -743,7 +743,7 @@ mod splitten_tests {
     #[test]
     fn space_contains_split() {
         let split = ChunkSplitten::new(Int3::all(16), Int3::all(2));
-        let space: Vec<_> = SpaceIter::new(Int3::zero() .. Int3::all(16)).collect();
+        let space: Vec<_> = Range3d::new(Int3::zero() .. Int3::all(16)).collect();
 
         for (entire, _, _) in split {
             assert!(space.contains(&entire));
@@ -753,7 +753,7 @@ mod splitten_tests {
     #[test]
     fn split_contains_space() {
         let entire: Vec<_> = ChunkSplitten::new(Int3::all(16), Int3::all(2)).map(|(e, _, _)| e).collect();
-        let space = SpaceIter::new(Int3::zero() .. Int3::all(16));
+        let space = Range3d::new(Int3::zero() .. Int3::all(16));
 
         for pos in space {
             assert!(entire.contains(&pos));
@@ -763,7 +763,7 @@ mod splitten_tests {
     #[test]
     fn length() {
         let all: Vec<_> = ChunkSplitten::new(Int3::all(32), Int3::all(4)).collect();
-        let space: Vec<_> = SpaceIter::new(Int3::zero() .. Int3::all(32)).collect();
+        let space: Vec<_> = Range3d::new(Int3::zero() .. Int3::all(32)).collect();
 
         assert_eq!(all.len(), space.len());
     }

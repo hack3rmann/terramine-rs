@@ -3,7 +3,7 @@
 #![feature(
     generators, generator_trait, get_mut_unchecked, exhaustive_patterns,
     associated_type_defaults, never_type, const_trait_impl, specialization,
-    const_fn_floating_point_arithmetic, const_option_ext,
+    const_fn_floating_point_arithmetic, const_option_ext, let_chains,
 )]
 
 #[allow(unused_imports)]

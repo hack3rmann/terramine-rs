@@ -143,16 +143,28 @@ impl<T> Nullable<T> {
     }
 
     /// Gives shared reference to inner type without `null`-check.
+    /// 
+    /// # Safety
+    /// 
+    /// - [`Nullable`] value is not `null`.
     pub const unsafe fn get_unchecked(&self) -> &T {
         self.inner.as_ref().unwrap_unchecked()
     }
 
     /// Gives `mut` reference to inner type without `null`-check.
+    /// 
+    /// # Safety
+    /// 
+    /// - [`Nullable`] value is not `null`.
     pub unsafe fn get_mut_unchecked(&mut self) -> &mut T {
         self.inner.as_mut().unwrap_unchecked()
     }
 
     /// Unwraps [`Nullable`] value into a type without `null`-check.
+    /// 
+    /// # Safety
+    /// 
+    /// - [`Nullable`] value is not `null`.
     pub unsafe fn into_inner_unchecked(self) -> T {
         self.inner.unwrap_unchecked()
     }
@@ -188,3 +200,35 @@ impl<T> DerefMut for Nullable<T> {
         self.inner.as_mut().expect("called deref_mut on null Nullable")
     }
 }
+
+
+
+macro_rules! impl_volume {
+    ($VecType:ty, $ElemType:ty) => {
+        impl Volume<$ElemType> for $VecType {
+            fn volume(&self) -> $ElemType {
+                self.x * self.y * self.z
+            }
+        }
+    };
+}
+
+pub trait Volume<T> {
+    fn volume(&self) -> T;
+}
+assert_obj_safe!(Volume<vec3>);
+
+impl_volume!(Byte3, i8);
+impl_volume!(UByte3, u8);
+impl_volume!(Short3, i16);
+impl_volume!(UShort3, u16);
+impl_volume!(Int3, i32);
+impl_volume!(UInt3, u32);
+impl_volume!(Long3, i64);
+impl_volume!(ULong3, u64);
+impl_volume!(Large3, i128);
+impl_volume!(ULarge3, u128);
+impl_volume!(ISize3, isize);
+impl_volume!(USize3, usize);
+impl_volume!(vec3, f32);
+impl_volume!(Double3, f64);

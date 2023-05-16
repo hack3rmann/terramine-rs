@@ -11,7 +11,10 @@ use {
             voxel::{self, Voxel, voxel_data::data::*},
         },
         saves::Save,
-        graphics::{camera_resource::Camera, Device, CommandEncoder, TextureView, BindsRef, RenderPipeline},
+        graphics::{
+            camera_resource::Camera, Device, Queue, CommandEncoder, TextureView, BindsRef, RenderPipeline,
+            Binds, LoadImageError, Graphics, PipelineLayout,
+        },
     },
     math_linear::math::ray::space_3d::Line,
     std::{io, mem, sync::Mutex},
@@ -24,65 +27,101 @@ pub static GENERATOR_SIZES: Mutex<[usize; 3]> = Mutex::new(USize3::ZERO.as_array
 
 
 
-#[derive(Clone, Copy, Debug)]
-enum ChunkArrSaveType {
-    Sizes,
-    Array,
-}
-
-impl From<ChunkArrSaveType> for u64 {
-    fn from(value: ChunkArrSaveType) -> Self { value as u64 }
+crate::define_save_key! {
+    pub enum ChunkArrSaveKey { Sizes, Array }
 }
 
 
 
-pub type ReadingHandle = JoinHandle<io::Result<(USize3, Vec<(Vec<Atomic<Id>>, FillType)>)>>;
-pub type SavingHandle = JoinHandle<io::Result<()>>;
-
-
-
-/// Represents 3d array of [`Chunk`]s. Can control their mesh generation, etc.
-#[derive(Debug, SmartDefault)]
+/// Represents 3d array of [`Chunk`]s. Can control their [mesh][ChunkMesh] generation, etc.
+#[derive(Debug)]
 pub struct ChunkArray {
+    pub self_entity: Entity,
     pub chunk_entities: Vec<Entity>,
-    pub chunks: Vec<ChunkRef>,
 
     pub sizes: USize3,
-
-    pub full_tasks: HashMap<Int3, FullTask>,
-    pub low_tasks: HashMap<(Int3, Lod), LowTask>,
-    pub voxels_gen_tasks: HashMap<Int3, GenTask>,
-    pub partition_tasks: HashMap<Int3, PartitionTask>,
-
-    pub binds: Nullable<BindsRef>,
-    pub pipeline: Nullable<RenderPipeline>,
-
-    #[default = 5.8]
     pub lod_threashold: f32,
 
-    pub reading_handle: Nullable<ReadingHandle>,
-    pub saving_handle: Nullable<SavingHandle>,
+    pub tasks: ChunkArrayTasks,
 }
 assert_impl_all!(ChunkArray: Send, Sync, Component);
 
 impl ChunkArray {
     const MAX_TRACE_STEPS: usize = 1024;
 
+    pub async fn make_binds(device: &Device, queue: &Queue) -> Result<Binds, LoadImageError> {
+        use crate::graphics::*;
+
+        let dir = Path::new(cfg::texture::DIRECTORY);
+
+        let (albedo_image, normal_image) = tokio::try_join!(
+            Image::from_file(dir.join("texture_atlas.png")),
+            Image::from_file(dir.join("normal_atlas.png")),
+        )?;
+
+        let albedo = GpuImage::new(
+            GpuImageDescriptor {
+                device,
+                queue,
+                image: &albedo_image,
+                label: Some("chunk_array_albedo_image_atlas".into()),
+            },
+        );
+
+        let normal = GpuImage::new(
+            GpuImageDescriptor {
+                device,
+                queue,
+                image: &normal_image,
+                label: Some("chunk_array_normal_image_atlas".into()),
+            },
+        );
+
+        let image_layout = GpuImage::bind_group_layout(device);
+
+        let albedo_bind = albedo.as_bind_group(device, &image_layout);
+        let normal_bind = normal.as_bind_group(device, &image_layout);
+
+        Ok(Binds::from_iter([
+            (albedo_bind, Some(image_layout.clone())),
+            (normal_bind, Some(image_layout.clone())),
+        ]))
+    }
+
+    pub fn make_pipeline_layout(device: &Device, bind_group_layouts: &[&wgpu::BindGroupLayout]) -> PipelineLayout {
+        use crate::graphics::PipelineLayoutDescriptor as Desc;
+
+        PipelineLayout::new(
+            device,
+            &Desc {
+                label: Some("chunk_array_pipeline"),
+                bind_group_layouts,
+                push_constant_ranges: &[],
+            },
+        )
+    }
+
+    pub fn make_pipeline(device: &Device, mesh: &ChunkMesh) -> RenderPipeline {
+        use crate::graphics::{RenderPipelineDescriptor as Desc, PrimitiveState};
+
+        todo!()
+    }
+
     /// Generates new chunks.
     /// 
     /// # Panic
     /// 
     /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
-    pub fn new(world: &mut World, sizes: USize3) -> Result<Self, UserFacingError> {
+    pub async fn new(world: &mut World, sizes: USize3) -> Result<Self, UserFacingError> {
         Self::validate_sizes(sizes)?;
         let (start_pos, end_pos) = Self::pos_bounds(sizes);
 
-        let chunks = SpaceIter::new(start_pos..end_pos)
+        let chunks = Range3d::new(start_pos..end_pos)
             .map(move |pos| Chunk::new(pos, sizes))
             .map(Arc::new)
             .collect();
 
-        Self::from_chunks(world, sizes, chunks)
+        Self::from_chunks(world, sizes, chunks).await
     }
 
     /// Constructs [`ChunkArray`] with passed in chunks.
@@ -90,7 +129,7 @@ impl ChunkArray {
     /// # Panic
     /// 
     /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
-    pub fn from_chunks(world: &mut World, sizes: USize3, chunks: Vec<Arc<Chunk>>) -> Result<Self, UserFacingError> {
+    pub async fn from_chunks(world: &mut World, sizes: USize3, chunks: Vec<ChunkRef>) -> Result<Self, UserFacingError> {
         Self::validate_sizes(sizes)?;
         let volume = Self::volume(sizes);
         if chunks.len() != volume {
@@ -103,11 +142,48 @@ impl ChunkArray {
             )
         }
 
-        let chunk_entities = (0..chunks.len())
-            .map(|_| world.spawn((ChunkMesh::default(),)))
-            .collect();
+        let self_entity = world.spawn_empty();
+
+        let (binds, layout, pipeline) = {
+            let graphics = world.resource::<&Graphics>().unwrap();
+            
+            let binds = Self::make_binds(&graphics.context.device, &graphics.context.queue)
+                .await
+                .expect("failed to make binds for chunk array");
+            let binds = BindsRef::from(binds);
+
+            let layout = Self::make_pipeline_layout(
+                &graphics.context.device,
+                &binds.layouts().collect_vec(),
+            );
+
+            let pipeline = Self::make_pipeline(&graphics.context.device, todo!());
+
+            world.insert(self_entity, (binds.clone(), pipeline.clone())).unwrap();
+
+            (binds, layout, pipeline)
+        };
+
+        let mut chunk_entities = Vec::with_capacity(chunks.len());
+
+        for chunk in chunks.into_iter() {
+            let entity = world.spawn_empty();
+
+            world.insert_one(entity, chunk).unwrap();
+            world.insert_one(entity, ChunkMesh::default()).unwrap();
+            world.insert_one(entity, binds.clone()).unwrap();
+            world.insert_one(entity, pipeline.clone()).unwrap();
+
+            chunk_entities.push(entity);
+        }
         
-        Ok(Self { chunks, sizes, chunk_entities, ..default() })
+        Ok(Self {
+            sizes,
+            chunk_entities,
+            self_entity,
+            lod_threashold: 5.8,
+            tasks: default(),
+        })
     }
 
     /// Constructs [`ChunkArray`] with empty chunks.
@@ -115,16 +191,16 @@ impl ChunkArray {
     /// # Panic
     /// 
     /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
-    pub fn new_empty_chunks(world: &mut World, sizes: USize3) -> Result<Self, UserFacingError> {
+    pub async fn new_empty_chunks(world: &mut World, sizes: USize3) -> Result<Self, UserFacingError> {
         Self::validate_sizes(sizes)?;
         let (start_pos, end_pos) = Self::pos_bounds(sizes);
 
-        let chunks = SpaceIter::new(start_pos..end_pos)
+        let chunks = Range3d::new(start_pos..end_pos)
             .map(Chunk::new_empty)
-            .map(Arc::new)
+            .map(ChunkRef::new)
             .collect();
 
-        Self::from_chunks(world, sizes, chunks)
+        Self::from_chunks(world, sizes, chunks).await
     }
 
     /// Computes start and end poses from chunk array sizes.
@@ -137,57 +213,59 @@ impl ChunkArray {
 
     /// Checks that sizes is valid.
     /// 
-    /// # Panic
+    /// # Error
     /// 
-    /// Panics if `sizes.x * sizes.y * sizes.z` > `MAX_CHUNKS`.
+    /// Returns `Err` if `sizes.x * sizes.y * sizes.z` > `MAX_CHUNKS`.
     pub fn validate_sizes(sizes: USize3) -> Result<(), UserFacingError> {
         let volume = Self::volume(sizes);
-        match volume <= cfg::terrain::MAX_CHUNKS {
-            false => Err(UserFacingError::new("too many chunks")
-                .reason(format!("cannot allocate too many chunks: {volume}"))),
-            true => Ok(()),
-        }
+        (volume <= cfg::terrain::MAX_CHUNKS)
+            .then_some(())
+            .ok_or_else(|| UserFacingError::new("too many chunks")
+                .reason(format!("cannot allocate too many chunks: {volume}"))
+            )
     }
 
     /// Gives empty [`ChunkArray`].
-    pub fn new_empty() -> Self {
-        Self::default()
+    pub async fn new_empty(world: &mut World) -> Result<Self, UserFacingError> {
+        Self::new_empty_chunks(world, USize3::ZERO).await
+    }
+
+    /// Clears all [chunk array][ChunkArray] stuff out from the `world`.
+    pub fn clean_world(&mut self, world: &mut World) {
+        world.despawn(self.self_entity).unwrap();
+        self.self_entity = Entity::DANGLING;
+
+        for chunk_entity in mem::take(&mut self.chunk_entities) {
+            world.despawn(chunk_entity).unwrap();
+        }
     }
 
     pub async fn save_to_file(
-        sizes: USize3, chunks: Vec<ChunkRef>, save_name: impl Into<String>, save_path: &'static str,
+        sizes: USize3, chunks: Vec<ChunkRef>, save_name: impl Into<String>, save_path: &str,
     ) -> io::Result<()> {
         let save_name = save_name.into();
 
         let _work_guard = logger::work("chunk-array", format!("saving to {save_name} in {save_path}"));
 
-        let is_all_generated = {
-            let mut result = true;
-            for chunk in chunks.iter() {
-                if !chunk.is_generated() {
-                    result = false;
-                    break
-                }
-            }
-            result
-        };
+        let is_all_generated = chunks.iter()
+            .all(|chunk| chunk.is_generated());
 
+        let volume = sizes.volume();
+        
         assert!(is_all_generated, "chunks should be generated to save them to file");
-
-        let volume = Self::volume(sizes);
         assert_eq!(volume, chunks.len(), "chunks should have same length as sizes volume");
 
         let loading = loading::start_new("Saving chunks");
 
-        Save::builder(save_name.clone())
+        Save::builder(save_name)
             .create(save_path).await?
-            .write(&sizes, ChunkArrSaveType::Sizes).await
-            .pointer_array(volume, ChunkArrSaveType::Array, |i| {
+            .write(&sizes, ChunkArrSaveKey::Sizes).await
+            .pointer_array(volume, ChunkArrSaveKey::Array, |i| {
                 let chunks = &chunks;
                 let loading = &loading;
 
                 async move {
-                    loading.refresh(i as f32 / (volume - 1) as f32);
+                    loading.refresh(loading::Discrete(i, volume));
                     Self::chunk_as_bytes(&chunks[i])
                 }
             }).await
@@ -199,7 +277,7 @@ impl ChunkArray {
 
     pub async fn read_from_file(
         save_name: &str, save_path: &str,
-    ) -> io::Result<(USize3, Vec<(Vec<Atomic<Id>>, FillType)>)> {
+    ) -> io::Result<(USize3, Vec<Chunk>)> {
         let _work_guard = logger::work("chunk-array", format!("reading chunks from {save_name} in {save_path}"));
 
         let loading = loading::start_new("Reading chunks");
@@ -208,14 +286,14 @@ impl ChunkArray {
             .open(save_path)
             .await?;
         
-        let sizes = save.read(ChunkArrSaveType::Sizes).await;
+        let sizes: USize3 = save.read(ChunkArrSaveKey::Sizes).await;
 
-        let chunks = save.read_pointer_array(ChunkArrSaveType::Array, |i, bytes| {
+        let chunks = save.read_pointer_array(ChunkArrSaveKey::Array, |i, bytes| {
             let loading = &loading;
 
             async move {
-                loading.refresh(i as f32 / (Self::volume(sizes) - 1) as f32);
-                Self::array_filltype_from_bytes(&bytes)
+                loading.refresh(loading::Discrete(i, sizes.volume()));
+                Self::chunk_from_bytes(&bytes)
             }
         }).await;
 
@@ -226,9 +304,13 @@ impl ChunkArray {
     pub fn chunk_as_bytes(chunk: &Chunk) -> Vec<u8> {
         use { bit_vec::BitVec, huffman_compress as hc };
 
+        let pos = chunk.pos.load(Relaxed);
+
         match chunk.info.load(Relaxed).fill_type {
-            FillType::AllSame(id) =>
+            FillType::AllSame(id) => itertools::chain!(
                 FillType::AllSame(id).as_bytes(),
+                pos.as_bytes(),
+            ).collect(),
 
             FillType::Unspecified => {
                 let n_voxels = chunk.voxel_ids.len();
@@ -253,17 +335,18 @@ impl ChunkArray {
                         .expect("voxel id should be in the book");
                 }
 
-                itertools::chain! {
+                itertools::chain!(
                     FillType::Unspecified.as_bytes(),
                     freqs.as_bytes(),
+                    pos.as_bytes(),
                     bits.as_bytes(),
-                }.collect()
+                ).collect()
             }
         }
     }
 
-    /// Reinterprets bytes as [chunk][Chunk] and reads [id][Id] array and [fill type][FillType] from it.
-    pub fn array_filltype_from_bytes(bytes: &[u8]) -> (Vec<Atomic<Id>>, FillType) {
+    /// Reads bytes as [chunk][Chunk].
+    pub fn chunk_from_bytes(bytes: &[u8]) -> Chunk {
         use { bit_vec::BitVec, huffman_compress as hc };
 
         let mut reader = ByteReader::new(bytes);
@@ -275,41 +358,71 @@ impl ChunkArray {
                 let freqs: HashMap<Id, usize> = reader.read()
                     .expect("failed to read frequencies map from bytes");
 
+                let pos: Int3 = reader.read()
+                    .expect("failed to read chunk pos from bytes");
+
                 let bits: BitVec = reader.read()
                     .expect("failed to read `BitVec` from bytes");
 
                 let (_, tree) = hc::CodeBuilder::from_iter(freqs).finish();
-                let voxel_ids: Vec<_> = tree.unbounded_decoder(bits)
-                    .map(Atomic::new)
-                    .collect();
+                let voxel_ids: Vec<_> = tree.unbounded_decoder(bits).collect();
 
                 let is_id_valid = voxel_ids.iter()
-                    .map(|id| id.load(Relaxed))
+                    .copied()
                     .all(voxel::is_id_valid);
 
                 assert!(is_id_valid, "Voxel ids in voxel array should be valid");
                 assert_eq!(voxel_ids.len(), Chunk::VOLUME, "There's should be Chunk::VOLUME voxels");
 
-                (voxel_ids, FillType::Unspecified)
+                Chunk::from_voxels(voxel_ids, pos)
             },
 
-            FillType::AllSame(id) =>
-                (vec![], FillType::AllSame(id)),
+            FillType::AllSame(id) => {
+                let pos: Int3 = reader.read()
+                    .expect("failed to read chunk pos from bytes");
+
+                Chunk::new_same_filled(pos, id)
+            }
         }
+    }
+
+    /// Gets a [chunk][Chunk] from the `world` without panic.
+    pub fn get_chunk(&self, world: &World, pos: Int3) -> Option<ChunkRef> {
+        let chunk_pos = Chunk::local_pos(pos);
+        let chunk_idx = Self::pos_to_idx(self.sizes, chunk_pos)?;
+        self.get_chunk_by_idx(world, chunk_idx)
+    }
+
+    /// Get a [chunk][Chunk] from the `world`.
+    pub fn chunk(&self, world: &World, pos: Int3) -> ChunkRef {
+        self.get_chunk(world, pos)
+            .expect(&format!("there's no chunk in world with position {pos}"))
+    }
+
+    /// Gets a [chunk][Chunk] from the `world` without panic.
+    pub fn get_chunk_by_idx(&self, world: &World, idx: usize) -> Option<ChunkRef> {
+        world.get::<&ChunkRef>(self.chunk_entities[idx]).ok().as_deref().cloned()
+    }
+
+    /// Get a [chunk][Chunk] from the `world`.
+    pub fn chunk_by_idx(&self, world: &World, idx: usize) -> ChunkRef {
+        self.get_chunk_by_idx(world, idx)
+            .expect(&format!("there's no chunk in world with idx {idx}"))
     }
 
     /// Sets voxel's id with position `pos` to `new_id` and returns old [`Id`]. If voxel is 
     /// set then this function should drop all its meshes and the neighbor ones.
+    /// 
     /// # Error
+    /// 
     /// Returns [`Err`] if `new_id` is not valid or `pos` is not in this [chunk array][ChunkArray].
-    pub fn set_voxel(&mut self, pos: Int3, new_id: Id) -> Result<Id, EditError> {
-        let chunk_pos = Chunk::local_pos(pos);
-        let chunk_idx = Self::pos_to_idx(self.sizes, chunk_pos)
+    pub fn set_voxel(&mut self, world: &World, pos: Int3, new_id: Id) -> Result<Id, EditError> {
+        // We know that `chunk_idx` is valid so we can get-by-index.
+        let mut chunk = self.get_chunk(world, pos)
             .ok_or(EditError::PosIdConversion(pos))?;
 
-        // We know that `chunk_idx` is valid so we can get-by-index.
         let old_id = unsafe {
-            Arc::get_mut_unchecked(&mut self.chunks[chunk_idx])
+            Arc::get_mut_unchecked(&mut chunk)
                 .set_voxel(pos, new_id)?
         };
 
@@ -317,11 +430,8 @@ impl ChunkArray {
     }
 
     /// Gives voxel if it is in the [array][ChunkArray].
-    pub fn get_voxel(&self, pos: Int3) -> Option<Voxel> {
-        let chunk_pos = Chunk::local_pos(pos);
-        let chunk_idx = Self::pos_to_idx(self.sizes, chunk_pos)?;
-
-        match self.chunks[chunk_idx].get_voxel_global(pos) {
+    pub fn get_voxel(&self, world: &World, pos: Int3) -> Option<Voxel> {
+        match self.get_chunk(world, pos)?.get_voxel_global(pos) {
             ChunkOption::Voxel(voxel) => Some(voxel),
             ChunkOption::OutsideChunk => unreachable!("pos {} is indeed in that chunk", pos),
             ChunkOption::Failed => None,
@@ -341,7 +451,7 @@ impl ChunkArray {
 
         let mut is_changed = false;
 
-        for chunk_pos in SpaceIter::new(chunk_pos_from..chunk_pos_to) {
+        for chunk_pos in Range3d::new(chunk_pos_from..chunk_pos_to) {
             let idx = Self::pos_to_idx(self.sizes, chunk_pos)
                 .expect("chunk_pos already valid");
 
@@ -360,8 +470,9 @@ impl ChunkArray {
                 Ord::min(pos_to.z, end_voxel_pos.z),
             );
 
+            let mut chunk = self.chunk_by_idx(world, idx);
             let chunk_changed = unsafe {
-                Arc::get_mut_unchecked(&mut self.chunks[idx])
+                Arc::get_mut_unchecked(&mut chunk)
                     .fill_voxels(pos_from, pos_to, new_id)?
             };
 
@@ -404,27 +515,19 @@ impl ChunkArray {
         result
     }
 
-    pub fn apply_new(&mut self, world: &mut World, sizes: USize3, chunk_arr: Vec<(Vec<Atomic<Id>>, FillType)>) -> Result<(), UserFacingError> {
-        if Self::volume(sizes) != chunk_arr.len() {
+    pub async fn apply_new(
+        &mut self, world: &mut World, sizes: USize3, chunks: Vec<Chunk>,
+    ) -> Result<(), UserFacingError> {
+        if Self::volume(sizes) != chunks.len() {
             return Err(UserFacingError::new("chunk-array should have same len as sizes"));
         }
 
-        let chunks = chunk_arr.into_iter()
-            .enumerate()
-            .map(|(idx, (voxel_ids, fill_type))| {
-                let chunk_pos = Self::idx_to_pos(idx, sizes);
-                match fill_type {
-                    FillType::Unspecified =>
-                        Chunk::from_voxels(voxel_ids, chunk_pos),
-                    FillType::AllSame(id) =>
-                        Chunk::new_same_filled(chunk_pos, id),
-                }
-            })
+        let chunks = chunks.into_iter()
             .map(Arc::new)
             .collect();
 
-        let new_chunks = ChunkArray::from_chunks(world, sizes, chunks)?;
-        self.drop_tasks();
+        let new_chunks = ChunkArray::from_chunks(world, sizes, chunks).await?;
+        self.tasks.delete_all();
         let _ = mem::replace(self, new_chunks);
 
         Ok(())
@@ -486,49 +589,29 @@ impl ChunkArray {
         Self::coord_idx_to_pos(sizes, coord_idx)
     }
 
-    /// Gives reference to chunk by its position.
-    pub fn get_chunk_by_pos(&self, pos: Int3) -> Option<Arc<Chunk>> {
-        Self::get_chunk_by_pos_unbounded(&self.chunks, self.sizes, pos)
-    }
-
-    fn get_chunk_by_pos_unbounded(chunks: &[Arc<Chunk>], sizes: USize3, pos: Int3) -> Option<Arc<Chunk>> {
-        let idx = Self::pos_to_idx(sizes, pos)?;
-        Some(Arc::clone(&chunks[idx]))
-    }
-
     /// Gives adjacent chunks references by center chunk position.
-    pub fn get_adj_chunks(&self, pos: Int3) -> ChunkAdj {
-        Self::get_adj_chunks_unbounded(&self.chunks, self.sizes, pos)
-    }
-
-    /// Gives adjacent chunks references by center chunk position.
-    fn get_adj_chunks_unbounded(chunks: &[ChunkRef], sizes: USize3, pos: Int3) -> ChunkAdj {
-        Self::get_adj_chunks_idxs(sizes, pos)
-            .map(|opt| opt.map(|idx| Arc::clone(&chunks[idx])))
+    pub fn get_adj_chunks(&self, world: &World, pos: Int3) -> ChunkAdj {
+        Self::get_adj_chunks_idxs(self.sizes, pos)
+            .map(|opt| opt.map(|idx| self.chunk_by_idx(world, idx)))
     }
 
     /// Gives '`iterator`' over adjacent to `pos` array indices.
     pub fn get_adj_chunks_idxs(sizes: USize3, pos: Int3) -> Sides<Option<usize>> {
-        SpaceIter::adj_iter(pos)
+        Range3d::adj_iter(pos)
             .map(|pos| Self::pos_to_idx(sizes, pos))
             .collect()
     }
 
     /// Gives iterator over chunk coordinates.
-    pub fn pos_iter(sizes: USize3) -> SpaceIter {
+    pub fn chunk_pos_range(sizes: USize3) -> Range3d {
         let (start, end) = Self::pos_bounds(sizes);
-        SpaceIter::new(start..end)
+        Range3d::new(start..end)
     }
 
     /// Gives iterator over all chunk's adjacents.
-    pub fn adj_iter(&self) -> impl ExactSizeIterator<Item = ChunkAdj> + '_ {
-        Self::adj_iter_unbounded(&self.chunks, self.sizes)
-    }
-
-    /// Gives iterator over all chunk's adjacents.
-    fn adj_iter_unbounded(chunks: &[ChunkRef], sizes: USize3) -> impl ExactSizeIterator<Item = ChunkAdj> + '_ {
-        Self::pos_iter(sizes)
-            .map(move |pos| Self::get_adj_chunks_unbounded(chunks, sizes, pos))
+    pub fn adj_iter<'s>(&'s self, world: &'s World) -> impl ExactSizeIterator<Item = ChunkAdj> + 's {
+        Self::chunk_pos_range(self.sizes)
+            .map(|pos| self.get_adj_chunks(world, pos))
     }
 
     /// Gives desired [LOD][Lod] value for chunk positioned in `chunk_pos`.
@@ -546,58 +629,44 @@ impl ChunkArray {
 
     /// Gives iterator over desired LOD for each chunk.
     pub fn desired_lod_iter(chunk_array_sizes: USize3, cam_pos: vec3, threashold: f32) -> impl ExactSizeIterator<Item = Lod> {
-        Self::pos_iter(chunk_array_sizes)
+        Self::chunk_pos_range(chunk_array_sizes)
             .map(move |chunk_pos| Self::desired_lod_at(chunk_pos, cam_pos, threashold))
     }
 
+    /// Gives iterator over all chunks in `world`.
+    pub fn chunks<'s>(&'s self, world: &'s World) -> impl ExactSizeIterator<Item = ChunkRef> + 's {
+        (0..self.chunk_entities.len())
+            .map(|idx| self.chunk_by_idx(world, idx))
+    }
+
     /// Gives iterator over all voxels in [`ChunkArray`].
-    pub fn voxels(&self) -> impl Iterator<Item = Voxel> + '_ {
-        self.chunks.iter()
-            .flat_map(|chunk| chunk.voxels())
+    pub fn voxels<'s>(&'s self, world: &'s World) -> impl Iterator<Item = Voxel> + 's {
+        self.chunks(world)
+            .flat_map(|chunk| chunk.voxels().collect_vec())
     }
 
     /// Gives iterator over mutable chunks and their adjacents.
-    pub fn chunks_with_adj(&self) -> impl ExactSizeIterator<Item = (ChunkRef, ChunkAdj)> + '_ {
-        Self::chunks_with_adj_unbounded(&self.chunks, self.sizes)
-    }
-
-    /// Gives iterator over mutable chunks and their adjacents.
-    pub fn chunks_with_adj_unbounded(
-        chunks: &[ChunkRef], sizes: USize3,
-    ) -> impl ExactSizeIterator<Item = (ChunkRef, ChunkAdj)> + '_ {
-        chunks.iter()
-            .map(Arc::clone)
-            .zip(Self::adj_iter_unbounded(chunks, sizes))
+    pub fn chunks_with_adj<'s>(&'s self, world: &'s World) -> impl ExactSizeIterator<Item = (ChunkRef, ChunkAdj)> + '_ {
+        Iterator::zip(self.chunks(world), self.adj_iter(world))
     }
 
     /// Gives [`Vec`] with [`ChunkRef`]s [`ChunkAdj`]s desired [lod][Lod].
-    fn get_targets_sorted(&self, cam_pos: vec3) -> Vec<(ChunkRef, ChunkAdj, Lod, usize)> {
-        let mut result: Vec<_> = self.chunks_with_adj()
-            .zip(Self::desired_lod_iter(self.sizes, cam_pos, self.lod_threashold))
-            .zip(0_usize..)
-            .map(|(((a, b), c), d)| (a, b, c, d))
-            .collect();
+    fn get_indices_sorted(&self, world: &World, cam_pos: vec3) -> Vec<usize> {
+        let mut result = Vec::from_iter(0..self.chunk_entities.len());
 
-        result.sort_by_key(|(chunk, _, _, _)| {
+        result.sort_by_key(|&idx| {
+            let chunk = self.chunk_by_idx(world, idx);
             let pos = Chunk::global_pos(chunk.pos.load(Relaxed));
             let dot = vec3::sqr(cam_pos - pos.into());
             
-            match NotNan::new(dot) {
-                Ok(result) => result,
-                Err(err) => {
-                    logger::log!(Error, from = "chunk-array", "{err}");
-                    NotNan::default()
-                }
-            }
+            NotNan::new(dot)
+                .log_error("chunk-array", "square chunk distance is NaN")
         });
 
         result
     }
 
-    /// Renders all [chunk][Chunk]s. If [chunk][Chunk] should have another
-    /// [LOD][Lod] then it will start async task that generates desired mesh.
-    /// If task is incomplete then it will render active [LOD][Lod]
-    /// of concrete [chunk][Chunk]. If it can't then it will do nothing.
+    /// TODO: missing docs
     pub async fn control_meshes(
         &mut self, world: &World, device: &Device, cam: &mut Camera,
     ) -> Result<(), ChunkRenderError> {
@@ -608,14 +677,20 @@ impl ChunkArray {
 
         self.try_finish_all_tasks(world, device).await;
 
-        for (mut chunk, chunk_adj, lod, idx) in self.get_targets_sorted(cam.pos) {
+        for idx in self.get_indices_sorted(world, cam.pos) {
+            let mut chunk = self.chunk_by_idx(world, idx);
             let chunk_pos = chunk.pos.load(Relaxed);
+            
+            let chunk_adj = self.get_adj_chunks(world, chunk_pos);
             let mut mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
 
+            let lod = Self::desired_lod_at(chunk_pos, cam.pos, self.lod_threashold);
+
+
             if !chunk.is_generated() {
-                if Self::is_voxels_gen_task_running(&self.voxels_gen_tasks, chunk_pos) {
-                    if let Some(new_chunk) = Self::try_finish_voxels_gen_task(&mut self.voxels_gen_tasks, chunk_pos).await {
-                        Self::drop_reader_tasks(&mut self.full_tasks, &mut self.low_tasks, chunk_pos);
+                if self.tasks.is_gen_running(chunk_pos) {
+                    if let Some(new_chunk) = self.tasks.try_finish_gen(chunk_pos).await {
+                        self.tasks.delete_all_meshes(chunk_pos);
 
                         // * Safety:
                         // * Safe, because there's no chunk readers due to tasks drop above
@@ -623,14 +698,10 @@ impl ChunkArray {
                             let _ = mem::replace(Arc::get_mut_unchecked(&mut chunk), new_chunk);
                         }
                     }
-                }
-                
-                else if self.can_start_tasks() {
-                    Self::start_task_gen_voxels(&mut self.voxels_gen_tasks, chunk_pos, sizes);
+                } else if self.tasks.can_start() {
+                    self.tasks.start_gen(chunk_pos, sizes);
                     continue;
-                }
-
-                else {
+                } else {
                     continue;
                 }
             }
@@ -643,10 +714,10 @@ impl ChunkArray {
             ) <= CHUNK_MESH_PARTITION_DIST;
 
             if chunk_is_close_to_be_partitioned &&
-               !self.partition_tasks.contains_key(&chunk_pos) &&
+               !self.tasks.partition.contains_key(&chunk_pos) &&
                !mesh.is_partial()
             {
-                Self::start_task_partitioning(&mut self.partition_tasks, Arc::clone(&chunk), chunk_adj.clone());
+                self.tasks.start_partitioning(&chunk, chunk_adj.clone());
             }
 
             let chunnk_can_be_connected =
@@ -660,27 +731,16 @@ impl ChunkArray {
 
             let can_set_new_lod =
                 mesh.get_available_lods().contains(&lod) ||
-                Self::is_mesh_task_running(&self.full_tasks, &self.low_tasks, chunk_pos, lod) &&
-                Self::try_finish_mesh_task(
-                    &mut self.full_tasks, &mut self.low_tasks,
-                    chunk_pos, lod, &mut mesh, device,
-                ).await.is_ok();
+                self.tasks.is_mesh_running(chunk_pos, lod) &&
+                self.tasks.try_finish_mesh(chunk_pos, lod, &mut mesh, device).await.is_ok();
 
             if can_set_new_lod {
                 chunk.set_active_lod(&mesh, lod);
-            }
-            
-            else if self.can_start_tasks() {
-                Self::start_task_gen_vertices(
-                    &mut self.full_tasks,
-                    &mut self.low_tasks,
-                    Arc::clone(&chunk),
-                    chunk_adj.clone(),
-                    lod,
-                ).await;
+            } else if self.tasks.can_start() {
+                self.tasks.start_mesh(&chunk, chunk_adj.clone(), lod).await;
             }
 
-            Self::drop_all_useless_tasks(&mut self.full_tasks, &mut self.low_tasks, lod, chunk_pos);
+            self.tasks.delete_all_useless(lod, chunk_pos);
 
             if !chunk.can_render_active_lod(&mesh) {
                 chunk.try_set_best_fit_lod(&mesh, lod);
@@ -694,6 +754,81 @@ impl ChunkArray {
         }
 
         Ok(())
+    }
+
+    pub async fn try_finish_all_full_tasks(&mut self, world: &World, device: &Device) {
+        let iter = self.tasks.full.iter_mut()
+            .map(|(&pos, task)| (pos, task));
+
+        for (pos, mesh) in Task::try_take_results(iter).await {
+            self.tasks.full.remove(&pos);
+
+            let idx = ChunkArray::pos_to_idx(self.sizes, pos)
+                .expect("pos should be valid");
+
+            let mut chunk_mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
+            chunk_mesh.upload_full_mesh(device, &mesh);
+        }
+    }
+
+    pub async fn try_finish_all_low_tasks(&mut self, world: &World, device: &Device) {
+        let iter = self.tasks.low.iter_mut()
+            .map(|(&idx, task)| (idx, task));
+
+        for ((pos, lod), mesh) in Task::try_take_results(iter).await {
+            self.tasks.low.remove(&(pos, lod));
+
+            let idx = ChunkArray::pos_to_idx(self.sizes, pos)
+                .expect("pos should be valid");
+
+            let mut chunk_mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
+            chunk_mesh.upload_low_mesh(device, &mesh, lod);
+        }
+    }
+
+    pub async fn try_finish_all_gen_tasks(&mut self, world: &World) {
+        let iter = self.tasks.voxels_gen.iter_mut()
+            .map(|(&pos, task)| (pos, task));
+
+        for (pos, voxels) in Task::try_take_results(iter).await {
+            self.tasks.voxels_gen.remove(&pos);
+
+            let mut chunk = self.chunk(world, pos);
+
+            self.tasks.delete_all_meshes(pos);
+            
+            // * Safety:
+            // * 
+            // * Safe, because there's no chunk readers due to tasks drop above.
+            unsafe {
+                let _ = mem::replace(
+                    Arc::get_mut_unchecked(&mut chunk),
+                    Chunk::from_voxels(voxels, pos),
+                );
+            }
+        }
+    }
+
+    pub async fn try_finish_all_partition_tasks(&mut self, world: &World, device: &Device) {
+        let iter = self.tasks.partition.iter_mut()
+            .map(|(&pos, task)| (pos, task));
+
+        for (pos, partitions) in Task::try_take_results(iter).await {
+            self.tasks.partition.remove(&pos);
+
+            let idx = ChunkArray::pos_to_idx(self.sizes, pos)
+                .expect("pos should be valid");
+
+            let mut chunk_mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
+            chunk_mesh.upload_partial_meshes(device, &partitions);
+        }
+    }
+
+    pub async fn try_finish_all_tasks(&mut self, world: &World, device: &Device) {
+        self.try_finish_all_full_tasks(world, device).await;
+        self.try_finish_all_low_tasks(world, device).await;
+        self.try_finish_all_partition_tasks(world, device).await;
+        self.try_finish_all_gen_tasks(world).await;
     }
 
     pub fn pass(&self, world: &World, encoder: &mut CommandEncoder, target_view: TextureView) {
@@ -710,141 +845,6 @@ impl ChunkArray {
         }
     }
 
-    pub fn drop_all_useless_tasks(
-        full_tasks: &mut HashMap<Int3, FullTask>,
-        low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
-        useful_lod: Lod, cur_pos: Int3,
-    ) {
-        for lod in Chunk::get_possible_lods() {
-            if 2 < lod.abs_diff(useful_lod) {
-                Self::drop_task(full_tasks, low_tasks, cur_pos, lod);
-            }
-        }
-    }
-
-    pub fn drop_task(
-        full_tasks: &mut HashMap<Int3, FullTask>,
-        low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
-        pos: Int3, lod: Lod,
-    ) {
-        match lod {
-            0 =>   drop(full_tasks.remove(&pos)),
-            lod => drop(low_tasks.remove(&(pos, lod))),
-        }
-    }
-
-    pub fn drop_reader_tasks(
-        full_tasks: &mut HashMap<Int3, FullTask>,
-        low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
-        pos: Int3,
-    ) {
-        let vals_to_be_dropped = Chunk::get_possible_lods()
-            .into_iter()
-            .cartesian_product(SpaceIter::adj_iter(pos)
-                .chain(std::iter::once(pos))
-            );
-        
-        for (lod, pos) in vals_to_be_dropped {
-            Self::drop_task(full_tasks, low_tasks, pos, lod);
-        }
-    }
-
-    pub async fn try_finish_full_tasks(&mut self, world: &World, device: &Device) {
-        let iter = self.full_tasks.iter_mut()
-            .map(|(&pos, task)| (pos, task));
-
-        for (pos, mesh) in Task::try_take_results(iter).await {
-            self.full_tasks.remove(&pos);
-
-            let idx = Self::pos_to_idx(self.sizes, pos)
-                .expect("pos should be valid");
-
-            let mut chunk_mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
-            chunk_mesh.upload_full_mesh(device, &mesh);
-        }
-    }
-
-    pub async fn try_finish_low_tasks(&mut self, world: &World, device: &Device) {
-        let iter = self.low_tasks.iter_mut()
-            .map(|(&idx, task)| (idx, task));
-
-        for ((pos, lod), mesh) in Task::try_take_results(iter).await {
-            self.low_tasks.remove(&(pos, lod));
-
-            let idx = Self::pos_to_idx(self.sizes, pos)
-                .expect("pos should be valid");
-
-            let mut chunk_mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
-            chunk_mesh.upload_low_mesh(device, &mesh, lod);
-        }
-    }
-
-    pub async fn try_finish_gen_tasks(&mut self) {
-        let iter = self.voxels_gen_tasks.iter_mut()
-            .map(|(&pos, task)| (pos, task));
-
-        for (pos, voxels) in Task::try_take_results(iter).await {
-            self.voxels_gen_tasks.remove(&pos);
-
-            let mut chunk = self.get_chunk_by_pos(pos)
-                .expect("pos should be valid");
-
-            Self::drop_reader_tasks(&mut self.full_tasks, &mut self.low_tasks, pos);
-            
-            // * Safety:
-            // * Safe, because there's no chunk readers due to tasks drop above.
-            unsafe {
-                let _ = mem::replace(Arc::get_mut_unchecked(&mut chunk), Chunk::from_voxels(voxels, pos));
-            }
-        }
-    }
-
-    pub async fn try_finish_partition_tasks(&mut self, world: &World, device: &Device) {
-        let iter = self.partition_tasks.iter_mut()
-            .map(|(&pos, task)| (pos, task));
-
-        for (pos, partitions) in Task::try_take_results(iter).await {
-            self.partition_tasks.remove(&pos);
-
-            let idx = Self::pos_to_idx(self.sizes, pos)
-                .expect("pos should be valid");
-
-            let mut chunk_mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
-            chunk_mesh.upload_partial_meshes(device, &partitions);
-        }
-    }
-
-    pub async fn try_finish_all_tasks(&mut self, world: &World, device: &Device) {
-        self.try_finish_full_tasks(world, device).await;
-        self.try_finish_low_tasks(world, device).await;
-        self.try_finish_partition_tasks(world, device).await;
-        self.try_finish_gen_tasks().await;
-    }
-
-    pub fn is_voxels_gen_task_running(tasks: &HashMap<Int3, GenTask>, pos: Int3) -> bool {
-        tasks.contains_key(&pos)
-    }
-
-    /// Checks if generate mesh task id running.
-    pub fn is_mesh_task_running(
-        full_tasks: &HashMap<Int3, FullTask>,
-        low_tasks: &HashMap<(Int3, Lod), LowTask>,
-        pos: Int3, lod: Lod
-    ) -> bool {
-        match lod {
-            0  => full_tasks.contains_key(&pos),
-            lod => low_tasks.contains_key(&(pos, lod)),
-        }
-    }
-
-    pub fn start_task_gen_voxels(tasks: &mut HashMap<Int3, GenTask>, pos: Int3, sizes: USize3) {
-        let prev_value = tasks.insert(pos, Task::spawn(async move {
-            Chunk::generate_voxels(pos, sizes)
-        }));
-
-        assert!(prev_value.is_none(), "threre should be only one task");
-    }
-
     /// Checks that [chunk][Chunk] [adjacent][ChunkAdj] are generated.
     pub async fn is_adj_generated(adj: &ChunkAdj) -> bool {
         adj.inner.iter()
@@ -852,128 +852,7 @@ impl ChunkArray {
             .all(|chunk| chunk.is_generated())
     }
 
-    /// Starts new generate vertices task.
-    pub async fn start_task_gen_vertices(
-        full_tasks: &mut HashMap<Int3, FullTask>,
-        low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
-        chunk: ChunkRef, adj: ChunkAdj, lod: Lod,
-    ) {
-        let chunk_pos = chunk.pos.load(Relaxed);
-        if lod == 0 && full_tasks.contains_key(&chunk_pos) ||
-           lod != 0 && low_tasks.contains_key(&(chunk_pos, lod)) ||
-           !chunk.is_generated() ||
-           !Self::is_adj_generated(&adj).await
-        { return }
-
-        match lod {
-            0 => {
-                let prev = full_tasks.insert(chunk_pos, Task::spawn(async move {
-                    chunk.make_full_mesh(adj)
-                }));
-                assert!(prev.is_none(), "there should be only one task");
-            },
-
-            lod => {
-                let prev = low_tasks.insert((chunk_pos, lod), Task::spawn(async move {
-                    chunk.make_low_mesh(adj, lod)
-                }));
-                assert!(prev.is_none(), "there should be only one task");
-            },
-        }
-    }
-
-    pub fn start_task_partitioning(
-        tasks: &mut HashMap<Int3, PartitionTask>,
-        chunk: ChunkRef, adj: ChunkAdj,
-    ) {
-        let prev_value = tasks.insert(chunk.pos.load(Relaxed), Task::spawn(async move {
-            chunk.make_partitial_meshes(adj)
-        }));
-        assert!(prev_value.is_none(), "there should be only one task");
-    }
-
-    pub async fn try_finish_voxels_gen_task(tasks: &mut HashMap<Int3, GenTask>, pos: Int3) -> Option<Chunk> {
-        if let Some(task) = tasks.get_mut(&pos) {
-            if let Some(voxel_ids) = task.try_take_result().await {
-                tasks.remove(&pos);
-                return Some(Chunk::from_voxels(voxel_ids, pos))
-            }
-        }
-
-        None
-    }
-
-    /// Tries to get mesh from task if it is ready then sets it to chunk.
-    /// Otherwise will return `Err(TaskError)`.
-    pub async fn try_finish_mesh_task(
-        full_tasks: &mut HashMap<Int3, FullTask>,
-        low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
-        pos: Int3, lod: Lod,
-        mesh: &mut ChunkMesh, device: &Device,
-    ) -> Result<(), TaskError> {
-        match lod {
-            0   => Self::try_finish_full_mesh_task(full_tasks, pos, mesh, device).await,
-            lod => Self::try_finish_low_mesh_task(low_tasks, pos, lod, mesh, device).await,
-        }
-    }
-
-    pub async fn try_finish_full_mesh_task(
-        full_tasks: &mut HashMap<Int3, FullTask>,
-        pos: Int3, mesh: &mut ChunkMesh, device: &Device,
-    ) -> Result<(), TaskError> {
-        match full_tasks.get_mut(&pos) {
-            Some(task) => match task.try_take_result().await {
-                Some(vertices) => {
-                    mesh.upload_full_mesh(device, &vertices);
-                    let _ = full_tasks.remove(&pos)
-                        .expect("there should be a task");
-                    Ok(())
-                },
-                None => Err(TaskError::TaskNotReady),
-            },
-            None => Err(TaskError::TaskNotFound { lod: 0, pos }),
-        }
-    }
-    
-    pub async fn try_finish_low_mesh_task(
-        low_tasks: &mut HashMap<(Int3, Lod), LowTask>,
-        pos: Int3, lod: Lod,
-        mesh: &mut ChunkMesh, device: &Device,
-    ) -> Result<(), TaskError> {
-        match low_tasks.get_mut(&(pos, lod)) {
-            Some(task) => match task.try_take_result().await {
-                Some(vertices) => {
-                    mesh.upload_low_mesh(device, &vertices, lod);
-                    let _ = low_tasks.remove(&(pos, lod))
-                        .expect("there should be a task");
-                    Ok(())
-                },
-                None => Err(TaskError::TaskNotReady),
-            },
-            None => Err(TaskError::TaskNotFound { lod, pos })
-        }
-    }
-
-    pub fn can_start_tasks(&self) -> bool {
-        self.saving_handle.is_null() && self.reading_handle.is_null() &&
-        self.low_tasks.len() + self.full_tasks.len() <= cfg::terrain::MAX_TASKS
-    }
-
-    pub fn drop_tasks(&mut self) {
-        drop(mem::take(&mut self.full_tasks));
-        drop(mem::take(&mut self.low_tasks));
-        drop(mem::take(&mut self.voxels_gen_tasks));
-        drop(mem::take(&mut self.partition_tasks));
-    }
-
-    pub fn any_task_running(&self) -> bool {
-        !self.low_tasks.is_empty() ||
-        !self.full_tasks.is_empty() ||
-        !self.voxels_gen_tasks.is_empty() ||
-        !self.partition_tasks.is_empty()
-    }
-
-    pub fn spawn_control_window(&mut self, world: &mut World, ui: &imgui::Ui) {
+    pub async fn spawn_control_window(&mut self, world: &mut World, ui: &imgui::Ui) {
         use crate::app::utils::graphics::ui::imgui_constructor::make_window;
 
         make_window(ui, "Chunk array")
@@ -981,17 +860,17 @@ impl ChunkArray {
             .build(|| {
                 ui.text(format!(
                     "{n} chunk generation tasks.",
-                    n = self.voxels_gen_tasks.len(),
+                    n = self.tasks.voxels_gen.len(),
                 ));
 
                 ui.text(format!(
                     "{n} mesh generation tasks.",
-                    n = self.low_tasks.len() + self.full_tasks.len(),
+                    n = self.tasks.low.len() + self.tasks.full.len(),
                 ));
 
                 ui.text(format!(
                     "{n} partition generation tasks.",
-                    n = self.partition_tasks.len(),
+                    n = self.tasks.partition.len(),
                 ));
 
                 ui.slider(
@@ -1004,14 +883,18 @@ impl ChunkArray {
 
                 ui.text("Generate new");
 
-                let mut sizes = GENERATOR_SIZES.lock()
-                    .unwrap();
+                let mut sizes = GENERATOR_SIZES.lock().unwrap();
 
                 ui.input_scalar_n("Sizes", &mut *sizes).build();
 
                 if ui.button("Generate") {
-                    self.drop_tasks();
-                    match Self::new_empty_chunks(world, USize3::from(*sizes)) {
+                    self.tasks.delete_all();
+
+                    let chunks = tokio::task::block_in_place(|| RUNTIME.block_on(
+                        Self::new_empty_chunks(world, USize3::from(*sizes))
+                    ));
+
+                    match chunks {
                         Ok(new_chunks) => {
                             let _ = mem::replace(self, new_chunks);
                         },
@@ -1027,7 +910,7 @@ impl ChunkArray {
     ) {
         match command {
             Command::SetVoxel { pos, new_id } => {
-                let old_id = self.set_voxel(pos, new_id)
+                let old_id = self.set_voxel(world, pos, new_id)
                     .log_error("chunk-array", "failed to set voxel");
 
                 if old_id != new_id {
@@ -1066,11 +949,11 @@ impl ChunkArray {
         }
     }
 
-    pub async fn reload_chunk(&self, device: &Device, world: &World, idx: usize) {
+    pub async fn reload_chunk(&self, world: &World, device: &Device, idx: usize) {
         let chunk_pos = Self::idx_to_pos(idx, self.sizes);
-        let adj = self.get_adj_chunks(chunk_pos);
+        let adj = self.get_adj_chunks(world, chunk_pos);
 
-        if let Some(chunk) = self.chunks.get(idx) {
+        if let Some(chunk) = self.get_chunk_by_idx(world, idx) {
             let mut mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
             chunk.generate_mesh(&mut mesh, 0, adj, device);
         }
@@ -1080,9 +963,9 @@ impl ChunkArray {
         &self, device: &Device, world: &World, chunk_idx: usize, partition_idx: usize,
     ) {
         let chunk_pos = Self::idx_to_pos(chunk_idx, self.sizes);
-        let adj = self.get_adj_chunks(chunk_pos);
+        let adj = self.get_adj_chunks(world, chunk_pos);
 
-        if let Some(chunk) = self.chunks.get(chunk_idx) {
+        if let Some(chunk) = self.get_chunk_by_idx(world, chunk_idx) {
             let mut chunk_mesh = self.chunk_component::<&mut ChunkMesh>(world, chunk_idx);
 
             if chunk_mesh.is_partial() {
@@ -1094,7 +977,7 @@ impl ChunkArray {
         }
     }
 
-    pub fn trace_ray(&self, ray: Line, max_steps: usize) -> impl Iterator<Item = Voxel> + '_ {
+    pub fn trace_ray<'s>(&'s self, world: &'s World, ray: Line, max_steps: usize) -> impl Iterator<Item = Voxel> + 's {
         (0..max_steps)
             .filter_map(move |i| {
                 let pos = ray.point_along(i as f32 * 0.125);
@@ -1104,14 +987,14 @@ impl ChunkArray {
                     pos.z.round() as i32,
                 );
 
-                self.get_voxel(pos)
+                self.get_voxel(world, pos)
             })
     }
 
-    pub async fn proccess_camera_input(&mut self, cam: &Camera) {
+    pub async fn proccess_camera_input(&mut self, world: &World, cam: &Camera) {
         use super::commands::command;
 
-        let first_voxel = self.trace_ray(Line::new(cam.pos, cam.front), Self::MAX_TRACE_STEPS)
+        let first_voxel = self.trace_ray(world, Line::new(cam.pos, cam.front), Self::MAX_TRACE_STEPS)
             .find(|voxel| !voxel.is_air());
 
         match first_voxel {
@@ -1122,32 +1005,33 @@ impl ChunkArray {
         }
     }
 
-    pub async fn update(&mut self, device: &Device, world: &mut World, cam: &Camera) -> Result<(), UpdateError> {
-        self.proccess_camera_input(cam).await;
+    pub async fn update(&mut self, world: &mut World, device: &Device, cam: &Camera) -> Result<(), UpdateError> {
+        self.proccess_camera_input(world, cam).await;
         self.process_commands(world, device).await;
 
         if keyboard::just_pressed_combo([Key::LControl, Key::S]) {
-            let chunks: Vec<_> = self.chunks.iter().map(Arc::clone).collect();
+            let chunks = self.chunks(world).collect_vec();
             let handle = tokio::spawn(
                 ChunkArray::save_to_file(self.sizes, chunks, "world", "world")
             );
-            self.saving_handle = Nullable::new(handle);
+            self.tasks.saving = Nullable::new(handle);
         }
 
-        if !self.saving_handle.is_null() && self.saving_handle.is_finished() {
-            let handle = self.saving_handle.take();
+        if !self.tasks.saving.is_null() && self.tasks.saving.is_finished() {
+            let handle = self.tasks.saving.take();
             handle.await??;
         }
 
         if keyboard::just_pressed_combo([Key::LControl, Key::O]) {
-            let handle = tokio::spawn(ChunkArray::read_from_file("world", "world"));
-            self.reading_handle = Nullable::new(handle);
+            self.tasks.reading = Nullable::new(
+                tokio::spawn(ChunkArray::read_from_file("world", "world"))
+            );
         }
 
-        if !self.reading_handle.is_null() && self.reading_handle.is_finished() {
-            let handle = self.reading_handle.take();
+        if !self.tasks.reading.is_null() && self.tasks.reading.is_finished() {
+            let handle = self.tasks.reading.take();
             let (sizes, arr) = handle.await??;
-            self.apply_new(world, sizes, arr)?;
+            self.apply_new(world, sizes, arr).await?;
         }
 
         Ok(())
@@ -1268,3 +1152,180 @@ impl ChangeTracker {
 pub type ChunkRef = Arc<Chunk>;
 pub type MeshRef = Rc<RefCell<ChunkMesh>>;
 pub type ChunkAdj = Sides<Option<Arc<Chunk>>>;
+
+
+
+pub type ReadingHandle = JoinHandle<io::Result<(USize3, Vec<Chunk>)>>;
+pub type SavingHandle = JoinHandle<io::Result<()>>;
+
+
+
+#[derive(Debug, Default)]
+pub struct ChunkArrayTasks {
+    pub full: HashMap<Int3, FullTask>,
+    pub low: HashMap<(Int3, Lod), LowTask>,
+    pub voxels_gen: HashMap<Int3, GenTask>,
+    pub partition: HashMap<Int3, PartitionTask>,
+
+    pub reading: Nullable<ReadingHandle>,
+    pub saving: Nullable<SavingHandle>,
+}
+assert_impl_all!(ChunkArrayTasks: Send, Sync);
+
+impl ChunkArrayTasks {
+    pub fn delete_all_useless(&mut self, useful_lod: Lod, cur_pos: Int3) {
+        for lod in Chunk::get_possible_lods() {
+            if 2 < lod.abs_diff(useful_lod) {
+                self.delete_mesh(cur_pos, lod);
+            }
+        }
+    }
+
+    pub fn delete_mesh(&mut self, pos: Int3, lod: Lod) {
+        match lod {
+            0 => drop(self.full.remove(&pos)),
+            _ => drop(self.low.remove(&(pos, lod))),
+        }
+    }
+
+    pub fn delete_all_meshes(&mut self, pos: Int3) {
+        let vals_to_be_dropped = Chunk::get_possible_lods()
+            .into_iter()
+            .cartesian_product(Range3d::adj_iter(pos).chain([pos]));
+        
+        for (lod, pos) in vals_to_be_dropped {
+            self.delete_mesh(pos, lod);
+        }
+    }
+
+    pub fn is_gen_running(&self, pos: Int3) -> bool {
+        self.voxels_gen.contains_key(&pos)
+    }
+
+    /// Checks if generate mesh task id running.
+    pub fn is_mesh_running(&self, pos: Int3, lod: Lod) -> bool {
+        match lod {
+            0 => self.full.contains_key(&pos),
+            _ => self.low.contains_key(&(pos, lod)),
+        }
+    }
+
+    pub fn start_gen(&mut self, pos: Int3, sizes: USize3) {
+        let prev_value = self.voxels_gen.insert(pos, Task::spawn(async move {
+            Chunk::generate_voxels(pos, sizes)
+        }));
+
+        assert!(prev_value.is_none(), "threre should be only one task");
+    }
+
+    /// Starts new generate vertices task.
+    pub async fn start_mesh(&mut self, chunk: &ChunkRef, adj: ChunkAdj, lod: Lod) {
+        let chunk = ChunkRef::clone(&chunk);
+
+        let chunk_pos = chunk.pos.load(Relaxed);
+        if lod == 0 && self.full.contains_key(&chunk_pos) ||
+           lod != 0 && self.low.contains_key(&(chunk_pos, lod)) ||
+           !chunk.is_generated() ||
+           !ChunkArray::is_adj_generated(&adj).await
+        { return }
+
+        match lod {
+            0 => {
+                let prev = self.full.insert(chunk_pos, Task::spawn(async move {
+                    chunk.make_full_mesh(adj)
+                }));
+                assert!(prev.is_none(), "there should be only one task");
+            },
+
+            lod => {
+                let prev = self.low.insert((chunk_pos, lod), Task::spawn(async move {
+                    chunk.make_low_mesh(adj, lod)
+                }));
+                assert!(prev.is_none(), "there should be only one task");
+            },
+        }
+    }
+
+    pub fn start_partitioning(&mut self, chunk: &ChunkRef, adj: ChunkAdj) {
+        let chunk = ChunkRef::clone(&chunk);
+        let prev_value = self.partition.insert(chunk.pos.load(Relaxed), Task::spawn(async move {
+            chunk.make_partitial_meshes(adj)
+        }));
+        assert!(prev_value.is_none(), "there should be only one task");
+    }
+
+    pub async fn try_finish_gen(&mut self, pos: Int3) -> Option<Chunk> {
+        if let Some(task) = self.voxels_gen.get_mut(&pos)
+            && let Some(voxel_ids) = task.try_take_result().await
+        {
+            self.voxels_gen.remove(&pos);
+            return Some(Chunk::from_voxels(voxel_ids, pos))
+        }
+
+        None
+    }
+
+    /// Tries to get mesh from task if it is ready then sets it to chunk.
+    /// Otherwise will return `Err(TaskError)`.
+    pub async fn try_finish_mesh(
+        &mut self, pos: Int3, lod: Lod, mesh: &mut ChunkMesh, device: &Device,
+    ) -> Result<(), TaskError> {
+        match lod {
+            0 => self.try_finish_full(pos, mesh, device).await,
+            _ => self.try_finish_low(pos, lod, mesh, device).await,
+        }
+    }
+
+    pub async fn try_finish_full(
+        &mut self, pos: Int3, mesh: &mut ChunkMesh, device: &Device,
+    ) -> Result<(), TaskError> {
+        match self.full.get_mut(&pos) {
+            Some(task) => match task.try_take_result().await {
+                Some(vertices) => {
+                    mesh.upload_full_mesh(device, &vertices);
+                    let _ = self.full.remove(&pos)
+                        .expect("there should be a task");
+                    Ok(())
+                },
+                None => Err(TaskError::TaskNotReady),
+            },
+            None => Err(TaskError::TaskNotFound { lod: 0, pos }),
+        }
+    }
+    
+    pub async fn try_finish_low(
+        &mut self, pos: Int3, lod: Lod, mesh: &mut ChunkMesh, device: &Device,
+    ) -> Result<(), TaskError> {
+        match self.low.get_mut(&(pos, lod)) {
+            Some(task) => match task.try_take_result().await {
+                Some(vertices) => {
+                    mesh.upload_low_mesh(device, &vertices, lod);
+                    let _ = self.low.remove(&(pos, lod))
+                        .expect("there should be a task");
+                    Ok(())
+                },
+                None => Err(TaskError::TaskNotReady),
+            },
+            None => Err(TaskError::TaskNotFound { lod, pos })
+        }
+    }
+
+    pub fn can_start(&self) -> bool {
+        self.saving.is_null() && self.reading.is_null() &&
+        self.low.len() + self.full.len() <= cfg::terrain::MAX_TASKS
+    }
+
+    pub fn delete_all(&mut self) {
+        drop(mem::take(&mut self.full));
+        drop(mem::take(&mut self.low));
+        drop(mem::take(&mut self.voxels_gen));
+        drop(mem::take(&mut self.partition));
+    }
+
+    pub fn any_running(&self) -> bool {
+        !self.low.is_empty() ||
+        !self.full.is_empty() ||
+        !self.voxels_gen.is_empty() ||
+        !self.partition.is_empty()
+    }
+}

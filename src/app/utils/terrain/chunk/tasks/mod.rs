@@ -81,5 +81,5 @@ impl<Item> Drop for Task<Item> {
 
 pub type FullTask = Task<Mesh<FullVertex>>;
 pub type LowTask  = Task<Mesh<LowVertex>>;
-pub type GenTask  = Task<Vec<Atomic<Id>>>;
+pub type GenTask  = Task<Vec<Id>>;
 pub type PartitionTask = Task<[Mesh<FullVertex>; 8]>;

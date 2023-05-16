@@ -1,4 +1,4 @@
-use crate::prelude::*;
+use {crate::prelude::*, std::borrow::Borrow};
 
 
 
@@ -8,6 +8,12 @@ pub struct StrView<'s> {
     pub inner: Cow<'s, str>,
 }
 assert_impl_all!(StrView: Send, Sync);
+
+impl<'s> StrView<'s> {
+    pub fn to_static(self) -> StaticStr {
+        StaticStr::from(self.inner.into_owned())
+    }
+}
 
 impl<'s> From<StrView<'s>> for Cow<'s, str> {
     fn from(value: StrView<'s>) -> Self {
@@ -33,10 +39,22 @@ impl<'s> From<&'s String> for StrView<'s> {
     }
 }
 
-impl std::ops::Deref for StrView<'_> {
+impl Deref for StrView<'_> {
     type Target = str;
     fn deref(&self) -> &Self::Target {
         self.inner.as_ref()
+    }
+}
+
+impl AsRef<str> for StrView<'_> {
+    fn as_ref(&self) -> &str {
+        self.inner.as_ref()
+    }
+}
+
+impl Borrow<str> for StrView<'_> {
+    fn borrow(&self) -> &str {
+        self.as_ref()
     }
 }
 

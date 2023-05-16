@@ -6,7 +6,7 @@ pub use {
         reinterpreter::*,
         cfg,
         user_io::{keyboard, mouse, Key, self},
-        terrain::{chunk::iterator::SpaceIter, voxel::voxel_data::data as voxels},
+        terrain::{chunk::iterator::Range3d, voxel::voxel_data::data as voxels},
         concurrency::loading,
         runtime::RUNTIME,
         time::timer::{Timer, Time, TimeStep},

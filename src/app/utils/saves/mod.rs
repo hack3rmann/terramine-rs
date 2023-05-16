@@ -1,3 +1,5 @@
+#![macro_use]
+
 use tokio::io::AsyncSeekExt;
 
 pub mod stack_heap;
@@ -18,9 +20,39 @@ use {
     stack_heap::{StackHeap, StackHeapError},
 };
 
+
+
+#[macro_export]
+macro_rules! define_save_key {
+    {
+        $(#[$macros:meta])*
+        $vis:vis enum $EnumName:ident {
+            $($EnumVar:ident),* $(,)?
+        }
+    } => {
+        $(#[$macros])*
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        $vis enum $EnumName {
+            $(
+                $EnumVar,
+            )*
+        }
+
+        impl From<$EnumName> for $crate::saves::Enumerator {
+            fn from(value: $EnumName) -> $crate::saves::Enumerator {
+                value as $crate::saves::Enumerator
+            }
+        }
+    };
+}
+
+
+
 pub type Offset = u64;
 pub type Size   = u64;
 pub type Enumerator = u64;
+
+
 
 #[derive(Error, Debug)]
 pub enum SaveError {
@@ -42,18 +74,7 @@ pub enum SaveError {
 
 pub type SaveResult<T> = Result<T, SaveError>;
 
-/// Handle for save files framework.
-#[derive(Debug)]
-pub struct Save<E> {
-    #[allow(dead_code)]
-    name: String,
 
-    file: StackHeap,
-    offsets: HashMap<Enumerator, Offset>,
-    offsets_save: File,
-
-    _phantom_data: PhantomData<E>,
-}
 
 #[derive(Debug)]
 pub struct SaveBuilder<E> {
@@ -126,6 +147,20 @@ impl<E: Copy + Into<Enumerator>> SaveBuilder<E> {
     }
 }
 
+
+
+/// Handle for save files framework.
+#[derive(Debug)]
+pub struct Save<E> {
+    #[allow(dead_code)]
+    name: String,
+
+    file: StackHeap,
+    offsets: HashMap<Enumerator, Offset>,
+    offsets_save: File,
+
+    _phantom_data: PhantomData<E>,
+}
 
 impl<E: Copy + Into<Enumerator>> Save<E> {
     /// Creates new [`SaveBuilder`] struct.
