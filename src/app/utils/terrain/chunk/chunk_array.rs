@@ -11,10 +11,7 @@ use {
             voxel::{self, Voxel, voxel_data::data::*},
         },
         saves::Save,
-        graphics::{
-            camera_resource::Camera, Device, Queue, CommandEncoder, TextureView, BindsRef, RenderPipeline,
-            Binds, LoadImageError, Graphics, PipelineLayout,
-        },
+        graphics::{*, camera_resource::Camera},
     },
     math_linear::math::ray::space_3d::Line,
     std::{io, mem, sync::Mutex},
@@ -36,7 +33,7 @@ crate::define_save_key! {
 /// Represents 3d array of [`Chunk`]s. Can control their [mesh][ChunkMesh] generation, etc.
 #[derive(Debug)]
 pub struct ChunkArray {
-    pub self_entity: Entity,
+    pub array_entity: Entity,
     pub chunk_entities: Vec<Entity>,
 
     pub sizes: USize3,
@@ -48,64 +45,6 @@ assert_impl_all!(ChunkArray: Send, Sync, Component);
 
 impl ChunkArray {
     const MAX_TRACE_STEPS: usize = 1024;
-
-    pub async fn make_binds(device: &Device, queue: &Queue) -> Result<Binds, LoadImageError> {
-        use crate::graphics::*;
-
-        let dir = Path::new(cfg::texture::DIRECTORY);
-
-        let (albedo_image, normal_image) = tokio::try_join!(
-            Image::from_file(dir.join("texture_atlas.png")),
-            Image::from_file(dir.join("normal_atlas.png")),
-        )?;
-
-        let albedo = GpuImage::new(
-            GpuImageDescriptor {
-                device,
-                queue,
-                image: &albedo_image,
-                label: Some("chunk_array_albedo_image_atlas".into()),
-            },
-        );
-
-        let normal = GpuImage::new(
-            GpuImageDescriptor {
-                device,
-                queue,
-                image: &normal_image,
-                label: Some("chunk_array_normal_image_atlas".into()),
-            },
-        );
-
-        let image_layout = GpuImage::bind_group_layout(device);
-
-        let albedo_bind = albedo.as_bind_group(device, &image_layout);
-        let normal_bind = normal.as_bind_group(device, &image_layout);
-
-        Ok(Binds::from_iter([
-            (albedo_bind, Some(image_layout.clone())),
-            (normal_bind, Some(image_layout.clone())),
-        ]))
-    }
-
-    pub fn make_pipeline_layout(device: &Device, bind_group_layouts: &[&wgpu::BindGroupLayout]) -> PipelineLayout {
-        use crate::graphics::PipelineLayoutDescriptor as Desc;
-
-        PipelineLayout::new(
-            device,
-            &Desc {
-                label: Some("chunk_array_pipeline"),
-                bind_group_layouts,
-                push_constant_ranges: &[],
-            },
-        )
-    }
-
-    pub fn make_pipeline(device: &Device, mesh: &ChunkMesh) -> RenderPipeline {
-        use crate::graphics::{RenderPipelineDescriptor as Desc, PrimitiveState};
-
-        todo!()
-    }
 
     /// Generates new chunks.
     /// 
@@ -144,43 +83,36 @@ impl ChunkArray {
 
         let self_entity = world.spawn_empty();
 
-        let (binds, layout, pipeline) = {
+        {
             let graphics = world.resource::<&Graphics>().unwrap();
             
-            let binds = Self::make_binds(&graphics.context.device, &graphics.context.queue)
+            let binds = ChunkBinds::new(&graphics.context.device, &graphics.context.queue)
                 .await
                 .expect("failed to make binds for chunk array");
-            let binds = BindsRef::from(binds);
 
-            let layout = Self::make_pipeline_layout(
+            let layout = ChunkPipelineLayout::new(
                 &graphics.context.device,
-                &binds.layouts().collect_vec(),
+                &binds.full.layouts().collect_vec(),
+                &binds.low.layouts().collect_vec(),
             );
 
-            let pipeline = Self::make_pipeline(&graphics.context.device, todo!());
+            let pipeline = ChunkRenderPipeline::new(&graphics.context.device, &layout).await;
 
-            world.insert(self_entity, (binds.clone(), pipeline.clone())).unwrap();
+            drop(graphics);
 
-            (binds, layout, pipeline)
+            world.insert(self_entity, (binds, pipeline, layout)).unwrap();
         };
 
-        let mut chunk_entities = Vec::with_capacity(chunks.len());
+        let chunk_entities = world.spawn_batch(
+            chunks.into_iter().map(|chunk| {
+                (chunk, ChunkMesh::default())
+            })
+        ).collect();
 
-        for chunk in chunks.into_iter() {
-            let entity = world.spawn_empty();
-
-            world.insert_one(entity, chunk).unwrap();
-            world.insert_one(entity, ChunkMesh::default()).unwrap();
-            world.insert_one(entity, binds.clone()).unwrap();
-            world.insert_one(entity, pipeline.clone()).unwrap();
-
-            chunk_entities.push(entity);
-        }
-        
         Ok(Self {
             sizes,
             chunk_entities,
-            self_entity,
+            array_entity: self_entity,
             lod_threashold: 5.8,
             tasks: default(),
         })
@@ -232,8 +164,8 @@ impl ChunkArray {
 
     /// Clears all [chunk array][ChunkArray] stuff out from the `world`.
     pub fn clean_world(&mut self, world: &mut World) {
-        world.despawn(self.self_entity).unwrap();
-        self.self_entity = Entity::DANGLING;
+        world.despawn(self.array_entity).unwrap();
+        self.array_entity = Entity::DANGLING;
 
         for chunk_entity in mem::take(&mut self.chunk_entities) {
             world.despawn(chunk_entity).unwrap();
@@ -245,7 +177,7 @@ impl ChunkArray {
     ) -> io::Result<()> {
         let save_name = save_name.into();
 
-        let _work_guard = logger::work("chunk-array", format!("saving to {save_name} in {save_path}"));
+        let _work_guard = logger::scope("chunk-array", format!("saving to {save_name} in {save_path}"));
 
         let is_all_generated = chunks.iter()
             .all(|chunk| chunk.is_generated());
@@ -275,10 +207,8 @@ impl ChunkArray {
         Ok(())
     }
 
-    pub async fn read_from_file(
-        save_name: &str, save_path: &str,
-    ) -> io::Result<(USize3, Vec<Chunk>)> {
-        let _work_guard = logger::work("chunk-array", format!("reading chunks from {save_name} in {save_path}"));
+    pub async fn read_from_file(save_name: &str, save_path: &str) -> io::Result<(USize3, Vec<Chunk>)> {
+        let _work_guard = logger::scope("chunk-array", format!("reading chunks from {save_name} in {save_path}"));
 
         let loading = loading::start_new("Reading chunks");
 
@@ -396,7 +326,7 @@ impl ChunkArray {
     /// Get a [chunk][Chunk] from the `world`.
     pub fn chunk(&self, world: &World, pos: Int3) -> ChunkRef {
         self.get_chunk(world, pos)
-            .expect(&format!("there's no chunk in world with position {pos}"))
+            .unwrap_or_else(|| panic!("there's no chunk in world with position {pos}"))
     }
 
     /// Gets a [chunk][Chunk] from the `world` without panic.
@@ -407,7 +337,7 @@ impl ChunkArray {
     /// Get a [chunk][Chunk] from the `world`.
     pub fn chunk_by_idx(&self, world: &World, idx: usize) -> ChunkRef {
         self.get_chunk_by_idx(world, idx)
-            .expect(&format!("there's no chunk in world with idx {idx}"))
+            .unwrap_or_else(|| panic!("there's no chunk in world with idx {idx}"))
     }
 
     /// Sets voxel's id with position `pos` to `new_id` and returns old [`Id`]. If voxel is 
@@ -558,13 +488,11 @@ impl ChunkArray {
         let sizes = Int3::from(sizes);
         let shifted = pos + sizes / 2;
 
-        match 0 <= shifted.x && shifted.x < sizes.x &&
-              0 <= shifted.y && shifted.y < sizes.y &&
-              0 <= shifted.z && shifted.z < sizes.z
-        {
-            true  => Some(shifted.into()),
-            false => None
-        }
+        (
+            0 <= shifted.x && shifted.x < sizes.x &&
+            0 <= shifted.y && shifted.y < sizes.y &&
+            0 <= shifted.z && shifted.z < sizes.z
+        ).then_some(shifted.into())
     }
 
     /// Convertes 3d index to an array index.
@@ -831,16 +759,18 @@ impl ChunkArray {
         self.try_finish_all_gen_tasks(world).await;
     }
 
-    pub fn pass(&self, world: &World, encoder: &mut CommandEncoder, target_view: TextureView) {
-        use crate::graphics::{RenderPass, Render};
+    pub fn render_pass(&self, world: &World, encoder: &mut CommandEncoder, target_view: TextureView) {
+        let pipeline = world.get::<&RenderPipeline>(self.array_entity).unwrap();
+        let binds = world.get::<&Binds>(self.array_entity).unwrap();
 
-        let mut query = world.query::<(&ChunkMesh, &RenderPipeline, &BindsRef)>();
+        let mut query = world.query::<&ChunkMesh>();
 
         let mut pass = RenderPass::new(encoder, "chunk_array_pass", [&target_view]);
 
-        for (_entity, (mesh, pipeline, binds)) in query.iter() {
-            binds.bind(&mut pass, 0);
-            mesh.render(pipeline, &mut pass)
+        binds.bind(&mut pass, 0);
+
+        for (_entity, mesh) in query.iter() {
+            mesh.render(&pipeline, &mut pass)
                 .expect("failed to render a chunk mesh");
         }
     }
@@ -848,8 +778,8 @@ impl ChunkArray {
     /// Checks that [chunk][Chunk] [adjacent][ChunkAdj] are generated.
     pub async fn is_adj_generated(adj: &ChunkAdj) -> bool {
         adj.inner.iter()
-            .filter_map(Option::as_ref)
-            .all(|chunk| chunk.is_generated())
+            .filter_map(Option::as_deref)
+            .all(Chunk::is_generated)
     }
 
     pub async fn spawn_control_window(&mut self, world: &mut World, ui: &imgui::Ui) {
@@ -997,11 +927,9 @@ impl ChunkArray {
         let first_voxel = self.trace_ray(world, Line::new(cam.pos, cam.front), Self::MAX_TRACE_STEPS)
             .find(|voxel| !voxel.is_air());
 
-        match first_voxel {
-            Some(voxel) if mouse::just_left_pressed() && cam.captures_mouse =>
-                command(Command::SetVoxel { pos: voxel.pos, new_id: AIR_VOXEL_DATA.id }),
-
-            _ => (),
+        if let Some(voxel) = first_voxel && mouse::just_left_pressed() && cam.captures_mouse
+        {
+            command(Command::SetVoxel { pos: voxel.pos, new_id: AIR_VOXEL_DATA.id })
         }
     }
 
@@ -1082,16 +1010,11 @@ impl ChangeTracker {
             let chunk_pos = Chunk::local_pos(voxel_pos);
             let local_pos = Chunk::global_to_local_pos(chunk_pos, voxel_pos);
 
-            let chunk_idx = match ChunkArray::pos_to_idx(self.sizes, chunk_pos) {
-                Some(idx) => idx,
-                None => continue,
-            };
+            let Some(chunk_idx) = ChunkArray::pos_to_idx(self.sizes, chunk_pos) else { continue };
 
             for offset in iterator::offsets_from_border(local_pos, Int3::ZERO..Int3::from(Chunk::SIZES)) {
-                match ChunkArray::pos_to_idx(self.sizes, chunk_pos + offset) {
-                    Some(idx) => { result.insert(idx); },
-                    None => continue,
-                }
+                let Some(idx) = ChunkArray::pos_to_idx(self.sizes, chunk_pos + offset) else { continue };
+                result.insert(idx);
             }
 
             result.insert(chunk_idx);
@@ -1115,10 +1038,7 @@ impl ChangeTracker {
                 voxel_coord_idx / (Chunk::SIZES / 2),
             );
 
-            let chunk_idx = match ChunkArray::pos_to_idx(self.sizes, chunk_pos) {
-                Some(idx) => idx,
-                None => continue,
-            };
+            let Some(chunk_idx) = ChunkArray::pos_to_idx(self.sizes, chunk_pos) else { continue };
 
             result.insert((chunk_idx, partition_idx));
 
@@ -1136,10 +1056,8 @@ impl ChangeTracker {
                     voxel_coord_idx / (Chunk::SIZE / 2),
                 );
 
-                match ChunkArray::pos_to_idx(self.sizes, adj_chunk_pos) {
-                    Some(idx) => { result.insert((idx, partition_idx)); },
-                    None => continue,
-                }
+                let Some(idx) = ChunkArray::pos_to_idx(self.sizes, adj_chunk_pos) else { continue };
+                result.insert((idx, partition_idx));
             }
         }
 
@@ -1220,7 +1138,7 @@ impl ChunkArrayTasks {
 
     /// Starts new generate vertices task.
     pub async fn start_mesh(&mut self, chunk: &ChunkRef, adj: ChunkAdj, lod: Lod) {
-        let chunk = ChunkRef::clone(&chunk);
+        let chunk = ChunkRef::clone(chunk);
 
         let chunk_pos = chunk.pos.load(Relaxed);
         if lod == 0 && self.full.contains_key(&chunk_pos) ||
@@ -1237,7 +1155,7 @@ impl ChunkArrayTasks {
                 assert!(prev.is_none(), "there should be only one task");
             },
 
-            lod => {
+            _ => {
                 let prev = self.low.insert((chunk_pos, lod), Task::spawn(async move {
                     chunk.make_low_mesh(adj, lod)
                 }));
@@ -1247,7 +1165,8 @@ impl ChunkArrayTasks {
     }
 
     pub fn start_partitioning(&mut self, chunk: &ChunkRef, adj: ChunkAdj) {
-        let chunk = ChunkRef::clone(&chunk);
+        let chunk = ChunkRef::clone(chunk);
+
         let prev_value = self.partition.insert(chunk.pos.load(Relaxed), Task::spawn(async move {
             chunk.make_partitial_meshes(adj)
         }));
@@ -1279,40 +1198,43 @@ impl ChunkArrayTasks {
     pub async fn try_finish_full(
         &mut self, pos: Int3, mesh: &mut ChunkMesh, device: &Device,
     ) -> Result<(), TaskError> {
-        match self.full.get_mut(&pos) {
-            Some(task) => match task.try_take_result().await {
-                Some(vertices) => {
-                    mesh.upload_full_mesh(device, &vertices);
-                    let _ = self.full.remove(&pos)
-                        .expect("there should be a task");
-                    Ok(())
-                },
-                None => Err(TaskError::TaskNotReady),
-            },
-            None => Err(TaskError::TaskNotFound { lod: 0, pos }),
-        }
+        let Some(task) = self.full.get_mut(&pos) else {
+            return Err(TaskError::TaskNotFound { lod: 0, pos })
+        };
+
+        let Some(vertices) = task.try_take_result().await else {
+            return Err(TaskError::TaskNotReady)
+        };
+
+        mesh.upload_full_mesh(device, &vertices);
+        let _ = self.full.remove(&pos)
+            .expect("there should be a task");
+
+        Ok(())
     }
     
     pub async fn try_finish_low(
         &mut self, pos: Int3, lod: Lod, mesh: &mut ChunkMesh, device: &Device,
     ) -> Result<(), TaskError> {
-        match self.low.get_mut(&(pos, lod)) {
-            Some(task) => match task.try_take_result().await {
-                Some(vertices) => {
-                    mesh.upload_low_mesh(device, &vertices, lod);
-                    let _ = self.low.remove(&(pos, lod))
-                        .expect("there should be a task");
-                    Ok(())
-                },
-                None => Err(TaskError::TaskNotReady),
-            },
-            None => Err(TaskError::TaskNotFound { lod, pos })
-        }
+        let Some(task) = self.low.get_mut(&(pos, lod)) else {
+            return Err(TaskError::TaskNotFound { lod, pos })
+        };
+
+        let Some(vertices) = task.try_take_result().await else {
+            return Err(TaskError::TaskNotReady)
+        };
+
+        mesh.upload_low_mesh(device, &vertices, lod);
+        let _ = self.low.remove(&(pos, lod))
+            .expect("there should be a task");
+
+        Ok(())
     }
 
     pub fn can_start(&self) -> bool {
-        self.saving.is_null() && self.reading.is_null() &&
-        self.low.len() + self.full.len() <= cfg::terrain::MAX_TASKS
+        self.saving.is_null()
+            && self.reading.is_null()
+            && self.low.len() + self.full.len() <= cfg::terrain::MAX_TASKS
     }
 
     pub fn delete_all(&mut self) {
@@ -1327,5 +1249,153 @@ impl ChunkArrayTasks {
         !self.full.is_empty() ||
         !self.voxels_gen.is_empty() ||
         !self.partition.is_empty()
+    }
+}
+
+
+
+#[derive(Debug, Clone)]
+pub struct ChunkBinds {
+    pub full: Binds,
+    pub low: Binds,
+}
+
+impl ChunkBinds {
+    pub async fn make_full(device: &Device, queue: &Queue) -> Result<Binds, LoadImageError> {
+        use crate::graphics::*;
+
+        let dir = Path::new(cfg::texture::DIRECTORY);
+
+        let (albedo_image, normal_image) = tokio::try_join!(
+            Image::from_file(dir.join("texture_atlas.png")),
+            Image::from_file(dir.join("normal_atlas.png")),
+        )?;
+
+        let albedo = GpuImage::new(
+            GpuImageDescriptor {
+                device,
+                queue,
+                image: &albedo_image,
+                label: Some("chunk_array_albedo_image_atlas".into()),
+            },
+        );
+
+        let normal = GpuImage::new(
+            GpuImageDescriptor {
+                device,
+                queue,
+                image: &normal_image,
+                label: Some("chunk_array_normal_image_atlas".into()),
+            },
+        );
+
+        let image_layout = GpuImage::bind_group_layout(device);
+
+        let albedo_bind = albedo.as_bind_group(device, &image_layout);
+        let normal_bind = normal.as_bind_group(device, &image_layout);
+
+        Ok(Binds::from_iter([
+            (albedo_bind, Some(image_layout.clone())),
+            (normal_bind, Some(image_layout)),
+        ]))
+    }
+
+    pub async fn new(device: &Device, queue: &Queue) -> Result<Self, LoadImageError> {
+        Ok(Self {
+            full: Self::make_full(device, queue).await?,
+            low: default(),
+        })
+    }
+}
+
+
+
+#[derive(Debug)]
+pub struct ChunkPipelineLayout {
+    pub full: PipelineLayout,
+    pub low: PipelineLayout,
+}
+
+impl ChunkPipelineLayout {
+    pub fn make_pipeline_layout(device: &Device, bind_group_layouts: &[&wgpu::BindGroupLayout]) -> PipelineLayout {
+        use crate::graphics::PipelineLayoutDescriptor as Desc;
+
+        PipelineLayout::new(
+            device,
+            &Desc {
+                label: Some("chunk_array_pipeline"),
+                bind_group_layouts,
+                push_constant_ranges: &[],
+            },
+        )
+    }
+
+    pub fn new(
+        device: &Device,
+        full_bind_layouts: &[&wgpu::BindGroupLayout],
+        low_bind_layouts: &[&wgpu::BindGroupLayout],
+    ) -> Self {
+        Self {
+            full: Self::make_pipeline_layout(device, full_bind_layouts),
+            low: Self::make_pipeline_layout(device, low_bind_layouts),
+        }
+    }
+}
+
+
+
+#[derive(Debug, Clone)]
+pub struct ChunkRenderPipeline {
+    pub full: RenderPipeline,
+    pub low: RenderPipeline,
+}
+assert_impl_all!(ChunkRenderPipeline: Send, Sync);
+
+impl ChunkRenderPipeline {
+    const PRIMITIVE_STATE: PrimitiveState = PrimitiveState {
+        cull_mode: Some(Face::Back),
+        ..const_default()
+    };
+
+    pub async fn make_material<V: Vertex>(device: &Device, shader_file_name: &str) -> Arc<dyn Material> {
+        let source = ShaderSource::from_file(shader_file_name).await
+            .unwrap_or_else(|err| panic!("failed to load shader from file {shader_file_name}: {err}"));
+
+        let shader = Shader::new(device, source, vec![V::BUFFER_LAYOUT]);
+
+        StandartMaterial::from(shader).to_arc()
+    }
+
+    pub async fn make_full(device: &Device, layout: &PipelineLayout) -> RenderPipeline {
+        use crate::{graphics::RenderPipelineDescriptor as Desc, terrain::chunk::mesh::FullVertex};
+
+        RenderPipeline::new(Desc {
+            device,
+            layout,
+            material: Self::make_material::<FullVertex>(device, "chunks_full.wgsl").await.as_ref(),
+            primitive_state: Self::PRIMITIVE_STATE,
+            label: Some("chunk_array_full_detail_render_pipeline".into()),
+        })
+    }
+
+    pub async fn make_low(device: &Device, layout: &PipelineLayout) -> RenderPipeline {
+        use crate::{graphics::RenderPipelineDescriptor as Desc, terrain::chunk::mesh::LowVertex};
+
+        RenderPipeline::new(Desc {
+            device,
+            layout,
+            material: Self::make_material::<LowVertex>(device, "chunks_low.wgsl").await.as_ref(),
+            primitive_state: Self::PRIMITIVE_STATE,
+            label: Some("chunk_array_full_detail_render_pipeline".into()),
+        })
+    }
+
+    pub async fn new(device: &Device, layout: &ChunkPipelineLayout) -> Self {
+        let (full, low) = tokio::join!(
+            Self::make_full(device, &layout.full),
+            Self::make_low(device, &layout.low),
+        );
+
+        Self { full, low }
     }
 }

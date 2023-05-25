@@ -33,6 +33,13 @@ pub struct BindGroupLayout {
     pub id: BindGroupLayoutId,
 }
 
+impl BindGroupLayout {
+    pub fn new(device: &Device, desc: &BindGroupLayoutDescriptor) -> Self {
+        let layout = device.create_bind_group_layout(desc);
+        Self::from(layout)
+    }
+}
+
 impl From<wgpu::BindGroupLayout> for BindGroupLayout {
     fn from(value: wgpu::BindGroupLayout) -> Self {
         Self { inner: Arc::new(value), id: BindGroupLayoutId::new() }
@@ -66,6 +73,11 @@ pub struct BindGroup {
 assert_impl_all!(BindGroup: Send, Sync);
 
 impl BindGroup {
+    pub fn new(device: &Device, desc: &BindGroupDescriptor) -> Self {
+        let bind_group = device.create_bind_group(desc);
+        Self::from(bind_group)
+    }
+
     pub fn bind<'s>(&'s self, pass: &mut RenderPass<'s>, idx: u32) {
         pass.set_bind_group(idx, self, &[]);
     }
@@ -154,7 +166,7 @@ assert_obj_safe!(AsBindGroup);
 
 
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Binds {
     pub bind_groups: Vec<BindGroup>,
     pub layouts: Vec<Option<BindGroupLayout>>,

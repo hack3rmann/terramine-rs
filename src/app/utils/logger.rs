@@ -67,21 +67,21 @@ pub fn log(msg_type: MsgType, from: impl Into<StaticStr>, content: impl Into<Sta
         .expect("failed to send message");
 }
 
-pub fn work(from: impl Into<StaticStr>, work: impl Into<StaticStr>) -> WorkLogGuard {
-    WorkLogGuard::new(from, work)
+pub fn scope(from: impl Into<StaticStr>, work: impl Into<StaticStr>) -> LogGuard {
+    LogGuard::new(from, work)
 }
 
 
 
 #[must_use]
 #[derive(Debug)]
-pub struct WorkLogGuard {
+pub struct LogGuard {
     pub from: StaticStr,
     pub work: StaticStr,
 }
-assert_impl_all!(WorkLogGuard: Send, Sync);
+assert_impl_all!(LogGuard: Send, Sync);
 
-impl WorkLogGuard {
+impl LogGuard {
     pub fn new(from: impl Into<StaticStr>, work: impl Into<StaticStr>) -> Self {
         let (from, work) = (from.into(), work.into());
         log!(Info, from = from.clone(), "start {work}.");
@@ -89,7 +89,7 @@ impl WorkLogGuard {
     }
 }
 
-impl Drop for WorkLogGuard {
+impl Drop for LogGuard {
     fn drop(&mut self) {
         let from = mem::take(&mut self.from);
         log!(Info, from = from, "end {work}.", work = self.work);
@@ -119,8 +119,8 @@ macro_rules! log_dbg {
 #[macro_export]
 macro_rules! work {
     (from = $from:expr, $($content:tt)*) => {{
-        use $crate::app::utils::logger::work;
-        work($from, std::fmt::format(format_args!($($content)*)))
+        use $crate::app::utils::logger::scope;
+        scope($from, std::fmt::format(format_args!($($content)*)))
     }};
 }
 

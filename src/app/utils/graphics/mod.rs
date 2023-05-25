@@ -38,7 +38,7 @@ pub use {
         DeviceDescriptor, RequestAdapterOptions, Backends, InstanceDescriptor, Instance,
         SurfaceConfiguration, Adapter, Surface, Queue,
         BufferBindingType, BindingType, Device,
-        util::{DeviceExt, BufferInitDescriptor}, IndexFormat, FrontFace, Face, Extent3d,
+        util::{DeviceExt, BufferInitDescriptor}, Extent3d,
     },
     winit::window::Window as WinitWindow,
     imgui_wgpu::{Renderer as ImguiRenderer, RendererConfig as ImguiRendererConfig},
@@ -71,15 +71,15 @@ assert_impl_all!(CommonUniforms: Send, Sync);
 
 #[derive(Debug)]
 pub struct CommonUniformsBuffer {
-    pub bind_group_layout: BindGroupLayout,
-    pub bind_group: BindGroup,
     pub buffer: Buffer,
+    pub binds: Binds,
 }
 assert_impl_all!(CommonUniformsBuffer: Send, Sync);
 
 impl CommonUniformsBuffer {
     pub fn new(device: &Device, initial_value: &CommonUniforms) -> Self {
-        let buffer = device.create_buffer_init(
+        let buffer = Buffer::new(
+            device,
             &BufferInitDescriptor {
                 label: Some("common_uniforms_buffer"),
                 contents: bytemuck::bytes_of(initial_value),
@@ -87,7 +87,8 @@ impl CommonUniformsBuffer {
             },
         );
 
-        let layout = device.create_bind_group_layout(
+        let layout = BindGroupLayout::new(
+            device,
             &BindGroupLayoutDescriptor {
                 label: Some("common_uniforms_bind_group_layout"),
                 entries: &[
@@ -105,7 +106,8 @@ impl CommonUniformsBuffer {
             },
         );
 
-        let bind_group = device.create_bind_group(
+        let bind_group = BindGroup::new(
+            device,
             &BindGroupDescriptor {
                 label: Some("common_uniforms_bind_group"),
                 layout: &layout,
@@ -118,11 +120,11 @@ impl CommonUniformsBuffer {
             },
         );
 
-        Self {
-            bind_group_layout: layout.into(),
-            bind_group: bind_group.into(),
-            buffer: Buffer::from(buffer)
-        }
+        let binds = Binds::from_iter([
+            (bind_group, Some(layout)),
+        ]);
+
+        Self { binds, buffer }
     }
 
     pub fn update(&self, queue: &Queue, uniforms: CommonUniforms) {
@@ -165,7 +167,7 @@ assert_impl_all!(Graphics: Send, Sync, Component);
 impl Graphics {
     /// Creates new [`Graphics`] that holds some renderer stuff.
     pub async fn new(event_loop: &EventLoop<()>) -> Result<Self, winit::error::OsError> {
-        let _log_guard = logger::work("graphics", "initialization");
+        let _log_guard = logger::scope("graphics", "initialization");
 
         let window = Window::from(event_loop, cfg::window::default::SIZES)?;
 
@@ -238,7 +240,7 @@ impl Graphics {
 
         let layout = {
             let bind_group_layouts: Vec<_> = itertools::chain!(
-                [common_uniforms.bind_group_layout.deref()],
+                common_uniforms.binds.layouts(),
                 binds.layouts(),
             ).collect();
 
@@ -274,7 +276,7 @@ impl Graphics {
 
         let binds_ref = BindsRef::from(binds);
 
-        sandbox.spawn((gpu_mesh, pipeline, binds_ref));
+        sandbox.spawn((gpu_mesh, pipeline, binds_ref, layout));
 
         
         
@@ -296,8 +298,7 @@ impl Graphics {
     /// # Safety
     ///
     /// - `window` must be a valid object to create a surface upon.
-    /// - `window` must remain valid until after the returned [`RenderContext`] is
-    ///   dropped.
+    /// - `window` must remain valid until after the returned [`RenderContext`] is dropped.
     async unsafe fn make_render_context(window: &Window) -> (RenderContext, SurfaceConfiguration) {
         let wgpu_instance = Instance::new(
             InstanceDescriptor {
@@ -355,18 +356,33 @@ impl Graphics {
     }
 
     pub async fn refresh_test_shader(&mut self) {
-        // FIXME:
+        match ShaderSource::from_file("shader.wgsl").await {
+            Ok(source) => {
+                let material = {
+                    let shader = Shader::new(&self.context.device, source, vec![TexturedVertex::BUFFER_LAYOUT]);
+                    StandartMaterial::from(shader).to_arc()
+                };
 
-        // let shader = ShaderSource::load_from_file(
-        //     Arc::clone(&self.context.device),
-        //     "test_shader",
-        //     "shader.wgsl",
-        // ).await;
+                let mesh = self.sandbox.resource::<&GpuMesh>().unwrap();
+                let layout = self.sandbox.resource::<&PipelineLayout>().unwrap();
 
-        // match shader {
-        //     Ok(shader) => self.test_mesh.reload_shader(Arc::new(shader)),
-        //     Err(err) => logger::log!(Error, from = "graphics", "failed to reload test shader: {err}"),
-        // }
+                let new_pipeline = RenderPipeline::new(
+                    RenderPipelineDescriptor {
+                        device: &self.context.device,
+                        material: material.as_ref(),
+                        primitive_state: mesh.primitive_state,
+                        label: Some("test_render_pipeline".into()),
+                        layout: &layout,
+                    },
+                );
+
+                let mut query = self.sandbox.query::<&mut RenderPipeline>();
+                for (_entity, pipeline) in query.into_iter() {
+                    *pipeline = new_pipeline.clone();
+                }
+            },
+            Err(err) => logger::log!(Error, from = "graphics", "failed to reload test shader: {err}"),
+        }
     }
 
     pub fn render_sandbox(&mut self, encoder: &mut CommandEncoder, view: TextureView) {
@@ -375,8 +391,8 @@ impl Graphics {
         let mut pass = RenderPass::new(encoder, "logo_draw_pass", [&view]);
 
         for (_entity, (binds, mesh, pipeline)) in query.iter() {
-            self.common_uniforms.bind_group.bind(&mut pass, 0);
-            binds.bind(&mut pass, 1);
+            self.common_uniforms.binds.bind(&mut pass, 0);
+            binds.bind(&mut pass, self.common_uniforms.binds.count() as u32);
             
             let Ok(()) = mesh.render(pipeline, &mut pass);
         }

@@ -128,26 +128,25 @@ impl ChunkMesh {
     /// Connects [mesh][Mesh] partitions into one [mesh][Mesh]. If [chunk][Chunk] is not
     /// partitioned then it will do nothing.
     pub fn connect_partitions(&mut self, device: &Device) {
-        let mesh = if let Some(ChunkFullMesh::Partial(ref meshes)) = self.full_mesh {
-            let meshes = meshes.iter().map(|gpu_mesh| gpu_mesh.read_vertices::<FullVertex>());
-            let mesh = Mesh::from_iter(meshes);
-            GpuMesh::new(Self::make_partition_desc(device, &mesh))
-        } else { return };
+        let Some(ChunkFullMesh::Partial(ref meshes)) = self.full_mesh else { return };
+        let meshes = meshes.iter().map(|gpu_mesh| gpu_mesh.read_vertices::<FullVertex>());
 
-        self.full_mesh.replace(ChunkFullMesh::Standart(mesh));
+        let mesh = Mesh::from_iter(meshes);
+
+        let gpu_mesh = GpuMesh::new(Self::make_partition_desc(device, &mesh));
+        self.full_mesh.replace(ChunkFullMesh::Standart(gpu_mesh));
     }
 
     pub fn upload_partition(
         &mut self, device: &Device, partition: &Mesh<FullVertex>, partition_idx: usize,
     ) {
-        match self.full_mesh {
-            Some(ChunkFullMesh::Partial(ref mut meshes)) => {
-                meshes[partition_idx] = GpuMesh::new(
-                    Self::make_partition_desc(device, partition)
-                )
-            },
-            _ => panic!("cannot upload only one partition"),
-        }
+        let Some(ChunkFullMesh::Partial(ref mut meshes)) = self.full_mesh else {
+            panic!("cannot upload only one partition");
+        };
+
+        meshes[partition_idx] = GpuMesh::new(
+            Self::make_partition_desc(device, partition)
+        )
     }
 
     pub fn make_partition_desc<'s>(
@@ -192,10 +191,10 @@ impl ChunkMesh {
     }
 
     /// Sets mesh to [chunk][Chunk].
-     pub fn upload_full_mesh(&mut self, device: &Device, mesh: &Mesh<FullVertex>) {
-         let mesh = GpuMesh::new(Self::make_full_desc(device, mesh));
-         self.full_mesh.replace(ChunkFullMesh::Standart(mesh));
-     }
+    pub fn upload_full_mesh(&mut self, device: &Device, mesh: &Mesh<FullVertex>) {
+        let mesh = GpuMesh::new(Self::make_full_desc(device, mesh));
+        self.full_mesh.replace(ChunkFullMesh::Standart(mesh));
+    }
 
     /// Sets mesh to [chunk][Chunk].
     pub fn upload_low_mesh(&mut self, device: &Device, mesh: &Mesh<LowVertex>, lod: Lod) {

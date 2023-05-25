@@ -218,11 +218,8 @@ impl Mesh {
         fn duplicate<T: Copy>(values: &[T], indices: impl Iterator<Item = usize>) -> Vec<T> {
             indices.map(|i| values[i]).collect()
         }
-
-        let indices = match self.indices.take() {
-            Some(indices) => indices,
-            None => return,
-        };
+        
+        let Some(indices) = self.indices.take() else { return };
 
         for attributes in self.attributes.values_mut() {
             use VertexAttributeValues::*;

@@ -31,7 +31,7 @@ pub struct App {
 impl App {
     /// Constructs [`App`].
     pub async fn new() -> Self {
-        let _work_guard = logger::work("app", "new");
+        let _work_guard = logger::scope("app", "new");
 
         let mut app = Self {
             update_functions: vec![
@@ -51,7 +51,7 @@ impl App {
 
     /// Setups an [`App`] after creation.
     pub async fn setup(&mut self) {
-        let _work_guard = logger::work("app", "setup");
+        let _work_guard = logger::scope("app", "setup");
 
 
         self.world.init_resource::<Timer>();
@@ -148,7 +148,7 @@ impl App {
             mouse::update(&graphics.window).await
                 .log_error("app", "failed to update mouse input");
 
-            keyboard::set_input_capture(graphics.imgui.context.io().want_capture_keyboard);
+            keyboard::set_input_capture(graphics.imgui.context.io().want_text_input);
     
             if keyboard::just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
                 mouse::set_capture(

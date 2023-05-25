@@ -1,5 +1,5 @@
 use {
-    crate::prelude::*,
+    crate::{prelude::*, graphics::{Device, BufferInitDescriptor}},
     std::ops::{Bound, RangeBounds},
 };
 
@@ -11,19 +11,26 @@ pub use wgpu::BufferUsages;
 
 crate::define_atomic_id!(BufferId);
 
-#[derive(Clone, Debug, Deref)]
+#[derive(Clone, Debug)]
 pub struct Buffer {
-    #[deref]
     pub inner: Arc<wgpu::Buffer>,
     pub id: BufferId,
 }
 assert_impl_all!(Buffer: Send, Sync);
 
 impl Buffer {
+    pub fn new(device: &Device, desc: &BufferInitDescriptor) -> Self {
+        use crate::graphics::DeviceExt;
+
+        let buffer = device.create_buffer_init(desc);
+        
+        Self::from(buffer)
+    }
+
     pub fn slice(&self, bounds: impl RangeBounds<wgpu::BufferAddress>) -> BufferSlice {
         BufferSlice {
             id: self.id,
-            // need to compute and store this manually because wgpu doesn't export offset on wgpu::BufferSlice
+            // Need to compute and store this manually because wgpu doesn't export offset on wgpu::BufferSlice
             offset: match bounds.start_bound() {
                 Bound::Included(&bound) => bound,
                 Bound::Excluded(&bound) => bound + 1,
@@ -40,6 +47,13 @@ impl From<wgpu::Buffer> for Buffer {
             id: BufferId::new(),
             inner: Arc::new(value),
         }
+    }
+}
+
+impl Deref for Buffer {
+    type Target = wgpu::Buffer;
+    fn deref(&self) -> &Self::Target {
+        self.inner.as_ref()
     }
 }
 

@@ -50,7 +50,7 @@ noise = '0.8.2'
 huffman-compress = '0.6.1'
 bit-vec = '0.6.3'
 array-init = '2.1.0'
-smallvec = { version = '1.10.0', features = ['const_generics'] }
+smallvec = { version = '1.10.0', features = ['const_generics', 'const_new'] }
 itertools = '0.10.5'
 ordered-float = '3.6.0'
 rand = '0.8.5'

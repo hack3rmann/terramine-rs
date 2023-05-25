@@ -390,11 +390,10 @@ impl Chunk {
                     let mut iter = Range3d::new(start_pos..end_pos);
                     let pred = |pos| is_blocking_voxel(pos, offset);
 
-                    match chunk_adj.by_offset(offset) {
-                        Some(_) if is_on_surface =>
-                            iter.all(pred),
-                        _ =>
-                            iter.any(pred),
+                    if let Some(_) = chunk_adj.by_offset(offset) && is_on_surface {
+                        iter.all(pred)
+                    } else {
+                        iter.any(pred)
                     }
                 };
 
@@ -436,9 +435,8 @@ impl Chunk {
            local_pos.z < 0 || local_pos.z >= Chunk::SIZE as i32
         { return ChunkOption::OutsideChunk }
 
-        let voxel = match self.get_voxel_local(local_pos) {
-            Some(voxel) => voxel,
-            None => return ChunkOption::Failed,
+        let Some(voxel) = self.get_voxel_local(local_pos) else {
+            return ChunkOption::Failed
         };
         
         ChunkOption::Voxel(voxel)
@@ -741,12 +739,10 @@ impl Chunk {
     pub fn unoptimize(&mut self) {
         let mut info = self.info.load(Acquire);
 
-        match info.fill_type {
-            FillType::Unspecified => (),
-            FillType::AllSame(id) =>
-                self.voxel_ids = std::iter::from_fn(|| Some(Atomic::new(id)))
-                    .take(Self::VOLUME)
-                    .collect(),
+        if let FillType::AllSame(id) = info.fill_type {
+            self.voxel_ids = std::iter::from_fn(|| Some(Atomic::new(id)))
+                .take(Self::VOLUME)
+                .collect()
         }
 
         info.fill_type = FillType::Unspecified;

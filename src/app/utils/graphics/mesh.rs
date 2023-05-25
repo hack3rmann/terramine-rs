@@ -10,14 +10,49 @@ use {
 
 pub use wgpu::{
     PrimitiveTopology, PrimitiveState, PolygonMode, VertexStepMode, VertexAttribute, vertex_attr_array,
-    VertexBufferLayout, BufferView, IndexFormat,
+    VertexBufferLayout, BufferView, IndexFormat, FrontFace, Face,
 };
+
+
+
+impl ConstDefault for PrimitiveState {
+    const DEFAULT: Self = Self {
+        topology: const_default(),
+        strip_index_format: const_default(),
+        front_face: const_default(),
+        cull_mode: const_default(),
+        unclipped_depth: const_default(),
+        polygon_mode: const_default(),
+        conservative: const_default(),
+    };
+}
+
+impl ConstDefault for PrimitiveTopology {
+    const DEFAULT: Self = Self::TriangleList;
+}
+
+impl ConstDefault for IndexFormat {
+    const DEFAULT: Self = Self::Uint32;
+}
+
+impl ConstDefault for FrontFace {
+    const DEFAULT: Self = Self::Ccw;
+}
+
+impl ConstDefault for PolygonMode {
+    const DEFAULT: Self = Self::Fill;
+}
+
+impl ConstDefault for VertexStepMode {
+    const DEFAULT: Self = Self::Vertex;
+}
 
 
 
 /// CPU-side mesh containing list of vertices and
 /// possibly indices with specified [topology][PrimitiveTopology].
-#[derive(Debug, Clone, Eq, PartialEq, Default)]
+#[derive(Debug, Clone, Eq, PartialEq, SmartDefault)]
+#[default(Self::DEFAULT)]
 pub struct Mesh<V> {
     pub vertices: Vec<V>,
     pub indices: Option<Indices>,
@@ -26,21 +61,18 @@ pub struct Mesh<V> {
 assert_impl_all!(Mesh<f32>: Send, Sync, Component);
 
 impl<V: Vertex> Mesh<V> {
-    pub fn new(vertices: Vec<V>, indices: Option<Indices>, primitive_topology: PrimitiveTopology) -> Self {
+    pub const fn new(vertices: Vec<V>, indices: Option<Indices>, primitive_topology: PrimitiveTopology) -> Self {
         Self { vertices, indices, primitive_topology }
     }
 
-    pub fn new_empty(primitive_topology: PrimitiveTopology) -> Self {
+    pub const fn new_empty(primitive_topology: PrimitiveTopology) -> Self {
         Self::new(vec![], None, primitive_topology)
     }
 
     pub fn connect(meshes: impl IntoIterator<Item = Self>) -> Self {
         let mut meshes = meshes.into_iter();
-        
-        let first = match meshes.next() {
-            Some(mesh) => mesh,
-            None => return default(),
-        };
+
+        let Some(first) = meshes.next() else { return default() };
 
         let mut vertices = first.vertices;
         let mut indices = first.indices;
@@ -72,20 +104,22 @@ impl<V: Vertex> FromIterator<Mesh<V>> for Mesh<V> {
     }
 }
 
+impl<V: Vertex> ConstDefault for Mesh<V> {
+    const DEFAULT: Self = Self::new(vec![], None, PrimitiveTopology::DEFAULT);
+}
+
 
 
 /// CPU-side index buffer containing indices for [mesh][Mesh].
-#[derive(Debug, Clone, Hash, PartialEq, Eq, SmartDefault, TypeUuid)]
-#[uuid = "2a840fc0-e39a-11ed-b9fb-0800200c9a66"]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub enum Indices {
-    #[default]
     U16(Vec<u16>),
     U32(Vec<u32>),
 }
 assert_impl_all!(Indices: Send, Sync, Component);
 
 impl Indices {
-    pub fn format(&self) -> IndexFormat {
+    pub const fn format(&self) -> IndexFormat {
         match self {
             Self::U16(_) => IndexFormat::Uint16,
             Self::U32(_) => IndexFormat::Uint32,
@@ -111,6 +145,14 @@ impl From<Vec<u32>> for Indices {
     fn from(value: Vec<u32>) -> Self {
         Self::U32(value)
     }
+}
+
+impl ConstDefault for Indices {
+    const DEFAULT: Self = Self::U16(vec![]);
+}
+
+impl Default for Indices {
+    fn default() -> Self { Self::DEFAULT }
 }
 
 
@@ -145,10 +187,7 @@ assert_impl_all!(GpuMesh: Send, Sync, Component);
 
 impl GpuMesh {
     pub fn new<V: Vertex>(desc: GpuMeshDescriptor<'_, V>) -> Self {
-        use crate::graphics::{
-            BufferUsages, FrontFace, Face,
-            DeviceExt, BufferInitDescriptor,
-        };
+        use crate::graphics::{BufferUsages, DeviceExt, BufferInitDescriptor};
 
         let vertices = desc.device.create_buffer_init(
             &BufferInitDescriptor {

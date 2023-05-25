@@ -11,6 +11,7 @@ pub use {
         runtime::RUNTIME,
         time::timer::{Timer, Time, TimeStep},
         str_view::{StrView, StaticStr},
+        wrapper::*,
     },
     smallvec::{SmallVec, smallvec},
     array_init::array_init,

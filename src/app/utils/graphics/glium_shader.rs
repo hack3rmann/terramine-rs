@@ -33,7 +33,7 @@ impl Shader {
         fragment_name: &str,
         display: &dyn glium::backend::Facade
     ) -> Result<Self, ShaderError> {
-        let _work_guard = logger::work("shader loader", format!("{vertex_name}, {fragment_name}."));
+        let _work_guard = logger::scope("shader loader", format!("{vertex_name}, {fragment_name}."));
         let vertex_src = fs::read_to_string(
             format!("{DIRECTORY}{}.{VERTEX_FILE_EXTENTION}", vertex_name)
         ).map_err(|err| ShaderError::FileRead { io_err: err, shader_name: vertex_name.into() })?;
