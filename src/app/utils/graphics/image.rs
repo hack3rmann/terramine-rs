@@ -52,7 +52,7 @@ impl FromFile for Image {
 
 
 
-crate::sum_errors! {
+macros::sum_errors! {
     LoadImageError { Io => io::Error, Load => ImageError }
 }
 

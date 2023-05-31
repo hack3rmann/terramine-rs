@@ -13,7 +13,6 @@ pub mod pass;
 pub mod gpu_conversions;
 pub mod material;
 pub mod bind_group;
-pub mod macros;
 pub mod buffer;
 pub mod texture;
 pub mod sprite;
@@ -166,10 +165,11 @@ assert_impl_all!(Graphics: Send, Sync, Component);
 
 impl Graphics {
     /// Creates new [`Graphics`] that holds some renderer stuff.
-    pub async fn new(event_loop: &EventLoop<()>) -> Result<Self, winit::error::OsError> {
+    pub async fn new(event_loop: &EventLoop<()>) -> AnyResult<Self> {
         let _log_guard = logger::scope("graphics", "initialization");
 
-        let window = Window::from(event_loop, cfg::window::default::SIZES)?;
+        let window = Window::from(event_loop, cfg::window::default::SIZES)
+            .context("failed to initialize a window")?;
 
 
 
@@ -355,34 +355,34 @@ impl Graphics {
         )
     }
 
-    pub async fn refresh_test_shader(&mut self) {
-        match ShaderSource::from_file("shader.wgsl").await {
-            Ok(source) => {
-                let material = {
-                    let shader = Shader::new(&self.context.device, source, vec![TexturedVertex::BUFFER_LAYOUT]);
-                    StandartMaterial::from(shader).to_arc()
-                };
+    pub async fn refresh_test_shader(&mut self) -> AnyResult<()> {
+        let source = ShaderSource::from_file("shader.wgsl").await
+            .context("failed to load shader source from 'shader.wgsl'")?;
 
-                let mesh = self.sandbox.resource::<&GpuMesh>().unwrap();
-                let layout = self.sandbox.resource::<&PipelineLayout>().unwrap();
+        let material = {
+            let shader = Shader::new(&self.context.device, source, vec![TexturedVertex::BUFFER_LAYOUT]);
+            StandartMaterial::from(shader).to_arc()
+        };
 
-                let new_pipeline = RenderPipeline::new(
-                    RenderPipelineDescriptor {
-                        device: &self.context.device,
-                        material: material.as_ref(),
-                        primitive_state: mesh.primitive_state,
-                        label: Some("test_render_pipeline".into()),
-                        layout: &layout,
-                    },
-                );
+        let mesh = self.sandbox.resource::<&GpuMesh>()?;
+        let layout = self.sandbox.resource::<&PipelineLayout>()?;
 
-                let mut query = self.sandbox.query::<&mut RenderPipeline>();
-                for (_entity, pipeline) in query.into_iter() {
-                    *pipeline = new_pipeline.clone();
-                }
+        let new_pipeline = RenderPipeline::new(
+            RenderPipelineDescriptor {
+                device: &self.context.device,
+                material: material.as_ref(),
+                primitive_state: mesh.primitive_state,
+                label: Some("test_render_pipeline".into()),
+                layout: &layout,
             },
-            Err(err) => logger::log!(Error, from = "graphics", "failed to reload test shader: {err}"),
+        );
+
+        let mut query = self.sandbox.query::<&mut RenderPipeline>();
+        for (_entity, pipeline) in query.into_iter() {
+            *pipeline = new_pipeline.clone();
         }
+
+        Ok(())
     }
 
     pub fn render_sandbox(&mut self, encoder: &mut CommandEncoder, view: TextureView) {
@@ -464,7 +464,8 @@ impl Graphics {
 
     pub async fn update(&mut self, dt: TimeStep) {
         if keyboard::just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
-            self.refresh_test_shader().await;
+            self.refresh_test_shader().await
+                .log_error("graphics", "failed to refresh test shader");
         }
 
         self.imgui.context

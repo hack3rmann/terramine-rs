@@ -363,7 +363,7 @@ impl ChunkArray {
     pub fn get_voxel(&self, world: &World, pos: Int3) -> Option<Voxel> {
         match self.get_chunk(world, pos)?.get_voxel_global(pos) {
             ChunkOption::Voxel(voxel) => Some(voxel),
-            ChunkOption::OutsideChunk => unreachable!("pos {} is indeed in that chunk", pos),
+            ChunkOption::OutsideChunk => unreachable!("pos {pos} is indeed in that chunk"),
             ChunkOption::Failed => None,
         }
     }
@@ -549,7 +549,7 @@ impl ChunkArray {
         let chunk_pos = vec3::from(chunk_pos);
 
         let dist = (chunk_pos - cam_pos_in_chunks + vec3::all(0.5)).len();
-        Lod::min(
+        cmp::min(
             (dist / threashold).floor() as Lod,
             Chunk::SIZE.ilog2() as Lod,
         )
@@ -968,7 +968,7 @@ impl ChunkArray {
 
 
 
-crate::sum_errors! {
+macros::sum_errors! {
     UpdateError { Join => JoinError, Save => io::Error, Other => UserFacingError }
 }
 
@@ -1068,7 +1068,6 @@ impl ChangeTracker {
 
 
 pub type ChunkRef = Arc<Chunk>;
-pub type MeshRef = Rc<RefCell<ChunkMesh>>;
 pub type ChunkAdj = Sides<Option<Arc<Chunk>>>;
 
 
@@ -1141,27 +1140,23 @@ impl ChunkArrayTasks {
         let chunk = ChunkRef::clone(chunk);
 
         let chunk_pos = chunk.pos.load(Relaxed);
-        if lod == 0 && self.full.contains_key(&chunk_pos) ||
-           lod != 0 && self.low.contains_key(&(chunk_pos, lod)) ||
-           !chunk.is_generated() ||
-           !ChunkArray::is_adj_generated(&adj).await
+        if lod == 0 && self.full.contains_key(&chunk_pos)
+        || lod != 0 && self.low.contains_key(&(chunk_pos, lod))
+        || !chunk.is_generated()
+        || !ChunkArray::is_adj_generated(&adj).await
         { return }
 
-        match lod {
-            0 => {
-                let prev = self.full.insert(chunk_pos, Task::spawn(async move {
-                    chunk.make_full_mesh(adj)
-                }));
-                assert!(prev.is_none(), "there should be only one task");
-            },
+        let prev_is_none = match lod {
+            0 => self.full.insert(chunk_pos, Task::spawn(async move {
+                chunk.make_full_mesh(adj)
+            })).is_none(),
 
-            _ => {
-                let prev = self.low.insert((chunk_pos, lod), Task::spawn(async move {
-                    chunk.make_low_mesh(adj, lod)
-                }));
-                assert!(prev.is_none(), "there should be only one task");
-            },
-        }
+            _ => self.low.insert((chunk_pos, lod), Task::spawn(async move {
+                chunk.make_low_mesh(adj, lod)
+            })).is_none(),
+        };
+
+        assert!(prev_is_none, "there should be only one task");
     }
 
     pub fn start_partitioning(&mut self, chunk: &ChunkRef, adj: ChunkAdj) {
@@ -1198,13 +1193,11 @@ impl ChunkArrayTasks {
     pub async fn try_finish_full(
         &mut self, pos: Int3, mesh: &mut ChunkMesh, device: &Device,
     ) -> Result<(), TaskError> {
-        let Some(task) = self.full.get_mut(&pos) else {
-            return Err(TaskError::TaskNotFound { lod: 0, pos })
-        };
+        let task = self.full.get_mut(&pos)
+            .ok_or(TaskError::TaskNotFound { lod: 0, pos })?;
 
-        let Some(vertices) = task.try_take_result().await else {
-            return Err(TaskError::TaskNotReady)
-        };
+        let vertices = task.try_take_result().await
+            .ok_or(TaskError::TaskNotReady)?;
 
         mesh.upload_full_mesh(device, &vertices);
         let _ = self.full.remove(&pos)
@@ -1216,13 +1209,11 @@ impl ChunkArrayTasks {
     pub async fn try_finish_low(
         &mut self, pos: Int3, lod: Lod, mesh: &mut ChunkMesh, device: &Device,
     ) -> Result<(), TaskError> {
-        let Some(task) = self.low.get_mut(&(pos, lod)) else {
-            return Err(TaskError::TaskNotFound { lod, pos })
-        };
+        let task = self.low.get_mut(&(pos, lod))
+            .ok_or(TaskError::TaskNotFound { lod, pos })?;
 
-        let Some(vertices) = task.try_take_result().await else {
-            return Err(TaskError::TaskNotReady)
-        };
+        let vertices = task.try_take_result().await
+            .ok_or(TaskError::TaskNotReady)?;
 
         mesh.upload_low_mesh(device, &vertices, lod);
         let _ = self.low.remove(&(pos, lod))

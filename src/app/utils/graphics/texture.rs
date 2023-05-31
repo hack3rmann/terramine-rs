@@ -13,7 +13,7 @@ pub use wgpu::{
 
 
 
-crate::define_atomic_id!(TextureId);
+macros::define_atomic_id!(TextureId);
 
 /// A GPU-accessible texture.
 ///
@@ -86,7 +86,7 @@ impl Deref for Texture {
 
 
 
-crate::define_atomic_id!(TextureViewId);
+macros::define_atomic_id!(TextureViewId);
 
 /// Describes a [`Texture`] with its associated metadata required by a pipeline or [`BindGroup`](super::BindGroup).
 #[derive(Clone, Debug)]
@@ -135,7 +135,7 @@ impl Deref for SurfaceTexture {
 
 
 
-crate::define_atomic_id!(SamplerId);
+macros::define_atomic_id!(SamplerId);
 
 /// A Sampler defines how a pipeline will sample from a [`TextureView`].
 /// They define image filters (including anisotropy) and address (wrapping) modes, among other things.

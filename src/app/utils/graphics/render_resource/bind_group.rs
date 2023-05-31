@@ -10,7 +10,7 @@ use {
     // encase::ShaderType,
 };
 
-crate::define_atomic_id!(BindGroupId);
+macros::define_atomic_id!(BindGroupId);
 
 /// Bind groups are responsible for binding render resources (e.g. buffers, textures, samplers)
 /// to a [`TrackedRenderPass`](crate::render_phase::TrackedRenderPass).

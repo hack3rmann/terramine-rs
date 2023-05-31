@@ -14,7 +14,7 @@ pub use wgpu::{
 
 
 
-crate::define_atomic_id!(BindGroupLayoutId);
+macros::define_atomic_id!(BindGroupLayoutId);
 
 /// Handle to a binding group layout.
 ///
@@ -55,7 +55,7 @@ impl Deref for BindGroupLayout {
 
 
 
-crate::define_atomic_id!(BindGroupId);
+macros::define_atomic_id!(BindGroupId);
 
 /// Handle to a binding group.
 ///
@@ -221,7 +221,7 @@ impl FromIterator<(BindGroup, Option<BindGroupLayout>)> for Binds {
 
 
 
-crate::define_atomic_id!(BindsId);
+macros::define_atomic_id!(BindsId);
 
 #[derive(Clone, Debug)]
 pub struct BindsRef {

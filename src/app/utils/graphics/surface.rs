@@ -156,7 +156,7 @@ impl<'s> Surface<'s> {
 
 
 
-crate::sum_errors! {
+macros::sum_errors! {
     SurfaceError {
         TextureCreation => TextureCreationError,
         Validation => ValidationError,

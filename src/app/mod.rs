@@ -30,7 +30,7 @@ pub struct App {
 
 impl App {
     /// Constructs [`App`].
-    pub async fn new() -> Self {
+    pub async fn new() -> AnyResult<Self> {
         let _work_guard = logger::scope("app", "new");
 
         let mut app = Self {
@@ -44,13 +44,13 @@ impl App {
             event_loop: Nullable::new(default()),
         };
 
-        app.setup().await;
+        app.setup().await?;
 
-        app
+        Ok(app)
     }
 
     /// Setups an [`App`] after creation.
-    pub async fn setup(&mut self) {
+    pub async fn setup(&mut self) -> AnyResult<()> {
         let _work_guard = logger::scope("app", "setup");
 
 
@@ -65,24 +65,26 @@ impl App {
         self.camera = CameraHandle::spawn_default(&mut self.world);
 
 
-        let mut graphics = self.world.resource::<&mut Graphics>().unwrap();
+        let mut graphics = self.world.resource::<&mut Graphics>()?;
 
         graphics.imgui.add_window_builder_bunch([
             logger::spawn_window,
             loading::spawn_info_window,
             crate::terrain::voxel::generator::spawn_control_window,
         ]);
+
+        Ok(())
     }
 
-    /// Runs app. Runs glium's `event_loop`.
+    /// Runs an [app][App]. Runs `glium`'s `event_loop`.
     pub fn run(mut self) -> ! {
         let event_loop = self.event_loop.take();
         event_loop.run(move |event, elw_target, control_flow| RUNTIME.block_on(
             self.run_frame_loop(event, elw_target, control_flow)
-        ))
+        ).unwrap())
     }
 
-    /// Exits app. Runs any destructor or deinitializer functions.
+    /// Exits [app][App]. Runs any destructor or deinitializer functions.
     pub async fn exit(&mut self, control_flow: &mut ControlFlow) {
         control_flow.set_exit();
     }
@@ -91,11 +93,11 @@ impl App {
     pub async fn run_frame_loop(
         &mut self, event: Event<'_, ()>,
         _elw_target: &EventLoopWindowTarget<()>, control_flow: &mut ControlFlow,
-    ) {
+    ) -> AnyResult<()> {
         *control_flow = ControlFlow::Poll;
 
         let cur_window_id = {
-            let mut graphics = self.world.resource::<&mut Graphics>().unwrap();
+            let mut graphics = self.world.resource::<&mut Graphics>()?;
 
             graphics.handle_event(&event);
             user_io::handle_event(&event, &graphics.window);
@@ -113,34 +115,38 @@ impl App {
             Event::MainEventsCleared => {
                 if keyboard::just_pressed(cfg::key_bindings::APP_EXIT) {
                     self.exit(control_flow).await;
-                    return;
+                    return Ok(());
                 }
 
-                let graphics = self.world.resource::<&Graphics>().unwrap();
+                let graphics = self.world.resource::<&Graphics>()?;
                 graphics.window.request_redraw();
             },
 
             Event::RedrawRequested(window_id) =>
-                self.do_frame(window_id).await,
+                self.do_frame(window_id).await?,
 
             _ => (),
         }
+
+        Ok(())
     }
 
     /// Updates `ecs`'s systems. Note that non of resources can be borrowed at this point.
-    async fn update_systems(&mut self) {
+    async fn update_systems(&mut self) -> AnyResult<()> {
         CameraHandle::update_all(&self.world);
+
+        Ok(())
     }
 
     /// Updates all in the [app][App].
-    async fn update(&mut self, _window_id: WindowId) {
+    async fn update(&mut self, _window_id: WindowId) -> AnyResult<()> {
         for update in self.update_functions.iter() {
             update();
         }
 
         {
-            let mut timer = self.world.resource::<&mut Timer>().unwrap();
-            let mut graphics = self.world.resource::<&mut Graphics>().unwrap();
+            let mut timer = self.world.resource::<&mut Timer>()?;
+            let mut graphics = self.world.resource::<&mut Graphics>()?;
             
             timer.update();
             graphics.update(timer.dt()).await;
@@ -158,22 +164,26 @@ impl App {
             }
         }
 
-        self.update_systems().await;
+        self.update_systems().await?;
+
+        Ok(())
     }
 
     /// Prepares a frame.
-    async fn prepare_frame(&mut self, _window_id: WindowId) {
-        let fps = self.world.resource::<&Timer>().unwrap().fps();
-        let mut graphics = self.world.resource::<&mut Graphics>().unwrap();
+    async fn prepare_frame(&mut self, _window_id: WindowId) -> AnyResult<()> {
+        let fps = self.world.resource::<&Timer>()?.fps();
+        let mut graphics = self.world.resource::<&mut Graphics>()?;
 
         // Prepare frame to render.
         graphics.prepare_frame(fps)
-            .expect("failed to prepare a frame");
+            .context("failed to prepare a frame")?;
+
+        Ok(())
     }
 
     /// Draws a frame on main window.
-    async fn draw_frame(&mut self, _window_id: WindowId) {
-        let timer = self.world.resource::<&Timer>().unwrap();
+    async fn draw_frame(&mut self, _window_id: WindowId) -> AnyResult<()> {
+        let timer = self.world.resource::<&Timer>()?;
 
         // InGui draw data.
         let use_ui = |ui: &mut imgui::Ui| {
@@ -181,25 +191,29 @@ impl App {
             profiler::update_and_build_window(ui, timer.dt());
         };
 
-        let mut graphics = self.world.resource::<&mut Graphics>().unwrap();
+        let mut graphics = self.world.resource::<&mut Graphics>()?;
         graphics.render(
             RenderDescriptor {
                 use_imgui_ui: use_ui,
                 time: timer.time(),
             }
-        ).expect("failed to render graphics");
+        ).context("failed to render graphics")?;
+
+        Ok(())
     }
 
     /// Does a frame.
-    async fn do_frame(&mut self, window_id: WindowId) {
+    async fn do_frame(&mut self, window_id: WindowId) -> AnyResult<()> {
         // Skip a frame if the window is not main.
         {
-            let graphics = self.world.resource::<&Graphics>().unwrap();
-            if window_id != graphics.window.id() { return }
+            let graphics = self.world.resource::<&Graphics>()?;
+            if window_id != graphics.window.id() { return Ok(()) }
         }
 
-        self.update(window_id).await;
-        self.prepare_frame(window_id).await;
-        self.draw_frame(window_id).await;
+        self.update(window_id).await?;
+        self.prepare_frame(window_id).await?;
+        self.draw_frame(window_id).await?;
+
+        Ok(())
     }
 }

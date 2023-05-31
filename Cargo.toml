@@ -47,6 +47,7 @@ directx_math = '0.2.2'
 noise = '0.8.2'
 
 # Utils
+anyhow = '1.0.71'
 huffman-compress = '0.6.1'
 bit-vec = '0.6.3'
 array-init = '2.1.0'

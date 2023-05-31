@@ -1,4 +1,4 @@
-#![macro_use]
+
 
 #[macro_export]
 macro_rules! define_atomic_id {
@@ -24,12 +24,38 @@ macro_rules! define_atomic_id {
                 }))
             }
         }
-    };
+    }
 }
 
-#[macro_export]
-macro_rules! sum_errors {
-    () => { };
+pub use crate::define_atomic_id;
+
+
+#[repr(transparent)]
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug, derive_deref_rs::Deref)]
+pub struct TestId(core::num::NonZeroU64);
+
+// We use new instead of default to indicate that each ID created will be unique.
+#[allow(clippy::new_without_default)]
+impl TestId {
+    pub fn new() -> Self {
+        use std::sync::atomic::{AtomicU64, Ordering};
+
+        static COUNTER: AtomicU64 = AtomicU64::new(1);
+
+        let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
+        Self(core::num::NonZeroU64::new(counter).unwrap_or_else(|| {
+            panic!(
+                "The system ran out of unique `{}`s.",
+                stringify!(TestId)
+            );
+        }))
+    }
+}
+
+
+
+pub macro sum_errors {
+    () => { },
 
     (
         $ErrName:ident { $($VariantName:ident => $ErrType:ty),+ $(,)? },
@@ -37,7 +63,7 @@ macro_rules! sum_errors {
     ) => {
         sum_errors! { $ErrName { $($VariantName => $ErrType,)+ } }
         sum_errors! { rest }
-    };
+    },
 
     ($ErrName:ident { $($VariantName:ident => $ErrType:ty),+ $(,)? }) => {
         #[derive(Debug, thiserror::Error)]
@@ -47,5 +73,5 @@ macro_rules! sum_errors {
                 $VariantName(#[from] $ErrType),
             )+
         }
-    };
+    },
 }

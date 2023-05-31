@@ -1,24 +1,25 @@
-#![macro_use]
-
 //!
 //! Provides some `type-byte` and `byte-type` reinterpretations to common types
 //!
 
+
+
 use crate::prelude::*;
+
+
 
 /// Composes input list of `IntoIterator`s with `Item = u8`
 /// into one large iterator by sequetially calling `.chain()`,
 /// producing new `Iterator` with `Item = u8`.
-#[macro_export]
-macro_rules! compose {
+pub macro compose {
     () => {
         Vec::<u8>::new()
             .into_iter()
-    };
+    },
 
     ($once:expr $(,)?) => {
         $once.into_iter()
-    };
+    },
 
     ($first:expr, $($next:expr),+ $(,)?) => {
         $first
@@ -26,20 +27,17 @@ macro_rules! compose {
             $(
                 .chain($next)
             )+
-    };
+    },
 }
 
-#[macro_export]
-macro_rules! read {
-    ($bytes:expr, $(let $var_name:ident $(:$VarType:ty)?),* $(,)?) => {
-        let mut reader = ByteReader::new($bytes);
-        $(
-            let $var_name $(:$VarType)? = reader.read()?;
-        )*
-    };
+pub macro read($bytes:expr, $(let $var_name:ident $(:$VarType:ty)?),* $(,)?) {
+    let mut reader = ByteReader::new($bytes);
+    $(
+        let $var_name $(:$VarType)? = reader.read()?;
+    )*
 }
 
-pub use crate::{compose, read};
+
 
 pub trait Reinterpret:
     AsBytes +
@@ -101,6 +99,9 @@ pub enum ReinterpretError {
 
     #[error("failed to convert types: {0}")]
     Conversion(String),
+
+    #[error(transparent)]
+    Other(#[from] AnyError),
 }
 
 #[repr(transparent)]
@@ -130,33 +131,32 @@ impl<'s> ByteReader<'s> {
     }
 }
 
-macro_rules! impl_nums {
-    ($($Type:ty),* $(,)?) => {
-        $(
-            impl AsBytes for $Type {
-                fn as_bytes(&self) -> Vec<u8> {
-                    self.to_ne_bytes().into()
-                }
+
+
+macro impl_nums($($Type:ty),* $(,)?) {
+    $(
+        impl AsBytes for $Type {
+            fn as_bytes(&self) -> Vec<u8> {
+                self.to_ne_bytes().into()
             }
+        }
 
-            impl FromBytes for $Type {
-                fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-                    use std::array::TryFromSliceError;
+        impl FromBytes for $Type {
+            fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+                use std::array::TryFromSliceError;
 
-                    let size = mem::size_of::<Self>();
-                    Ok(Self::from_ne_bytes(source[..size].try_into().map_err(|err: TryFromSliceError|
-                        ReinterpretError::Conversion(err.to_string())
-                    )?))
-                }
+                let size = mem::size_of::<Self>();
+                Ok(Self::from_ne_bytes(source[..size].try_into().map_err(|err: TryFromSliceError|
+                    ReinterpretError::Conversion(err.to_string())
+                )?))
             }
+        }
 
-            impl StaticSize for $Type { }
-        )*
-    }
+        impl StaticSize for $Type { }
+    )*
 }
 
 impl_nums! { u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, f32, f64 }
-
 
 impl AsBytes for usize {
     fn as_bytes(&self) -> Vec<u8> {
@@ -409,8 +409,8 @@ impl<T: DynamicSize> DynamicSize for Option<T> {
 
 use math_linear::prelude::*;
 
-macro_rules! reinterpret_3d_vectors {
-    ($($VecName:ident = ($x:ident, $y:ident, $z:ident): $Type:ty);* $(;)?) => {$(
+macro reinterpret_3d_vectors($($VecName:ident = ($x:ident, $y:ident, $z:ident): $Type:ty);* $(;)?) {
+    $(
         impl AsBytes for $VecName {
             fn as_bytes(&self) -> Vec<u8> {
                 compose! {
@@ -436,7 +436,7 @@ macro_rules! reinterpret_3d_vectors {
         impl StaticSize for $VecName {
             fn static_size() -> usize { 3 * <$Type>::static_size() }
         }
-    )*};
+    )*
 }
 
 reinterpret_3d_vectors! {

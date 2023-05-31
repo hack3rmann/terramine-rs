@@ -1,6 +1,8 @@
 use crate::prelude::*;
 
-crate::define_atomic_id!(BindGroupLayoutId);
+
+
+macros::define_atomic_id!(BindGroupLayoutId);
 
 #[derive(Clone, Debug, Deref)]
 pub struct BindGroupLayout {

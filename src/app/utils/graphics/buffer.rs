@@ -9,7 +9,7 @@ pub use wgpu::BufferUsages;
 
 
 
-crate::define_atomic_id!(BufferId);
+macros::define_atomic_id!(BufferId);
 
 #[derive(Clone, Debug)]
 pub struct Buffer {

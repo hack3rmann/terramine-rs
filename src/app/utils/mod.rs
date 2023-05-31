@@ -16,6 +16,7 @@ pub mod transform;
 pub mod camera;
 pub mod str_view;
 pub mod wrapper;
+pub mod macros;
 
 
 
@@ -64,14 +65,12 @@ impl ToVec2 for PhysicalSize<u32> {
 
 
 
-macro_rules! impl_volume {
-    ($VecType:ty, $ElemType:ty) => {
-        impl Volume<$ElemType> for $VecType {
-            fn volume(&self) -> $ElemType {
-                self.x * self.y * self.z
-            }
+macro impl_volume($VecType:ty, $ElemType:ty) {
+    impl Volume<$ElemType> for $VecType {
+        fn volume(&self) -> $ElemType {
+            self.x * self.y * self.z
         }
-    };
+    }
 }
 
 pub trait Volume<T> {
@@ -96,14 +95,12 @@ impl_volume!(Double3, f64);
 
 
 
-macro_rules! impl_default_for_numbers {
-    ($($Int:ty),* $(,)?) => {
-        $(
-            impl ConstDefault for $Int {
-                const DEFAULT: Self = 0 as Self;
-            }
-        )*
-    };
+macro impl_nums_const_default($($Int:ty),* $(,)?) {
+    $(
+        impl ConstDefault for $Int {
+            const DEFAULT: Self = 0 as Self;
+        }
+    )*
 }
 
 
@@ -112,7 +109,7 @@ pub trait ConstDefault {
     const DEFAULT: Self;
 }
 
-impl_default_for_numbers! { i8, u8, i16, u16, i32, u32, f32, i64, u64, isize, usize }
+impl_nums_const_default! { i8, u8, i16, u16, i32, u32, f32, i64, u64, isize, usize }
 
 impl ConstDefault for bool {
     const DEFAULT: Self = false;

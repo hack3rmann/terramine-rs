@@ -98,33 +98,28 @@ impl Drop for LogGuard {
 
 
 
-#[macro_export]
-macro_rules! log {
-    ($msg_type:ident, from = $from:expr, $($content:tt)*) => {{
-        use $crate::app::utils::logger::{log, MsgType::*};
+pub macro log($msg_type:ident, from = $from:expr, $($content:tt)*) {
+    {
+        use $crate::app::utils::logger::{log, MsgType::$msg_type};
         log($msg_type, $from, std::fmt::format(format_args!($($content)*)));
-    }};
+    }
 }
 
-#[macro_export]
-macro_rules! log_dbg {
-    ($expr:expr) => {{
+pub macro log_dbg($expr:expr) {
+    {
         use $crate::app::utils::logger::log;
         let result = $expr;
         log!(Info, from = "dbg", "{expr} = {result:?}", expr = stringify!($expr));
         result
-    }};
+    }
 }
 
-#[macro_export]
-macro_rules! work {
-    (from = $from:expr, $($content:tt)*) => {{
+pub macro work(from = $from:expr, $($content:tt)*) {
+    {
         use $crate::app::utils::logger::scope;
         scope($from, std::fmt::format(format_args!($($content)*)))
-    }};
+    }
 }
-
-pub use crate::{log, log_dbg, work};
 
 
 
@@ -230,7 +225,7 @@ pub trait LogError<T> {
     fn log_error_or_else(self, from: impl Into<StaticStr>, msg: impl Into<StaticStr>, f: impl FnOnce() -> T) -> T;
 }
 
-impl<T, E: std::error::Error> LogError<T> for Result<T, E> {
+impl<T, E: std::fmt::Display> LogError<T> for Result<T, E> {
     fn log_error(self, from: impl Into<StaticStr>, msg: impl Into<StaticStr>) -> T where T: Default {
         match self {
             Ok(item) => item,
