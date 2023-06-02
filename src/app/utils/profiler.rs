@@ -1,26 +1,30 @@
 #![allow(dead_code)]
 
-pub extern crate profiler as profiler_target_macro;
-pub use profiler_target_macro::profiler_target;
-
 use {
     crate::prelude::*,
-    std::{
-        time::Instant,
-        sync::Mutex,
-    },
+    std::time::Instant,
+    parking_lot::Mutex,
 };
+
+
+
+pub use terramine_profiler_macros::profiler_target as profile;
+
 
 pub mod prelude {
     pub use super::{
-        profiler_target as profile,
+        profile,
         super::profiler,
         MeasureId,
     };
 }
 
+
+
 pub type MeasureId = u64;
 pub type DataSummary<'s> = Vec<Data<'s>>;
+
+
 
 #[derive(Debug, Clone, Copy)]
 pub struct Data<'s> {
@@ -30,6 +34,8 @@ pub struct Data<'s> {
     time: f64,
     max_time: f64,
 }
+
+
 
 /// Represents profiler target.
 #[derive(Debug)]
@@ -49,6 +55,8 @@ impl Profile {
         }
     }
 }
+
+
 
 /// Represents a time measure with drop-stop.
 #[derive(Debug)]
@@ -71,11 +79,15 @@ impl Drop for Measure {
     }
 }
 
+
+
 /// Handles all profiles.
 #[derive(Debug)]
 pub struct Profiler {
     pub profiles: HashMap<MeasureId, Profile>,
 }
+
+
 
 static IS_DRAWING_ENABLED: AtomicBool = AtomicBool::new(false);
 
@@ -88,7 +100,6 @@ lazy_static! {
 /// Adds profile
 pub fn add_profile(profile: Profile, id: MeasureId) {
     PROFILER.lock()
-        .unwrap()
         .profiles
         .insert(id, profile);
 }
@@ -96,7 +107,6 @@ pub fn add_profile(profile: Profile, id: MeasureId) {
 /// Uploads measure
 pub fn upload_measure(measure: &Measure) {
     PROFILER.lock()
-        .unwrap()
         .profiles
         .get_mut(&measure.id)
         .unwrap_or_else(|| panic!("measure {measure:?} should be in measure map"))
@@ -107,7 +117,6 @@ pub fn upload_measure(measure: &Measure) {
 /// Starting capturing to to profile under given `id`.
 pub fn start_capture(target_name: impl Into<String>, id: MeasureId) -> Measure {
     let is_already_captured = PROFILER.lock()
-        .unwrap()
         .profiles
         .get(&id)
         .is_some();
@@ -125,7 +134,7 @@ pub fn update_and_build_window(ui: &imgui::Ui, dt: TimeStep) {
         let _ = IS_DRAWING_ENABLED.fetch_update(AcqRel, Relaxed, |prev| Some(!prev));
     }
 
-    let mut lock = PROFILER.lock().unwrap();
+    let mut lock = PROFILER.lock();
     let data = lock.profiles
         .iter_mut()
         .map(|(_, profile)| {
@@ -157,15 +166,15 @@ pub fn update_and_build_window(ui: &imgui::Ui, dt: TimeStep) {
 /// Updates profiler:
 /// * Clears measures
 pub fn update() {
-    let mut lock = PROFILER.lock().unwrap();
-    for (_, profile) in lock.profiles.iter_mut() {
+    let mut profiler = PROFILER.lock();
+    for profile in profiler.profiles.values_mut() {
         profile.measures.clear()
     }
 }
 
 /// Builds ImGui window of capturing results
 pub fn build_window(ui: &imgui::Ui, profiler_result: DataSummary) {
-    use crate::app::utils::graphics::ui::imgui_constructor::make_window;
+    use crate::app::utils::graphics::ui::imgui_ext::make_window;
 
     if !profiler_result.is_empty() && IS_DRAWING_ENABLED.load(Relaxed) {
         make_window(ui, "Profiler")
@@ -195,4 +204,17 @@ pub fn build_window(ui: &imgui::Ui, profiler_result: DataSummary) {
             }
         });
     }
+}
+
+
+
+pub macro scope {
+    ($name:expr) => {
+        ::lazy_static::lazy_static! {
+            static ref SCOPE_ID: $crate::profiler::MeasureId = ::rand::random();
+        }
+        let _measure = $crate::profiler::start_capture($name, *SCOPE_ID);
+    },
+
+    () => { $crate::profiler::scope!(""); },
 }

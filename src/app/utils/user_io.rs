@@ -8,7 +8,6 @@ use {
         um::winuser::GetCursorPos,
         shared::windef::POINT,
     },
-    std::sync::{RwLock, Mutex},
     glium::glutin::{
         event::{
             ElementState,
@@ -40,17 +39,16 @@ pub mod keyboard {
     }
 
     pub fn press(key: Key) {
-        INPUTS.write().unwrap()
+        INPUTS.write()
             .insert(key, ElementState::Pressed);
     }
 
     pub fn release(key: Key) {
-        INPUTS.write().unwrap()
-            .remove(&key);
+        INPUTS.write().remove(&key);
     }
 
     pub fn is_pressed(key: Key) -> bool {
-        let is_pressed = INPUTS.read().unwrap()
+        let is_pressed = INPUTS.read()
             .contains_key(&key);
         let is_captured = IS_INPUT_CAPTURED.load(Relaxed);
 
@@ -58,11 +56,11 @@ pub mod keyboard {
     }
 
     pub fn just_pressed(key: Key) -> bool {
-        let inputs = INPUTS.read().unwrap();
+        let inputs = INPUTS.read();
 
         let is_pressed = inputs.contains_key(&key);
         if is_pressed && !IS_INPUT_CAPTURED.load(Relaxed) {
-            RELEASED_KEYS.lock().unwrap()
+            RELEASED_KEYS.lock()
                 .insert(key);
             true
         } else {
@@ -84,8 +82,7 @@ pub mod keyboard {
         let is_captured = IS_INPUT_CAPTURED.load(Relaxed);
 
         if is_pressed && !is_captured {
-            let mut released_keys = RELEASED_KEYS.lock()
-                .unwrap();
+            let mut released_keys = RELEASED_KEYS.lock();
 
             for key in keys {
                 released_keys.insert(key);
@@ -96,9 +93,9 @@ pub mod keyboard {
     }
 
     pub fn update() {
-        let mut input = INPUTS.write().unwrap();
+        let mut input = INPUTS.write();
 
-        let mut released_keys = RELEASED_KEYS.lock().unwrap();
+        let mut released_keys = RELEASED_KEYS.lock();
 
         for key in released_keys.iter() {
             input.remove(key);
@@ -135,18 +132,15 @@ pub mod mouse {
     pub fn get_dy_dt() -> f32 { DY.load(Relaxed) }
 
     pub fn press(button: MouseButton) {
-        INPUTS.write().unwrap()
-            .insert(button);
+        INPUTS.write().insert(button);
     }
 
     pub fn release(button: MouseButton) {
-        INPUTS.write().unwrap()
-            .remove(&button);
+        INPUTS.write().remove(&button);
     }
 
     pub fn is_pressed(button: MouseButton) -> bool {
-        INPUTS.read().unwrap()
-            .contains(&button)
+        INPUTS.read().contains(&button)
     }
 
     pub fn just_pressed(button: MouseButton) -> bool {
@@ -192,8 +186,7 @@ pub mod mouse {
         {
             let mut released_keys = RELEASED_KEYS.lock().await;
 
-            let mut inputs = INPUTS.write()
-                .expect("rwlock should be not poisoned");
+            let mut inputs = INPUTS.write();
 
             for key in released_keys.iter() {
                 inputs.remove(key);
@@ -323,7 +316,7 @@ pub fn handle_event(event: &Event<()>, window: &glium::glutin::window::Window) {
 
             WindowEvent::Focused(focused) => {
                 /* If window has unfocused then release cursor. */
-                let mut is_regrabbed = CURSOR_REGRABBED.lock().unwrap();
+                let mut is_regrabbed = CURSOR_REGRABBED.lock();
 
                 let is_grabbed = mouse::IS_GRABBED.load(Relaxed);
                 if *focused && *is_regrabbed && !is_grabbed {

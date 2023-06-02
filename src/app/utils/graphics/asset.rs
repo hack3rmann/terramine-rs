@@ -38,13 +38,22 @@ pub async unsafe fn load_default_assets(device: &Device) {
 
 
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, From)]
 pub enum ShaderRef {
     #[default]
     Default,
     Module(Arc<Shader>),
 }
 assert_impl_all!(ShaderRef: Send, Sync);
+
+impl ShaderRef {
+    pub fn as_module(&self) -> Arc<Shader> {
+        match self {
+            Self::Default => Arc::clone(&DEFAULT_SHADER),
+            Self::Module(module) => Arc::clone(module),
+        }
+    }
+}
 
 impl From<Shader> for ShaderRef {
     fn from(value: Shader) -> Self {
@@ -55,21 +64,6 @@ impl From<Shader> for ShaderRef {
 impl From<&Arc<Shader>> for ShaderRef {
     fn from(value: &Arc<Shader>) -> Self {
         Self::from(Arc::clone(value))
-    }
-}
-
-impl From<Arc<Shader>> for ShaderRef {
-    fn from(value: Arc<Shader>) -> Self {
-        Self::Module(value)
-    }
-}
-
-impl ShaderRef {
-    pub fn as_module(&self) -> Arc<Shader> {
-        match self {
-            Self::Default => Arc::clone(&DEFAULT_SHADER),
-            Self::Module(module) => Arc::clone(module),
-        }
     }
 }
 

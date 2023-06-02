@@ -36,7 +36,7 @@ impl Default for Box<dyn Material> {
 
 lazy_static! {
     static ref DEFAULT_MATERIAL_COLOR_TARGET_STATES: Vec<Option<ColorTargetState>> = vec![Some({
-        let format = SURFACE_CFG.read().unwrap().format;
+        let format = SURFACE_CFG.read().format;
         ColorTargetState {
             format,
             blend: Some(BlendState::ALPHA_BLENDING),

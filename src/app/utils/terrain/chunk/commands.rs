@@ -1,11 +1,7 @@
-use {
-    crate::app::utils::{
-        terrain::voxel::voxel_data::Id,
-        concurrency::channel::Channel,
-    },
-    math_linear::prelude::*,
-    lazy_static::lazy_static,
-    std::sync::Mutex,
+use crate::{
+    prelude::*,
+    terrain::voxel::voxel_data::Id,
+    concurrency::channel::Channel,
 };
 
 lazy_static! {
@@ -30,7 +26,6 @@ pub enum Command {
 
 pub fn command(command: Command) {
     COMMAND_CHANNEL.lock()
-        .unwrap()
         .sender
         .send(command)
         .expect("failed to send command");

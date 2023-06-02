@@ -20,10 +20,7 @@ pub mod shader;
 pub mod asset;
 pub mod image;
 
-use {
-    crate::prelude::*,
-    std::sync::RwLock,
-};
+use crate::prelude::*;
 
 
 
@@ -184,7 +181,7 @@ impl Graphics {
         // * # Safety
         // * 
         // * We've got unique access to `SURFACE_CFG` so it is safe.
-        unsafe { SURFACE_CFG.write().unwrap().upload(config) };
+        unsafe { SURFACE_CFG.write().upload(config) };
 
         // * # Safety
         // * 
@@ -280,7 +277,7 @@ impl Graphics {
 
         
         
-        let imgui = ImGui::new(&context, &SURFACE_CFG.read().unwrap(), &window);
+        let imgui = ImGui::new(&context, &SURFACE_CFG.read(), &window);
 
 
 
@@ -422,9 +419,7 @@ impl Graphics {
             let ui = self.imgui.context.new_frame();
 
             (desc.use_imgui_ui)(ui);
-            for build in self.imgui.window_builders.iter() {
-                build(ui);
-            }
+            ui::imgui_ext::use_each_window_builder(ui);
 
             self.imgui.platform.prepare_render(ui, &self.window);
 
@@ -442,7 +437,7 @@ impl Graphics {
     /// Handles window resize event by [`Graphics`].
     pub fn on_window_resize(&mut self, new_size: UInt2) {
         if new_size.x > 0 && new_size.y > 0 {
-            let mut config = SURFACE_CFG.write().unwrap();
+            let mut config = SURFACE_CFG.write();
             (config.width, config.height) = (new_size.x, new_size.y);
             self.context.surface.configure(&self.context.device, &config);
         }
@@ -495,9 +490,6 @@ pub struct ImGui {
 
     /// ImGui WGPU renderer.
     pub renderer: ImGuiRendererWrapper,
-
-    /// Always used windows.
-    pub window_builders: Vec<fn(&imgui::Ui)>,
 }
 
 impl ImGui {
@@ -534,19 +526,7 @@ impl ImGui {
             context,
             platform,
             renderer: ImGuiRendererWrapper(renderer),
-            window_builders: default(),
         }
-    }
-
-    pub fn add_window_builder(&mut self, builder: fn(&imgui::Ui)) {
-        self.window_builders.push(builder);
-    }
-
-    pub fn add_window_builder_bunch(
-        &mut self,
-        builders: impl IntoIterator<Item = fn(&imgui::Ui)>,
-    ) {
-        self.window_builders.extend(builders.into_iter());
     }
 }
 
@@ -562,7 +542,7 @@ pub struct ImGuiRendererWrapper(ImguiRenderer);
 
 impl std::fmt::Debug for ImGuiRendererWrapper {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "imgui_Renderer {{ ... }}")
+        write!(f, "ImguiRenderer {{ ... }}")
     }
 }
 

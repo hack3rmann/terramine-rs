@@ -15,7 +15,7 @@ assert_impl_all!(DirectionalLight: Send, Sync);
 impl DirectionalLight {
     pub fn spawn_control_window(&mut self, ui: &imgui::Ui) {
         use {
-            crate::app::utils::graphics::ui::imgui_constructor::make_window,
+            crate::app::utils::graphics::ui::imgui_ext::make_window,
             std::f32::consts::PI,
         };
 

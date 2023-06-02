@@ -2,9 +2,16 @@
 
 use {
     crate::prelude::*,
-    std::sync::Mutex,
     tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
 };
+
+
+
+module_constructor! {
+    use crate::graphics::ui::imgui_ext::push_window_builder;
+
+    push_window_builder(spawn_info_window);
+}
 
 
 
@@ -71,7 +78,7 @@ impl Loadings {
     }
 
     pub fn spawn_info_window(&self, ui: &imgui::Ui) {
-        use crate::app::utils::graphics::ui::imgui_constructor::make_window;
+        use crate::app::utils::graphics::ui::imgui_ext::make_window;
 
         if self.list.is_empty() { return }
 
@@ -162,15 +169,9 @@ impl LoadingGuard {
 
 
 
-#[derive(Clone, Copy, Default, PartialEq, PartialOrd, Deref)]
+#[derive(Clone, Copy, Default, PartialEq, PartialOrd, Deref, From, Into)]
 pub struct LoadingValue(f32);
 assert_impl_all!(LoadingValue: Send, Sync);
-
-impl From<f32> for LoadingValue {
-    fn from(value: f32) -> Self {
-        Self(value)
-    }
-}
 
 impl From<Discrete> for LoadingValue {
     fn from(Discrete(current, size): Discrete) -> Self {
@@ -207,15 +208,12 @@ pub type CommandSender = UnboundedSender<LoadingCommand>;
 
 pub fn spawn_info_window(ui: &imgui::Ui) {
     LOADINGS.lock()
-        .unwrap()
         .loads
         .spawn_info_window(ui)
 }
 
 pub fn recv_all() -> Result<(), LoadingError> {
-    LOADINGS.lock()
-        .unwrap()
-        .recv_all()
+    LOADINGS.lock().recv_all()
 }
 
 pub fn update() {
@@ -223,10 +221,7 @@ pub fn update() {
 }
 
 pub fn make_sender() -> CommandSender {
-    LOADINGS.lock()
-        .unwrap()
-        .tx
-        .clone()
+    LOADINGS.lock().tx.clone()
 }
 
 pub fn start_new(name: impl Into<StaticStr>) -> LoadingGuard {

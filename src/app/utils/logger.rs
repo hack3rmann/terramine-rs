@@ -1,12 +1,8 @@
-#![macro_use]
 #![allow(clippy::manual_strip, clippy::too_many_arguments)]
 
-use {
-    crate::{
-        prelude::*,
-        concurrency::channel::Channel,
-    },
-    std::sync::Mutex,
+use crate::{
+    prelude::*,
+    concurrency::channel::Channel,
 };
 
 
@@ -16,6 +12,15 @@ lazy_static! {
 }
 
 static LOG_MESSAGES: Mutex<VecDeque<Message>> = Mutex::new(VecDeque::new());
+
+
+
+module_constructor! {
+    use crate::graphics::ui::imgui_ext::push_window_builder;
+
+    env_logger::init();
+    push_window_builder(spawn_window);
+}
 
 
 
@@ -41,11 +46,8 @@ pub enum MsgType {
 
 
 pub fn recv_all() {
-    let mut channel = CHANNEL.lock()
-        .expect("channel mutex should be not poisoned");
-
-    let mut messages = LOG_MESSAGES.lock()
-        .expect("messages mutex should be not poisoned");
+    let mut channel = CHANNEL.lock();
+    let mut messages = LOG_MESSAGES.lock();
 
     while let Ok(msg) = channel.receiver.try_recv() {
         messages.push_back(msg);
@@ -61,7 +63,6 @@ pub fn log(msg_type: MsgType, from: impl Into<StaticStr>, content: impl Into<Sta
 
     eprintln!("{msg_type} from {from}: {content}");
     CHANNEL.lock()
-        .expect("channel mutex should be not poisoned")
         .sender
         .send(Message { msg_type, from, content})
         .expect("failed to send message");
@@ -126,7 +127,7 @@ pub macro work(from = $from:expr, $($content:tt)*) {
 pub fn spawn_window(ui: &imgui::Ui) {
     use {
         crate::app::utils::{
-            graphics::ui::imgui_constructor::make_window,
+            graphics::ui::imgui_ext::make_window,
         },
         cpython::{Python, PyResult, py_fn, PyDict},
     };
@@ -150,12 +151,10 @@ pub fn spawn_window(ui: &imgui::Ui) {
         .build(|| {
             use crate::app::utils::terrain::chunk::commands::{Command, command};
 
-            let messages = LOG_MESSAGES.lock()
-                .expect("messages lock should be not poisoned");
+            let messages = LOG_MESSAGES.lock();
 
             static INPUT: Mutex<String> = Mutex::new(String::new());
-            let mut input = INPUT.lock()
-                .unwrap();
+            let mut input = INPUT.lock();
 
             let is_enter_pressed = ui.input_text("Console", &mut input)
                 .enter_returns_true(true)

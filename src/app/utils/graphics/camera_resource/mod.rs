@@ -225,7 +225,7 @@ impl Camera {
 
     /// Spawns camera control window.
     pub fn spawn_control_window(&mut self, ui: &imgui::Ui) {
-        use crate::app::utils::graphics::ui::imgui_constructor::make_window;
+        use crate::app::utils::graphics::ui::imgui_ext::make_window;
 
         /* UI building */
         make_window(ui, "Camera").build(|| {

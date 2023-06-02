@@ -14,7 +14,7 @@ use {
         graphics::{*, camera_resource::Camera},
     },
     math_linear::math::ray::space_3d::Line,
-    std::{io, mem, sync::Mutex},
+    std::io,
     tokio::task::{JoinHandle, JoinError},
 };
 
@@ -783,7 +783,7 @@ impl ChunkArray {
     }
 
     pub async fn spawn_control_window(&mut self, world: &mut World, ui: &imgui::Ui) {
-        use crate::app::utils::graphics::ui::imgui_constructor::make_window;
+        use crate::app::utils::graphics::ui::imgui_ext::make_window;
 
         make_window(ui, "Chunk array")
             .always_auto_resize(true)
@@ -813,7 +813,7 @@ impl ChunkArray {
 
                 ui.text("Generate new");
 
-                let mut sizes = GENERATOR_SIZES.lock().unwrap();
+                let mut sizes = GENERATOR_SIZES.lock();
 
                 ui.input_scalar_n("Sizes", &mut *sizes).build();
 
@@ -864,7 +864,7 @@ impl ChunkArray {
 
         let mut change_tracker = ChangeTracker::new(self.sizes);
         
-        while let Ok(command) = COMMAND_CHANNEL.lock().unwrap().receiver.try_recv() {
+        while let Ok(command) = COMMAND_CHANNEL.lock().receiver.try_recv() {
             self.proccess_command(world, command, &mut change_tracker).await;
         }
 
@@ -969,7 +969,7 @@ impl ChunkArray {
 
 
 macros::sum_errors! {
-    UpdateError { Join => JoinError, Save => io::Error, Other => UserFacingError }
+    pub enum UpdateError { Join => JoinError, Save => io::Error, Other => UserFacingError }
 }
 
 

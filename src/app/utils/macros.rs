@@ -1,77 +1,58 @@
+pub use crate::{define_atomic_id, sum_errors};
+
 
 
 #[macro_export]
 macro_rules! define_atomic_id {
-    ($atomic_id_type:ident) => {
+    ($AtomicIdType:ident) => {
         #[repr(transparent)]
-        #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug, derive_deref_rs::Deref)]
-        pub struct $atomic_id_type(core::num::NonZeroU64);
-
+        #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+        pub struct $AtomicIdType(core::num::NonZeroU64);
+    
         // We use new instead of default to indicate that each ID created will be unique.
         #[allow(clippy::new_without_default)]
-        impl $atomic_id_type {
+        impl $AtomicIdType {
             pub fn new() -> Self {
                 use std::sync::atomic::{AtomicU64, Ordering};
-
+    
                 static COUNTER: AtomicU64 = AtomicU64::new(1);
-
+    
                 let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
                 Self(core::num::NonZeroU64::new(counter).unwrap_or_else(|| {
                     panic!(
                         "The system ran out of unique `{}`s.",
-                        stringify!($atomic_id_type)
+                        stringify!($AtomicIdType)
                     );
                 }))
             }
         }
-    }
-}
-
-pub use crate::define_atomic_id;
-
-
-#[repr(transparent)]
-#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug, derive_deref_rs::Deref)]
-pub struct TestId(core::num::NonZeroU64);
-
-// We use new instead of default to indicate that each ID created will be unique.
-#[allow(clippy::new_without_default)]
-impl TestId {
-    pub fn new() -> Self {
-        use std::sync::atomic::{AtomicU64, Ordering};
-
-        static COUNTER: AtomicU64 = AtomicU64::new(1);
-
-        let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
-        Self(core::num::NonZeroU64::new(counter).unwrap_or_else(|| {
-            panic!(
-                "The system ran out of unique `{}`s.",
-                stringify!(TestId)
-            );
-        }))
-    }
+    
+        impl std::ops::Deref for $AtomicIdType {
+            type Target = core::num::NonZeroU64;
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+    
+        impl std::ops::DerefMut for $AtomicIdType {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
+    };
 }
 
 
 
-pub macro sum_errors {
-    () => { },
-
-    (
-        $ErrName:ident { $($VariantName:ident => $ErrType:ty),+ $(,)? },
-        $rest:tt $(,)?
-    ) => {
-        sum_errors! { $ErrName { $($VariantName => $ErrType,)+ } }
-        sum_errors! { rest }
-    },
-
-    ($ErrName:ident { $($VariantName:ident => $ErrType:ty),+ $(,)? }) => {
+#[macro_export]
+macro_rules! sum_errors {
+    ($vis:vis enum $ErrName:ident { $($VariantName:ident => $ErrType:ty),+ $(,)? }) => {
         #[derive(Debug, thiserror::Error)]
-        pub enum $ErrName {
+        $vis enum $ErrName {
             $(
                 #[error(transparent)]
                 $VariantName(#[from] $ErrType),
             )+
         }
-    },
+    };
 }

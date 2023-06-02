@@ -157,7 +157,7 @@ impl<'s> Surface<'s> {
 
 
 macros::sum_errors! {
-    SurfaceError {
+    pub enum SurfaceError {
         TextureCreation => TextureCreationError,
         Validation => ValidationError,
     }

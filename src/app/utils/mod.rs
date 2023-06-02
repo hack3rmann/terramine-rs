@@ -20,7 +20,9 @@ pub mod macros;
 
 
 
-use {crate::prelude::*, winit::dpi::{Pixel, PhysicalSize}};
+use { crate::prelude::*, winit::dpi::{Pixel, PhysicalSize} };
+
+pub use crate::{module_constructor, module_destructor};
 
 
 
@@ -129,4 +131,26 @@ impl<T> ConstDefault for Vec<T> {
 
 impl<T, const N: usize> ConstDefault for SmallVec<[T; N]> {
     const DEFAULT: Self = Self::new_const();
+}
+
+
+
+#[macro_export]
+macro_rules! module_constructor {
+    ($($content:tt)*) => {
+        #[ctor::ctor]
+        fn __module_constructor_function() {
+            $($content)*
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! module_destructor {
+    ($($content:tt)*) => {
+        #[ctor::dtor]
+        fn __module_destructor_function() {
+            $($content)*
+        }
+    };
 }

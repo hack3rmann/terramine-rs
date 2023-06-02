@@ -1,9 +1,9 @@
 use {
-    crate::app::utils::window::message_box::{MessageBox, MessageBoxError, MessageBoxSuccess},
+    crate::window::message_box::{MessageBox, MessageBoxError, MessageBoxSuccess},
     std::fmt::Display,
 };
 
-pub fn set_panic_hook() {
+crate::module_constructor! {
     std::panic::set_hook(Box::new(|panic_info| {
         eprintln!("Panic occured: {panic_info}");
         error_message("Panic occured", panic_info)

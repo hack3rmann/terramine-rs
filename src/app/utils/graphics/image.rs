@@ -14,7 +14,7 @@ pub type RgbaImageBuffer = ImageBuffer<Rgba<u8>, Vec<u8>>;
 
 
 
-#[derive(Clone, Debug, PartialEq, Deref, Default)]
+#[derive(Clone, Debug, PartialEq, Deref, Default, From, Into)]
 pub struct Image {
     pub inner: RgbaImageBuffer,
 }
@@ -28,12 +28,6 @@ impl Image {
     pub fn extent_size(&self) -> Extent3d {
         let (width, height) = self.dimensions().as_tuple();
         Extent3d { width, height, depth_or_array_layers: 1 }
-    }
-}
-
-impl From<RgbaImageBuffer> for Image {
-    fn from(value: RgbaImageBuffer) -> Self {
-        Self { inner: value }
     }
 }
 
@@ -53,7 +47,7 @@ impl FromFile for Image {
 
 
 macros::sum_errors! {
-    LoadImageError { Io => io::Error, Load => ImageError }
+    pub enum LoadImageError { Io => io::Error, Load => ImageError }
 }
 
 

@@ -64,15 +64,6 @@ impl App {
 
         self.camera = CameraHandle::spawn_default(&mut self.world);
 
-
-        let mut graphics = self.world.resource::<&mut Graphics>()?;
-
-        graphics.imgui.add_window_builder_bunch([
-            logger::spawn_window,
-            loading::spawn_info_window,
-            crate::terrain::voxel::generator::spawn_control_window,
-        ]);
-
         Ok(())
     }
 

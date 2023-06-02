@@ -111,7 +111,7 @@ impl<V: Vertex> ConstDefault for Mesh<V> {
 
 
 /// CPU-side index buffer containing indices for [mesh][Mesh].
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, From, IsVariant)]
 pub enum Indices {
     U16(Vec<u16>),
     U32(Vec<u32>),
@@ -132,18 +132,6 @@ impl Indices {
             (Self::U32(to), Self::U32(from)) => to.append(from),
             _ => panic!("appending different types if indices is unsupported"),
         }
-    }
-}
-
-impl From<Vec<u16>> for Indices {
-    fn from(value: Vec<u16>) -> Self {
-        Self::U16(value)
-    }
-}
-
-impl From<Vec<u32>> for Indices {
-    fn from(value: Vec<u32>) -> Self {
-        Self::U32(value)
     }
 }
 

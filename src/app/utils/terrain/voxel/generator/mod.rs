@@ -9,6 +9,16 @@ use {
     spin::RwLock,
 };
 
+
+
+module_constructor! {
+    use crate::graphics::ui::imgui_ext::push_window_builder;
+
+    push_window_builder(spawn_control_window);
+}
+
+
+
 static FREQUENCY: AtomicF32 = AtomicF32::new(0.05);
 static N_OCTAVES: AtomicUsize = AtomicUsize::new(6);
 static PERSISTENCE: AtomicF32 = AtomicF32::new(3.0);
@@ -19,7 +29,7 @@ lazy_static! {
     static ref NOISE_VALS: RwLock<Noise2d> = RwLock::new(
         Noise2d::new(
             SEED.load(Relaxed),
-            (Chunk::SIZES * USize3::from(*GENERATOR_SIZES.lock().unwrap())).xz(),
+            (Chunk::SIZES * USize3::from(*GENERATOR_SIZES.lock())).xz(),
             FREQUENCY.load(Relaxed),
             LACUNARITY.load(Relaxed),
             N_OCTAVES.load(Relaxed),
@@ -28,8 +38,10 @@ lazy_static! {
     );
 }
 
+
+
 pub fn spawn_control_window(ui: &imgui::Ui) {
-    use crate::app::utils::graphics::ui::imgui_constructor::make_window;
+    use crate::app::utils::graphics::ui::imgui_ext::make_window;
 
     make_window(ui, "Generator settings").build(|| {
         let _ = FREQUENCY.fetch_update(AcqRel, Relaxed, |mut freq| {
@@ -56,7 +68,7 @@ pub fn spawn_control_window(ui: &imgui::Ui) {
             let mut noise_vals = NOISE_VALS.write();
             let _ = mem::replace(&mut *noise_vals, Noise2d::new(
                 SEED.load(Relaxed),
-                (Chunk::SIZES * USize3::from(*GENERATOR_SIZES.lock().unwrap())).xz(),
+                (Chunk::SIZES * USize3::from(*GENERATOR_SIZES.lock())).xz(),
                 FREQUENCY.load(Relaxed),
                 LACUNARITY.load(Relaxed),
                 N_OCTAVES.load(Relaxed),

@@ -47,7 +47,7 @@ impl CameraHandle {
     }
 
     pub fn spawn_control_windows(world: &World, ui: &imgui::Ui) {
-        use crate::graphics::ui::imgui_constructor::make_window;
+        use crate::graphics::ui::imgui_ext::make_window;
 
         let mut query = world.query::<(&mut CameraComponent, &mut Transform)>();
         for (entity, (camera, transform)) in query.into_iter() {
@@ -155,7 +155,7 @@ impl CameraComponent {
 
     /// Spawns camera control window.
     pub fn spawn_control_window(&mut self, ui: &imgui::Ui, transform: &mut Transform, speed: &mut Speed) {
-        use crate::graphics::ui::imgui_constructor::make_window;
+        use crate::graphics::ui::imgui_ext::make_window;
 
         make_window(ui, "Camera").build(|| {
             ui.text("Position");

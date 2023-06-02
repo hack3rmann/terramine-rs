@@ -114,7 +114,7 @@ impl Deref for BindGroup {
 ///
 /// Corresponds to [WebGPU `GPUBindingResource`](
 /// https://gpuweb.github.io/gpuweb/#typedefdef-gpubindingresource).
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, From)]
 pub enum OwnedBindingResource {
     Buffer(Buffer),
     Sampler(Sampler),
@@ -123,31 +123,13 @@ pub enum OwnedBindingResource {
 assert_impl_all!(OwnedBindingResource: Send, Sync);
 
 impl OwnedBindingResource {
-    fn as_binding_resource(&self) -> BindingResource<'_> {
+    pub fn as_binding_resource(&self) -> BindingResource<'_> {
         use OwnedBindingResource::*;
         match self {
             Buffer(buffer) => buffer.as_entire_binding(),
             Sampler(sampler) => BindingResource::Sampler(sampler),
             TextureView(view) => BindingResource::TextureView(view),
         }
-    }
-}
-
-impl From<Buffer> for OwnedBindingResource {
-    fn from(value: Buffer) -> Self {
-        Self::Buffer(value)
-    }
-}
-
-impl From<Sampler> for OwnedBindingResource {
-    fn from(value: Sampler) -> Self {
-        Self::Sampler(value)
-    }
-}
-
-impl From<TextureView> for OwnedBindingResource {
-    fn from(value: TextureView) -> Self {
-        Self::TextureView(value)
     }
 }
 

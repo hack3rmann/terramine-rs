@@ -33,18 +33,12 @@ impl AsMatrix for Transform {
 
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Default, Deref, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Deref, Display, From, Into)]
 #[display("x: {offset.x:.3}, y: {offset.y:.3}, z: {offset.z:.3}")]
 pub struct Translation {
     pub offset: vec3,
 }
 assert_impl_all!(Translation: Send, Sync);
-
-impl From<vec3> for Translation {
-    fn from(value: vec3) -> Self {
-        Self { offset: value }
-    }
-}
 
 impl AsMatrix for Translation {
     fn as_matrix(&self) -> mat4 {
@@ -54,7 +48,7 @@ impl AsMatrix for Translation {
 
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Default, Deref, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Deref, Display, From)]
 #[display("roll: {angles.x:.3}, pitch: {angles.y:.3}, yaw: {angles.z:.3}")]
 pub struct Rotation {
     /// Rotation in `vec3 { x: roll, y: pitch, z: yaw }`.
@@ -68,12 +62,6 @@ impl Rotation {
     }
 }
 
-impl From<vec3> for Rotation {
-    fn from(value: vec3) -> Self {
-        Self { angles: value }
-    }
-}
-
 impl AsMatrix for Rotation {
     fn as_matrix(&self) -> mat4 {
         let (roll, pitch, yaw) = self.angles.as_tuple();
@@ -83,19 +71,13 @@ impl AsMatrix for Rotation {
 
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Deref, SmartDefault, Display)]
+#[derive(Debug, Clone, Copy, PartialEq, Deref, SmartDefault, Display, From, Into)]
 #[display("x: {amount.x:.3}, y: {amount.y:.3}, z: {amount.z:.3}")]
 pub struct Scaling {
     #[default(vec3::ONE)]
     pub amount: vec3,
 }
 assert_impl_all!(Scaling: Send, Sync);
-
-impl From<vec3> for Scaling {
-    fn from(value: vec3) -> Self {
-        Self { amount: value }
-    }
-}
 
 impl AsMatrix for Scaling {
     fn as_matrix(&self) -> mat4 {
@@ -112,17 +94,11 @@ assert_obj_safe!(AsMatrix);
 
 
 
-#[derive(Clone, Copy, Deref, Default, PartialEq, Debug)]
+#[derive(Clone, Copy, Deref, Default, PartialEq, Debug, From)]
 pub struct Speed {
     pub inner: vec3,
 }
 assert_impl_all!(Speed: Send, Sync);
-
-impl From<vec3> for Speed {
-    fn from(value: vec3) -> Self {
-        Self { inner: value }
-    }
-}
 
 impl GetOffset for Speed {
     fn get_offset(&self, dt: TimeStep) -> vec3 {
@@ -132,17 +108,11 @@ impl GetOffset for Speed {
 
 
 
-#[derive(Clone, Copy, Deref, Default, PartialEq, Debug)]
+#[derive(Clone, Copy, Deref, Default, PartialEq, Debug, From)]
 pub struct Acceleration {
     pub inner: vec3,
 }
 assert_impl_all!(Acceleration: Send, Sync);
-
-impl From<vec3> for Acceleration {
-    fn from(value: vec3) -> Self {
-        Self { inner: value }
-    }
-}
 
 impl GetOffset for Acceleration {
     fn get_offset(&self, dt: TimeStep) -> vec3 {
