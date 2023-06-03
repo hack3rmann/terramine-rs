@@ -71,15 +71,15 @@ impl ChunkArray {
     pub async fn from_chunks(world: &mut World, sizes: USize3, chunks: Vec<ChunkRef>) -> Result<Self, UserFacingError> {
         Self::validate_sizes(sizes)?;
         let volume = Self::volume(sizes);
-        if chunks.len() != volume {
-            return Err(UserFacingError::new("sizes are not match with data")
-                .help(format!(
-                    "passed in chunk `Vec` should have same size as
-                    passed in sizes, but sizes: {sizes}, len: {len}",
-                    len = chunks.len(),
-                ))
-            )
-        }
+
+        ensure!(
+            chunks.len() == volume,
+            UserFacingError::new("sizes are not match with data").help(format!(
+                "passed in chunk `Vec` should have same size as
+                passed in sizes, but sizes: {sizes}, len: {len}",
+                len = chunks.len(),
+            ))
+        );
 
         let self_entity = world.spawn_empty();
 
@@ -448,9 +448,11 @@ impl ChunkArray {
     pub async fn apply_new(
         &mut self, world: &mut World, sizes: USize3, chunks: Vec<Chunk>,
     ) -> Result<(), UserFacingError> {
-        if Self::volume(sizes) != chunks.len() {
-            return Err(UserFacingError::new("chunk-array should have same len as sizes"));
-        }
+        ensure_eq!(
+            Self::volume(sizes),
+            chunks.len(),
+            UserFacingError::new("chunk-array should have same len as sizes")
+        );
 
         let chunks = chunks.into_iter()
             .map(Arc::new)
@@ -601,7 +603,7 @@ impl ChunkArray {
         #![allow(clippy::await_holding_refcell_ref)]
 
         let sizes = self.sizes;
-        if sizes == USize3::ZERO { return Ok(()) }
+        ensure_or!(sizes != USize3::ZERO, return Ok(()));
 
         self.try_finish_all_tasks(world, device).await;
 

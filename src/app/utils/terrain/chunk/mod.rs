@@ -119,11 +119,7 @@ impl Chunk {
 
     /// Checks if chunk is empty.
     pub fn is_empty(&self) -> bool {
-        if self.voxel_ids.is_empty() {
-            return true
-        }
-
-        matches!(
+        self.voxel_ids.is_empty() || matches!(
             self.info.load(Relaxed).fill_type,
             FillType::AllSame(id) if id == AIR_VOXEL_DATA.id
         )
@@ -319,9 +315,7 @@ impl Chunk {
     /// Gives [`Vec`] with full detail vertices mesh of [`Chunk`].
     pub fn make_partitial_meshes(&self, chunk_adj: ChunkAdj) -> [Mesh<FullVertex>; 8] {
         let is_filled_and_blocked = self.is_filled() && Self::is_adj_filled(&chunk_adj);
-        if self.is_empty() || is_filled_and_blocked {
-            return default();
-        }
+        ensure_or!(!self.is_empty() && !is_filled_and_blocked, return default());
 
         array_init(|idx| self.make_partition(&chunk_adj, idx))
     }
@@ -331,7 +325,7 @@ impl Chunk {
         assert!(lod > 0, "There's a separate function for LOD = 0! Use .make_vertices_detailed() instead!");
         
         let is_filled_and_blocked = self.is_filled() && Self::is_adj_filled(&chunk_adj);
-        if self.is_empty() || is_filled_and_blocked { return default() }
+        ensure_or!(!self.is_empty() && !is_filled_and_blocked, return default());
 
         // TODO: optimize for same-filled chunks
         let sub_chunk_size = 2_i32.pow(lod);
@@ -418,7 +412,7 @@ impl Chunk {
     /// Gives [voxel id][Id] by it's index in array.
     /// Returns [`Some`] with [id][Id] or [`None`] if `idx` is invalid.
     pub fn get_id(&self, idx: usize) -> Option<Id> {
-        if Chunk::VOLUME <= idx { return None }
+        ensure_or!(idx < Chunk::VOLUME, return None);
 
         Some(match self.info.load(Relaxed).fill_type {
             FillType::AllSame(id) => id,
@@ -448,7 +442,7 @@ impl Chunk {
     /// 
     /// Panics if [chunk][Chunk] is not already had been generated or `local_pos` is not local.
     pub fn get_voxel_local(&self, local_pos: Int3) -> Option<Voxel> {
-        if !self.is_generated() { return None }
+        ensure_or!(self.is_generated(), return None);
         
         let idx = Chunk::voxel_pos_to_idx(local_pos)?;
 
@@ -587,11 +581,7 @@ impl Chunk {
     /// 
     /// Returns [`Err`] if `idx` is out of bounds.
     pub fn set_id(&mut self, idx: usize, new_id: Id) -> Result<Id, EditError> {
-        if Self::VOLUME <= idx {
-            return Err(
-                EditError::IdxOutOfBounds { idx, len: Self::VOLUME }
-            )
-        }
+        ensure!(idx < Self::VOLUME, EditError::IdxOutOfBounds { idx, len: Self::VOLUME });
 
         let old_id = match self.info.load(Relaxed).fill_type {
             FillType::Unspecified => {
@@ -628,9 +618,7 @@ impl Chunk {
     /// 
     /// Returns `Err` if `new_id` is not valid or `pos` is not in this [`Chunk`].
     pub fn set_voxel(&mut self, pos: Int3, new_id: Id) -> Result<Id, EditError> {
-        if !voxel::is_id_valid(new_id) {
-            return Err(EditError::InvalidId(new_id));
-        }
+        ensure!(voxel::is_id_valid(new_id), EditError::InvalidId(new_id));
 
         let local_pos = Self::global_to_local_pos_checked(self.pos.load(Relaxed), pos)?;
         let idx = Self::voxel_pos_to_idx_unchecked(local_pos);
@@ -647,9 +635,7 @@ impl Chunk {
 
     /// Sets voxel's ids in range `pos_from..pos_to` to index [`new_id`][Id].
     pub fn fill_voxels(&mut self, pos_from: Int3, pos_to: Int3, new_id: Id) -> Result<bool, EditError> {
-        if !voxel::is_id_valid(new_id) {
-            return Err(EditError::InvalidId(new_id));
-        }
+        ensure!(voxel::is_id_valid(new_id), EditError::InvalidId(new_id));
 
         let pos = self.pos.load(Relaxed);
         let local_pos_from = Self::global_to_local_pos_checked(pos, pos_from)?;
@@ -666,14 +652,15 @@ impl Chunk {
             let idx = Self::voxel_pos_to_idx_unchecked(local_pos);
             
             let old_id = self.get_id(idx).expect("idx should be valid");
-            if old_id != new_id {
-                is_changed = true;
+            ensure_or!(old_id != new_id, continue);
 
-                // * Safety:
-                // * Safe, because `idx` is valid and `self` is unoptimized.
-                unsafe {
-                    self.set_id_fast(idx, new_id);
-                }
+            is_changed = true;
+
+            // * # Safety
+            // * 
+            // * Safe, because `idx` is valid and `self` is unoptimized.
+            unsafe {
+                self.set_id_fast(idx, new_id);
             }
         }
 
@@ -711,7 +698,7 @@ impl Chunk {
     pub fn optimize(&mut self) {
         self.unoptimize();
 
-        if !self.is_generated() { return }
+        ensure_or!(self.is_generated(), return);
         
         let mut info = Info {
             active_lod: self.info.load(Acquire).active_lod,
@@ -794,9 +781,7 @@ impl Chunk {
     /// 
     /// Returns [`None`] if `pos` < [`Int3::ZERO`][Int3] or `pos` >= [`Chunk::SIZES`][Chunk].
     pub fn voxel_pos_to_idx(pos: Int3) -> Option<usize> {
-        if pos.x < 0 || pos.y < 0 || pos.z < 0 {
-            return None;
-        }
+        ensure_or!(pos.x >= 0 && pos.y >= 0 && pos.z >= 0, return None);
 
         let idx = sdex::get_index(&USize3::from(pos).as_array(), &[Self::SIZE; 3]);
 
@@ -835,7 +820,7 @@ impl Chunk {
         &self, mesh: &'rp mut ChunkMesh, lod: Lod,
         pipeline: &'rp RenderPipeline, pass: &mut RenderPass<'rp>,
     ) -> Result<(), ChunkRenderError> {
-        if self.is_empty() { return Ok(()) }
+        ensure_or!(!self.is_empty(), return Ok(()));
 
         mesh.active_lod = Some(lod);
         mesh.render(pipeline, pass)

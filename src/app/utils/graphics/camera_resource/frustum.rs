@@ -48,56 +48,34 @@ impl Frustum {
         Self { near, far, left, right, top, bottom, courner_rays }
     }
 
-    /// Frustum check
+    /// [AABB][Aabb]-frustum intersection check.
     pub fn is_aabb_in_frustum(&self, aabb: Aabb) -> bool {
-        /* Frirst pass
-         * 1) Checks if camera position is in AABB
-         * 2) Checks if center of chunk is in frustum
-         * Very cheap operation */
-        if aabb.is_containing(self.courner_rays[0].origin) { return true; }
-        if self.is_in_frustum(aabb.center()) { return true; }
+        // If camera in AABB then intersection found.
+        ensure_or!(!aabb.contains(self.courner_rays[0].origin), return true);
 
-        /* Second pass
-         * Checks every vertex of AABB is behind the frustum
-         ? 8 times more expensive than previous */
+        // If AABB centre is in frustum then intersection found.
+        ensure_or!(!self.contains(aabb.center()), return true);
 
-        let vertex_set = aabb.as_vertex_array();
+        let aabb_vertices = aabb.as_vertex_array();
 
-        let mut result = false;
-        for vertex in vertex_set {
-            if self.near.is_in_positive_side(vertex) {
-                result = true;
-                break;
-            }
-        }
-        if !result { return result }
+        let is_all_vertices_behind = aabb_vertices.iter().copied()
+            .all(|vertex| self.near.signed_distance(vertex) < -f32::EPSILON);
 
-        /* Third pass
-         * Checks every vertex of AABB is in frustum
-         ? 6 times more expensive than previous */
+        // If all vertices are behind the frustum there's no intersection.
+        ensure_or!(!is_all_vertices_behind, return false);
 
-        for vertex in vertex_set {
-            if self.is_in_frustum(vertex) {
-                return true;
-            }
-        }
+        // If any AABB vertex is in frustum then intersection found.
+        ensure_or!(!aabb_vertices.iter().any(|&vertex| self.contains(vertex)), return true);
 
-        /* Fourth pass
-         * Checks if someone of 4 frustum corner rays intersects AABB
-         ? Kinda cheap operation */
-        
-        for ray in self.courner_rays {
-            if aabb.is_intersected_by_ray(ray) {
-                return true;
-            }
-        }
+        // If any corner ray intersects AABB then intersection found.
+        ensure_or!(!self.courner_rays.iter().any(|&ray| aabb.is_intersected_by_ray(ray)), return true);
 
-        /* All passed */
+        // All intersection tests failed.
         false
     }
 
     /// Checks if given vector is in frustum
-    pub fn is_in_frustum(&self, vec: vec3) -> bool {
+    pub fn contains(&self, vec: vec3) -> bool {
         self.planes()
             .into_iter()
             .all(|plane| plane.is_in_positive_side(vec))

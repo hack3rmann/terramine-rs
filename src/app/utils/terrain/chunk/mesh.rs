@@ -231,7 +231,7 @@ impl Render for ChunkMesh {
     ) -> Result<(), Self::Error> {
         use ChunkRenderError as Err;
 
-        if !self.is_enabled() { return Ok(()) }
+        ensure_or!(self.is_enabled(), return Ok(()));
 
         match self.active_lod {
             None => return Ok(()),

@@ -283,7 +283,7 @@ impl Render for GpuMesh {
     fn render<'rp, 's: 'rp>(
         &'s self, pipeline: &'rp RenderPipeline, render_pass: &mut RenderPass<'rp>,
     ) -> Result<(), Self::Error> {
-        if self.is_empty() { return Ok(()) }
+        ensure_or!(!self.is_empty(), return Ok(()));
 
         render_pass.set_pipeline(pipeline);
         render_pass.set_vertex_buffer(0, *self.buffer.slice(..));

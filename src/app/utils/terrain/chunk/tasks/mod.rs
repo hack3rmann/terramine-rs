@@ -35,7 +35,7 @@ impl<Item: Send + 'static> Task<Item> {
     }
 
     pub async fn try_take_result(&mut self) -> Option<Item> {
-        if self.handle.is_null() || !self.handle.is_finished() { return None }
+        ensure_or!(!self.handle.is_null() && self.handle.is_finished(), return None);
 
         let handle = self.handle.take();
         handle.await.ok()

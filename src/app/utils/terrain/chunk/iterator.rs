@@ -444,7 +444,7 @@ impl<T> Sides<T> {
         self.inner.clone()
     }
 
-    pub fn set(&mut self, offset: Int3, item: T) -> Result<(), String> {
+    pub fn set(&mut self, offset: Int3, item: T) -> AnyResult<()> {
         match offset.as_tuple() {
             ( 1,  0,  0) => self.inner[0] = item,
             (-1,  0,  0) => self.inner[1] = item,
@@ -452,7 +452,7 @@ impl<T> Sides<T> {
             ( 0, -1,  0) => self.inner[3] = item,
             ( 0,  0,  1) => self.inner[4] = item,
             ( 0,  0, -1) => self.inner[5] = item,
-            _ => return Err(format!("Offset should be small (adjacent) but {offset:?}")),
+            _ => bail_str!("Offset should be small (adjacent) but {offset:?}"),
         }
 
         Ok(())

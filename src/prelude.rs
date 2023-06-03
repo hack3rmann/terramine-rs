@@ -13,6 +13,7 @@ pub use {
         str_view::{StrView, StaticStr},
         wrapper::*,
         macros,
+        failure::{ensure_or, ensure, ensure_eq, ensure_ne, bail, bail_str, StrError},
     },
     smallvec::{SmallVec, smallvec},
     array_init::array_init,

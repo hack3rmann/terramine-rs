@@ -17,6 +17,7 @@ pub mod camera;
 pub mod str_view;
 pub mod wrapper;
 pub mod macros;
+pub mod failure;
 
 
 

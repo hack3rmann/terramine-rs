@@ -80,7 +80,7 @@ impl Loadings {
     pub fn spawn_info_window(&self, ui: &imgui::Ui) {
         use crate::app::utils::graphics::ui::imgui_ext::make_window;
 
-        if self.list.is_empty() { return }
+        ensure_or!(!self.list.is_empty(), return);
 
         make_window(ui, "Loadings").build(|| {
             for (name, &value) in self.list.iter() {

@@ -296,23 +296,22 @@ impl Mesh {
     pub fn compute_aabb(&self) -> Option<Aabb> {
         use VertexAttributeValues::Float32x3;
 
-        if let Some(Float32x3(values)) = self.attribute(MeshVertexAttribute::POSITION) {
-            let mut min = vec3::all(f32::MAX);
-            let mut max = vec3::all(f32::MIN);
-            for &pos in values {
-                min.x = min.x.min(pos.x);
-                min.y = min.y.min(pos.y);
-                min.z = min.z.min(pos.z);
+        let Some(Float32x3(values)) = self.attribute(MeshVertexAttribute::POSITION)
+        else { return None };
 
-                max.x = max.x.max(pos.x);
-                max.y = max.y.max(pos.y);
-                max.z = max.z.max(pos.z);
-            }
+        let mut min = vec3::all(f32::MAX);
+        let mut max = vec3::all(f32::MIN);
+        for &pos in values {
+            min.x = min.x.min(pos.x);
+            min.y = min.y.min(pos.y);
+            min.z = min.z.min(pos.z);
 
-            return Some(Aabb::from_float3(min, max))
+            max.x = max.x.max(pos.x);
+            max.y = max.y.max(pos.y);
+            max.z = max.z.max(pos.z);
         }
 
-        None
+        Some(Aabb::from_float3(min, max))
     }
 }
 
@@ -622,24 +621,22 @@ impl InnerMeshVertexBufferLayout {
     ) -> Result<OwnedVertexBufferLayout, MissingVertexAttributeError> {
         let mut attributes = Vec::with_capacity(attribute_descriptors.len());
         for attribute_descriptor in attribute_descriptors {
-            if let Some(index) = self
-                .attribute_ids
-                .iter()
+            let Some(index) = self.attribute_ids.iter()
                 .position(|id| *id == attribute_descriptor.id)
-            {
-                let layout_attribute = &self.layout.attributes[index];
-                attributes.push(VertexAttribute {
-                    format: layout_attribute.format,
-                    offset: layout_attribute.offset,
-                    shader_location: attribute_descriptor.shader_location,
-                });
-            } else {
-                return Err(MissingVertexAttributeError {
+            else {
+                bail!(MissingVertexAttributeError {
                     id: attribute_descriptor.id,
                     name: attribute_descriptor.name,
                     pipeline_type: None,
-                });
-            }
+                })
+            };
+
+            let layout_attribute = &self.layout.attributes[index];
+            attributes.push(VertexAttribute {
+                format: layout_attribute.format,
+                offset: layout_attribute.offset,
+                shader_location: attribute_descriptor.shader_location,
+            });
         }
 
         Ok(OwnedVertexBufferLayout {

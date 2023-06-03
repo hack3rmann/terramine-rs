@@ -200,7 +200,7 @@ impl Camera {
 
     /// Checks if position is in camera frustum
     pub fn is_pos_in_view(&mut self, pos: vec3) -> bool {
-        self.get_frustum().is_in_frustum(pos)
+        self.get_frustum().contains(pos)
     }
 
     /// Checks if AABB is in camera frustum
