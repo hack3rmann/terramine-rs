@@ -1,4 +1,4 @@
-use {crate::prelude::*, std::borrow::Borrow};
+use { crate::prelude::*, std::borrow::Borrow };
 
 
 
@@ -37,6 +37,10 @@ impl<'s> From<&'s String> for StrView<'s> {
     fn from(value: &'s String) -> Self {
         Self { inner: Cow::Borrowed(value.as_str()) }
     }
+}
+
+impl ConstDefault for StrView<'static> {
+    const DEFAULT: Self = Self { inner: Cow::Borrowed(<&str>::DEFAULT) };
 }
 
 impl Deref for StrView<'_> {

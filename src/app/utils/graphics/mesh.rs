@@ -105,7 +105,7 @@ impl<V: Vertex> FromIterator<Mesh<V>> for Mesh<V> {
 }
 
 impl<V: Vertex> ConstDefault for Mesh<V> {
-    const DEFAULT: Self = Self::new(vec![], None, PrimitiveTopology::DEFAULT);
+    const DEFAULT: Self = Self::new(const_default(), const_default(), const_default());
 }
 
 
@@ -136,11 +136,11 @@ impl Indices {
 }
 
 impl ConstDefault for Indices {
-    const DEFAULT: Self = Self::U16(vec![]);
+    const DEFAULT: Self = Self::U16(const_default());
 }
 
 impl Default for Indices {
-    fn default() -> Self { Self::DEFAULT }
+    fn default() -> Self { const_default() }
 }
 
 

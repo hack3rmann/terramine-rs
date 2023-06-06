@@ -18,12 +18,11 @@ pub mod str_view;
 pub mod wrapper;
 pub mod macros;
 pub mod failure;
+pub mod const_default;
 
 
 
 use { crate::prelude::*, winit::dpi::{Pixel, PhysicalSize} };
-
-pub use crate::{module_constructor, module_destructor};
 
 
 
@@ -68,6 +67,11 @@ impl ToVec2 for PhysicalSize<u32> {
 
 
 
+pub trait Volume<T> {
+    fn volume(&self) -> T;
+}
+assert_obj_safe!(Volume<vec3>);
+
 macro impl_volume($VecType:ty, $ElemType:ty) {
     impl Volume<$ElemType> for $VecType {
         fn volume(&self) -> $ElemType {
@@ -75,11 +79,6 @@ macro impl_volume($VecType:ty, $ElemType:ty) {
         }
     }
 }
-
-pub trait Volume<T> {
-    fn volume(&self) -> T;
-}
-assert_obj_safe!(Volume<vec3>);
 
 impl_volume!(Byte3, i8);
 impl_volume!(UByte3, u8);
@@ -98,60 +97,16 @@ impl_volume!(Double3, f64);
 
 
 
-macro impl_nums_const_default($($Int:ty),* $(,)?) {
-    $(
-        impl ConstDefault for $Int {
-            const DEFAULT: Self = 0 as Self;
-        }
-    )*
+pub macro module_constructor($($content:tt)*) {
+    #[ctor::ctor]
+    fn __module_constructor_function() {
+        $($content)*
+    }
 }
 
-
-
-pub trait ConstDefault {
-    const DEFAULT: Self;
-}
-
-impl_nums_const_default! { i8, u8, i16, u16, i32, u32, f32, i64, u64, isize, usize }
-
-impl ConstDefault for bool {
-    const DEFAULT: Self = false;
-}
-
-impl ConstDefault for String {
-    const DEFAULT: Self = Self::new();
-}
-
-impl<T> ConstDefault for Option<T> {
-    const DEFAULT: Self = Self::None;
-}
-
-impl<T> ConstDefault for Vec<T> {
-    const DEFAULT: Self = vec![];
-}
-
-impl<T, const N: usize> ConstDefault for SmallVec<[T; N]> {
-    const DEFAULT: Self = Self::new_const();
-}
-
-
-
-#[macro_export]
-macro_rules! module_constructor {
-    ($($content:tt)*) => {
-        #[ctor::ctor]
-        fn __module_constructor_function() {
-            $($content)*
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! module_destructor {
-    ($($content:tt)*) => {
-        #[ctor::dtor]
-        fn __module_destructor_function() {
-            $($content)*
-        }
-    };
+pub macro module_destructor($($content:tt)*) {
+    #[ctor::dtor]
+    fn __module_destructor_function() {
+        $($content)*
+    }
 }

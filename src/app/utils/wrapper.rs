@@ -91,6 +91,10 @@ impl<T> From<Nullable<T>> for Option<T> {
     }
 }
 
+impl<T> ConstDefault for Nullable<T> {
+    const DEFAULT: Self = Self::NULL;
+}
+
 impl<T> Deref for Nullable<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {

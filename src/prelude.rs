@@ -14,6 +14,7 @@ pub use {
         wrapper::*,
         macros,
         failure::{ensure_or, ensure, ensure_eq, ensure_ne, bail, bail_str, StrError},
+        const_default::ConstDefault,
     },
     smallvec::{SmallVec, smallvec},
     array_init::array_init,

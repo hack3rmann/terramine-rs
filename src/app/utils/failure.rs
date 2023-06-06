@@ -1,3 +1,5 @@
+//! Set of simple macros similar to [`panic!`] but with fuction returning behaviour.
+
 use { crate::prelude::*, derive_more::{Error, Display} };
 
 
