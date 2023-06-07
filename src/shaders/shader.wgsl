@@ -19,24 +19,25 @@ struct CommonUniforms {
     time: f32,
 }
 
-@group(0)
-@binding(0)
-var<uniform> common_uniform: CommonUniforms;
+@group(0) @binding(0)
+var<uniform> common_uniforms: CommonUniforms;
+
+struct CameraUniform {
+    proj: mat4x4<f32>,
+    view: mat4x4<f32>,
+}
+
+@group(2) @binding(0) 
+var<uniform> camera: CameraUniform;
 
 @vertex
-fn vs_main(input: VertexInput) -> VertexOutput {
-    var output: VertexOutput;
+fn vs_main(in: VertexInput) -> VertexOutput {
+    var out: VertexOutput;
 
-    let aspect_ratio = common_uniform.resolution.y / common_uniform.resolution.x;
+    out.tex_coords = in.tex_coords;
+    out.clip_pos = camera.proj * camera.view * vec4<f32>(in.pos, 1.0);
 
-    var pos: vec3<f32> = input.pos;
-    pos.x *= aspect_ratio;
-
-    output.tex_coords = input.tex_coords;
-    let sin_time = sin(common_uniform.time) * 0.5 + 0.5;
-    output.clip_pos = vec4<f32>(pos * sin_time, 1.0);
-
-    return output;
+    return out;
 }
 
 
@@ -46,12 +47,10 @@ struct FragmentOutput {
     frag_color: vec4<f32>,
 }
 
-@group(1)
-@binding(0)
+@group(1) @binding(0)
 var texture: texture_2d<f32>;
 
-@group(1)
-@binding(1)
+@group(1) @binding(1)
 var tex_sampler: sampler;
 
 @fragment

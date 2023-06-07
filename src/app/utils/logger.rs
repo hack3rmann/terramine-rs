@@ -116,11 +116,10 @@ pub macro log_dbg($expr:expr) {
     }
 }
 
-pub macro work(from = $from:expr, $($content:tt)*) {
-    {
-        use $crate::app::utils::logger::scope;
-        scope($from, std::fmt::format(format_args!($($content)*)))
-    }
+pub macro scope(from = $from:expr, $($content:tt)*) {
+    let _logger_scope_guard = $crate::app::utils::logger::scope(
+        $from, std::fmt::format(format_args!($($content)*))
+    );
 }
 
 

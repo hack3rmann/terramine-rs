@@ -138,8 +138,11 @@ pub mod mouse {
 
     pub fn get_x() -> f32 { X.load(Relaxed) }
     pub fn get_y() -> f32 { Y.load(Relaxed) }
-    pub fn get_dx_dt() -> f32 { DX.load(Relaxed) }
-    pub fn get_dy_dt() -> f32 { DY.load(Relaxed) }
+    pub fn get_pos() -> vec2 { vecf!(get_x(), get_y()) }
+
+    pub fn get_dx() -> f32 { DX.load(Relaxed) }
+    pub fn get_dy() -> f32 { DY.load(Relaxed) }
+    pub fn get_delta() -> vec2 { vecf!(get_dx(), get_dy()) }
 
     pub fn press(button: MouseButton) {
         INPUTS.write().insert(button);

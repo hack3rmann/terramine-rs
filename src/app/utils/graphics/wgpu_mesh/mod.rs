@@ -8,10 +8,13 @@ use {
     wgpu::*,
 };
 
+
+
 pub use wgpu::PrimitiveTopology;
 
-#[derive(Debug, Clone, TypeUuid, SmartDefault)]
-#[uuid = "f39d5600-e07a-11ed-b9fb-0800200c9a66"]
+
+
+#[derive(Debug, Clone, SmartDefault)]
 #[default(Self::new(default()))]
 pub struct Mesh {
     primitive_topology: PrimitiveTopology,
@@ -315,9 +318,13 @@ impl Mesh {
     }
 }
 
+
+
 fn triangle_face_normal(a: vec3, b: vec3, c: vec3) -> vec3 {
     (b - a).cross(c - a).normalized()
 }
+
+
 
 #[derive(Debug, Clone)]
 pub struct MeshVertexAttribute {
@@ -340,9 +347,12 @@ impl MeshVertexAttribute {
 }
 
 
+
 #[derive(Clone, Copy, Default, Eq, PartialEq, Hash, PartialOrd, Ord, Deref, Debug)]
 pub struct MeshVertexAttributeId(usize);
 assert_impl_all!(MeshVertexAttributeId: Send, Sync);
+
+
 
 pub trait VertexFormatSize {
     fn get_size(self) -> u64;

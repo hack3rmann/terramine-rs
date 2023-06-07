@@ -22,13 +22,13 @@ pub mod camera {
         pub const SPEED:	      f32 = 10.0;
         pub const SPEED_FALLOFF:  f32 = 0.88;
         pub const FOV_IN_DEGREES: f32 = 60.0;
-        pub const MOUSE_SENSETIVITY: f32 = 0.2;
+        pub const MOUSE_SENSETIVITY: f32 = 0.4;
     }
 }
 
 pub mod window {
     pub const fn aspect_ratio(width: f32, height: f32) -> f32 {
-        width / height
+        height / width
     }
 
     pub mod default {

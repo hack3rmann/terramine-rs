@@ -28,6 +28,7 @@ pub use {
     material::*, gpu_conversions::*, pass::*,
     bind_group::*, buffer::*, texture::*, window::Window,
     mesh::*, shader::*, asset::*, pipeline::*, self::image::*,
+    camera::*,
 
     wgpu::{
         SurfaceError, CommandEncoder, Features,
@@ -44,12 +45,12 @@ pub use {
 
 
 const TEST_VERTICES: &[TexturedVertex] = &[
-    TexturedVertex::new(vecf![-0.5, -0.5, 0.0], vecf!(0.0, 1.0)),
-    TexturedVertex::new(vecf![ 0.5, -0.5, 0.0], vecf!(1.0, 1.0)),
-    TexturedVertex::new(vecf![ 0.5,  0.5, 0.0], vecf!(1.0, 0.0)),
-    TexturedVertex::new(vecf![-0.5, -0.5, 0.0], vecf!(0.0, 1.0)),
-    TexturedVertex::new(vecf![ 0.5,  0.5, 0.0], vecf!(1.0, 0.0)),
-    TexturedVertex::new(vecf![-0.5,  0.5, 0.0], vecf!(0.0, 0.0)),
+    TexturedVertex::new(vecf!(-0.4, -0.5, 0.0), vecf!(0.0, 1.0)),
+    TexturedVertex::new(vecf!( 0.4, -0.5, 0.0), vecf!(1.0, 1.0)),
+    TexturedVertex::new(vecf!( 0.4,  0.5, 0.0), vecf!(1.0, 0.0)),
+    TexturedVertex::new(vecf!(-0.4, -0.5, 0.0), vecf!(0.0, 1.0)),
+    TexturedVertex::new(vecf!( 0.4,  0.5, 0.0), vecf!(1.0, 0.0)),
+    TexturedVertex::new(vecf!(-0.4,  0.5, 0.0), vecf!(0.0, 0.0)),
 ];
 
 
@@ -163,7 +164,7 @@ assert_impl_all!(Graphics: Send, Sync, Component);
 impl Graphics {
     /// Creates new [`Graphics`] that holds some renderer stuff.
     pub async fn new(event_loop: &EventLoop<()>) -> AnyResult<Self> {
-        let _log_guard = logger::scope("graphics", "initialization");
+        logger::scope!(from = "graphics", "new()");
 
         let window = Window::from(event_loop, cfg::window::default::SIZES)
             .context("failed to initialize a window")?;
@@ -235,10 +236,13 @@ impl Graphics {
             },
         );
 
+        let camera_uniform = camera::CameraUniformBuffer::new(&context.device, &default());
+
         let layout = {
             let bind_group_layouts: Vec<_> = itertools::chain!(
                 common_uniforms.binds.layouts(),
                 binds.layouts(),
+                camera_uniform.binds.layouts(),
             ).collect();
 
             PipelineLayout::new(
@@ -274,6 +278,7 @@ impl Graphics {
         let binds_ref = BindsRef::from(binds);
 
         sandbox.spawn((gpu_mesh, pipeline, binds_ref, layout));
+        sandbox.insert_resource(camera_uniform);
 
         
         
@@ -384,12 +389,16 @@ impl Graphics {
 
     pub fn render_sandbox(&mut self, encoder: &mut CommandEncoder, view: TextureView) {
         let mut query = self.sandbox.query::<(&BindsRef, &GpuMesh, &RenderPipeline)>();
+        let cam = self.sandbox.resource::<&CameraUniformBuffer>().unwrap();
 
         let mut pass = RenderPass::new(encoder, "logo_draw_pass", [&view]);
 
         for (_entity, (binds, mesh, pipeline)) in query.iter() {
-            self.common_uniforms.binds.bind(&mut pass, 0);
-            binds.bind(&mut pass, self.common_uniforms.binds.count() as u32);
+            Binds::bind_all(&mut pass, [
+                &self.common_uniforms.binds,
+                &binds,
+                &cam.binds,
+            ]);
             
             let Ok(()) = mesh.render(pipeline, &mut pass);
         }
@@ -443,29 +452,54 @@ impl Graphics {
         }
     }
 
-    pub fn handle_event(&mut self, event: &Event<()>) {
+    pub fn handle_event(world: &World, event: &Event<()>) -> AnyResult<()> {
         use winit::event::WindowEvent;
 
+        let mut graphics = world.resource::<&mut Self>()?;
+
         if let Event::WindowEvent { event: WindowEvent::Resized(new_size), .. } = event {
-            self.on_window_resize(new_size.to_vec2());
+            let new_size = new_size.to_vec2();
+
+            graphics.on_window_resize(new_size);
+
+            let mut query = world.query::<&mut CameraComponent>();
+            for (_entity, camera) in query.iter() {
+                camera.on_window_resize(new_size);
+            }
         }
 
-        self.imgui.platform.handle_event(
-            self.imgui.context.io_mut(),
-            &self.window,
-            event,
-        );
+        graphics.handle_event_imgui(event);
+
+        Ok(())
     }
 
-    pub async fn update(&mut self, dt: TimeStep) {
+    pub fn handle_event_imgui(&mut self, event: &Event<'_, ()>) {
+        self.imgui.handle_event(event, &self.window);
+    }
+
+    pub async fn update(world: &World) -> AnyResult<()> {
+        let mut graphics = world.resource::<&mut Self>()?;
+
+        {
+            let camera = world.resource::<&MainCamera>()
+                .context("main camera has to be set")?;
+            let cam_uniform = camera.get_uniform(world)?;
+            let uniform_buffer = graphics.sandbox.resource::<&CameraUniformBuffer>()?;
+            uniform_buffer.update(&graphics.context.queue, &cam_uniform);
+        }
+        
         if keyboard::just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
-            self.refresh_test_shader().await
+            graphics.refresh_test_shader().await
                 .log_error("graphics", "failed to refresh test shader");
         }
 
-        self.imgui.context
+        let dt = world.resource::<&Timer>()?.dt();
+
+        graphics.imgui.context
             .io_mut()
             .update_delta_time(dt);
+
+        Ok(())
     }
 
     pub fn prepare_frame(&mut self, fps: f32) -> Result<(), winit::error::ExternalError> {
@@ -527,6 +561,14 @@ impl ImGui {
             platform,
             renderer: ImGuiRendererWrapper(renderer),
         }
+    }
+
+    pub fn handle_event(&mut self, event: &Event<'_, ()>, window: &Window) {
+        self.platform.handle_event(
+            self.context.io_mut(),
+            window,
+            event,
+        )
     }
 }
 

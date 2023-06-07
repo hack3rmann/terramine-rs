@@ -23,6 +23,14 @@ impl Transform {
     }
 }
 
+impl ConstDefault for Transform {
+    const DEFAULT: Self = Self {
+        translation: const_default(),
+        rotation: const_default(),
+        scaling: const_default(),
+    };
+}
+
 impl AsMatrix for Transform {
     fn as_matrix(&self) -> mat4 {
         self.translation.as_matrix()
@@ -39,6 +47,10 @@ pub struct Translation {
     pub offset: vec3,
 }
 assert_impl_all!(Translation: Send, Sync);
+
+impl ConstDefault for Translation {
+    const DEFAULT: Self = Self { offset: const_default() };
+}
 
 impl AsMatrix for Translation {
     fn as_matrix(&self) -> mat4 {
@@ -62,6 +74,10 @@ impl Rotation {
     }
 }
 
+impl ConstDefault for Rotation {
+    const DEFAULT: Self = Self { angles: const_default() };
+}
+
 impl AsMatrix for Rotation {
     fn as_matrix(&self) -> mat4 {
         let (roll, pitch, yaw) = self.angles.as_tuple();
@@ -78,6 +94,10 @@ pub struct Scaling {
     pub amount: vec3,
 }
 assert_impl_all!(Scaling: Send, Sync);
+
+impl ConstDefault for Scaling {
+    const DEFAULT: Self = Self { amount: const_default() };
+}
 
 impl AsMatrix for Scaling {
     fn as_matrix(&self) -> mat4 {

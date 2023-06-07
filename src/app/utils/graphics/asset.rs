@@ -105,6 +105,10 @@ impl<T> GlobalAsset<T> {
     }
 }
 
+impl<T: ConstDefault> ConstDefault for GlobalAsset<T> {
+    const DEFAULT: Self = Self::new(T::DEFAULT);
+}
+
 impl<T> Deref for GlobalAsset<T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {

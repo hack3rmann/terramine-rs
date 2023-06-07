@@ -182,6 +182,14 @@ impl Binds {
         }
     }
 
+    pub fn bind_all<'s>(pass: &mut RenderPass<'s>, bindses: impl IntoIterator<Item = &'s Self>) {
+        let mut start_idx = 0;
+        for binds in bindses.into_iter() {
+            binds.bind(pass, start_idx);
+            start_idx += binds.count() as u32;
+        }
+    }
+
     pub fn count(&self) -> usize {
         self.bind_groups.len()
     }

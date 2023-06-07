@@ -45,7 +45,6 @@ pub use {
     ordered_float::NotNan,
     rayon::prelude::*,
     bytemuck::{Pod, Zeroable},
-    type_uuid::TypeUuid,
     smart_default::SmartDefault,
     static_assertions::{assert_impl_all, assert_obj_safe},
     terramine_ecs::*,

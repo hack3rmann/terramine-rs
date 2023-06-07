@@ -1,12 +1,15 @@
-use crate::{
-    prelude::*,
-    transform::*,
-};
+use crate::{prelude::*, transform::*, graphics::{Buffer, Binds, Device, Queue}};
 
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, TypeUuid)]
-#[uuid = "40b56f60-c643-4193-abaa-9b370c8b6672"]
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deref)]
+pub struct MainCamera(pub CameraHandle);
+assert_impl_all!(MainCamera: Component, Send, Sync);
+
+
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, From, Into)]
 pub struct CameraHandle {
     pub entity: Entity,
 }
@@ -14,18 +17,10 @@ assert_impl_all!(CameraHandle: Send, Sync);
 
 impl CameraHandle {
     pub fn spawn_default(world: &mut World) -> Self {
-        Self { entity: world.spawn(CameraBundle::default()) }
+        Self::new(world.spawn(CameraBundle::default()))
     }
 
-    pub fn from_entity(world: &World, entity: Entity) -> Self {
-        let mut query = world.query_one::<(&CameraComponent, &Transform, &Speed)>(entity)
-            .expect("camera entity should exist");
-        query.get().expect("camera entity should have CameraComponent, Transfrom and Speed components");
-
-        Self::from_entity_unchecked(entity)
-    }
-
-    pub fn from_entity_unchecked(entity: Entity) -> Self {
+    pub fn new(entity: Entity) -> Self {
         Self { entity }
     }
 
@@ -46,12 +41,24 @@ impl CameraHandle {
         }
     }
 
+    pub fn get_uniform(&self, world: &World) -> AnyResult<CameraUniform> {
+        let mut query = world.query_one::<(&CameraComponent, &Transform)>(self.entity)?;
+        let (cam, transform) = query.get()
+            .context("camera entity does not have `CameraComponent` or `Transform`")?;
+        Ok(CameraUniform::new(cam, transform))
+    }
+
     pub fn spawn_control_windows(world: &World, ui: &imgui::Ui) {
         use crate::graphics::ui::imgui_ext::make_window;
 
-        let mut query = world.query::<(&mut CameraComponent, &mut Transform)>();
+        let mut query = world.query::<(&mut CameraComponent, Option<&mut Transform>)>();
         for (entity, (camera, transform)) in query.into_iter() {
             make_window(ui, format!("Camera #{}", entity.id())).build(|| {
+                let transform = match transform {
+                    Some(t) => &*t,
+                    None => &Transform::DEFAULT,
+                };
+
                 ui.text("Position");
                 ui.text(transform.translation.to_string());
 
@@ -84,8 +91,7 @@ impl CameraHandle {
 
 
 
-#[derive(Debug, Clone, TypeUuid, PartialEq)]
-#[uuid = "bb9e7b74-3847-48b9-b515-2110c4b5b0df"]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CameraComponent {
     pub fov: Angle,
     pub aspect_ratio: f32,
@@ -126,8 +132,8 @@ impl CameraComponent {
 
         if keyboard::is_pressed(Key::W)      { new_speed += vecf!(front.x, 0, front.z).normalized() }
         if keyboard::is_pressed(Key::S)      { new_speed -= vecf!(front.x, 0, front.z).normalized() }
-        if keyboard::is_pressed(Key::A)      { new_speed += right.normalized() }
-        if keyboard::is_pressed(Key::D)      { new_speed -= right.normalized() }
+        if keyboard::is_pressed(Key::D)      { new_speed += right.normalized() }
+        if keyboard::is_pressed(Key::A)      { new_speed -= right.normalized() }
         if keyboard::is_pressed(Key::Space)  { new_speed += vecf!(0, 1, 0) }
         if keyboard::is_pressed(Key::LShift) { new_speed -= vecf!(0, 1, 0) }
 
@@ -144,8 +150,11 @@ impl CameraComponent {
         speed.affect_translation(dt, &mut transform.translation);
 
         if self.captures_mouse {
-            let mouse_delta = vec3::new(0.0, -mouse::get_dy_dt(), mouse::get_dx_dt());
-            transform.rotation.rotate(dt_secs * self.mouse_sensetivity * mouse_delta);
+            let mouse_delta = mouse::get_delta();
+            let angles = vec3::new(mouse_delta.y, 0.0, mouse_delta.x);
+
+            // TODO: bound rotation by (-pi..pi)
+            transform.rotation.rotate(dt_secs * self.mouse_sensetivity * angles);
         }
 
         if keyboard::just_pressed(Key::P) {
@@ -191,6 +200,10 @@ impl CameraComponent {
             }
         });
     }
+
+    pub fn on_window_resize(&mut self, size: UInt2) {
+        self.aspect_ratio = cfg::window::aspect_ratio(size.x as f32, size.y as f32);
+    }
 }
 
 impl Default for CameraComponent {
@@ -211,3 +224,92 @@ impl Default for CameraComponent {
 
 
 pub type CameraBundle = (CameraComponent, Transform, Speed);
+
+
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+pub struct CameraUniform {
+    pub proj: mat4,
+    pub view: mat4,
+}
+assert_impl_all!(CameraUniform: Send, Sync);
+
+impl CameraUniform {
+    pub fn new(cam: &CameraComponent, transform: &Transform) -> Self {
+        Self { proj: cam.get_proj(), view: transform.get_view() }
+    }
+}
+
+impl Default for CameraUniform {
+    fn default() -> Self {
+        Self::new(&default(), &default())
+    }
+}
+
+
+
+#[derive(Debug)]
+pub struct CameraUniformBuffer {
+    pub buffer: Buffer,
+    pub binds: Binds,
+}
+
+impl CameraUniformBuffer {
+    pub fn new(device: &Device, init: &CameraUniform) -> Self {
+        use crate::graphics::*;
+
+        let buffer = Buffer::new(
+            device,
+            &BufferInitDescriptor {
+                label: Some("camera_uniform_buffer"),
+                contents: bytemuck::bytes_of(init),
+                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            },
+        );
+
+        let layout = BindGroupLayout::new(
+            device,
+            &BindGroupLayoutDescriptor {
+                label: Some("camera_unifors_bind_group_layout"),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::VERTEX_FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            },
+        );
+
+        let bind_group = BindGroup::new(
+            device,
+            &BindGroupDescriptor {
+                label: Some("common_uniforms_bind_group"),
+                layout: &layout,
+                entries: &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: buffer.as_entire_binding(),
+                    },
+                ],
+            },
+        );
+
+        let binds = Binds::from_iter([
+            (bind_group, Some(layout)),
+        ]);
+
+        Self { binds, buffer }
+    }
+
+    pub fn update(&self, queue: &Queue, uniform: &CameraUniform) {
+        queue.write_buffer(&self.buffer, 0, bytemuck::bytes_of(uniform));
+        queue.submit(None);
+    }
+}

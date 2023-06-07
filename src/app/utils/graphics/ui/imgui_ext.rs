@@ -5,7 +5,7 @@ use { crate::prelude::*, imgui::Ui };
 pub type WindowBuilder = fn(&imgui::Ui);
 
 thread_local! {
-    pub static WINDOW_BUILDERS: RefCell<Vec<WindowBuilder>> = RefCell::new(Vec::with_capacity(32));
+    pub static WINDOW_BUILDERS: RefCell<SmallVec<[WindowBuilder; 32]>> = RefCell::new(smallvec![]);
 }
 
 pub fn push_window_builder(builder: WindowBuilder) {

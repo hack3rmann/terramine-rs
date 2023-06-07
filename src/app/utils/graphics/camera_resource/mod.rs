@@ -172,8 +172,8 @@ impl Camera {
         if self.captures_mouse {
             self.rotate(
                  0.0,
-                -mouse::get_dy_dt() * dt * 0.2,
-                 mouse::get_dx_dt() * dt * 0.2,
+                -mouse::get_dy() * dt * 0.2,
+                 mouse::get_dx() * dt * 0.2,
             );
         }
     }

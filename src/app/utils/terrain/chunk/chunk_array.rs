@@ -177,7 +177,7 @@ impl ChunkArray {
     ) -> io::Result<()> {
         let save_name = save_name.into();
 
-        let _work_guard = logger::scope("chunk-array", format!("saving to {save_name} in {save_path}"));
+        logger::scope!(from = "chunk-array", "saving to {save_name} in {save_path}");
 
         let is_all_generated = chunks.iter()
             .all(|chunk| chunk.is_generated());
@@ -208,7 +208,7 @@ impl ChunkArray {
     }
 
     pub async fn read_from_file(save_name: &str, save_path: &str) -> io::Result<(USize3, Vec<Chunk>)> {
-        let _work_guard = logger::scope("chunk-array", format!("reading chunks from {save_name} in {save_path}"));
+        logger::scope!(from = "chunk-array", "reading chunks from {save_name} in {save_path}");
 
         let loading = loading::start_new("Reading chunks");
 

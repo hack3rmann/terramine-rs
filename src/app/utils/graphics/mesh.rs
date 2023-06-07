@@ -208,7 +208,7 @@ impl GpuMesh {
             topology: desc.mesh.primitive_topology,
             strip_index_format: indices.format(),
             front_face: FrontFace::Ccw,
-            cull_mode: Some(Face::Back),
+            cull_mode: None,// FIXME: Some(Face::Back),
             unclipped_depth: false,
             polygon_mode: desc.polygon_mode,
             conservative: false,
@@ -295,8 +295,7 @@ impl Render for GpuMesh {
 
 
 
-#[derive(Debug, TypeUuid)]
-#[uuid = "abf45a60-e39a-11ed-b9fb-0800200c9a66"]
+#[derive(Debug)]
 pub enum GpuIndices {
     Unindexed,
     Indexed(Buffer, IndexFormat),
