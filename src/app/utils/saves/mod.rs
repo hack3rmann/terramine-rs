@@ -1,7 +1,5 @@
 #![macro_use]
 
-use tokio::io::AsyncSeekExt;
-
 pub mod stack_heap;
 
 use {
@@ -9,12 +7,8 @@ use {
         prelude::*,
         cfg::save::META_FILE_NAME,
     },
-    std::{
-        marker::PhantomData, 
-        future::Future,
-    },
     tokio::{
-        io::{self, SeekFrom, AsyncReadExt, AsyncWriteExt},
+        io::{self, SeekFrom, AsyncReadExt, AsyncWriteExt, AsyncSeekExt},
         fs::{File, OpenOptions},
     },
     stack_heap::{StackHeap, StackHeapError},
@@ -22,14 +16,16 @@ use {
 
 
 
+// --problematic
+// failed to convert this `macro_rules!` to macro 2.0 due to rustc panic.
 #[macro_export]
-macro_rules! define_save_key {
-    {
+macro_rules! define_key {
+    (
         $(#[$macros:meta])*
         $vis:vis enum $EnumName:ident {
             $($EnumVar:ident),* $(,)?
         }
-    } => {
+    ) => {
         $(#[$macros])*
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         $vis enum $EnumName {
@@ -38,19 +34,27 @@ macro_rules! define_save_key {
             )*
         }
 
-        impl From<$EnumName> for $crate::saves::Enumerator {
-            fn from(value: $EnumName) -> $crate::saves::Enumerator {
-                value as $crate::saves::Enumerator
+        impl $crate::saves::GetSaveKey for $EnumName {
+            fn get_save_key(&self) -> $crate::saves::Enumerator {
+                *self as $crate::saves::Enumerator
             }
         }
     };
 }
+
+pub use crate::define_key;
 
 
 
 pub type Offset = u64;
 pub type Size   = u64;
 pub type Enumerator = u64;
+
+
+
+pub trait GetSaveKey {
+    fn get_save_key(&self) -> Enumerator;
+}
 
 
 
@@ -62,11 +66,8 @@ pub enum SaveError {
     #[error(transparent)]
     StackHeap(#[from] StackHeapError),
 
-    #[error("index shpuld be in 0..{size} but {idx}")]
-    IndexOutOfBounds {
-        idx: Offset,
-        size: Size,
-    },
+    #[error("index should be in 0..{size} but {idx}")]
+    IndexOutOfBounds { idx: Offset, size: Size },
 
     #[error("Trying to write same key of some data to another place. Old enumerator value: {0}.")]
     DataOverride(Enumerator),
@@ -84,7 +85,7 @@ pub struct SaveBuilder<E> {
     _phantom_data: PhantomData<E>,
 }
 
-impl<E: Copy + Into<Enumerator>> SaveBuilder<E> {
+impl<E: Copy + GetSaveKey> SaveBuilder<E> {
     /// Creates heap-stack folder.
     pub async fn create(self, path: &str) -> io::Result<Save<E>> {
         let file = StackHeap::new(path, &self.name).await?;
@@ -162,7 +163,7 @@ pub struct Save<E> {
     _phantom_data: PhantomData<E>,
 }
 
-impl<E: Copy + Into<Enumerator>> Save<E> {
+impl<E: Copy + GetSaveKey> Save<E> {
     /// Creates new [`SaveBuilder`] struct.
     pub fn builder(name: impl Into<String>) -> SaveBuilder<E> {
         SaveBuilder {
@@ -569,7 +570,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
     /// Saves offset by enumerator.
     fn store_offset(&mut self, enumerator: E, offset: Offset) -> SaveResult<()> {
-        match self.offsets.insert(enumerator.into(), offset) {
+        match self.offsets.insert(enumerator.get_save_key(), offset) {
             None => Ok(()),
             Some(old) => Err(SaveError::DataOverride(old))
         }
@@ -578,9 +579,10 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     /// Loads offset by enumerator.
     fn load_offset(&self, enumerator: E) -> Offset {
         *self.offsets
-            .get(&enumerator.into())
+            .get(&enumerator.get_save_key())
             .unwrap_or_else(|| panic!("There is no data enumerated by {}",
-                enumerator.into()))
+                enumerator.get_save_key())
+            )
     }
 
     async fn offsets_async_write(file: &mut File, bytes: &[u8], offset: Offset) -> io::Result<()> {

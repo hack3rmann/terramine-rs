@@ -24,7 +24,7 @@ pub static GENERATOR_SIZES: Mutex<[usize; 3]> = Mutex::new(USize3::ZERO.as_array
 
 
 
-crate::define_save_key! {
+saves::define_key! {
     pub enum ChunkArrSaveKey { Sizes, Array }
 }
 
@@ -459,7 +459,7 @@ impl ChunkArray {
             .collect();
 
         let new_chunks = ChunkArray::from_chunks(world, sizes, chunks).await?;
-        self.tasks.delete_all();
+        self.tasks.stop_all();
         let _ = mem::replace(self, new_chunks);
 
         Ok(())
@@ -620,7 +620,7 @@ impl ChunkArray {
             if !chunk.is_generated() {
                 if self.tasks.is_gen_running(chunk_pos) {
                     if let Some(new_chunk) = self.tasks.try_finish_gen(chunk_pos).await {
-                        self.tasks.delete_all_meshes(chunk_pos);
+                        self.tasks.stop_all_meshes(chunk_pos);
 
                         // * Safety:
                         // * Safe, because there's no chunk readers due to tasks drop above
@@ -628,7 +628,7 @@ impl ChunkArray {
                             let _ = mem::replace(Arc::get_mut_unchecked(&mut chunk), new_chunk);
                         }
                     }
-                } else if self.tasks.can_start() {
+                } else if self.tasks.can_start_mesh() {
                     self.tasks.start_gen(chunk_pos, sizes);
                     continue;
                 } else {
@@ -662,15 +662,15 @@ impl ChunkArray {
             let can_set_new_lod =
                 mesh.get_available_lods().contains(&lod) ||
                 self.tasks.is_mesh_running(chunk_pos, lod) &&
-                self.tasks.try_finish_mesh(chunk_pos, lod, &mut mesh, device).await.is_ok();
+                self.tasks.try_finish_mesh(chunk_pos, lod, &mut mesh, device).await;
 
             if can_set_new_lod {
                 chunk.set_active_lod(&mesh, lod);
-            } else if self.tasks.can_start() {
+            } else if self.tasks.can_start_mesh() {
                 self.tasks.start_mesh(&chunk, chunk_adj.clone(), lod).await;
             }
 
-            self.tasks.delete_all_useless(lod, chunk_pos);
+            self.tasks.stop_all_useless(lod, chunk_pos);
 
             if !chunk.can_render_active_lod(&mesh) {
                 chunk.try_set_best_fit_lod(&mesh, lod);
@@ -725,7 +725,7 @@ impl ChunkArray {
 
             let mut chunk = self.chunk(world, pos);
 
-            self.tasks.delete_all_meshes(pos);
+            self.tasks.stop_all_meshes(pos);
             
             // * Safety:
             // * 
@@ -820,7 +820,7 @@ impl ChunkArray {
                 ui.input_scalar_n("Sizes", &mut *sizes).build();
 
                 if ui.button("Generate") {
-                    self.tasks.delete_all();
+                    self.tasks.stop_all();
 
                     let chunks = tokio::task::block_in_place(|| RUNTIME.block_on(
                         Self::new_empty_chunks(world, USize3::from(*sizes))
@@ -976,20 +976,6 @@ macros::sum_errors! {
 
 
 
-#[derive(Debug, Error)]
-pub enum TaskError {
-    #[error("task is not already finished")]
-    TaskNotReady,
-
-    #[error("there is no task to generate mesh with lod {lod} and pos {pos} in map")]
-    TaskNotFound {
-        lod: Lod,
-        pos: Int3,
-    },
-}
-
-
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChangeTracker {
     pub sizes: USize3,
@@ -1079,6 +1065,7 @@ pub type SavingHandle = JoinHandle<io::Result<()>>;
 
 
 
+/// Unifies [`ChunkArray`] task interface.
 #[derive(Debug, Default)]
 pub struct ChunkArrayTasks {
     pub full: HashMap<Int3, FullTask>,
@@ -1092,31 +1079,35 @@ pub struct ChunkArrayTasks {
 assert_impl_all!(ChunkArrayTasks: Send, Sync);
 
 impl ChunkArrayTasks {
-    pub fn delete_all_useless(&mut self, useful_lod: Lod, cur_pos: Int3) {
+    /// Stops all mesh generation tasks that differst with `useful_lod` by more than `2`.
+    pub fn stop_all_useless(&mut self, useful_lod: Lod, cur_pos: Int3) {
         for lod in Chunk::get_possible_lods() {
             if 2 < lod.abs_diff(useful_lod) {
-                self.delete_mesh(cur_pos, lod);
+                self.stop_mesh(cur_pos, lod);
             }
         }
     }
 
-    pub fn delete_mesh(&mut self, pos: Int3, lod: Lod) {
+    /// Stops all mesh generation tasks with level of details of `lod`.
+    pub fn stop_mesh(&mut self, pos: Int3, lod: Lod) {
         match lod {
             0 => drop(self.full.remove(&pos)),
             _ => drop(self.low.remove(&(pos, lod))),
         }
     }
 
-    pub fn delete_all_meshes(&mut self, pos: Int3) {
+    /// Stops all mesh generation tasks.
+    pub fn stop_all_meshes(&mut self, pos: Int3) {
         let vals_to_be_dropped = Chunk::get_possible_lods()
             .into_iter()
             .cartesian_product(Range3d::adj_iter(pos).chain([pos]));
         
         for (lod, pos) in vals_to_be_dropped {
-            self.delete_mesh(pos, lod);
+            self.stop_mesh(pos, lod);
         }
     }
 
+    /// Tests for voxel generation task running.
     pub fn is_gen_running(&self, pos: Int3) -> bool {
         self.voxels_gen.contains_key(&pos)
     }
@@ -1129,6 +1120,7 @@ impl ChunkArrayTasks {
         }
     }
 
+    /// Starts new voxel generation task.
     pub fn start_gen(&mut self, pos: Int3, sizes: USize3) {
         let prev_value = self.voxels_gen.insert(pos, Task::spawn(async move {
             Chunk::generate_voxels(pos, sizes)
@@ -1137,7 +1129,7 @@ impl ChunkArrayTasks {
         assert!(prev_value.is_none(), "threre should be only one task");
     }
 
-    /// Starts new generate vertices task.
+    /// Starts new mesh generation task.
     pub async fn start_mesh(&mut self, chunk: &ChunkRef, adj: ChunkAdj, lod: Lod) {
         let chunk = ChunkRef::clone(chunk);
 
@@ -1161,6 +1153,7 @@ impl ChunkArrayTasks {
         assert!(prev_is_none, "there should be only one task");
     }
 
+    /// Starts new mesh partitioning task.
     pub fn start_partitioning(&mut self, chunk: &ChunkRef, adj: ChunkAdj) {
         let chunk = ChunkRef::clone(chunk);
 
@@ -1170,6 +1163,8 @@ impl ChunkArrayTasks {
         assert!(prev_value.is_none(), "there should be only one task");
     }
 
+    /// Tries to finish chunk generation task.
+    /// Returns [`Some`] with [chunk][Chunk] if it's ready.
     pub async fn try_finish_gen(&mut self, pos: Int3) -> Option<Chunk> {
         if let Some(task) = self.voxels_gen.get_mut(&pos)
             && let Some(voxel_ids) = task.try_take_result().await
@@ -1181,62 +1176,63 @@ impl ChunkArrayTasks {
         None
     }
 
-    /// Tries to get mesh from task if it is ready then sets it to chunk.
-    /// Otherwise will return `Err(TaskError)`.
+    /// Tries to finish mesh generation task and then applies it to `mesh`.
+    /// Returns [`true`] if success.
     pub async fn try_finish_mesh(
         &mut self, pos: Int3, lod: Lod, mesh: &mut ChunkMesh, device: &Device,
-    ) -> Result<(), TaskError> {
+    ) -> bool {
         match lod {
             0 => self.try_finish_full(pos, mesh, device).await,
             _ => self.try_finish_low(pos, lod, mesh, device).await,
         }
     }
 
+    /// Tries to finish full resolution mesh generation task and then applies it to `mesh`.
+    /// Returns [`true`] if success.
     pub async fn try_finish_full(
         &mut self, pos: Int3, mesh: &mut ChunkMesh, device: &Device,
-    ) -> Result<(), TaskError> {
-        let task = self.full.get_mut(&pos)
-            .ok_or(TaskError::TaskNotFound { lod: 0, pos })?;
-
-        let vertices = task.try_take_result().await
-            .ok_or(TaskError::TaskNotReady)?;
+    ) -> bool {
+        let Some(task) = self.full.get_mut(&pos) else { return false };
+        let Some(vertices) = task.try_take_result().await else { return false };
 
         mesh.upload_full_mesh(device, &vertices);
         let _ = self.full.remove(&pos)
-            .expect("there should be a task");
+            .expect("there should be a task due to check before");
 
-        Ok(())
+        true
     }
-    
+
+    /// Tries to finish low resolution mesh generation task and then applies it to `mesh`.
+    /// Returns [`true`] if success.
     pub async fn try_finish_low(
         &mut self, pos: Int3, lod: Lod, mesh: &mut ChunkMesh, device: &Device,
-    ) -> Result<(), TaskError> {
-        let task = self.low.get_mut(&(pos, lod))
-            .ok_or(TaskError::TaskNotFound { lod, pos })?;
-
-        let vertices = task.try_take_result().await
-            .ok_or(TaskError::TaskNotReady)?;
+    ) -> bool {
+        let Some(task) = self.low.get_mut(&(pos, lod)) else { return false };
+        let Some(vertices) = task.try_take_result().await else { return false };
 
         mesh.upload_low_mesh(device, &vertices, lod);
         let _ = self.low.remove(&(pos, lod))
-            .expect("there should be a task");
+            .expect("there should be a task due to check before");
 
-        Ok(())
+        true
     }
 
-    pub fn can_start(&self) -> bool {
+    /// Tests for available slot for new mesh generation tasks.
+    pub fn can_start_mesh(&self) -> bool {
         self.saving.is_null()
             && self.reading.is_null()
             && self.low.len() + self.full.len() <= cfg::terrain::MAX_TASKS
     }
 
-    pub fn delete_all(&mut self) {
+    /// Stops all tasks.
+    pub fn stop_all(&mut self) {
         drop(mem::take(&mut self.full));
         drop(mem::take(&mut self.low));
         drop(mem::take(&mut self.voxels_gen));
         drop(mem::take(&mut self.partition));
     }
 
+    /// Tests for any task running.
     pub fn any_running(&self) -> bool {
         !self.low.is_empty() ||
         !self.full.is_empty() ||

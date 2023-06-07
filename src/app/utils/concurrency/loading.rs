@@ -11,6 +11,7 @@ module_constructor! {
     use crate::graphics::ui::imgui_ext::push_window_builder;
 
     push_window_builder(spawn_info_window);
+    app::push_update_function(update);
 }
 
 

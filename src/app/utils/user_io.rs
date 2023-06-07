@@ -20,7 +20,17 @@ use {
     },
 };
 
+
+
 pub use glium::glutin::event::VirtualKeyCode as Key;
+
+
+
+module_constructor! {
+    app::push_update_function(keyboard::update);
+}
+
+
 
 pub mod keyboard {
     #![allow(dead_code)]

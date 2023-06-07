@@ -20,6 +20,7 @@ module_constructor! {
 
     env_logger::init();
     push_window_builder(spawn_window);
+    app::push_update_function(update);
 }
 
 

@@ -32,7 +32,7 @@ portable-atomic = { version = '1.2.0', features = ['float'] }
 atomic = '0.5.1'
 cpython = { version = '0.7.1', features = ['extension-module'] }
 parking_lot = { version = '0.12.1', features = ['nightly'] }
-ctor = '0.2.2'
+ctor = '0.2.0'
 
 # Macro utils
 thiserror = '1.0.40'
@@ -44,6 +44,8 @@ type-uuid = '0.1.2'
 smart-default = '0.7.1'
 async-trait = '0.1.68'
 derive_more = '0.99.17'
+const-random = '0.1.15'
+const_format = '0.2.31'
 
 # Math
 directx_math = '0.2.2'

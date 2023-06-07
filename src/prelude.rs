@@ -1,6 +1,6 @@
 pub use {
     crate::{
-        app::utils::*,
+        app::{self, utils::*},
         profiler::{prelude::*, self},
         logger::{self, LogError},
         reinterpreter::*,
@@ -36,6 +36,7 @@ pub use {
         borrow::Cow, any::Any,
         marker::PhantomData,
         path::{Path, PathBuf},
+        future::Future,
     },
     itertools::Itertools,
     portable_atomic::{AtomicF32, AtomicF64, AtomicU128, AtomicI128},
@@ -52,4 +53,6 @@ pub use {
     anyhow::{Error as AnyError, Result as AnyResult, Context},
     parking_lot::{Mutex, RwLock},
     derive_more::{From, Into, AsRef, AsMut, Constructor, Unwrap, IsVariant},
+    const_random::const_random,
+    const_format::formatcp,
 };

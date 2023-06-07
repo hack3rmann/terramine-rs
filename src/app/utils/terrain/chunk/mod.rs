@@ -29,15 +29,8 @@ use {
 
 pub mod prelude {
     pub use super::{
-        Chunk,
-        SetLodError,
-        ChunkRenderError,
-        Info as ChunkInfo,
-        Lod,
-        ChunkOption,
-        FillType,
-        chunk_array::ChunkArray,
-        iterator::{Range3d, self},
+        Chunk, SetLodError, ChunkRenderError, ChunkInfo, Lod,
+        ChunkOption, FillType, chunk_array::ChunkArray, iterator::{self, Range3d},
     };
 }
 
@@ -47,22 +40,25 @@ pub mod prelude {
 pub struct Chunk {
     pub pos: Atomic<Int3>,
     pub voxel_ids: Vec<Atomic<Id>>,
-    pub info: Atomic<Info>,
+    pub info: Atomic<ChunkInfo>,
 }
 assert_impl_all!(Chunk: Send, Sync, Component);
 
+impl ConstDefault for Chunk {
+    #[allow(clippy::declare_interior_mutable_const)]
+    const DEFAULT: Self = Self {
+        voxel_ids: const_default(),
+        pos: const_default(),
+        info: Atomic::new(ChunkInfo {
+            fill_type: FillType::AllSame(AIR_VOXEL_DATA.id),
+            is_filled: true,
+            active_lod: None,
+        }),
+    };
+}
+
 impl Default for Chunk {
-    fn default() -> Self {
-        Self {
-            voxel_ids: default(),
-            pos: default(),
-            info: Atomic::new(Info {
-                fill_type: FillType::AllSame(AIR_VOXEL_DATA.id),
-                is_filled: true,
-                active_lod: None,
-            }),
-        }
-    }
+    fn default() -> Self { const_default() }
 }
 
 impl Chunk {
@@ -517,7 +513,7 @@ impl Chunk {
     pub fn new_same_filled(chunk_pos: Int3, fill_id: Id) -> Self {
         Self {
             voxel_ids: vec![Atomic::new(fill_id)],
-            info: Atomic::new(Info {
+            info: Atomic::new(ChunkInfo {
                 fill_type: FillType::AllSame(fill_id),
                 is_filled: true,
                 active_lod: None,
@@ -700,7 +696,7 @@ impl Chunk {
 
         ensure_or!(self.is_generated(), return);
         
-        let mut info = Info {
+        let mut info = ChunkInfo {
             active_lod: self.info.load(Acquire).active_lod,
             ..default()
         };
@@ -899,7 +895,7 @@ pub enum ChunkRenderError {
 
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
-pub struct Info {
+pub struct ChunkInfo {
     pub fill_type: FillType,
     pub is_filled: bool,
     pub active_lod: Option<Lod>,

@@ -24,7 +24,6 @@ pub struct App {
     pub world: World,
     pub camera: CameraHandle,
 
-    pub update_functions: Vec<fn()>,
     pub event_loop: Nullable<EventLoop<()>>,
 }
 
@@ -34,11 +33,6 @@ impl App {
         let _work_guard = logger::scope("app", "new");
 
         let mut app = Self {
-            update_functions: vec![
-                loading::update,
-                logger::update,
-                keyboard::update,
-            ],
             camera: CameraHandle::from_entity_unchecked(Entity::DANGLING),
             world: World::new(),
             event_loop: Nullable::new(default()),
@@ -131,7 +125,7 @@ impl App {
 
     /// Updates all in the [app][App].
     async fn update(&mut self, _window_id: WindowId) -> AnyResult<()> {
-        for update in self.update_functions.iter() {
+        for update in UPDATE_FUNCTIONS.lock().iter() {
             update();
         }
 
@@ -207,4 +201,14 @@ impl App {
 
         Ok(())
     }
+}
+
+
+
+lazy_static! {
+    pub static ref UPDATE_FUNCTIONS: Mutex<Vec<fn()>> = Mutex::new(Vec::with_capacity(64));
+}
+
+pub fn push_update_function(function: fn()) {
+    UPDATE_FUNCTIONS.lock().push(function);
 }

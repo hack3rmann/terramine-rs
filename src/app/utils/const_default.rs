@@ -16,6 +16,19 @@ macro impl_nums_const_default($($Int:ty),* $(,)?) {
 
 impl_nums_const_default! { i8, u8, i16, u16, i32, u32, f32, f64, i64, u64, isize, usize }
 
+macro impl_vecs_const_default($($Vec:ty),* $(,)?) {
+    $(
+        impl ConstDefault for $Vec {
+            const DEFAULT: Self = Self::ZERO;
+        }
+    )*
+}
+
+impl_vecs_const_default! {
+    Byte2, Byte3, UByte2, UByte3, Short2, Short3, UShort2, UShort3, Int2, Int3, UInt2, UInt3,
+    Long2, Long3, ULong2, ULong3, Large2, Large3, ULarge2, ULarge3, Float2, Float3, Double2, Double3,
+}
+
 impl ConstDefault for bool {
     const DEFAULT: Self = false;
 }
@@ -83,6 +96,7 @@ impl<T> ConstDefault for VecDeque<T> {
 macro impl_atomics($($AtomicName:ident($TypeName:ident)),* $(,)?) {
     $(
         impl ConstDefault for $AtomicName {
+            #[allow(clippy::declare_interior_mutable_const)]
             const DEFAULT: Self = Self::new(<$TypeName>::DEFAULT);
         }
     )*
@@ -94,7 +108,12 @@ impl_atomics! {
 }
 
 impl<T> ConstDefault for AtomicPtr<T> {
+    #[allow(clippy::declare_interior_mutable_const)]
     const DEFAULT: Self = Self::new(std::ptr::null_mut());
+}
+
+impl<T: ConstDefault> ConstDefault for Atomic<T> {
+    const DEFAULT: Self = Self::new(T::DEFAULT);
 }
 
 impl ConstDefault for Duration {

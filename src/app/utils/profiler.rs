@@ -11,6 +11,7 @@ use {
 pub use terramine_profiler_macros::profiler_target as profile;
 
 
+
 pub mod prelude {
     pub use super::{
         profile,
@@ -22,7 +23,6 @@ pub mod prelude {
 
 
 pub type MeasureId = u64;
-pub type DataSummary<'s> = Vec<Data<'s>>;
 
 
 
@@ -173,7 +173,7 @@ pub fn update() {
 }
 
 /// Builds ImGui window of capturing results
-pub fn build_window(ui: &imgui::Ui, profiler_result: DataSummary) {
+pub fn build_window(ui: &imgui::Ui, profiler_result: Vec<Data<'_>>) {
     use crate::app::utils::graphics::ui::imgui_ext::make_window;
 
     if !profiler_result.is_empty() && IS_DRAWING_ENABLED.load(Relaxed) {
@@ -210,11 +210,14 @@ pub fn build_window(ui: &imgui::Ui, profiler_result: DataSummary) {
 
 pub macro scope {
     ($name:expr) => {
-        ::lazy_static::lazy_static! {
-            static ref SCOPE_ID: $crate::profiler::MeasureId = ::rand::random();
-        }
-        let _measure = $crate::profiler::start_capture($name, *SCOPE_ID);
+        use $crate::profiler::{MeasureId, start_capture};
+        const SCOPE_ID: MeasureId = ::const_random::const_random!(u64) as MeasureId;
+        let _measure = start_capture($name, SCOPE_ID);
     },
 
-    () => { $crate::profiler::scope!(""); },
+    () => {
+        $crate::profiler::scope!(
+            const_format::formatcp!("scope #{}", ::const_random::const_random!(u64))
+        );
+    },
 }
