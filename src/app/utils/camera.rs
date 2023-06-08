@@ -26,10 +26,13 @@ impl CameraHandle {
 
     pub fn switch_mouse_capture(&self, world: &World) -> bool {
         let mut query = world.query_one::<&mut CameraComponent>(self.entity).unwrap();
-        let mut camera = query.get().unwrap();
+        let camera = query.get().unwrap();
 
-        camera.captures_mouse = !camera.captures_mouse;
-        camera.captures_mouse
+        let CameraActivity::Enabled { captures_mouse } = &mut camera.activity
+        else { return false };
+
+        *captures_mouse = !*captures_mouse;
+        *captures_mouse
     }
 
     pub fn update_all(world: &World) {
@@ -84,9 +87,32 @@ impl CameraHandle {
 
                     camera.fov.set_degrees(fov);
                 }
+
+                if ui.button("Set main") {
+                    camera.enable();
+
+                    let mut cam = world.resource::<&mut MainCamera>().unwrap();
+                    cam.0.entity = entity;
+                }
             });
         }
     }
+}
+
+
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, IsVariant)]
+pub enum CameraActivity {
+    Disabled,
+    Enabled { captures_mouse: bool },
+}
+
+impl ConstDefault for CameraActivity {
+    const DEFAULT: Self = Self::Disabled;
+}
+
+impl Default for CameraActivity {
+    fn default() -> Self { const_default() }
 }
 
 
@@ -103,7 +129,7 @@ pub struct CameraComponent {
     pub speed_factor: f32,
 
     pub mouse_sensetivity: f32,
-    pub captures_mouse: bool,
+    pub activity: CameraActivity,
 }
 assert_impl_all!(CameraHandle: Send, Sync);
 
@@ -130,12 +156,14 @@ impl CameraComponent {
 
         let mut new_speed = vec3::ZERO;
 
-        if keyboard::is_pressed(Key::W)      { new_speed += vecf!(front.x, 0, front.z).normalized() }
-        if keyboard::is_pressed(Key::S)      { new_speed -= vecf!(front.x, 0, front.z).normalized() }
-        if keyboard::is_pressed(Key::D)      { new_speed += right.normalized() }
-        if keyboard::is_pressed(Key::A)      { new_speed -= right.normalized() }
-        if keyboard::is_pressed(Key::Space)  { new_speed += vecf!(0, 1, 0) }
-        if keyboard::is_pressed(Key::LShift) { new_speed -= vecf!(0, 1, 0) }
+        if let CameraActivity::Enabled { captures_mouse: true } = self.activity {
+            if keyboard::is_pressed(Key::W)      { new_speed += vecf!(front.x, 0, front.z).normalized() }
+            if keyboard::is_pressed(Key::S)      { new_speed -= vecf!(front.x, 0, front.z).normalized() }
+            if keyboard::is_pressed(Key::D)      { new_speed += right.normalized() }
+            if keyboard::is_pressed(Key::A)      { new_speed -= right.normalized() }
+            if keyboard::is_pressed(Key::Space)  { new_speed += vecf!(0, 1, 0) }
+            if keyboard::is_pressed(Key::LShift) { new_speed -= vecf!(0, 1, 0) }
+        }
 
         new_speed = new_speed.with_len(self.speed_factor);
 
@@ -149,7 +177,7 @@ impl CameraComponent {
 
         speed.affect_translation(dt, &mut transform.translation);
 
-        if self.captures_mouse {
+        if let CameraActivity::Enabled { captures_mouse: true } = self.activity {
             let mouse_delta = mouse::get_delta();
             let angles = vec3::new(mouse_delta.y, 0.0, mouse_delta.x);
 
@@ -204,21 +232,31 @@ impl CameraComponent {
     pub fn on_window_resize(&mut self, size: UInt2) {
         self.aspect_ratio = cfg::window::aspect_ratio(size.x as f32, size.y as f32);
     }
+
+    pub fn disable(&mut self) {
+        self.activity = CameraActivity::Disabled;
+    }
+
+    pub fn enable(&mut self) {
+        self.activity = CameraActivity::Enabled { captures_mouse: false };
+    }
+}
+
+impl ConstDefault for CameraComponent {
+    const DEFAULT: Self = Self {
+        fov: Angle::from_degrees(cfg::camera::default::FOV_IN_DEGREES),
+        aspect_ratio: cfg::window::default::ASPECT_RATIO,
+        near_plane: cfg::camera::default::NEAR_PLANE,
+        far_plane: cfg::camera::default::FAR_PLANE,
+        speed_falloff: cfg::camera::default::SPEED_FALLOFF,
+        speed_factor: cfg::camera::default::SPEED,
+        mouse_sensetivity: cfg::camera::default::MOUSE_SENSETIVITY,
+        activity: const_default(),
+    };
 }
 
 impl Default for CameraComponent {
-    fn default() -> Self {
-        Self {
-            fov: Angle::from_degrees(cfg::camera::default::FOV_IN_DEGREES),
-            aspect_ratio: cfg::window::default::ASPECT_RATIO,
-            near_plane: cfg::camera::default::NEAR_PLANE,
-            far_plane: cfg::camera::default::FAR_PLANE,
-            speed_falloff: cfg::camera::default::SPEED_FALLOFF,
-            speed_factor: cfg::camera::default::SPEED,
-            mouse_sensetivity: cfg::camera::default::MOUSE_SENSETIVITY,
-            captures_mouse: false,
-        }
-    }
+    fn default() -> Self { const_default() }
 }
 
 

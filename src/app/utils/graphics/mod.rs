@@ -481,7 +481,7 @@ impl Graphics {
         let mut graphics = world.resource::<&mut Self>()?;
 
         {
-            let camera = world.resource::<&MainCamera>()
+            let MainCamera(camera) = world.copy_resource::<MainCamera>()
                 .context("main camera has to be set")?;
             let cam_uniform = camera.get_uniform(world)?;
             let uniform_buffer = graphics.sandbox.resource::<&CameraUniformBuffer>()?;

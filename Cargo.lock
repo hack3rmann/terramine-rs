@@ -333,6 +333,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "const_fn"
+version = "0.4.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fbdcdcb6d86f71c5e97409ad45898af11cbc995b4ee8112d59095a28d376c935"
+
+[[package]]
 name = "const_format"
 version = "0.2.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1475,6 +1481,7 @@ name = "math_linear"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "const_fn",
  "directx_math",
  "doc-comment",
 ]
