@@ -89,7 +89,9 @@ pub struct Profiler {
 
 
 
-static IS_DRAWING_ENABLED: AtomicBool = AtomicBool::new(false);
+macros::atomic_static! {
+    static IS_DRAWING_ENABLED: bool = false;
+}
 
 lazy_static! {
     static ref PROFILER: Mutex<Profiler> = Mutex::new(Profiler {

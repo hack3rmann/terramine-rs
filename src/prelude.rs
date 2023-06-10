@@ -24,7 +24,7 @@ pub use {
     math_linear::prelude::*,
     user_error::UserFacingError,
     std::{
-        sync::Arc, rc::Rc, cell::{RefCell, Cell}, mem, cmp, ops, fmt, pin::Pin, fmt::Debug,
+        sync::Arc, rc::Rc, cell::{RefCell, Cell}, mem, cmp, ops, fmt, pin::Pin, fmt::Debug, hint,
         collections::{HashMap, HashSet, VecDeque},
         sync::atomic::{
             AtomicUsize, AtomicBool, AtomicI16, AtomicI32, AtomicI64,
@@ -54,4 +54,5 @@ pub use {
     derive_more::{From, Into, AsRef, AsMut, Constructor, Unwrap, IsVariant},
     const_random::const_random,
     const_format::formatcp,
+    terramine_macros::ConstDefault,
 };

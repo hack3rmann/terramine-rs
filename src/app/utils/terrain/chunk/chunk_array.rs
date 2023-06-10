@@ -877,7 +877,7 @@ impl ChunkArray {
         }
 
         if n_changed != 0 {
-            logger::log!(Info, from = "chunk-array", "{n_changed} chunks were updated!");
+            logger::info!(from = "chunk-array", "{n_changed} chunks were updated!");
         }
     }
 
@@ -939,7 +939,7 @@ impl ChunkArray {
         self.proccess_camera_input(world, cam).await;
         self.process_commands(world, device).await;
 
-        if keyboard::just_pressed_combo([Key::LControl, Key::S]) {
+        if keyboard::just_pressed_combo(&[Key::LControl, Key::S]) {
             let chunks = self.chunks(world).collect_vec();
             let handle = tokio::spawn(
                 ChunkArray::save_to_file(self.sizes, chunks, "world", "world")
@@ -952,7 +952,7 @@ impl ChunkArray {
             handle.await??;
         }
 
-        if keyboard::just_pressed_combo([Key::LControl, Key::O]) {
+        if keyboard::just_pressed_combo(&[Key::LControl, Key::O]) {
             self.tasks.reading = Nullable::new(
                 tokio::spawn(ChunkArray::read_from_file("world", "world"))
             );

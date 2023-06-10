@@ -8,10 +8,16 @@ use {
 
 
 module_constructor! {
-    use crate::graphics::ui::imgui_ext::push_window_builder;
+    use crate::graphics::ui::imgui_ext::push_window_builder_lock_free;
 
-    push_window_builder(spawn_info_window);
-    app::push_update_function(update);
+    // * Safety
+    // * 
+    // * Safe, because it's going on in module
+    // * constructor, so no one access the update list.
+    unsafe {
+        push_window_builder_lock_free(spawn_info_window);
+        app::update::push_function_lock_free(update);
+    }
 }
 
 

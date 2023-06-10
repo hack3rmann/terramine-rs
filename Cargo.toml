@@ -67,6 +67,7 @@ bytemuck = { version = '1.13.1', features = ['derive'] }
 
 # Terramine modules
 terramine_ecs = { path = '../terramine_ecs', version = '0.1.0' }
+terramine_macros = { version = '*', path = '../terramine_macros' }
 terramine_profiler_macros = { path = '../terramine_profiler_macros' }
 math_linear = { version = '0.1.0', path = '../math_linear', features = ['byte_muck', 'nightly'] }
 

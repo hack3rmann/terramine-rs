@@ -20,19 +20,19 @@ impl DirectionalLight {
         };
 
         make_window(ui, "Light").build(|| {
-            static ANGLES: (AtomicF32, AtomicF32) = (AtomicF32::new(0.3), AtomicF32::new(5.7));
+            macros::atomic_static! {
+                static HORIZONTAL: f32 = 0.3;
+                static VERTICAL: f32 = 5.7;
+            }
 
-            let (mut horizontal, mut vertical) = (
-                ANGLES.0.load(Acquire),
-                ANGLES.1.load(Acquire),
-            );
+            let (mut horizontal, mut vertical) = macros::load!(Acquire: HORIZONTAL, VERTICAL);
 
             ui.text("Rotation");
             ui.slider("Horizontal", 0.0, 2.0 * PI, &mut horizontal);
             ui.slider("Vertical",   0.0, 2.0 * PI, &mut vertical);
 
-            ANGLES.0.store(horizontal, Release);
-            ANGLES.1.store(vertical, Release);
+            HORIZONTAL.store(horizontal, Release);
+            VERTICAL.store(vertical, Release);
 
             self.cam.front = vec3::new(
                 f32::cos(vertical) * f32::cos(horizontal),

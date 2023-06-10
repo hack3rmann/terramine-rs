@@ -22,7 +22,7 @@ pub mod const_default;
 
 
 
-use { crate::prelude::*, winit::dpi::{Pixel, PhysicalSize} };
+use { crate::prelude::*, winit::dpi::{Pixel, PhysicalSize, PhysicalPosition} };
 
 
 
@@ -43,13 +43,26 @@ pub const fn const_default<T: ConstDefault>() -> T {
 
 
 pub trait ToPhisicalSize<P: Pixel> {
-    fn to_phisical_size(&self) -> PhysicalSize<P>;
+    fn to_physical_size(&self) -> PhysicalSize<P>;
 }
 assert_obj_safe!(ToPhisicalSize<u32>);
 
 impl ToPhisicalSize<u32> for UInt2 {
-    fn to_phisical_size(&self) -> PhysicalSize<u32> {
+    fn to_physical_size(&self) -> PhysicalSize<u32> {
         PhysicalSize::new(self.x, self.y)
+    }
+}
+
+
+
+pub trait ToPhisicalPosition<P: Pixel> {
+    fn to_physical_position(&self) -> PhysicalPosition<P>;
+}
+assert_obj_safe!(ToPhisicalPosition<u32>);
+
+impl ToPhisicalPosition<u32> for UInt2 {
+    fn to_physical_position(&self) -> PhysicalPosition<u32> {
+        PhysicalPosition::new(self.x, self.y)
     }
 }
 

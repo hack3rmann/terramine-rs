@@ -7,21 +7,28 @@ use crate::{
 
 
 
+module_constructor! {
+    use crate::graphics::ui::imgui_ext::push_window_builder_lock_free;
+
+    env_logger::init();
+
+    // * Safety
+    // * 
+    // * Safe, because it's going on in module
+    // * constructor, so no one access the update list.
+    unsafe {
+        push_window_builder_lock_free(spawn_window);
+        app::update::push_function_lock_free(update);
+    }
+}
+
+
+
 lazy_static! {
     static ref CHANNEL: Mutex<Channel<Message>> = Mutex::new(Channel::default());
 }
 
 static LOG_MESSAGES: Mutex<VecDeque<Message>> = Mutex::new(VecDeque::new());
-
-
-
-module_constructor! {
-    use crate::graphics::ui::imgui_ext::push_window_builder;
-
-    env_logger::init();
-    push_window_builder(spawn_window);
-    app::push_update_function(update);
-}
 
 
 
@@ -86,7 +93,7 @@ assert_impl_all!(LogGuard: Send, Sync);
 impl LogGuard {
     pub fn new(from: impl Into<StaticStr>, work: impl Into<StaticStr>) -> Self {
         let (from, work) = (from.into(), work.into());
-        log!(Info, from = from.clone(), "start {work}.");
+        info!(from = from.clone(), "start {work}.");
         Self { from, work }
     }
 }
@@ -94,7 +101,7 @@ impl LogGuard {
 impl Drop for LogGuard {
     fn drop(&mut self) {
         let from = mem::take(&mut self.from);
-        log!(Info, from = from, "end {work}.", work = self.work);
+        info!(from = from, "end {work}.", work = self.work);
     }
 }
 
@@ -107,11 +114,27 @@ pub macro log($msg_type:ident, from = $from:expr, $($content:tt)*) {
     }
 }
 
+pub macro info {
+    (from = $from:expr, $($fmt:tt)*) => {
+        $crate::logger::log!(Info, from = $from, $($fmt)*);
+    },
+
+    ($($fmt:tt)*) => { $crate::logger::info!(from = "*unknown*", $($fmt)*); },
+}
+
+pub macro error {
+    (from = $from:expr, $($fmt:tt)*) => {
+        $crate::logger::log!(Error, from = $from, $($fmt)*);
+    },
+
+    ($($fmt:tt)*) => { $crate::logger::error!(from = "*unknown*", $($fmt)*); },
+}
+
 pub macro log_dbg($expr:expr) {
     {
         use $crate::app::utils::logger::log;
         let result = $expr;
-        log!(Info, from = "dbg", "{expr} = {result:?}", expr = stringify!($expr));
+        info!(from = "dbg", "{expr} = {result:?}", expr = stringify!($expr));
         result
     }
 }

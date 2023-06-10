@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 
 
-#[derive(Debug, Clone, PartialEq, Default, Display)]
+#[derive(Debug, Clone, PartialEq, ConstDefault, Display)]
 #[display("translation: {translation}; rotation: {rotation}; scaling: {scaling}")]
 pub struct Transform {
     pub translation: Translation,
@@ -23,14 +23,6 @@ impl Transform {
     }
 }
 
-impl ConstDefault for Transform {
-    const DEFAULT: Self = Self {
-        translation: const_default(),
-        rotation: const_default(),
-        scaling: const_default(),
-    };
-}
-
 impl AsMatrix for Transform {
     fn as_matrix(&self) -> mat4 {
         self.translation.as_matrix()
@@ -41,16 +33,12 @@ impl AsMatrix for Transform {
 
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Default, Deref, Display, From, Into)]
+#[derive(Debug, Clone, Copy, PartialEq, ConstDefault, Deref, Display, From, Into)]
 #[display("x: {offset.x:.3}, y: {offset.y:.3}, z: {offset.z:.3}")]
 pub struct Translation {
     pub offset: vec3,
 }
 assert_impl_all!(Translation: Send, Sync);
-
-impl ConstDefault for Translation {
-    const DEFAULT: Self = Self { offset: const_default() };
-}
 
 impl AsMatrix for Translation {
     fn as_matrix(&self) -> mat4 {
@@ -60,7 +48,7 @@ impl AsMatrix for Translation {
 
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Default, Deref, Display, From)]
+#[derive(Debug, Clone, Copy, PartialEq, ConstDefault, Deref, Display, From)]
 #[display("roll: {angles.x:.3}, pitch: {angles.y:.3}, yaw: {angles.z:.3}")]
 pub struct Rotation {
     /// Rotation in `vec3 { x: roll, y: pitch, z: yaw }`.
@@ -74,10 +62,6 @@ impl Rotation {
     }
 }
 
-impl ConstDefault for Rotation {
-    const DEFAULT: Self = Self { angles: const_default() };
-}
-
 impl AsMatrix for Rotation {
     fn as_matrix(&self) -> mat4 {
         let (roll, pitch, yaw) = self.angles.as_tuple();
@@ -89,14 +73,14 @@ impl AsMatrix for Rotation {
 
 #[derive(Debug, Clone, Copy, PartialEq, Deref, SmartDefault, Display, From, Into)]
 #[display("x: {amount.x:.3}, y: {amount.y:.3}, z: {amount.z:.3}")]
+#[default(Self::DEFAULT)]
 pub struct Scaling {
-    #[default(vec3::ONE)]
     pub amount: vec3,
 }
 assert_impl_all!(Scaling: Send, Sync);
 
 impl ConstDefault for Scaling {
-    const DEFAULT: Self = Self { amount: const_default() };
+    const DEFAULT: Self = Self { amount: vec3::ONE };
 }
 
 impl AsMatrix for Scaling {

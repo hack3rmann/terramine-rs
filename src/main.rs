@@ -7,18 +7,12 @@
     decl_macro, rustc_attrs, local_key_cell_methods,
 )]
 
-
-
 #[allow(unused_imports)]
 #[macro_use(vecf, veci, vecu, vecs)]
 pub extern crate math_linear;
 
-
-
 pub mod app;
 pub mod prelude;
-
-
 
 pub use app::utils::*;
 

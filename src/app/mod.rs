@@ -46,24 +46,35 @@ impl App {
 
         self.world.init_resource::<Timer>();
 
-        let camera = self.world.spawn(CameraBundle::default()).into();
+        let camera = self.world.spawn({
+            let mut cam = CameraBundle::default();
+            cam.0.enable();
+            cam
+        }).into();
         self.world.insert_resource(MainCamera(camera));
 
         self.world.insert_resource(
             Graphics::new(&self.event_loop)
                 .await
-                .expect("failed to create graphics")
+                .context("failed to create graphics")?
         );
 
         Ok(())
     }
 
-    /// Runs an [app][App]. Runs `glium`'s `event_loop`.
+    /// Runs an [app][App]. Runs [`winit`]'s `event_loop`.
     pub fn run(mut self) -> ! {
         let event_loop = self.event_loop.take();
-        event_loop.run(move |event, elw_target, control_flow| RUNTIME.block_on(
-            self.run_frame_loop(event, elw_target, control_flow)
-        ).expect("fauler to run frame loop"))
+        event_loop.run(move |event, elw_target, control_flow| {
+            let result = RUNTIME.block_on(
+                self.run_frame_loop(event, elw_target, control_flow)
+            );
+
+            if let Err(error) = result {
+                logger::error!(from = "app", "failed to run event loop: {error:#?}");
+                panic!("panicked on {error}");
+            }
+        })
     }
 
     /// Exits [app][App]. Runs any destructor or deinitializer functions.
@@ -123,7 +134,7 @@ impl App {
 
     /// Updates all in the [app][App].
     async fn update(&mut self, _window_id: WindowId) -> AnyResult<()> {
-        for update in UPDATE_FUNCTIONS.lock().iter() {
+        for update in update::UPDATE_FUNCTIONS.lock().iter() {
             update();
         }
 
@@ -133,7 +144,7 @@ impl App {
             self.world.resource::<&mut Timer>()?.update();
             let graphics = self.world.resource::<&Graphics>()?;
             
-            mouse::update(&graphics.window).await
+            mouse::update(&graphics.window)
                 .log_error("app", "failed to update mouse input");
 
             keyboard::set_input_capture(graphics.imgui.context.io().want_text_input);
@@ -203,10 +214,31 @@ impl App {
 
 
 
-lazy_static! {
-    pub static ref UPDATE_FUNCTIONS: Mutex<SmallVec<[fn(); 64]>> = Mutex::new(smallvec![]);
-}
+pub mod update {
+    use crate::prelude::*;
 
-pub fn push_update_function(function: fn()) {
-    UPDATE_FUNCTIONS.lock().push(function);
+    pub type UpdateFunctionVec<const N: usize> = SmallVec<[fn(); N]>;
+
+    pub static UPDATE_FUNCTIONS: Mutex<UpdateFunctionVec<64>> = const_default();
+
+    /// Adds update function to update list.
+    /// That functon will be executed before each frame.
+    pub fn push_function(function: fn()) {
+        UPDATE_FUNCTIONS.lock().push(function);
+    }
+
+    /// Adds update function to update list without aquireing [`Mutex`]'s lock.
+    /// That functon will be executed before each frame.
+    /// 
+    /// # Safety
+    /// 
+    /// - should be called on main thread.
+    /// - there's no threads pushing update functions.
+    pub unsafe fn push_function_lock_free(function: fn()) {
+        UPDATE_FUNCTIONS
+            .data_ptr()
+            .as_mut()
+            .unwrap_unchecked()
+            .push(function);
+    }
 }

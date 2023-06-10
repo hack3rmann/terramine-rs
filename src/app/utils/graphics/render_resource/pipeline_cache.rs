@@ -198,8 +198,8 @@
 //                     render_device.limits().max_storage_buffers_per_shader_stage,
 //                 ));
 
-//                 logger::log!(
-//                     Info, from = "pipeline-cache",
+//                 logger::info!(
+//                     from = "pipeline-cache",
 //                     "processing shader {shader:?}, with shader defs {shader_defs:?}",
 //                 );
 //                 let processed = self.processor.process(

@@ -56,3 +56,86 @@ macro_rules! sum_errors {
         }
     };
 }
+
+
+
+/// Makes atomic static's declarations look like usual static's declarations.
+/// 
+/// # Example
+/// 
+/// ```
+/// # use crate::macros::atomic_static;
+/// 
+/// #[derive(Clone, Copy)]
+/// enum Weather {
+///     Sunny,
+///     Rainy,
+///     Cloudy,
+/// }
+/// 
+/// atomic_static! {
+///     pub static WEATHER: Weather = Weather::Sunny;
+///     pub static IS_WEATHER_GOOD: bool = true;
+/// }
+/// ```
+/// 
+/// is equivalent to
+/// 
+/// ```
+/// # use std::sync::atomic::AtomicBool;
+/// # use atomic::Atomic;
+/// pub static IS_WEATHER_GOOD: AtomicBool = AtomicBool::new(true);
+/// pub static WEATHER: Atomic<Weather> = Atomic::new(Weather::Sunny);
+/// ```
+pub macro atomic_static($($vis:vis static $NAME:ident: $Type:ty = $init:expr;)*) {
+    $(
+        $vis static $NAME: crate::macros::Atomic!($Type) = <crate::macros::Atomic!($Type)>::new($init);
+    )*
+}
+
+/// Makes an atomic type out of any [`Copy`] type.
+/// 
+/// # Example
+/// 
+/// Common types are already atomics:
+/// 
+/// ```
+/// # use crate::macros::Atomic;
+/// type AtomicUsize = Atomic!(usize);
+/// ```
+/// 
+/// And any small type too:
+/// 
+/// ```
+/// # use crate::macros::Atomic;
+/// #[derive(Clone, Copy)]
+/// enum Animal {
+///     Dog,
+///     Cat,
+/// }
+/// 
+/// type AtomicAnimal = Atomic!(Animal);
+/// ```
+pub macro Atomic {
+    (i8) => { ::std::sync::atomic::AtomicI8 },
+    (u8) => { ::std::sync::atomic::AtomicU8 },
+    (i16) => { ::std::sync::atomic::AtomicI16 },
+    (u16) => { ::std::sync::atomic::AtomicU16 },
+    (i32) => { ::std::sync::atomic::AtomicI32 },
+    (u32) => { ::std::sync::atomic::AtomicU32 },
+    (i64) => { ::std::sync::atomic::AtomicI64 },
+    (i128) => { ::portable_atomic::AtomicI128 },
+    (u128) => { ::portable_atomic::AtomicU128 },
+    (isize) => { ::std::sync::atomic::AtomicIsize },
+    (usize) => { ::std::sync::atomic::AtomicUsize },
+    (f32) => { ::portable_atomic::AtomicF32 },
+    (f64) => { ::portable_atomic::AtomicF64 },
+    (bool) => { ::std::sync::atomic::AtomicBool },
+    ($Type:ty) => { ::atomic::Atomic<$Type> },
+}
+
+pub macro load($ordering:ident: $($name:ident),*) {
+    ($(
+        $name.load(::std::sync::atomic::Ordering::$ordering),
+    )*)
+}

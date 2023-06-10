@@ -12,18 +12,24 @@ use {
 
 
 module_constructor! {
-    use crate::graphics::ui::imgui_ext::push_window_builder;
+    use crate::graphics::ui::imgui_ext::push_window_builder_lock_free;
 
-    push_window_builder(spawn_control_window);
+    // * Safety
+    // * 
+    // * Safe, because it's going on in module
+    // * constructor, so no one access the update list.
+    unsafe { push_window_builder_lock_free(spawn_control_window) };
 }
 
 
 
-static FREQUENCY: AtomicF32 = AtomicF32::new(0.05);
-static N_OCTAVES: AtomicUsize = AtomicUsize::new(6);
-static PERSISTENCE: AtomicF32 = AtomicF32::new(3.0);
-static LACUNARITY: AtomicF32 = AtomicF32::new(0.5);
-static SEED: AtomicU32 = AtomicU32::new(10);
+macros::atomic_static! {
+    static FREQUENCY: f32 = 0.05;
+    static N_OCTAVES: usize = 6;
+    static PERSISTENCE: f32 = 3.0;
+    static LACUNARITY: f32 = 0.5;
+    static SEED: u32 = 10;
+}
 
 lazy_static! {
     static ref NOISE_VALS: RwLock<Noise2d> = RwLock::new(

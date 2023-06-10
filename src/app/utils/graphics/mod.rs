@@ -396,7 +396,7 @@ impl Graphics {
         for (_entity, (binds, mesh, pipeline)) in query.iter() {
             Binds::bind_all(&mut pass, [
                 &self.common_uniforms.binds,
-                &binds,
+                binds,
                 &cam.binds,
             ]);
             

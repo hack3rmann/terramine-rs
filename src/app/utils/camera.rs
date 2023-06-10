@@ -179,7 +179,12 @@ impl CameraComponent {
 
         if let CameraActivity::Enabled { captures_mouse: true } = self.activity {
             let mouse_delta = mouse::get_delta();
-            let angles = vec3::new(mouse_delta.y, 0.0, mouse_delta.x);
+
+            let accel_multiple = if cfg::camera::IS_CAMERA_LOOK_ACCELERATION_ENABLED {
+                130.0 * dt_secs
+            } else { 1.0 };
+
+            let angles = accel_multiple * vec3::new(mouse_delta.y, 0.0, mouse_delta.x);
 
             // TODO: bound rotation by (-pi..pi)
             transform.rotation.rotate(dt_secs * self.mouse_sensetivity * angles);
