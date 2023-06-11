@@ -1,7 +1,4 @@
-use crate::{
-    prelude::*,
-    graphics::{Buffer, render_resource::{RenderDevice, RenderQueue}},
-};
+use crate::{prelude::*, graphics::Buffer};
 
 /// A structure for storing raw bytes that have already been properly formatted
 /// for use by the GPU.
@@ -84,46 +81,46 @@ impl<T: Pod> BufferVec<T> {
         self.label.as_deref()
     }
 
-    /// Creates a [`Buffer`](crate::render_resource::Buffer) on the [`RenderDevice`](crate::renderer::RenderDevice) with size
-    /// at least `std::mem::size_of::<T>() * capacity`, unless a such a buffer already exists.
-    ///
-    /// If a [`Buffer`](crate::render_resource::Buffer) exists, but is too small, references to it will be discarded,
-    /// and a new [`Buffer`](crate::render_resource::Buffer) will be created. Any previously created [`Buffer`](crate::render_resource::Buffer)s
-    /// that are no longer referenced will be deleted by the [`RenderDevice`](crate::renderer::RenderDevice)
-    /// once it is done using them (typically 1-2 frames).
-    ///
-    /// In addition to any [`BufferUsages`](crate::render_resource::BufferUsages) provided when
-    /// the `BufferVec` was created, the buffer on the [`RenderDevice`](crate::renderer::RenderDevice)
-    /// is marked as [`BufferUsages::COPY_DST`](crate::render_resource::BufferUsages).
-    pub fn reserve(&mut self, capacity: usize, device: &RenderDevice) {
-        if capacity > self.capacity || self.label_changed {
-            self.capacity = capacity;
-            let size = self.item_size * capacity;
-            self.buffer = Some(device.create_buffer(&wgpu::BufferDescriptor {
-                label: self.label.as_deref(),
-                size: size as wgpu::BufferAddress,
-                usage: wgpu::BufferUsages::COPY_DST | self.buffer_usage,
-                mapped_at_creation: false,
-            }));
-            self.label_changed = false;
-        }
-    }
+    // /// Creates a [`Buffer`](crate::render_resource::Buffer) on the [`RenderDevice`](crate::renderer::RenderDevice) with size
+    // /// at least `std::mem::size_of::<T>() * capacity`, unless a such a buffer already exists.
+    // ///
+    // /// If a [`Buffer`](crate::render_resource::Buffer) exists, but is too small, references to it will be discarded,
+    // /// and a new [`Buffer`](crate::render_resource::Buffer) will be created. Any previously created [`Buffer`](crate::render_resource::Buffer)s
+    // /// that are no longer referenced will be deleted by the [`RenderDevice`](crate::renderer::RenderDevice)
+    // /// once it is done using them (typically 1-2 frames).
+    // ///
+    // /// In addition to any [`BufferUsages`](crate::render_resource::BufferUsages) provided when
+    // /// the `BufferVec` was created, the buffer on the [`RenderDevice`](crate::renderer::RenderDevice)
+    // /// is marked as [`BufferUsages::COPY_DST`](crate::render_resource::BufferUsages).
+    // pub fn reserve(&mut self, capacity: usize, device: &RenderDevice) {
+    //     if capacity > self.capacity || self.label_changed {
+    //         self.capacity = capacity;
+    //         let size = self.item_size * capacity;
+    //         self.buffer = Some(device.create_buffer(&wgpu::BufferDescriptor {
+    //             label: self.label.as_deref(),
+    //             size: size as wgpu::BufferAddress,
+    //             usage: wgpu::BufferUsages::COPY_DST | self.buffer_usage,
+    //             mapped_at_creation: false,
+    //         }));
+    //         self.label_changed = false;
+    //     }
+    // }
 
-    /// Queues writing of data from system RAM to VRAM using the [`RenderDevice`](crate::renderer::RenderDevice)
-    /// and the provided [`RenderQueue`](crate::renderer::RenderQueue).
-    ///
-    /// Before queuing the write, a [`reserve`](crate::render_resource::BufferVec::reserve) operation
-    /// is executed.
-    pub fn write_buffer(&mut self, device: &RenderDevice, queue: &RenderQueue) {
-        ensure_or!(!self.values.is_empty(), return);
+    // /// Queues writing of data from system RAM to VRAM using the [`RenderDevice`](crate::renderer::RenderDevice)
+    // /// and the provided [`RenderQueue`](crate::renderer::RenderQueue).
+    // ///
+    // /// Before queuing the write, a [`reserve`](crate::render_resource::BufferVec::reserve) operation
+    // /// is executed.
+    // pub fn write_buffer(&mut self, device: &RenderDevice, queue: &RenderQueue) {
+    //     ensure_or!(!self.values.is_empty(), return);
         
-        self.reserve(self.values.len(), device);
-        if let Some(buffer) = &self.buffer {
-            let range = 0..self.item_size * self.values.len();
-            let bytes: &[u8] = bytemuck::cast_slice(&self.values);
-            queue.write_buffer(buffer, 0, &bytes[range]);
-        }
-    }
+    //     self.reserve(self.values.len(), device);
+    //     if let Some(buffer) = &self.buffer {
+    //         let range = 0..self.item_size * self.values.len();
+    //         let bytes: &[u8] = bytemuck::cast_slice(&self.values);
+    //         queue.write_buffer(buffer, 0, &bytes[range]);
+    //     }
+    // }
 
     pub fn truncate(&mut self, len: usize) {
         self.values.truncate(len);

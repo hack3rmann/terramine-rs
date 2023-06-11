@@ -1,9 +1,11 @@
+#![allow(unused)]
+
 use std::marker::PhantomData;
 
 use {
     crate::{
         prelude::*,
-        graphics::{Buffer, render_resource::{RenderDevice, RenderQueue}},
+        graphics::Buffer,
     },
     encase::{
         internal::WriteInto, DynamicStorageBuffer as DynamicStorageBufferWrapper, ShaderType,
@@ -114,28 +116,28 @@ impl<T: ShaderType + WriteInto> StorageBuffer<T> {
         self.changed = true;
     }
 
-    /// Queues writing of data from system RAM to VRAM using the [`RenderDevice`](crate::renderer::RenderDevice)
-    /// and the provided [`RenderQueue`](crate::renderer::RenderQueue).
-    ///
-    /// If there is no GPU-side buffer allocated to hold the data currently stored, or if a GPU-side buffer previously
-    /// allocated does not have enough capacity, a new GPU-side buffer is created.
-    pub fn write_buffer(&mut self, device: &RenderDevice, queue: &RenderQueue) {
-        self.scratch.write(&self.value).unwrap();
+    // /// Queues writing of data from system RAM to VRAM using the [`RenderDevice`](crate::renderer::RenderDevice)
+    // /// and the provided [`RenderQueue`](crate::renderer::RenderQueue).
+    // ///
+    // /// If there is no GPU-side buffer allocated to hold the data currently stored, or if a GPU-side buffer previously
+    // /// allocated does not have enough capacity, a new GPU-side buffer is created.
+    // pub fn write_buffer(&mut self, device: &RenderDevice, queue: &RenderQueue) {
+    //     self.scratch.write(&self.value).unwrap();
 
-        let capacity = self.buffer.as_deref().map(|buffer| buffer.size()).unwrap_or(0);
-        let size = self.scratch.as_ref().len() as u64;
+    //     let capacity = self.buffer.as_deref().map(|buffer| buffer.size()).unwrap_or(0);
+    //     let size = self.scratch.as_ref().len() as u64;
 
-        if capacity < size || self.changed {
-            self.buffer = Some(device.create_buffer_with_data(&BufferInitDescriptor {
-                label: self.label.as_deref(),
-                usage: self.buffer_usage,
-                contents: self.scratch.as_ref(),
-            }));
-            self.changed = false;
-        } else if let Some(buffer) = &self.buffer {
-            queue.write_buffer(buffer, 0, self.scratch.as_ref());
-        }
-    }
+    //     if capacity < size || self.changed {
+    //         self.buffer = Some(device.create_buffer_with_data(&BufferInitDescriptor {
+    //             label: self.label.as_deref(),
+    //             usage: self.buffer_usage,
+    //             contents: self.scratch.as_ref(),
+    //         }));
+    //         self.changed = false;
+    //     } else if let Some(buffer) = &self.buffer {
+    //         queue.write_buffer(buffer, 0, self.scratch.as_ref());
+    //     }
+    // }
 }
 
 /// Stores data to be transferred to the GPU and made accessible to shaders as a dynamic storage buffer.
@@ -227,21 +229,21 @@ impl<T: ShaderType + WriteInto> DynamicStorageBuffer<T> {
         self.changed = true;
     }
 
-    pub fn write_buffer(&mut self, device: &RenderDevice, queue: &RenderQueue) {
-        let capacity = self.buffer.as_deref().map(|buffer| buffer.size()).unwrap_or(0);
-        let size = self.scratch.as_ref().len() as u64;
+    // pub fn write_buffer(&mut self, device: &RenderDevice, queue: &RenderQueue) {
+    //     let capacity = self.buffer.as_deref().map(|buffer| buffer.size()).unwrap_or(0);
+    //     let size = self.scratch.as_ref().len() as u64;
 
-        if capacity < size || self.changed {
-            self.buffer = Some(device.create_buffer_with_data(&BufferInitDescriptor {
-                label: self.label.as_deref(),
-                usage: self.buffer_usage,
-                contents: self.scratch.as_ref(),
-            }));
-            self.changed = false;
-        } else if let Some(buffer) = &self.buffer {
-            queue.write_buffer(buffer, 0, self.scratch.as_ref());
-        }
-    }
+    //     if capacity < size || self.changed {
+    //         self.buffer = Some(device.create_buffer_with_data(&BufferInitDescriptor {
+    //             label: self.label.as_deref(),
+    //             usage: self.buffer_usage,
+    //             contents: self.scratch.as_ref(),
+    //         }));
+    //         self.changed = false;
+    //     } else if let Some(buffer) = &self.buffer {
+    //         queue.write_buffer(buffer, 0, self.scratch.as_ref());
+    //     }
+    // }
 
     pub fn clear(&mut self) {
         self.scratch.as_mut().clear();
