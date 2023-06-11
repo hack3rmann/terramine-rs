@@ -3,13 +3,9 @@ pub mod utils;
 use {
     crate::{
         prelude::*,
-        graphics::{
-            Graphics,
-            RenderDescriptor,
-        },
+        graphics::{Graphics, RenderDescriptor},
         camera::*,
     },
-
     winit::{
         event::{Event, WindowEvent},
         event_loop::{ControlFlow, EventLoopWindowTarget, EventLoop},
@@ -182,7 +178,7 @@ impl App {
         // InGui draw data.
         let use_ui = |ui: &mut imgui::Ui| {
             CameraHandle::spawn_control_windows(&self.world, ui);
-            profiler::update_and_build_window(ui, timer.dt());
+            profiler::update_and_build_window(ui, timer.time_step());
         };
 
         let mut graphics = self.world.resource::<&mut Graphics>()?;

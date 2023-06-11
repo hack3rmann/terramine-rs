@@ -31,8 +31,7 @@ impl DirectionalLight {
             ui.slider("Horizontal", 0.0, 2.0 * PI, &mut horizontal);
             ui.slider("Vertical",   0.0, 2.0 * PI, &mut vertical);
 
-            HORIZONTAL.store(horizontal, Release);
-            VERTICAL.store(vertical, Release);
+            macros::store!(Release: HORIZONTAL = horizontal, VERTICAL = vertical);
 
             self.cam.front = vec3::new(
                 f32::cos(vertical) * f32::cos(horizontal),

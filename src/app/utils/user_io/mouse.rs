@@ -228,10 +228,7 @@ pub fn update_cursor_position(window: &Window) -> Result<(), MouseError> {
     let (x, y) = get_cursor_pos(window)?.as_tuple();
     let (prev_x, prev_y) = macros::load!(Acquire: X, Y);
 
-    X.store(x, Release);
-    Y.store(y, Release);
-    DX.store(x - prev_x, Release);
-    DY.store(y - prev_y, Release);
+    macros::store!(Release: X = x, Y = y, DX = x - prev_x, DY = y - prev_y);
 
     // Get window size.
     let half_size = window.inner_size().to_vec2() / 2;
@@ -242,8 +239,7 @@ pub fn update_cursor_position(window: &Window) -> Result<(), MouseError> {
             half_size.to_physical_position()
         ).expect("failed to set cursor position");
         
-        X.store(half_size.x as f32, Release);
-        Y.store(half_size.y as f32, Release);
+        macros::store!(Release: X = half_size.x as f32, Y = half_size.y as f32);
     }
 
     Ok(())

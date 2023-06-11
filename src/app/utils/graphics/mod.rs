@@ -493,7 +493,7 @@ impl Graphics {
                 .log_error("graphics", "failed to refresh test shader");
         }
 
-        let dt = world.resource::<&Timer>()?.dt();
+        let dt = world.resource::<&Timer>()?.time_step();
 
         graphics.imgui.context
             .io_mut()

@@ -19,6 +19,7 @@ pub mod wrapper;
 pub mod macros;
 pub mod failure;
 pub mod const_default;
+pub mod physics;
 
 
 
@@ -85,28 +86,20 @@ pub trait Volume<T> {
 }
 assert_obj_safe!(Volume<vec3>);
 
-macro impl_volume($VecType:ty, $ElemType:ty) {
-    impl Volume<$ElemType> for $VecType {
-        fn volume(&self) -> $ElemType {
-            self.x * self.y * self.z
+macro impl_volume($($VecType:ty : $ElemType:ty),* $(,)?) {
+    $(
+        impl Volume<$ElemType> for $VecType {
+            fn volume(&self) -> $ElemType {
+                self.x * self.y * self.z
+            }
         }
-    }
+    )*
 }
 
-impl_volume!(Byte3, i8);
-impl_volume!(UByte3, u8);
-impl_volume!(Short3, i16);
-impl_volume!(UShort3, u16);
-impl_volume!(Int3, i32);
-impl_volume!(UInt3, u32);
-impl_volume!(Long3, i64);
-impl_volume!(ULong3, u64);
-impl_volume!(Large3, i128);
-impl_volume!(ULarge3, u128);
-impl_volume!(ISize3, isize);
-impl_volume!(USize3, usize);
-impl_volume!(vec3, f32);
-impl_volume!(Double3, f64);
+impl_volume! {
+    Byte3: i8, UByte3: u8, Short3: i16, UShort3: u16, Int3: i32, UInt3: u32, Long3: i64,
+    ULong3: u64, Large3: i128, ULarge3: u128, ISize3: isize, USize3: usize, vec3: f32, Double3: f64,
+}
 
 
 

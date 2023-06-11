@@ -34,15 +34,15 @@ impl AsMatrix for Transform {
 
 
 #[derive(Debug, Clone, Copy, PartialEq, ConstDefault, Deref, Display, From, Into)]
-#[display("x: {offset.x:.3}, y: {offset.y:.3}, z: {offset.z:.3}")]
+#[display("x: {position.x:.3}, y: {position.y:.3}, z: {position.z:.3}")]
 pub struct Translation {
-    pub offset: vec3,
+    pub position: vec3,
 }
 assert_impl_all!(Translation: Send, Sync);
 
 impl AsMatrix for Translation {
     fn as_matrix(&self) -> mat4 {
-        mat4::translation(self.offset)
+        mat4::translation(self.position)
     }
 }
 
@@ -132,7 +132,7 @@ pub trait GetOffset {
     fn get_offset(&self, dt: TimeStep) -> vec3;
 
     fn affect_translation(&self, dt: TimeStep, translation: &mut Translation) {
-        translation.offset += self.get_offset(dt);
+        translation.position += self.get_offset(dt);
     }
 
     fn affect_multiple<Offsets, Offset>(offsets: Offsets, dt: TimeStep, translation: &mut Translation)

@@ -36,7 +36,7 @@ impl CameraHandle {
     }
 
     pub fn update_all(world: &World) {
-        let dt = world.resource::<&Timer>().unwrap().dt();
+        let dt = world.resource::<&Timer>().unwrap().time_step();
         let mut query = world.query::<(&mut CameraComponent, &mut Transform, &mut Speed)>();
 
         for (_entity, (camera, transform, speed)) in query.into_iter() {

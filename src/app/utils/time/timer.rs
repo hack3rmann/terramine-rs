@@ -60,7 +60,7 @@ impl Timer {
     }
 
     /// Gives duration since `update()` call
-    pub fn dt(&self) -> TimeStep { self.dt }
+    pub fn time_step(&self) -> TimeStep { self.dt }
 
     /// Gives `fps` measured by [timer][Timer].
     pub fn fps(&self) -> f32 { self.fps }

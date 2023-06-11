@@ -139,3 +139,47 @@ pub macro load($ordering:ident: $($name:ident),*) {
         $name.load(::std::sync::atomic::Ordering::$ordering),
     )*)
 }
+
+pub macro store($ordering:ident: $($name:ident = $value:expr),*) {
+    ($(
+        $name.store($value, ::std::sync::atomic::Ordering::$ordering),
+    )*)
+}
+
+/// Makes a 2-D vector out of type.
+pub macro Vec2 {
+    (i8) => { ::math_linear::prelude::Byte2 },
+    (u8) => { ::math_linear::prelude::UByte2 },
+    (i16) => { ::math_linear::prelude::Short2 },
+    (u16) => { ::math_linear::prelude::UShort2 },
+    (i32) => { ::math_linear::prelude::Int2 },
+    (u32) => { ::math_linear::prelude::UInt2 },
+    (i64) => { ::math_linear::prelude::Long2 },
+    (u64) => { ::math_linear::prelude::ULong2 },
+    (i128) => { ::math_linear::prelude::Large2 },
+    (u128) => { ::math_linear::prelude::ULarge2 },
+    (f32) => { ::math_linear::prelude::Float2 },
+    (f64) => { ::math_linear::prelude::Double2 },
+    (isize) => { ::math_linear::prelude::ISize2 },
+    (usize) => { ::math_linear::prelude::USize2 },
+    ($other:ty) => { compile_error!("only primitive types are supported") },
+}
+
+/// Makes a 3-D vector out of type.
+pub macro Vec3 {
+    (i8) => { ::math_linear::prelude::Byte3 },
+    (u8) => { ::math_linear::prelude::UByte3 },
+    (i16) => { ::math_linear::prelude::Short3 },
+    (u16) => { ::math_linear::prelude::UShort3 },
+    (i32) => { ::math_linear::prelude::Int3 },
+    (u32) => { ::math_linear::prelude::UInt3 },
+    (i64) => { ::math_linear::prelude::Long3 },
+    (u64) => { ::math_linear::prelude::ULong3 },
+    (i128) => { ::math_linear::prelude::Large3 },
+    (u128) => { ::math_linear::prelude::ULarge3 },
+    (f32) => { ::math_linear::prelude::Float3 },
+    (f64) => { ::math_linear::prelude::Double3 },
+    (isize) => { ::math_linear::prelude::ISize3 },
+    (usize) => { ::math_linear::prelude::USize3 },
+    ($other:ty) => { crate::macros::Vec2!($other) },
+}
