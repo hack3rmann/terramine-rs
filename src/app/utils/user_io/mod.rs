@@ -14,7 +14,7 @@ use {
 
 
 
-pub use glium::glutin::event::VirtualKeyCode as Key;
+pub use winit::event::VirtualKeyCode as Key;
 
 
 

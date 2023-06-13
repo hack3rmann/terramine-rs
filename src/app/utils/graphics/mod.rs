@@ -1,11 +1,7 @@
-pub mod glium_shader;
-pub mod glium_texture;
 pub mod camera_resource;
-pub mod glium_mesh;
 pub mod debug_visuals;
 pub mod ui;
 pub mod light;
-pub mod surface;
 pub mod mesh;
 pub mod render_resource;
 pub mod pipeline;

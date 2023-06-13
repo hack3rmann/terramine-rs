@@ -7,7 +7,6 @@ edition = '2021'
 
 [dependencies]
 # Graphics
-glium = '0.32.1'
 wgpu = '0.15.1'
 encase = '0.6.1'
 

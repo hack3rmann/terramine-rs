@@ -22,6 +22,16 @@ pub struct App {
 }
 
 impl App {
+    /// Drives an [app][App] to completion.
+    /// 
+    /// # Note
+    /// 
+    /// If executable finishes with success it will stop inside this function. It implies that this
+    /// function returns only [`Err`] if something gone wrong and never returns in success case.
+    pub fn drive() -> AnyResult<!> {
+        RUNTIME.block_on(Self::new())?.run()
+    }
+
     /// Constructs [`App`].
     pub async fn new() -> AnyResult<Self> {
         logger::scope!(from = "app", "new()");
