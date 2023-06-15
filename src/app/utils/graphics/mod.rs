@@ -33,7 +33,6 @@ pub use {
         BufferBindingType, BindingType, Device,
         util::{DeviceExt, BufferInitDescriptor}, Extent3d,
     },
-    winit::window::Window as WinitWindow,
     imgui_wgpu::{Renderer as ImguiRenderer, RendererConfig as ImguiRendererConfig},
     winit::{event_loop::EventLoop, event::Event},
 };
@@ -51,83 +50,6 @@ const TEST_VERTICES: &[TexturedVertex] = &[
 
 
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct CommonUniforms {
-    pub screen_resolution: vec2,
-    pub time: f32,
-    pub _pad: u32,
-}
-assert_impl_all!(CommonUniforms: Send, Sync);
-
-
-
-#[derive(Debug)]
-pub struct CommonUniformsBuffer {
-    pub buffer: Buffer,
-    pub binds: Binds,
-}
-assert_impl_all!(CommonUniformsBuffer: Send, Sync);
-
-impl CommonUniformsBuffer {
-    pub fn new(device: &Device, initial_value: &CommonUniforms) -> Self {
-        let buffer = Buffer::new(
-            device,
-            &BufferInitDescriptor {
-                label: Some("common_uniforms_buffer"),
-                contents: bytemuck::bytes_of(initial_value),
-                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            },
-        );
-
-        let layout = BindGroupLayout::new(
-            device,
-            &BindGroupLayoutDescriptor {
-                label: Some("common_uniforms_bind_group_layout"),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::VERTEX_FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                ],
-            },
-        );
-
-        let bind_group = BindGroup::new(
-            device,
-            &BindGroupDescriptor {
-                label: Some("common_uniforms_bind_group"),
-                layout: &layout,
-                entries: &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: buffer.as_entire_binding(),
-                    },
-                ],
-            },
-        );
-
-        let binds = Binds::from_iter([
-            (bind_group, Some(layout)),
-        ]);
-
-        Self { binds, buffer }
-    }
-
-    pub fn update(&self, queue: &Queue, uniforms: CommonUniforms) {
-        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[uniforms]));
-        queue.submit(None);
-    }
-}
-
-
-
 #[derive(Debug)]
 pub struct RenderContext {
     pub device: Arc<Device>,
@@ -139,7 +61,7 @@ assert_impl_all!(RenderContext: Send, Sync);
 
 
 
-pub static SURFACE_CFG: RwLock<GlobalAsset<SurfaceConfiguration>> = RwLock::new(GlobalAsset::unloaded());
+pub static SURFACE_CFG: RwLock<GlobalAsset<SurfaceConfiguration>> = const_default();
 
 
 
@@ -258,7 +180,7 @@ impl Graphics {
 
             let shader = Shader::new(&context.device, source, vec![TexturedVertex::BUFFER_LAYOUT]);
 
-            StandartMaterial::from(shader).to_arc()
+            ShaderMaterial::from(shader).to_arc()
         };
 
         let pipeline = RenderPipeline::new(
@@ -359,7 +281,7 @@ impl Graphics {
 
         let material = {
             let shader = Shader::new(&self.context.device, source, vec![TexturedVertex::BUFFER_LAYOUT]);
-            StandartMaterial::from(shader).to_arc()
+            ShaderMaterial::from(shader).to_arc()
         };
 
         let mesh = self.sandbox.resource::<&GpuMesh>()?;
@@ -383,13 +305,12 @@ impl Graphics {
         Ok(())
     }
 
-    pub fn render_sandbox(&mut self, encoder: &mut CommandEncoder, view: TextureView) {
+    pub fn render_sandbox(&mut self, encoder: &mut CommandEncoder, view: TextureView, cam: &CameraUniformBuffer) {
         let mut query = self.sandbox.query::<(&BindsRef, &GpuMesh, &RenderPipeline)>();
-        let cam = self.sandbox.resource::<&CameraUniformBuffer>().unwrap();
 
         let mut pass = RenderPass::new(encoder, "logo_draw_pass", [&view]);
 
-        for (_entity, (binds, mesh, pipeline)) in query.iter() {
+        for (_entity, (binds, mesh, pipeline)) in query.into_iter() {
             Binds::bind_all(&mut pass, [
                 &self.common_uniforms.binds,
                 binds,
@@ -401,7 +322,7 @@ impl Graphics {
     }
 
     pub fn render<UseUi: FnOnce(&mut imgui::Ui)>(
-        &mut self, desc: RenderDescriptor<UseUi>,
+        &mut self, desc: RenderDescriptor<UseUi>, world: &World,
     ) -> Result<(), SurfaceError> {
         let size = self.window.inner_size();
         self.common_uniforms.update(&self.context.queue, CommonUniforms {
@@ -416,7 +337,10 @@ impl Graphics {
 
         ClearPass::clear(&mut encoder, [&view]);
 
-        self.render_sandbox(&mut encoder, view.clone());
+        {
+            let cam = world.resource::<&CameraUniformBuffer>().unwrap();
+            self.render_sandbox(&mut encoder, view.clone(), &cam);
+        }
 
         {
             let mut render_pass = RenderPass::new(&mut encoder, "imgui_draw_pass", [&view]);
@@ -459,7 +383,7 @@ impl Graphics {
             graphics.on_window_resize(new_size);
 
             let mut query = world.query::<&mut CameraComponent>();
-            for (_entity, camera) in query.iter() {
+            for (_entity, camera) in query.into_iter() {
                 camera.on_window_resize(new_size);
             }
         }
@@ -480,7 +404,7 @@ impl Graphics {
             let MainCamera(camera) = world.copy_resource::<MainCamera>()
                 .context("main camera has to be set")?;
             let cam_uniform = camera.get_uniform(world)?;
-            let uniform_buffer = graphics.sandbox.resource::<&CameraUniformBuffer>()?;
+            let uniform_buffer = world.resource::<&CameraUniformBuffer>()?;
             uniform_buffer.update(&graphics.context.queue, &cam_uniform);
         }
         
@@ -590,4 +514,81 @@ impl std::fmt::Debug for ImGuiRendererWrapper {
 pub struct RenderDescriptor<UseImguiUi> {
     pub use_imgui_ui: UseImguiUi,
     pub time: Time,
+}
+
+
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Pod, Zeroable)]
+pub struct CommonUniforms {
+    pub screen_resolution: vec2,
+    pub time: f32,
+    pub _pad: u32,
+}
+assert_impl_all!(CommonUniforms: Send, Sync);
+
+
+
+#[derive(Debug)]
+pub struct CommonUniformsBuffer {
+    pub buffer: Buffer,
+    pub binds: Binds,
+}
+assert_impl_all!(CommonUniformsBuffer: Send, Sync);
+
+impl CommonUniformsBuffer {
+    pub fn new(device: &Device, initial_value: &CommonUniforms) -> Self {
+        let buffer = Buffer::new(
+            device,
+            &BufferInitDescriptor {
+                label: Some("common_uniforms_buffer"),
+                contents: bytemuck::bytes_of(initial_value),
+                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            },
+        );
+
+        let layout = BindGroupLayout::new(
+            device,
+            &BindGroupLayoutDescriptor {
+                label: Some("common_uniforms_bind_group_layout"),
+                entries: &[
+                    BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: ShaderStages::VERTEX_FRAGMENT,
+                        ty: BindingType::Buffer {
+                            ty: BufferBindingType::Uniform,
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                ],
+            },
+        );
+
+        let bind_group = BindGroup::new(
+            device,
+            &BindGroupDescriptor {
+                label: Some("common_uniforms_bind_group"),
+                layout: &layout,
+                entries: &[
+                    BindGroupEntry {
+                        binding: 0,
+                        resource: buffer.as_entire_binding(),
+                    },
+                ],
+            },
+        );
+
+        let binds = Binds::from_iter([
+            (bind_group, Some(layout)),
+        ]);
+
+        Self { binds, buffer }
+    }
+
+    pub fn update(&self, queue: &Queue, uniforms: CommonUniforms) {
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[uniforms]));
+        queue.submit(None);
+    }
 }

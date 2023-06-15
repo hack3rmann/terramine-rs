@@ -64,18 +64,18 @@ impl Material for DefaultMaterial {
 
 
 #[derive(Debug)]
-pub struct StandartMaterial {
+pub struct ShaderMaterial {
     pub shader: ShaderRef,
 }
-assert_impl_all!(StandartMaterial: Send, Sync, Component);
+assert_impl_all!(ShaderMaterial: Send, Sync, Component);
 
-impl<S: Into<ShaderRef>> From<S> for StandartMaterial {
+impl<S: Into<ShaderRef>> From<S> for ShaderMaterial {
     fn from(value: S) -> Self {
         Self { shader: value.into() }
     }
 }
 
-impl Material for StandartMaterial {
+impl Material for ShaderMaterial {
     fn get_shader(&self) -> ShaderRef {
         self.shader.clone()
     }

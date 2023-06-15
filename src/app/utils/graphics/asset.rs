@@ -70,8 +70,8 @@ impl From<&Arc<Shader>> for ShaderRef {
 
 
 #[derive(Debug, SmartDefault)]
+#[default(Self::DEFAULT)]
 pub struct GlobalAsset<T> {
-    #[default(UnsafeCell::new(None))]
     pub inner: UnsafeCell<Option<T>>,
 }
 assert_impl_all!(GlobalAsset<f32>: Send, Sync);
@@ -105,8 +105,8 @@ impl<T> GlobalAsset<T> {
     }
 }
 
-impl<T: ConstDefault> ConstDefault for GlobalAsset<T> {
-    const DEFAULT: Self = Self::new(T::DEFAULT);
+impl<T> ConstDefault for GlobalAsset<T> {
+    const DEFAULT: Self = Self::unloaded();
 }
 
 impl<T> Deref for GlobalAsset<T> {

@@ -81,7 +81,7 @@ impl PhysicalComponent {
         let mut query = world.query::<&mut PhysicalComponent>();
         let ts = world.resource::<&Timer>()?.time_step();
 
-        for (_entity, state) in query.iter() {
+        for (_entity, state) in query.into_iter() {
             state.step(ts);
         }
 

@@ -16,6 +16,10 @@ impl<IntoStr: Into<StaticStr>> From<IntoStr> for StrError {
     }
 }
 
+pub macro fmt_error($(fmt:tt)*) {
+    crate::failure::StrError::from(format!($($fmt)*))
+}
+
 
 
 pub macro ensure_or($cond:expr, $diverging_expr:expr) {
@@ -24,6 +28,13 @@ pub macro ensure_or($cond:expr, $diverging_expr:expr) {
 
 pub macro ensure($cond:expr, $err:expr) {
     ensure_or!($cond, return Err($err.into()))
+}
+
+pub macro ensure_fmt($cond:expr, $($fmt:tt)*) {
+    crate::failure::ensure!(
+        $cond,
+        crate::failure::fmt_error!($($fmt)*)
+    )
 }
 
 pub macro ensure_eq($lhs:expr, $rhs:expr, $err:expr) {

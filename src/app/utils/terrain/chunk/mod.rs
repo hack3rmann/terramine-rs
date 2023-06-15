@@ -7,10 +7,7 @@ pub mod mesh;
 use {
     crate::{
         prelude::*,
-        graphics::{
-            camera_resource::Camera,
-            Mesh, Device, RenderPipeline, RenderPass, Render,
-        },
+        graphics::{camera_resource::Camera, Mesh, Device, RenderPass},
     },
     super::voxel::{
         self,
@@ -21,7 +18,7 @@ use {
         generator as gen,
     },
     mesh::{FullVertex, LowVertex, ChunkMesh},
-    chunk_array::ChunkAdj,
+    chunk_array::{ChunkAdj, ChunkRenderPipeline},
     iterator::{CubeBoundary, Sides},
 };
 
@@ -814,7 +811,7 @@ impl Chunk {
     /// Renders a [`Chunk`].
     pub fn render<'rp>(
         &self, mesh: &'rp mut ChunkMesh, lod: Lod,
-        pipeline: &'rp RenderPipeline, pass: &mut RenderPass<'rp>,
+        pipeline: &'rp ChunkRenderPipeline, pass: &mut RenderPass<'rp>,
     ) -> Result<(), ChunkRenderError> {
         ensure_or!(!self.is_empty(), return Ok(()));
 

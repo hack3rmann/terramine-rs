@@ -4,7 +4,7 @@ use {
     crate::{
         prelude::*,
         graphics::{Graphics, RenderDescriptor},
-        camera::*,
+        camera::{*, self},
     },
     winit::{
         event::{Event, WindowEvent},
@@ -52,18 +52,18 @@ impl App {
 
         self.world.init_resource::<Timer>();
 
-        let camera = self.world.spawn({
-            let mut cam = CameraBundle::default();
-            cam.0.enable();
-            cam
-        }).into();
+        let camera = self.world.spawn(camera::make_new_enabled()).into();
         self.world.insert_resource(MainCamera(camera));
 
-        self.world.insert_resource(
-            Graphics::new(&self.event_loop)
-                .await
-                .context("failed to create graphics")?
-        );
+        let graphics = Graphics::new(&self.event_loop)
+            .await
+            .context("failed to create graphics")?;
+
+        self.world.insert_resource(CameraUniformBuffer::new(&graphics.context.device, &default()));
+
+        self.world.insert_resource(graphics);
+
+        // ChunkArray::new_empty_chunks(&mut self.world, vecs!(2, 2, 2)).await.unwrap();
 
         Ok(())
     }
@@ -134,6 +134,7 @@ impl App {
     /// Updates `ecs`'s systems. Note that non of resources can be borrowed at this point.
     async fn update_systems(&mut self) -> AnyResult<()> {
         CameraHandle::update_all(&self.world);
+        Graphics::update(&self.world).await?;
 
         Ok(())
     }
@@ -145,8 +146,6 @@ impl App {
         }
 
         {
-            Graphics::update(&self.world).await?;
-
             self.world.resource::<&mut Timer>()?.update();
             let graphics = self.world.resource::<&Graphics>()?;
             
@@ -196,7 +195,8 @@ impl App {
             RenderDescriptor {
                 use_imgui_ui: use_ui,
                 time: timer.time(),
-            }
+            },
+            &self.world,
         ).context("failed to render graphics")?;
 
         Ok(())

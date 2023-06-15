@@ -2,9 +2,36 @@ use {
     crate::{
         prelude::*,
         graphics::*,
-        terrain::chunk::prelude::*,
+        terrain::chunk::{prelude::*, chunk_array::ChunkRenderPipeline},
     },
 };
+
+
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, IsVariant)]
+pub enum Details {
+    Full,
+    Low(Lod),
+}
+assert_impl_all!(Details: Send, Sync);
+
+impl From<Lod> for Details {
+    fn from(value: Lod) -> Self {
+        match value {
+            0 => Self::Full,
+            lod => Self::Low(lod),
+        }
+    }
+}
+
+impl From<Details> for Lod {
+    fn from(value: Details) -> Self {
+        match value {
+            Details::Full => 0,
+            Details::Low(lod) => lod,
+        }
+    }
+}
 
 
 
@@ -120,6 +147,10 @@ impl ChunkMesh {
         self.is_enabled.store(true, Release);
     }
 
+    pub fn details(&self) -> Option<Details> {
+        Some(Details::from(self.active_lod?))
+    }
+
     /// Checks if [chunk][Chunk]'s mesh is partitioned.
     pub fn is_partial(&self) -> bool {
         matches!(self.full_mesh, Some(ChunkFullMesh::Partial(_)))
@@ -220,38 +251,34 @@ impl ChunkMesh {
     
         result
     }
-}
-
-impl Render for ChunkMesh {
-    type Error = ChunkRenderError;
 
     /// Renders a [mesh][ChunkMesh].
-    fn render<'rp, 's: 'rp>(
-        &'s self, pipeline: &'rp RenderPipeline, render_pass: &mut RenderPass<'rp>,
-    ) -> Result<(), Self::Error> {
+    pub fn render<'rp, 's: 'rp>(
+        &'s self, pipeline: &'rp ChunkRenderPipeline, render_pass: &mut RenderPass<'rp>,
+    ) -> Result<(), ChunkRenderError> {
         use ChunkRenderError as Err;
 
         ensure_or!(self.is_enabled(), return Ok(()));
 
-        match self.active_lod {
+        match self.details() {
             None => return Ok(()),
 
-            Some(0) => {
+            Some(Details::Full) => {
                 let mesh = self.full_mesh
                     .as_ref()
                     .ok_or(Err::NoMesh(0))?;
 
-                let Ok(()) = mesh.render(pipeline, render_pass);
+                let Ok(()) = mesh.render(&pipeline.full, render_pass);
             },
 
-            Some(lod) => {
+            Some(Details::Low(lod)) => {
                 let mesh = self.low_meshes
                     .get(lod as usize - 1)
                     .ok_or(Err::TooBigLod(lod))?
                     .as_ref()
                     .ok_or(Err::NoMesh(lod))?;
 
-                let Ok(()) = mesh.render(pipeline, render_pass);
+                let Ok(()) = mesh.render(&pipeline.low, render_pass);
             }
         }
 

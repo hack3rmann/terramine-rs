@@ -3,7 +3,7 @@ use crate::{prelude::*, transform::*, graphics::{Buffer, Binds, Device, Queue}};
 
 
 #[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deref)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deref, From, Into)]
 pub struct MainCamera(pub CameraHandle);
 assert_impl_all!(MainCamera: Component, Send, Sync);
 
@@ -267,6 +267,12 @@ impl Default for CameraComponent {
 
 
 pub type CameraBundle = (CameraComponent, Transform, Speed);
+
+pub fn make_new_enabled() -> CameraBundle {
+    let mut cam = CameraBundle::default();
+    cam.0.enable();
+    cam
+}
 
 
 

@@ -35,10 +35,10 @@ fn set_icon_windows() -> io::Result<()> {
 
 #[cfg(unix)]
 fn set_icon_unix() -> io::Result<()> {
-    todo!()
+    todo!("set_icon_unix()")
 }
 
 #[cfg(mac)]
 fn set_icon_macos() -> io::Result<()> {
-    todo!()
+    todo!("set_icon_macos")
 }
