@@ -58,8 +58,8 @@ assert_impl_all!(ClearPass: Send, Sync);
 
 impl<'s> RenderPass<'s> {
     pub fn new(
-        encoder: &'s mut CommandEncoder,
         label: &str,
+        encoder: &'s mut CommandEncoder,
         target_views: impl IntoIterator<Item = &'s TextureView>
     ) -> Self {
         use wgpu::{RenderPassColorAttachment, Operations, LoadOp, RenderPassDescriptor};

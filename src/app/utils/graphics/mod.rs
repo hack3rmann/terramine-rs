@@ -65,14 +65,32 @@ pub static SURFACE_CFG: RwLock<GlobalAsset<SurfaceConfiguration>> = const_defaul
 
 
 
+#[derive(Debug, Constructor)]
+pub struct RenderStage {
+    pub view: TextureView,
+    pub encoder: CommandEncoder,
+    pub output: SurfaceTexture,
+}
+assert_impl_all!(RenderStage: Send, Sync);
+
+
+
 /// Graphics handler.
 #[derive(Debug)]
 pub struct Graphics {
+    /// A [window][Window] handle.
     pub window: Window,
 
+    /// Wraps [queue][Queue], [device][Device], [adapter][Adapter] and render [surface][Surface].
     pub context: RenderContext,
+
+    /// Holds rendering information during render proccess.
+    pub render_stage: Option<RenderStage>,
+
+    /// Handle to [`imgui`] rendering stuff.
     pub imgui: ImGui,
 
+    /// Common shader uniforms buffer. Holds uniforms like time, screen resolution, etc.
     pub common_uniforms: CommonUniformsBuffer,
 
     pub sandbox: World,
@@ -84,7 +102,7 @@ impl Graphics {
     pub async fn new(event_loop: &EventLoop<()>) -> AnyResult<Self> {
         logger::scope!(from = "graphics", "new()");
 
-        let window = Window::from(event_loop, cfg::window::default::SIZES)
+        let window = Window::new(event_loop, cfg::window::default::SIZES)
             .context("failed to initialize a window")?;
 
 
@@ -210,6 +228,7 @@ impl Graphics {
             context,
             common_uniforms,
             imgui,
+            render_stage: None,
         })
     }
 
@@ -305,10 +324,13 @@ impl Graphics {
         Ok(())
     }
 
-    pub fn render_sandbox(&mut self, encoder: &mut CommandEncoder, view: TextureView, cam: &CameraUniformBuffer) {
+    pub fn render_sandbox(&mut self, cam: &CameraUniformBuffer) {
         let mut query = self.sandbox.query::<(&BindsRef, &GpuMesh, &RenderPipeline)>();
 
-        let mut pass = RenderPass::new(encoder, "logo_draw_pass", [&view]);
+        let render_stage = self.render_stage.as_mut()
+            .expect("`render_sadbox` should be called after `begin_render` and before `finish_render`");
+
+        let mut pass = RenderPass::new("logo_draw_pass", &mut render_stage.encoder, [&render_stage.view]);
 
         for (_entity, (binds, mesh, pipeline)) in query.into_iter() {
             Binds::bind_all(&mut pass, [
@@ -323,10 +345,24 @@ impl Graphics {
 
     pub fn render<UseUi: FnOnce(&mut imgui::Ui)>(
         &mut self, desc: RenderDescriptor<UseUi>, world: &World,
-    ) -> Result<(), SurfaceError> {
+    ) -> AnyResult<()> {
+        self.begin_render(desc.time)?;
+
+        {
+            let cam = world.resource::<&CameraUniformBuffer>().unwrap();
+            self.render_sandbox(&cam);
+        }
+
+        self.finish_render(desc.use_imgui_ui)?;
+
+        Ok(())
+    }
+
+    /// Begins a render proccess.
+    pub fn begin_render(&mut self, time: Time) -> Result<(), SurfaceError> {
         let size = self.window.inner_size();
         self.common_uniforms.update(&self.context.queue, CommonUniforms {
-            time: desc.time.as_secs_f32(),
+            time: time.as_secs_f32(),
             screen_resolution: vecf!(size.width, size.height),
             _pad: 0,
         });
@@ -337,28 +373,44 @@ impl Graphics {
 
         ClearPass::clear(&mut encoder, [&view]);
 
-        {
-            let cam = world.resource::<&CameraUniformBuffer>().unwrap();
-            self.render_sandbox(&mut encoder, view.clone(), &cam);
-        }
+        self.render_stage = Some(RenderStage::new(view, encoder, output.into()));
 
-        {
-            let mut render_pass = RenderPass::new(&mut encoder, "imgui_draw_pass", [&view]);
+        Ok(())
+    }
 
-            let ui = self.imgui.context.new_frame();
+    /// Ends rendering proccess.
+    pub fn finish_render<UseImgui: FnOnce(&mut imgui::Ui)>(&mut self, use_imgui: UseImgui) -> AnyResult<()> {
+        let mut render_stage = self.render_stage.take()
+            .context("`finish_render` should be called only once and `begin_render` should be called before")?;
 
-            (desc.use_imgui_ui)(ui);
-            ui::imgui_ext::use_each_window_builder(ui);
-
-            self.imgui.platform.prepare_render(ui, &self.window);
-
-            let draw_data = self.imgui.context.render();
-            self.imgui.renderer.render(draw_data, &self.context.queue, &self.context.device, &mut render_pass)
-                .expect("failed to render imgui");
-        }
+        self.render_imgui(use_imgui, &mut render_stage.encoder, &render_stage.view)?;
     
-        self.context.queue.submit([encoder.finish()]);
-        output.present();
+        self.context.queue.submit([render_stage.encoder.finish()]);
+        Arc::into_inner(render_stage.output.inner)
+            .expect("Render stage's output should be owned by `Graphics`")
+            .present();
+
+        Ok(())
+    }
+
+    fn render_imgui<UseImgui>(
+        &mut self, use_imgui: UseImgui, encoder: &mut CommandEncoder, view: &TextureView,
+    ) -> AnyResult<()>
+    where
+        UseImgui: FnOnce(&mut imgui::Ui),
+    {
+        let mut render_pass = RenderPass::new("imgui_draw_pass", encoder, [view]);
+
+        let ui = self.imgui.context.new_frame();
+
+        use_imgui(ui);
+        ui::imgui_ext::use_each_window_builder(ui);
+
+        self.imgui.platform.prepare_render(ui, &self.window);
+
+        let draw_data = self.imgui.context.render();
+        self.imgui.renderer.render(draw_data, &self.context.queue, &self.context.device, &mut render_pass)
+            .context("failed to render imgui")?;
 
         Ok(())
     }

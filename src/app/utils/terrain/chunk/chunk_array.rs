@@ -695,7 +695,7 @@ impl ChunkArray {
 
         let mut query = world.query::<(&ChunkBinds, &ChunkMesh, &ChunkRenderPipeline)>();
 
-        let mut pass = RenderPass::new(encoder, "chunk_array_render_pass", [&view]);
+        let mut pass = RenderPass::new("chunk_array_render_pass", encoder, [&view]);
 
         for (_entity, (binds, mesh, pipeline)) in query.into_iter() {
             let Some(details) = mesh.details() else { continue };

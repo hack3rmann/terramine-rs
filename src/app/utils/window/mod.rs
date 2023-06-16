@@ -1,8 +1,8 @@
-pub mod message_box;
+//!
+//! Adds container to window stuff
+//!
 
-/**
- *  Adds container to window stuff
- */
+pub mod message_box;
 
 use {
     crate::prelude::*,
@@ -10,19 +10,20 @@ use {
         window::{WindowBuilder, Window as WinitWindow, Icon},
         event_loop::EventLoop,
         dpi::PhysicalSize,
+        error::OsError,
     },
     math_linear::prelude::*,
 };
 
 /// Wrapper around `winit`'s window.
-#[derive(Debug, Deref)]
+#[derive(Debug, Deref, From, Into)]
 pub struct Window {
     pub inner: WinitWindow,
 }
 
 impl Window {
     /// Constructs window.
-    pub fn from(event_loop: &EventLoop<()>, sizes: USize2) -> Result<Self, winit::error::OsError> {
+    pub fn new(event_loop: &EventLoop<()>, sizes: USize2) -> Result<Self, OsError> {
         let window = WindowBuilder::new()
             .with_title("Terramine")
             .with_resizable(true)
@@ -30,7 +31,7 @@ impl Window {
             .with_window_icon(Some(Self::load_icon()))
             .build(event_loop)?;
         
-        Ok(Self { inner: window })
+        Ok(Self::from(window))
     }
 
     fn load_icon() -> Icon {
