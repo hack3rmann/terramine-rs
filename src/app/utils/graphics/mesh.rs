@@ -186,6 +186,8 @@ impl GpuMesh {
         ).into();
 
         let indices = match desc.mesh.indices {
+            None => GpuIndices::Unindexed,
+            
             Some(ref indices) => {
                 let (contents, idx_format) = match indices {
                     Indices::U16(indices) => (bytemuck::cast_slice(indices), IndexFormat::Uint16),
@@ -196,12 +198,10 @@ impl GpuMesh {
                     &BufferInitDescriptor {
                         label: desc.label.as_deref(),
                         contents,
-                        usage: BufferUsages::INDEX | BufferUsages::COPY_DST,
+                        usage: BufferUsages::all(),
                     },
                 ).into(), idx_format)
             },
-
-            None => GpuIndices::Unindexed,
         };
 
         let primitive_state = PrimitiveState {
@@ -227,6 +227,7 @@ impl GpuMesh {
     }
 
     pub fn get_vertex_buffer_view(&self) -> BufferView {
+        // TODO: map range to avoid random panic
         self.buffer.slice(..).get_mapped_range()
     }
 
@@ -303,7 +304,7 @@ pub enum GpuIndices {
 assert_impl_all!(GpuIndices: Send, Sync, Component);
 
 impl GpuIndices {
-    pub fn format(&self) -> Option<IndexFormat> {
+    pub const fn format(&self) -> Option<IndexFormat> {
         match self {
             Self::Unindexed => None,
             Self::Indexed(_, format) => Some(*format),

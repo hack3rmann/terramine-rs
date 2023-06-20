@@ -1,4 +1,3 @@
-pub mod iterator;
 pub mod chunk_array;
 pub mod tasks;
 pub mod commands;
@@ -7,7 +6,9 @@ pub mod mesh;
 use {
     crate::{
         prelude::*,
-        graphics::{camera_resource::Camera, Mesh, Device, RenderPass},
+        graphics::{Mesh, Device, RenderPass},
+        geometry::frustum::Frustum,
+        iterator::{CubeBoundary, Sides},
     },
     super::voxel::{
         self,
@@ -19,7 +20,6 @@ use {
     },
     mesh::{FullVertex, LowVertex, ChunkMesh},
     chunk_array::{ChunkAdj, ChunkRenderPipeline},
-    iterator::{CubeBoundary, Sides},
 };
 
 
@@ -27,7 +27,7 @@ use {
 pub mod prelude {
     pub use super::{
         Chunk, SetLodError, ChunkRenderError, ChunkInfo, Lod,
-        ChunkOption, FillType, chunk_array::ChunkArray, iterator::{self, Range3d},
+        ChunkOption, FillType, chunk_array::ChunkArray,
     };
 }
 
@@ -36,6 +36,7 @@ pub mod prelude {
 #[derive(Debug)]
 pub struct Chunk {
     pub pos: Atomic<Int3>,
+    // TODO: try use `Arc<[Atomic<Id>]> instead.
     pub voxel_ids: Vec<Atomic<Id>>,
     pub info: Atomic<ChunkInfo>,
 }
@@ -283,7 +284,7 @@ impl Chunk {
         let start_pos = Int3::from(coord_idx * Chunk::SIZES / 2);
         let end_pos   = start_pos + Int3::from(Chunk::SIZES / 2);
 
-        let vertices = Range3d::new(start_pos..end_pos)
+        let vertices = Range3d::from(start_pos..end_pos)
             .filter_map(|pos| match self.get_voxel_local(pos) {
                 some @ Some(_) => some,
                 None => {
@@ -374,7 +375,7 @@ impl Chunk {
                         _ => false,
                     };
                     
-                    let mut iter = Range3d::new(start_pos..end_pos);
+                    let mut iter = Range3d::from(start_pos..end_pos);
                     let pred = |pos| is_blocking_voxel(pos, offset);
 
                     if let Some(_) = chunk_adj.by_offset(offset) && is_on_surface {
@@ -447,14 +448,14 @@ impl Chunk {
     }
 
     /// Tests that chunk is visible by camera.
-    pub fn is_visible_by_camera(&self, camera: &mut Camera) -> bool {
+    pub fn is_in_frustum(&self, frustum: &Frustum) -> bool {
         let global_chunk_pos = Chunk::global_pos(self.pos.load(Relaxed));
         let global_chunk_pos = vec3::from(global_chunk_pos) * Voxel::SIZE;
 
         let lo = global_chunk_pos - 0.5 * vec3::all(Voxel::SIZE);
         let hi = lo + vec3::all(Chunk::GLOBAL_SIZE) - 0.5 * vec3::all(Voxel::SIZE);
 
-        camera.is_aabb_in_view(Aabb::from_float3(lo, hi))
+        frustum.intersects_aabb(&Aabb::from_float3(lo, hi))
     }
 
     /// Checks if [`Chunk`] is not already generated.
@@ -640,7 +641,7 @@ impl Chunk {
 
         let mut is_changed = false;
 
-        for local_pos in Range3d::new(local_pos_from..local_pos_to) {
+        for local_pos in Range3d::from(local_pos_from..local_pos_to) {
             // We can safely not to check idx due to previous check.
             let idx = Self::voxel_pos_to_idx_unchecked(local_pos);
             
@@ -664,7 +665,7 @@ impl Chunk {
 
     /// Gives iterator over all id-vectors in chunk (or relative to chunk voxel positions).
     pub fn local_pos_iter() -> Range3d {
-        Range3d::new(Int3::ZERO..Self::SIZES.into())
+        Range3d::from(Int3::ZERO..Self::SIZES.into())
     }
 
     /// Gives iterator over all id-vectors in chunk (or relative to chunk voxel positions).

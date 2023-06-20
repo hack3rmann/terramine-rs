@@ -22,18 +22,20 @@ impl Voxel {
     pub const SIZE: f32 = cfg::terrain::VOXEL_SIZE;
 
     /// Voxel constructor.
-    pub fn new(position: Int3, data: &'static VoxelData) -> Self {
+    pub const fn new(position: Int3, data: &'static VoxelData) -> Self {
         Voxel { data, pos: position }
     }
 
-    pub fn is_air(&self) -> bool {
+    pub const fn is_air(&self) -> bool {
         self.data.id == AIR_VOXEL_DATA.id
     }
 }
 
 pub fn is_id_valid(id: Id) -> bool {
+    #![allow(unused_comparisons)]
+    #![allow(clippy::absurd_extreme_comparisons)]
     let id = id as usize;
-    (0..VOXEL_DATA.len()).contains(&id)
+    0 <= id && id < VOXEL_DATA.len()
 }
 
 /// Generalization of voxel details.
@@ -66,7 +68,7 @@ impl FromBytes for Voxel {
     }
 }
 
-impl StaticSize for Voxel {
+impl const StaticSize for Voxel {
     fn static_size() -> usize { 16 }
 }
 
@@ -116,13 +118,12 @@ pub mod shape {
 
     impl<'c> CubeDetailed<'c> {
         /// Constructs new cube maker with filled voxel data.
-        pub fn new(data: &'c VoxelData) -> Self {
+        pub const fn new(data: &'c VoxelData) -> Self {
             Self { data, half_size: Voxel::SIZE * 0.5 }
         }
 
         /// Edit default size.
-        #[allow(dead_code)]
-        pub fn size(mut self, new_size: f32) -> Self {
+        pub const fn size(mut self, new_size: f32) -> Self {
             self.half_size = new_size * 0.5;
             self
         }
@@ -261,8 +262,8 @@ pub mod shape {
     }
 
     impl CubeLowered {
-        pub fn new(size: f32) -> Self {
-            Self { half_size: size / 2.0 }
+        pub const fn new(size: f32) -> Self {
+            Self { half_size: 0.5 * size }
         }
 
         pub fn by_offset(&self, offset: Int3, position: vec3, color: Color, vertices: &mut Vec<LowVertex>) {

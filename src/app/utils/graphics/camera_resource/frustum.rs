@@ -30,12 +30,12 @@ impl Frustum {
         let front_far = cam.front * cam.far_plane_dist;
 
         /* Planes */
-        let near	= Plane::from_origin_and_normal(cam.pos + cam.front * cam.near_plane_dist, cam.front);
-        let far		= Plane::from_origin_and_normal(cam.pos + front_far, -cam.front);
-        let right	= Plane::from_origin_and_normal(cam.pos, cam.up.cross(front_far + cam.right * half_horizontal_side));
-        let left	= Plane::from_origin_and_normal(cam.pos, (front_far - cam.right * half_horizontal_side).cross(cam.up));
-        let top		= Plane::from_origin_and_normal(cam.pos, cam.right.cross(front_far - cam.up * half_vertical_side));
-        let bottom	= Plane::from_origin_and_normal(cam.pos, (front_far + cam.up * half_vertical_side).cross(cam.right));
+        let near	= Plane::new(cam.pos + cam.front * cam.near_plane_dist, cam.front);
+        let far		= Plane::new(cam.pos + front_far, -cam.front);
+        let right	= Plane::new(cam.pos, cam.up.cross(front_far + cam.right * half_horizontal_side));
+        let left	= Plane::new(cam.pos, (front_far - cam.right * half_horizontal_side).cross(cam.up));
+        let top		= Plane::new(cam.pos, cam.right.cross(front_far - cam.up * half_vertical_side));
+        let bottom	= Plane::new(cam.pos, (front_far + cam.up * half_vertical_side).cross(cam.right));
 
         /* Lines */
         let courner_rays = [
@@ -51,7 +51,7 @@ impl Frustum {
     /// [AABB][Aabb]-frustum intersection check.
     pub fn is_aabb_in_frustum(&self, aabb: Aabb) -> bool {
         // If camera in AABB then intersection found.
-        ensure_or!(!aabb.contains(self.courner_rays[0].origin), return true);
+        ensure_or!(!aabb.contains_point(self.courner_rays[0].origin), return true);
 
         // If AABB centre is in frustum then intersection found.
         ensure_or!(!self.contains(aabb.center()), return true);
@@ -68,7 +68,7 @@ impl Frustum {
         ensure_or!(!aabb_vertices.iter().any(|&vertex| self.contains(vertex)), return true);
 
         // If any corner ray intersects AABB then intersection found.
-        ensure_or!(!self.courner_rays.iter().any(|&ray| aabb.is_intersected_by_ray(ray)), return true);
+        ensure_or!(!self.courner_rays.iter().any(|ray| aabb.intersects_ray(ray)), return true);
 
         // All intersection tests failed.
         false

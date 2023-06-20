@@ -31,12 +31,12 @@ impl Timer {
     /// Constructs new timer.
     pub fn new() -> Self {
         Self {
-            dt: default(),
-            time: default(),
+            dt: const_default(),
+            time: const_default(),
             last_frame: Instant::now(),
             fps: 0.0,
             frame_idx: 0,
-            frames_sum: default(),
+            frames_sum: const_default(),
         }
     }
 
@@ -60,13 +60,13 @@ impl Timer {
     }
 
     /// Gives duration since `update()` call
-    pub fn time_step(&self) -> TimeStep { self.dt }
+    pub const fn time_step(&self) -> TimeStep { self.dt }
 
     /// Gives `fps` measured by [timer][Timer].
-    pub fn fps(&self) -> f32 { self.fps }
+    pub const fn fps(&self) -> f32 { self.fps }
 
     /// Gives time since [timer][Timer] creation.
-    pub fn time(&self) -> Time { self.time }
+    pub const fn time(&self) -> Time { self.time }
 }
 
 

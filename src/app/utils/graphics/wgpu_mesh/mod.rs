@@ -354,6 +354,7 @@ assert_impl_all!(MeshVertexAttributeId: Send, Sync);
 
 
 
+#[const_trait]
 pub trait VertexFormatSize {
     fn get_size(self) -> u64;
 }

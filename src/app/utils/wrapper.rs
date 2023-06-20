@@ -140,7 +140,7 @@ impl<V: Hash, H: BuildHasher + Default> Hashed<V, H> {
     }
 
     /// The pre-computed hash.
-    pub fn hash(&self) -> u64 {
+    pub const fn hash(&self) -> u64 {
         self.hash
     }
 }

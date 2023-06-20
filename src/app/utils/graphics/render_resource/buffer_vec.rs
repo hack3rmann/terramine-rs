@@ -45,11 +45,11 @@ impl<T: Pod> BufferVec<T> {
         }
     }
 
-    pub fn buffer(&self) -> Option<&Buffer> {
+    pub const fn buffer(&self) -> Option<&Buffer> {
         self.buffer.as_ref()
     }
 
-    pub fn cap(&self) -> usize {
+    pub const fn cap(&self) -> usize {
         self.capacity
     }
 
@@ -81,6 +81,7 @@ impl<T: Pod> BufferVec<T> {
         self.label.as_deref()
     }
 
+    // FIXME: remove
     // /// Creates a [`Buffer`](crate::render_resource::Buffer) on the [`RenderDevice`](crate::renderer::RenderDevice) with size
     // /// at least `std::mem::size_of::<T>() * capacity`, unless a such a buffer already exists.
     // ///

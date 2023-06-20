@@ -16,6 +16,7 @@ impl<'s> ClearPass<'s> {
     pub fn new(
         encoder: &'s mut wgpu::CommandEncoder,
         target_views: impl IntoIterator<Item = &'s TextureView>,
+        clear_color: wgpu::Color,
     ) -> Self {
         use wgpu::{RenderPassColorAttachment, Operations, LoadOp, RenderPassDescriptor};
 
@@ -24,7 +25,7 @@ impl<'s> ClearPass<'s> {
                 view,
                 resolve_target: None,
                 ops: Operations {
-                    load: LoadOp::Clear(cfg::shader::CLEAR_COLOR),
+                    load: LoadOp::Clear(clear_color),
                     store: true,
                 },
             }))
@@ -41,18 +42,19 @@ impl<'s> ClearPass<'s> {
         Self(render_pass)
     }
 
-    /// Does a [`ClearPass`] creation and then drops it.
+    /// Makes new [`ClearPass`] then drops it.
     pub fn clear(
         encoder: &'s mut CommandEncoder,
         target_views: impl IntoIterator<Item = &'s TextureView>,
+        clear_color: wgpu::Color,
     ) {
-        let _ = Self::new(encoder, target_views);
+        let _pass = Self::new(encoder, target_views, clear_color);
     }
 }
 
 
 
-#[derive(Debug, Deref)]
+#[derive(Debug, Deref, From, Into)]
 pub struct RenderPass<'s>(pub wgpu::RenderPass<'s>);
 assert_impl_all!(ClearPass: Send, Sync);
 
@@ -83,6 +85,6 @@ impl<'s> RenderPass<'s> {
             },
         );
 
-        Self(render_pass)
+        Self::from(render_pass)
     }
 }

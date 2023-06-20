@@ -52,6 +52,7 @@ pub type Enumerator = u64;
 
 
 
+#[const_trait]
 pub trait GetSaveKey {
     fn get_save_key(&self) -> Enumerator;
 }

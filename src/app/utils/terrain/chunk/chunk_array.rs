@@ -8,10 +8,11 @@ use {
                 mesh::{ChunkMesh, Details},
                 commands::Command,
             },
-            voxel::{self, Voxel, voxel_data::data::*},
+            voxel::{self, Voxel},
         },
         saves::Save,
-        graphics::{*, camera_resource::Camera},
+        graphics::*,
+        geometry::frustum::Frustum,
     },
     math_linear::math::ray::space_3d::Line,
     std::io,
@@ -44,18 +45,19 @@ pub struct ChunkArray {
 assert_impl_all!(ChunkArray: Send, Sync, Component);
 
 impl ChunkArray {
-    const MAX_TRACE_STEPS: usize = 1024;
+    // FIXME: add camera input
+    // const MAX_TRACE_STEPS: usize = 1024;
 
     /// Generates new chunks.
     /// 
     /// # Panic
     /// 
     /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
-    pub async fn new(world: &mut World, sizes: USize3) -> Result<Self, UserFacingError> {
+    pub async fn new(world: &mut World, sizes: USize3) -> AnyResult<Self> {
         Self::validate_sizes(sizes)?;
         let (start_pos, end_pos) = Self::pos_bounds(sizes);
 
-        let chunks = Range3d::new(start_pos..end_pos)
+        let chunks = Range3d::from(start_pos..end_pos)
             .map(move |pos| Chunk::new(pos, sizes))
             .map(Arc::new)
             .collect();
@@ -68,13 +70,13 @@ impl ChunkArray {
     /// # Panic
     /// 
     /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
-    pub async fn from_chunks(world: &mut World, sizes: USize3, chunks: Vec<ChunkRef>) -> Result<Self, UserFacingError> {
+    pub async fn from_chunks(world: &mut World, sizes: USize3, chunks: Vec<ChunkRef>) -> AnyResult<Self> {
         Self::validate_sizes(sizes)?;
         let volume = Self::volume(sizes);
 
         ensure!(
             chunks.len() == volume,
-            UserFacingError::new("sizes are not match with data").help(format!(
+            StrError::from(format!(
                 "passed in chunk `Vec` should have same size as
                 passed in sizes, but sizes: {sizes}, len: {len}",
                 len = chunks.len(),
@@ -83,28 +85,7 @@ impl ChunkArray {
 
         let self_entity = world.spawn_empty();
 
-        {
-            let graphics = world.resource::<&Graphics>().unwrap();
-            let cam_uniform = world.resource::<&CameraUniformBuffer>().unwrap();
-            
-            let binds = ChunkBinds::new(&graphics.context.device, &graphics.context.queue)
-                .await
-                .expect("failed to make binds for chunk array");
-
-            let layout = ChunkPipelineLayout::new(
-                &graphics.context.device,
-                &graphics.common_uniforms.binds,
-                &binds,
-                &cam_uniform.binds,
-            );
-
-            let pipeline = ChunkRenderPipeline::new(&graphics.context.device, &layout).await;
-
-            drop(graphics);
-            drop(cam_uniform);
-
-            world.insert(self_entity, (binds, pipeline, layout)).unwrap();
-        };
+        Self::make_binds(world, self_entity).await;
 
         let chunk_entities = world.spawn_batch(
             chunks.into_iter().map(|chunk| {
@@ -116,9 +97,32 @@ impl ChunkArray {
             sizes,
             chunk_entities,
             array_entity: self_entity,
-            lod_threashold: 5.8,
+            lod_threashold: 1.0,// FIXME: 5.8,
             tasks: default(),
         })
+    }
+
+    pub async fn make_binds(world: &mut World, self_entity: Entity) {
+        let graphics = world.resource::<&Graphics>().unwrap();
+        let cam_uniform = world.resource::<&CameraUniformBuffer>().unwrap();
+        
+        let binds = ChunkBinds::new(&graphics.context.device, &graphics.context.queue)
+            .await
+            .expect("failed to make binds for chunk array");
+
+        let layout = ChunkPipelineLayout::new(
+            &graphics.context.device,
+            &graphics.common_uniforms.binds,
+            &binds,
+            &cam_uniform.binds,
+        );
+
+        let pipeline = ChunkRenderPipeline::new(&graphics.context.device, &layout).await;
+
+        drop(graphics);
+        drop(cam_uniform);
+
+        world.insert(self_entity, (binds, pipeline, layout)).unwrap();
     }
 
     /// Constructs [`ChunkArray`] with empty chunks.
@@ -126,11 +130,11 @@ impl ChunkArray {
     /// # Panic
     /// 
     /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
-    pub async fn new_empty_chunks(world: &mut World, sizes: USize3) -> Result<Self, UserFacingError> {
+    pub async fn new_empty_chunks(world: &mut World, sizes: USize3) -> AnyResult<Self> {
         Self::validate_sizes(sizes)?;
         let (start_pos, end_pos) = Self::pos_bounds(sizes);
 
-        let chunks = Range3d::new(start_pos..end_pos)
+        let chunks = Range3d::from(start_pos..end_pos)
             .map(Chunk::new_empty)
             .map(ChunkRef::new)
             .collect();
@@ -151,17 +155,17 @@ impl ChunkArray {
     /// # Error
     /// 
     /// Returns `Err` if `sizes.x * sizes.y * sizes.z` > `MAX_CHUNKS`.
-    pub fn validate_sizes(sizes: USize3) -> Result<(), UserFacingError> {
+    pub fn validate_sizes(sizes: USize3) -> AnyResult<()> {
         let volume = Self::volume(sizes);
         (volume <= cfg::terrain::MAX_CHUNKS)
             .then_some(())
-            .ok_or_else(|| UserFacingError::new("too many chunks")
-                .reason(format!("cannot allocate too many chunks: {volume}"))
+            .ok_or_else(||
+                StrError::from(format!("cannot allocate too many chunks: {volume}")).into()
             )
     }
 
     /// Gives empty [`ChunkArray`].
-    pub async fn new_empty(world: &mut World) -> Result<Self, UserFacingError> {
+    pub async fn new_empty(world: &mut World) -> AnyResult<Self> {
         Self::new_empty_chunks(world, USize3::ZERO).await
     }
 
@@ -384,7 +388,7 @@ impl ChunkArray {
 
         let mut is_changed = false;
 
-        for chunk_pos in Range3d::new(chunk_pos_from..chunk_pos_to) {
+        for chunk_pos in Range3d::from(chunk_pos_from..chunk_pos_to) {
             let idx = Self::pos_to_idx(self.sizes, chunk_pos)
                 .expect("chunk_pos already valid");
 
@@ -450,11 +454,11 @@ impl ChunkArray {
 
     pub async fn apply_new(
         &mut self, world: &mut World, sizes: USize3, chunks: Vec<Chunk>,
-    ) -> Result<(), UserFacingError> {
+    ) -> AnyResult<()> {
         ensure_eq!(
             Self::volume(sizes),
             chunks.len(),
-            UserFacingError::new("chunk-array should have same len as sizes")
+            StrError::from("chunk-array should have same len as sizes")
         );
 
         let chunks = chunks.into_iter()
@@ -538,7 +542,7 @@ impl ChunkArray {
     /// Gives iterator over chunk coordinates.
     pub fn chunk_pos_range(sizes: USize3) -> Range3d {
         let (start, end) = Self::pos_bounds(sizes);
-        Range3d::new(start..end)
+        Range3d::from(start..end)
     }
 
     /// Gives iterator over all chunk's adjacents.
@@ -601,23 +605,26 @@ impl ChunkArray {
 
     /// TODO: missing docs
     pub async fn update_meshes(
-        &mut self, world: &World, device: &Device, cam: &mut Camera,
+        &mut self, world: &World, cam_pos: vec3, frustum: &Frustum,
     ) -> Result<(), ChunkRenderError> {
         #![allow(clippy::await_holding_refcell_ref)]
 
         let sizes = self.sizes;
         ensure_or!(sizes != USize3::ZERO, return Ok(()));
 
+        let graphics = world.resource::<&Graphics>().unwrap();
+        let device = &graphics.context.device;
+
         self.try_finish_all_tasks(world, device).await;
 
-        for idx in self.get_indices_sorted(world, cam.pos) {
+        for idx in self.get_indices_sorted(world, cam_pos) {
             let mut chunk = self.chunk_by_idx(world, idx);
             let chunk_pos = chunk.pos.load(Relaxed);
             
             let chunk_adj = self.get_adj_chunks(world, chunk_pos);
             let mut mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
 
-            let lod = Self::desired_lod_at(chunk_pos, cam.pos, self.lod_threashold);
+            let lod = Self::desired_lod_at(chunk_pos, cam_pos, self.lod_threashold);
 
 
             if !chunk.is_generated() {
@@ -639,28 +646,29 @@ impl ChunkArray {
                 }
             }
 
-            const CHUNK_MESH_PARTITION_DIST: f32 = 128.0;
+            // FIXME: add partitioning (fix vbuffer unmap).
+            // const CHUNK_MESH_PARTITION_DIST: f32 = 128.0;
 
-            let chunk_is_close_to_be_partitioned = vec3::len(
-                vec3::from(Chunk::global_pos(chunk_pos))
-                - cam.pos + vec3::from(Chunk::SIZES / 2)
-            ) <= CHUNK_MESH_PARTITION_DIST;
+            // let chunk_is_close_to_be_partitioned = vec3::len(
+            //     vec3::from(Chunk::global_pos(chunk_pos))
+            //     - cam_pos + vec3::from(Chunk::SIZES / 2)
+            // ) <= CHUNK_MESH_PARTITION_DIST;
 
-            if chunk_is_close_to_be_partitioned &&
-               !self.tasks.partition.contains_key(&chunk_pos) &&
-               !mesh.is_partial()
-            {
-                self.tasks.start_partitioning(&chunk, chunk_adj.clone());
-            }
+            // if chunk_is_close_to_be_partitioned &&
+            //    !self.tasks.partition.contains_key(&chunk_pos) &&
+            //    !mesh.is_partial()
+            // {
+            //     self.tasks.start_partitioning(&chunk, chunk_adj.clone());
+            // }
 
-            let chunnk_can_be_connected =
-                lod == 0 &&
-                mesh.is_partial() &&
-                !chunk_is_close_to_be_partitioned;
+            // let chunnk_can_be_connected =
+            //     lod == 0 &&
+            //     mesh.is_partial() &&
+            //     !chunk_is_close_to_be_partitioned;
 
-            if chunnk_can_be_connected {
-                mesh.connect_partitions(device);
-            }
+            // if chunnk_can_be_connected {
+            //     mesh.connect_partitions(device);
+            // }
 
             let can_set_new_lod =
                 mesh.get_available_lods().contains(&lod) ||
@@ -680,33 +688,39 @@ impl ChunkArray {
             }
 
             // FIXME: make cam vis-check for light.
-            if chunk.can_render_active_lod(&mesh) && chunk.is_visible_by_camera(cam) {
+            if chunk.can_render_active_lod(&mesh) && chunk.is_in_frustum(frustum) {
                 mesh.active_lod = chunk.info.load(Relaxed).active_lod;
                 mesh.enable();
+            } else {
+                mesh.disable();
             }
         }
 
         Ok(())
     }
 
-    pub fn render(&self, world: &World, encoder: &mut CommandEncoder, view: TextureView) -> AnyResult<()> {
-        let graphics = world.resource::<&Graphics>()?;
+    pub fn render(
+        &self, world: &World, common_binds: &Binds,
+        encoder: &mut CommandEncoder, view: TextureView,
+    ) -> AnyResult<()> {
         let cam_unform = world.resource::<&CameraUniformBuffer>()?;
+        let binds = world.get::<&ChunkBinds>(self.array_entity)?;
+        let pipeline = world.get::<&ChunkRenderPipeline>(self.array_entity)?;
 
-        let mut query = world.query::<(&ChunkBinds, &ChunkMesh, &ChunkRenderPipeline)>();
+        let mut query = world.query::<&ChunkMesh>();
 
         let mut pass = RenderPass::new("chunk_array_render_pass", encoder, [&view]);
 
-        for (_entity, (binds, mesh, pipeline)) in query.into_iter() {
+        for (_entity, mesh) in query.into_iter() {
             let Some(details) = mesh.details() else { continue };
 
             Binds::bind_all(&mut pass, [
-                &graphics.common_uniforms.binds,
+                common_binds,
                 binds.by_details(details),
                 &cam_unform.binds,
             ]);
 
-            mesh.render(pipeline, &mut pass)?;
+            mesh.render(&pipeline, &mut pass)?;
         }
 
         Ok(())
@@ -794,7 +808,7 @@ impl ChunkArray {
             .all(Chunk::is_generated)
     }
 
-    pub async fn spawn_control_window(&mut self, world: &mut World, ui: &imgui::Ui) {
+    pub fn spawn_control_window(&self, ui: &imgui::Ui) {
         use crate::app::utils::graphics::ui::imgui_ext::make_window;
 
         make_window(ui, "Chunk array")
@@ -815,11 +829,12 @@ impl ChunkArray {
                     n = self.tasks.partition.len(),
                 ));
 
-                ui.slider(
-                    "Chunks lod threashold",
-                    0.01, 20.0,
-                    &mut self.lod_threashold,
-                );
+                // FIXME: temp removed lod threashold slider
+                // ui.slider(
+                //     "Chunks lod threashold",
+                //     0.01, 20.0,
+                //     &mut self.lod_threashold,
+                // );
 
                 ui.separator();
 
@@ -829,20 +844,21 @@ impl ChunkArray {
 
                 ui.input_scalar_n("Sizes", &mut *sizes).build();
 
-                if ui.button("Generate") {
-                    self.tasks.stop_all();
+                // FIXME: temp removed generate button
+                // if ui.button("Generate") {
+                //     self.tasks.stop_all();
 
-                    let chunks = tokio::task::block_in_place(|| RUNTIME.block_on(
-                        Self::new_empty_chunks(world, USize3::from(*sizes))
-                    ));
+                //     let chunks = tokio::task::block_in_place(|| RUNTIME.block_on(
+                //         Self::new_empty_chunks(world, USize3::from(*sizes))
+                //     ));
 
-                    match chunks {
-                        Ok(new_chunks) => {
-                            let _ = mem::replace(self, new_chunks);
-                        },
-                        Err(err) => logger::log!(Error, from = "chunk-array", "{err}")
-                    }
-                }
+                //     match chunks {
+                //         Ok(new_chunks) => {
+                //             let _ = mem::replace(self, new_chunks);
+                //         },
+                //         Err(err) => logger::log!(Error, from = "chunk-array", "{err}")
+                //     }
+                // }
             });
     }
 
@@ -869,7 +885,7 @@ impl ChunkArray {
         }
     }
 
-    pub async fn process_commands(&mut self, world: &World, device: &Device) {
+    pub async fn process_commands(&mut self, world: &World) {
         #![allow(clippy::await_holding_lock)]
 
         use crate::terrain::chunk::commands::*;
@@ -882,8 +898,14 @@ impl ChunkArray {
 
         let idxs_to_reload = change_tracker.idxs_to_reload_partitioning();
         let n_changed = idxs_to_reload.len();
-        for (idx, partition_idx) in idxs_to_reload {
-            self.reload_chunk_partitioning(device, world, idx, partition_idx).await;
+
+        {
+            let graphics = world.resource::<&Graphics>().unwrap();
+            let device = &graphics.context.device;
+
+            for (idx, partition_idx) in idxs_to_reload {
+                self.reload_chunk_partitioning(device, world, idx, partition_idx).await;
+            }
         }
 
         if n_changed != 0 {
@@ -933,21 +955,23 @@ impl ChunkArray {
             })
     }
 
-    pub async fn proccess_camera_input(&mut self, world: &World, cam: &Camera) {
-        use super::commands::command;
+    // FIXME: add camera input
+    // pub async fn proccess_camera_input(&mut self, world: &World, cam: &Camera) {
+    //     use super::commands::command;
 
-        let first_voxel = self.trace_ray(world, Line::new(cam.pos, cam.front), Self::MAX_TRACE_STEPS)
-            .find(|voxel| !voxel.is_air());
+    //     let first_voxel = self.trace_ray(world, Line::new(cam.pos, cam.front), Self::MAX_TRACE_STEPS)
+    //         .find(|voxel| !voxel.is_air());
 
-        if let Some(voxel) = first_voxel && mouse::just_left_pressed() && cam.captures_mouse
-        {
-            command(Command::SetVoxel { pos: voxel.pos, new_id: AIR_VOXEL_DATA.id })
-        }
-    }
+    //     if let Some(voxel) = first_voxel && mouse::just_left_pressed() && cam.captures_mouse
+    //     {
+    //         command(Command::SetVoxel { pos: voxel.pos, new_id: AIR_VOXEL_DATA.id })
+    //     }
+    // }
 
-    pub async fn update(&mut self, world: &mut World, device: &Device, cam: &Camera) -> Result<(), UpdateError> {
-        self.proccess_camera_input(world, cam).await;
-        self.process_commands(world, device).await;
+    pub async fn update(&mut self, world: &World) -> Result<(), UpdateError> {
+        // FIXME: add camera input
+        // self.proccess_camera_input(world, cam).await;
+        self.process_commands(world).await;
 
         if keyboard::just_pressed_combo(&[Key::LControl, Key::S]) {
             let chunks = self.chunks(world).collect_vec();
@@ -968,11 +992,12 @@ impl ChunkArray {
             );
         }
 
-        if !self.tasks.reading.is_null() && self.tasks.reading.is_finished() {
-            let handle = self.tasks.reading.take();
-            let (sizes, arr) = handle.await??;
-            self.apply_new(world, sizes, arr).await?;
-        }
+        // FIXME: uncomment
+        // if !self.tasks.reading.is_null() && self.tasks.reading.is_finished() {
+        //     let handle = self.tasks.reading.take();
+        //     let (sizes, arr) = handle.await??;
+        //     self.apply_new(world, sizes, arr).await?;
+        // }
 
         Ok(())
     }
@@ -981,7 +1006,7 @@ impl ChunkArray {
 
 
 macros::sum_errors! {
-    pub enum UpdateError { Join => JoinError, Save => io::Error, Other => UserFacingError }
+    pub enum UpdateError { Join => JoinError, Save => io::Error, Other => AnyError }
 }
 
 
@@ -1270,11 +1295,9 @@ impl ChunkBinds {
     pub async fn make_full(device: &Device, queue: &Queue) -> Result<Binds, LoadImageError> {
         use crate::graphics::*;
 
-        let dir = Path::new(cfg::texture::DIRECTORY);
-
         let (albedo_image, normal_image) = tokio::try_join!(
-            Image::from_file(dir.join("texture_atlas.png")),
-            Image::from_file(dir.join("normal_atlas.png")),
+            Image::from_file("texture_atlas.png"),
+            Image::from_file("normal_atlas.png"),
         )?;
 
         let albedo = GpuImage::new(
@@ -1298,11 +1321,12 @@ impl ChunkBinds {
         let image_layout = GpuImage::bind_group_layout(device);
 
         let albedo_bind = albedo.as_bind_group(device, &image_layout);
-        let normal_bind = normal.as_bind_group(device, &image_layout);
+        let _normal_bind = normal.as_bind_group(device, &image_layout);
 
         Ok(Binds::from_iter([
-            (albedo_bind, Some(image_layout.clone())),
-            (normal_bind, Some(image_layout)),
+            (albedo_bind, Some(image_layout)),
+            // FIXME:
+            // (normal_bind, Some(image_layout)),
         ]))
     }
 

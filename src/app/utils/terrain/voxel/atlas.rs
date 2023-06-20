@@ -2,10 +2,7 @@
 //! Tools for dealing with texture atlases.
 //!
 
-use {
-    crate::prelude::*,
-    cfg::texture::atlas::*
-};
+use { crate::prelude::*, cfg::texture::atlas::* };
 
 /// The size of texture atlas row in pixels
 pub const ATLAS_ROW_SIZE_IN_PIXELS: usize = (ITEM_SIZE_IN_PIXELS + 2 * ITEM_PADDING_IN_PIXELS) * ITEMS_COUNT_IN_ROW;
@@ -43,11 +40,11 @@ impl UV {
         lo.y += ATLAS_PADDING_F;
         hi.y -= ATLAS_PADDING_F;
 
-        Self { lo, hi }.inversed()
+        Self { lo, hi }
     }
 
     /// Useful if texture is inverted
-    pub fn inversed(mut self) -> Self {
+    pub const fn inversed(mut self) -> Self {
         self.lo.y = 1.0 - self.lo.y;
         self.hi.y = 1.0 - self.hi.y;
         self

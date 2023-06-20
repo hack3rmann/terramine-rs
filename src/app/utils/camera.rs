@@ -1,4 +1,6 @@
-use crate::{prelude::*, transform::*, graphics::{Buffer, Binds, Device, Queue}};
+use {
+    crate::{prelude::*, transform::*, graphics::{Buffer, Binds, Device, Queue}, geometry::frustum::Frustum},
+};
 
 
 
@@ -17,10 +19,10 @@ assert_impl_all!(CameraHandle: Send, Sync);
 
 impl CameraHandle {
     pub fn spawn_default(world: &mut World) -> Self {
-        Self::new(world.spawn(CameraBundle::default()))
+        Self::new(world.spawn(self::make_new_enabled()))
     }
 
-    pub fn new(entity: Entity) -> Self {
+    pub const fn new(entity: Entity) -> Self {
         Self { entity }
     }
 
@@ -37,10 +39,10 @@ impl CameraHandle {
 
     pub fn update_all(world: &World) {
         let dt = world.resource::<&Timer>().unwrap().time_step();
-        let mut query = world.query::<(&mut CameraComponent, &mut Transform, &mut Speed)>();
+        let mut query = world.query::<(&mut CameraComponent, &mut Transform, &mut Speed, &mut Frustum)>();
 
-        for (_entity, (camera, transform, speed)) in query.into_iter() {
-            camera.update(dt, transform, speed);
+        for (_entity, (camera, transform, speed, frustum)) in query.into_iter() {
+            camera.update(dt, transform, speed, frustum);
         }
     }
 
@@ -144,15 +146,10 @@ impl CameraComponent {
         )
     }
 
-    pub fn update(&mut self, dt: TimeStep, transform: &mut Transform, speed: &mut Speed) {
+    pub fn update(&mut self, dt: TimeStep, transform: &mut Transform, speed: &mut Speed, frustum: &mut Frustum) {
         let dt_secs = dt.as_secs_f32();
 
-        let (front, right) = {
-            let rotation = transform.rotation.as_matrix();
-            let right = vec3::from(cfg::terrain::RIGHT_NORMAL);
-            let front = vec3::from(cfg::terrain::FRONT_NORMAL);
-            (rotation * front, rotation * right)
-        };
+        let (front, right) = (transform.rotation.front(), transform.rotation.right());
 
         let mut new_speed = vec3::ZERO;
 
@@ -193,6 +190,8 @@ impl CameraComponent {
         if keyboard::just_pressed(Key::P) {
             *transform = default();
         }
+
+        *frustum = Frustum::new(self, transform);
     }
 
     /// Spawns camera control window.
@@ -266,12 +265,17 @@ impl Default for CameraComponent {
 
 
 
-pub type CameraBundle = (CameraComponent, Transform, Speed);
+pub type CameraBundle = (CameraComponent, Transform, Speed, Frustum);
 
 pub fn make_new_enabled() -> CameraBundle {
-    let mut cam = CameraBundle::default();
-    cam.0.enable();
-    cam
+    let mut cam = CameraComponent::DEFAULT;
+    let transform = Transform::DEFAULT;
+    let speed = Speed::DEFAULT;
+    let frustum = Frustum::new(&cam, &transform);
+    
+    cam.enable();
+
+    (cam, transform, speed, frustum)
 }
 
 

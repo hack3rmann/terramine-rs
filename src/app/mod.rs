@@ -3,8 +3,9 @@ pub mod utils;
 use {
     crate::{
         prelude::*,
-        graphics::{Graphics, RenderDescriptor},
+        graphics::Graphics,
         camera::{*, self},
+        terrain::chunk::chunk_array::ChunkArray,
     },
     winit::{
         event::{Event, WindowEvent},
@@ -32,7 +33,7 @@ impl App {
         RUNTIME.block_on(Self::new())?.run()
     }
 
-    /// Constructs [`App`].
+    /// Constructs new [`App`].
     pub async fn new() -> AnyResult<Self> {
         logger::scope!(from = "app", "new()");
 
@@ -63,7 +64,8 @@ impl App {
 
         self.world.insert_resource(graphics);
 
-        // ChunkArray::new_empty_chunks(&mut self.world, vecs!(2, 2, 2)).await.unwrap();
+        let chunk_array = ChunkArray::new(&mut self.world, vecs!(2, 2, 2)).await?;
+        self.world.insert_resource(chunk_array);
 
         Ok(())
     }
@@ -145,6 +147,30 @@ impl App {
             update();
         }
 
+        if keyboard::just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
+            let arr_entity = self.world.resource::<&ChunkArray>()?.array_entity;
+            ChunkArray::make_binds(&mut self.world, arr_entity).await;
+        }
+
+        if keyboard::just_pressed(Key::N) {
+            let arr = ChunkArray::new(&mut self.world, vecs!(2, 2, 2)).await?;
+            self.world.insert_resource(arr);
+        }
+
+        {
+            use crate::{transform::Transform, geometry::frustum::Frustum};
+
+            let mut arr = self.world.resource::<&mut ChunkArray>()?;
+            let MainCamera(cam) = self.world.copy_resource::<MainCamera>()?;
+
+            let mut query = self.world
+                .query_one::<(&CameraComponent, &Transform, &Frustum)>(cam.entity).unwrap();
+            let (_cam, transform, frustum) = query.get().unwrap();
+
+            arr.update_meshes(&self.world, transform.translation.position, frustum).await?;
+            arr.update(&self.world).await?;
+        }
+
         {
             self.world.resource::<&mut Timer>()?.update();
             let graphics = self.world.resource::<&Graphics>()?;
@@ -183,21 +209,20 @@ impl App {
     /// Draws a frame on main window.
     async fn draw_frame(&mut self, _window_id: WindowId) -> AnyResult<()> {
         let timer = self.world.resource::<&Timer>()?;
+        let chunk_array = self.world.resource::<&ChunkArray>()?;
 
         // InGui draw data.
         let use_ui = |ui: &mut imgui::Ui| {
             CameraHandle::spawn_control_windows(&self.world, ui);
             profiler::update_and_build_window(ui, timer.time_step());
+            chunk_array.spawn_control_window(ui);
         };
 
         let mut graphics = self.world.resource::<&mut Graphics>()?;
-        graphics.render(
-            RenderDescriptor {
-                use_imgui_ui: use_ui,
-                time: timer.time(),
-            },
-            &self.world,
-        ).context("failed to render graphics")?;
+
+        graphics.render(timer.time(), use_ui, |binds, encoder, view|
+            chunk_array.render(&self.world, binds, encoder, view.clone())
+        )?;
 
         Ok(())
     }

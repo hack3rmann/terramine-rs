@@ -53,35 +53,40 @@ impl<T:
     DynamicSize
 > Reinterpret for T { }
 
+#[const_trait]
 pub trait AsBytes {
     fn as_bytes(&self) -> Vec<u8>;
 }
 
+#[const_trait]
 pub trait FromBytes: Sized {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError>;
 }
 
+#[const_trait]
 pub trait StaticSize: Sized {
     fn static_size() -> usize {
         mem::size_of::<Self>()
     }
 }
 
+#[const_trait]
 pub trait StaticSizeHint {
     fn static_size_hint() -> Option<usize>;
 }
 
-impl<T: StaticSize> StaticSizeHint for T {
+impl<T: ~const StaticSize> const StaticSizeHint for T {
     fn static_size_hint() -> Option<usize> {
         Some(Self::static_size())
     }
 }
 
+#[const_trait]
 pub trait DynamicSize {
     fn dynamic_size(&self) -> usize;
 }
 
-impl<T: StaticSize> DynamicSize for T {
+impl<T: ~const StaticSize> const DynamicSize for T {
     fn dynamic_size(&self) -> usize {
         Self::static_size()
     }
@@ -111,7 +116,7 @@ pub struct ByteReader<'s> {
 }
 
 impl<'s> ByteReader<'s> {
-    pub fn new(source: &'s [u8]) -> Self {
+    pub const fn new(source: &'s [u8]) -> Self {
         Self { bytes: source }
     }
     
@@ -152,7 +157,7 @@ macro impl_nums($($Type:ty),* $(,)?) {
             }
         }
 
-        impl StaticSize for $Type { }
+        impl const StaticSize for $Type { }
     )*
 }
 
@@ -175,7 +180,7 @@ impl FromBytes for usize {
     }
 }
 
-impl StaticSize for usize {
+impl const StaticSize for usize {
     fn static_size() -> usize {
         u64::static_size()
     }
@@ -200,7 +205,7 @@ impl FromBytes for isize {
     }
 }
 
-impl StaticSize for isize {
+impl const StaticSize for isize {
     fn static_size() -> usize {
         i64::static_size()
     }
@@ -224,7 +229,7 @@ impl FromBytes for char {
     }
 }
 
-impl StaticSize for char {
+impl const StaticSize for char {
     fn static_size() -> usize {
         u32::static_size()
     }
@@ -253,7 +258,7 @@ impl FromBytes for bool {
     }
 }
 
-impl StaticSize for bool {
+impl const StaticSize for bool {
     fn static_size() -> usize {
         u8::static_size()
     }
@@ -484,7 +489,7 @@ impl FromBytes for Float4 {
     }
 }
 
-impl StaticSize for Float4 {
+impl const StaticSize for Float4 {
     fn static_size() -> usize { 16 }
 }
 

@@ -131,7 +131,7 @@ impl Graphics {
             &CommonUniforms {
                 time: 0.0,
                 screen_resolution: window.inner_size().to_vec2().into(),
-                _pad: 0,
+                _padding: 0,
             },
         );
 
@@ -294,36 +294,6 @@ impl Graphics {
         )
     }
 
-    pub async fn refresh_test_shader(&mut self) -> AnyResult<()> {
-        let source = ShaderSource::from_file("shader.wgsl").await
-            .context("failed to load shader source from 'shader.wgsl'")?;
-
-        let material = {
-            let shader = Shader::new(&self.context.device, source, vec![TexturedVertex::BUFFER_LAYOUT]);
-            ShaderMaterial::from(shader).to_arc()
-        };
-
-        let mesh = self.sandbox.resource::<&GpuMesh>()?;
-        let layout = self.sandbox.resource::<&PipelineLayout>()?;
-
-        let new_pipeline = RenderPipeline::new(
-            RenderPipelineDescriptor {
-                device: &self.context.device,
-                material: material.as_ref(),
-                primitive_state: mesh.primitive_state,
-                label: Some("test_render_pipeline".into()),
-                layout: &layout,
-            },
-        );
-
-        let mut query = self.sandbox.query::<&mut RenderPipeline>();
-        for (_entity, pipeline) in query.into_iter() {
-            *pipeline = new_pipeline.clone();
-        }
-
-        Ok(())
-    }
-
     pub fn render_sandbox(&mut self, cam: &CameraUniformBuffer) {
         let mut query = self.sandbox.query::<(&BindsRef, &GpuMesh, &RenderPipeline)>();
 
@@ -343,17 +313,37 @@ impl Graphics {
         }
     }
 
-    pub fn render<UseUi: FnOnce(&mut imgui::Ui)>(
-        &mut self, desc: RenderDescriptor<UseUi>, world: &World,
+    pub fn render_with_sandbox<F: FnOnce(&mut imgui::Ui)>(
+        &mut self, time: Time, use_ui: F, world: &World,
     ) -> AnyResult<()> {
-        self.begin_render(desc.time)?;
+        self.begin_render(time)?;
 
         {
             let cam = world.resource::<&CameraUniformBuffer>().unwrap();
             self.render_sandbox(&cam);
         }
 
-        self.finish_render(desc.use_imgui_ui)?;
+        self.finish_render(use_ui)?;
+
+        Ok(())
+    }
+
+    pub fn render<F, R>(&mut self, time: Time, use_ui: F, render: R) -> AnyResult<()>
+    where
+        F: FnOnce(&mut imgui::Ui),
+        R: FnOnce(&Binds, &mut CommandEncoder, &TextureView) -> AnyResult<()>,
+    {
+        self.begin_render(time)?;
+        
+        {
+            // * Safety
+            // * 
+            // * Safe, because in `begin_render` `render_stage` is set to `Some`.
+            let render_stage = unsafe { self.render_stage.as_mut().unwrap_unchecked() };
+            render(&self.common_uniforms.binds, &mut render_stage.encoder, &render_stage.view)?;
+        }
+
+        self.finish_render(use_ui)?;
 
         Ok(())
     }
@@ -364,14 +354,14 @@ impl Graphics {
         self.common_uniforms.update(&self.context.queue, CommonUniforms {
             time: time.as_secs_f32(),
             screen_resolution: vecf!(size.width, size.height),
-            _pad: 0,
+            _padding: 0,
         });
 
         let output = self.context.surface.get_current_texture()?;
         let view = TextureView::from(output.texture.create_view(&default()));
         let mut encoder = self.context.device.create_command_encoder(&default());
 
-        ClearPass::clear(&mut encoder, [&view]);
+        ClearPass::clear(&mut encoder, [&view], cfg::shader::CLEAR_COLOR);
 
         self.render_stage = Some(RenderStage::new(view, encoder, output.into()));
 
@@ -379,7 +369,7 @@ impl Graphics {
     }
 
     /// Ends rendering proccess.
-    pub fn finish_render<UseImgui: FnOnce(&mut imgui::Ui)>(&mut self, use_imgui: UseImgui) -> AnyResult<()> {
+    pub fn finish_render<F: FnOnce(&mut imgui::Ui)>(&mut self, use_imgui: F) -> AnyResult<()> {
         let mut render_stage = self.render_stage.take()
             .context("`finish_render` should be called only once and `begin_render` should be called before")?;
 
@@ -459,11 +449,6 @@ impl Graphics {
             let uniform_buffer = world.resource::<&CameraUniformBuffer>()?;
             uniform_buffer.update(&graphics.context.queue, &cam_uniform);
         }
-        
-        if keyboard::just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
-            graphics.refresh_test_shader().await
-                .log_error("graphics", "failed to refresh test shader");
-        }
 
         let dt = world.resource::<&Timer>()?.time_step();
 
@@ -504,16 +489,18 @@ impl ImGui {
         surface_config: &SurfaceConfiguration,
         window: &Window,
     ) -> Self {
+        use { imgui::{Context, FontSource}, imgui_winit_support::{WinitPlatform, HiDpiMode} };
+
         // Create ImGui context and set `.ini` file name.
-        let mut context = imgui::Context::create();
+        let mut context = Context::create();
         context.set_ini_filename(Some(PathBuf::from("src/imgui_settings.ini")));
 
         // Bind ImGui to winit.
-        let mut platform = imgui_winit_support::WinitPlatform::init(&mut context);
-        platform.attach_window(context.io_mut(), window, imgui_winit_support::HiDpiMode::Rounded);
+        let mut platform = WinitPlatform::init(&mut context);
+        platform.attach_window(context.io_mut(), window, HiDpiMode::Rounded);
 
         // Style configuration.
-        context.fonts().add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
+        context.fonts().add_font(&[FontSource::DefaultFontData { config: None }]);
         context.io_mut().font_global_scale = (1.0 / platform.hidpi_factor()) as f32;
         context.style_mut().window_rounding = 16.0;
 
@@ -562,20 +549,12 @@ impl std::fmt::Debug for ImGuiRendererWrapper {
 
 
 
-#[derive(Debug)]
-pub struct RenderDescriptor<UseImguiUi> {
-    pub use_imgui_ui: UseImguiUi,
-    pub time: Time,
-}
-
-
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct CommonUniforms {
     pub screen_resolution: vec2,
     pub time: f32,
-    pub _pad: u32,
+    pub _padding: u32,
 }
 assert_impl_all!(CommonUniforms: Send, Sync);
 

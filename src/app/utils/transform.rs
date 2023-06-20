@@ -60,6 +60,18 @@ impl Rotation {
     pub fn rotate(&mut self, delta: vec3) {
         self.angles += delta
     }
+
+    pub fn right(&self) -> vec3 {
+        self.as_matrix() * vec3::from(cfg::terrain::RIGHT_NORMAL)
+    }
+
+    pub fn up(&self) -> vec3 {
+        self.as_matrix() * vec3::from(cfg::terrain::TOP_NORMAL)
+    }
+
+    pub fn front(&self) -> vec3 {
+        self.as_matrix() * vec3::from(cfg::terrain::FRONT_NORMAL)
+    }
 }
 
 impl AsMatrix for Rotation {
@@ -91,6 +103,7 @@ impl AsMatrix for Scaling {
 
 
 
+#[const_trait]
 pub trait AsMatrix {
     fn as_matrix(&self) -> mat4;
 }
@@ -98,7 +111,7 @@ assert_obj_safe!(AsMatrix);
 
 
 
-#[derive(Clone, Copy, Deref, Default, PartialEq, Debug, From)]
+#[derive(Clone, Copy, Deref, ConstDefault, PartialEq, Debug, From)]
 pub struct Speed {
     pub inner: vec3,
 }
@@ -112,7 +125,7 @@ impl GetOffset for Speed {
 
 
 
-#[derive(Clone, Copy, Deref, Default, PartialEq, Debug, From)]
+#[derive(Clone, Copy, Deref, ConstDefault, PartialEq, Debug, From)]
 pub struct Acceleration {
     pub inner: vec3,
 }
@@ -133,17 +146,6 @@ pub trait GetOffset {
 
     fn affect_translation(&self, dt: TimeStep, translation: &mut Translation) {
         translation.position += self.get_offset(dt);
-    }
-
-    fn affect_multiple<Offsets, Offset>(offsets: Offsets, dt: TimeStep, translation: &mut Translation)
-    where
-        Self: Sized,
-        Offset: GetOffset,
-        Offsets: IntoIterator<Item = Offset>,
-    {
-        for offset in offsets.into_iter() {
-            offset.affect_translation(dt, translation);
-        }
     }
 }
 assert_obj_safe!(GetOffset);
