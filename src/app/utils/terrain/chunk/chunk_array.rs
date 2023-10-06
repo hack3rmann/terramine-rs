@@ -688,7 +688,7 @@ impl ChunkArray {
             }
 
             // FIXME: make cam vis-check for light.
-            if chunk.can_render_active_lod(&mesh) && chunk.is_in_frustum(frustum) {
+            if chunk.can_render_active_lod(&mesh) /* && chunk.is_in_frustum(frustum) */ {
                 mesh.active_lod = chunk.info.load(Relaxed).active_lod;
                 mesh.enable();
             } else {
@@ -878,7 +878,7 @@ impl ChunkArray {
 
             Command::FillVoxels { pos_from, pos_to, new_id } => {
                 let _is_changed = self.fill_voxels(world, pos_from, pos_to, new_id)
-                    .log_error("chunk-arrat", "failed to fill voxels");
+                    .log_error("chunk-array", "failed to fill voxels");
             }
 
             Command::DropAllMeshes => self.drop_all_meshes(world),

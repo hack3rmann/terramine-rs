@@ -33,7 +33,7 @@ impl Frustum {
         let pos = transform.translation.position;
 
         // Far rectangle half size.
-        let half_vertical_side = f32::tan(cam.fov.get_radians() / 2.0) * cam.far_plane;
+        let half_vertical_side = f32::tan(0.5 * cam.fov.get_radians()) * cam.far_plane;
         let half_horizontal_side = half_vertical_side / cam.aspect_ratio;
         
         let front_far = front_dir * cam.far_plane;

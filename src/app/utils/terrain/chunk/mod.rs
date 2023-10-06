@@ -453,9 +453,9 @@ impl Chunk {
         let global_chunk_pos = vec3::from(global_chunk_pos) * Voxel::SIZE;
 
         let lo = global_chunk_pos - 0.5 * vec3::all(Voxel::SIZE);
-        let hi = lo + vec3::all(Chunk::GLOBAL_SIZE) - 0.5 * vec3::all(Voxel::SIZE);
+        let hi = lo + vec3::all(Chunk::GLOBAL_SIZE);
 
-        frustum.intersects_aabb(&Aabb::from_float3(lo, hi))
+        frustum.intersects(&Aabb::from_float3(lo, hi))
     }
 
     /// Checks if [`Chunk`] is not already generated.
@@ -464,15 +464,13 @@ impl Chunk {
     }
 
     /// Transmutes [`Vec<Id>`] into [`Vec<Atomic<Id>>`].
-    pub fn transmute_ids(src: Vec<Id>) -> Vec<Atomic<Id>> {
+    pub const fn transmute_ids(src: Vec<Id>) -> Vec<Atomic<Id>> {
         // * Safety
         // * 
         // * Safe, because memory layout of `T` is same as `Atomic<T>`,
         // * because `Atomic<T>` is `repr(transparent)` of `UnsafeCell<T>`
         // * and `UnsafeCell<T>` is `repr(transparent)` of `T`.
-        unsafe {
-            mem::transmute(src)
-        }
+        unsafe { mem::transmute(src) }
     }
 
     /// Generates voxel id array.
@@ -480,7 +478,7 @@ impl Chunk {
         let mut result = Vec::with_capacity(Self::VOLUME);
 
         for pos in Self::global_pos_iter(chunk_pos) {
-            let height = gen::perlin(pos, chunk_array_sizes);
+            let height = -1;//FIXME: gen::perlin(pos, chunk_array_sizes);
 
             let id = if pos.y <= height - 5 {
                 STONE_VOXEL_DATA.id
@@ -599,8 +597,8 @@ impl Chunk {
     /// 
     /// # Safety
     /// 
-    /// 1. `idx` < `Chunk::VOLUME`
-    /// 2. `self.info.fill_type` should be [`FillType::Default`].
+    /// - `idx` < `Chunk::VOLUME`
+    /// - `self.info.fill_type` should be [`FillType::Unspecified`].
     pub unsafe fn set_id_fast(&self, idx: usize, new_id: Id) -> Id {
         self.voxel_ids.get_unchecked(idx).swap(new_id, AcqRel)
     }
@@ -653,9 +651,7 @@ impl Chunk {
             // * # Safety
             // * 
             // * Safe, because `idx` is valid and `self` is unoptimized.
-            unsafe {
-                self.set_id_fast(idx, new_id);
-            }
+            unsafe { self.set_id_fast(idx, new_id) };
         }
 
         self.optimize();

@@ -45,7 +45,13 @@ struct FragmentOutput {
 fn fs_main(in: VertexOutput) -> FragmentOutput {
     var out: FragmentOutput;
 
-    out.albedo = vec4<f32>(in.color, 1.0);
+    let color = vec3(
+        pow(in.color.r, 1.0 / 0.4545),
+        pow(in.color.g, 1.0 / 0.4545),
+        pow(in.color.b, 1.0 / 0.4545),
+    );
+
+    out.albedo = vec4<f32>(1.25 * color, 1.0);
 
     return out;
 }

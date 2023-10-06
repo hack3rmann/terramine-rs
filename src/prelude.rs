@@ -16,6 +16,7 @@ pub use {
         failure::{ensure_or, ensure, ensure_eq, ensure_ne, bail, bail_str, fmt_error, ensure_fmt, StrError},
         const_default::ConstDefault,
         iterator::Range3d,
+        geometry::{Intersects, Contains},
     },
     smallvec::{SmallVec, smallvec},
     array_init::array_init,

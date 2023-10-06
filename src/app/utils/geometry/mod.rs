@@ -28,6 +28,9 @@ impl Intersects<Frustum> for Aabb {
 }
 
 impl const Intersects<Line> for Aabb {
+    /// # Note
+    /// 
+    /// It's `const fn`.
     fn intersects(&self, with: &Line) -> bool {
         self.intersects_ray(with)
     }
@@ -42,12 +45,18 @@ pub trait Contains<T> {
 assert_obj_safe!(Contains<vec3>);
 
 impl const Contains<vec3> for Frustum {
+    /// # Note
+    /// 
+    /// It's `const fn`.
     fn contains(&self, obj: &vec3) -> bool {
         self.contains_point(*obj)
     }
 }
 
 impl const Contains<vec3> for Aabb {
+    /// # Note
+    /// 
+    /// It's `const fn`.
     fn contains(&self, obj: &vec3) -> bool {
         self.contains_point(*obj)
     }
