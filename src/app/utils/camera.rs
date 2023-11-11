@@ -1,6 +1,4 @@
-use {
-    crate::{prelude::*, transform::*, graphics::{Buffer, Binds, Device, Queue}, geometry::frustum::Frustum},
-};
+use crate::{prelude::*, transform::*, graphics::{Buffer, Binds, Device, Queue}, geometry::frustum::Frustum};
 
 
 
@@ -53,52 +51,53 @@ impl CameraHandle {
         Ok(CameraUniform::new(cam, transform))
     }
 
-    pub fn spawn_control_windows(world: &World, ui: &imgui::Ui) {
-        use crate::graphics::ui::imgui_ext::make_window;
+    // FIXME:
+    // pub fn spawn_control_windows(world: &World, ui: &imgui::Ui) {
+    //     use crate::graphics::ui::imgui_ext::make_window;
 
-        let mut query = world.query::<(&mut CameraComponent, Option<&mut Transform>)>();
-        for (entity, (camera, transform)) in query.into_iter() {
-            make_window(ui, format!("Camera #{}", entity.id())).build(|| {
-                let transform = match transform {
-                    Some(t) => &*t,
-                    None => &Transform::DEFAULT,
-                };
+    //     let mut query = world.query::<(&mut CameraComponent, Option<&mut Transform>)>();
+    //     for (entity, (camera, transform)) in query.into_iter() {
+    //         make_window(ui, format!("Camera #{}", entity.id())).build(|| {
+    //             let transform = match transform {
+    //                 Some(t) => &*t,
+    //                 None => &Transform::DEFAULT,
+    //             };
 
-                ui.text("Position");
-                ui.text(transform.translation.to_string());
+    //             ui.text("Position");
+    //             ui.text(transform.translation.to_string());
 
-                ui.text("Rotation");
-                ui.text(transform.rotation.to_string());
+    //             ui.text("Rotation");
+    //             ui.text(transform.rotation.to_string());
 
-                ui.separator();
+    //             ui.separator();
 
-                ui.slider_config("Speed", 5.0, 300.0)
-                    .display_format("%.1f")
-                    .build(&mut camera.speed_factor);
+    //             ui.slider_config("Speed", 5.0, 300.0)
+    //                 .display_format("%.1f")
+    //                 .build(&mut camera.speed_factor);
 
-                ui.slider_config("Speed falloff", 0.0, 1.0)
-                    .display_format("%.3f")
-                    .build(&mut camera.speed_falloff);
+    //             ui.slider_config("Speed falloff", 0.0, 1.0)
+    //                 .display_format("%.3f")
+    //                 .build(&mut camera.speed_falloff);
 
-                {
-                    let mut fov = camera.fov.get_degrees();
+    //             {
+    //                 let mut fov = camera.fov.get_degrees();
 
-                    ui.slider_config("FOV", 1.0, 180.0)
-                        .display_format("%.0f")
-                        .build(&mut fov);
+    //                 ui.slider_config("FOV", 1.0, 180.0)
+    //                     .display_format("%.0f")
+    //                     .build(&mut fov);
 
-                    camera.fov.set_degrees(fov);
-                }
+    //                 camera.fov.set_degrees(fov);
+    //             }
 
-                if ui.button("Set main") {
-                    camera.enable();
+    //             if ui.button("Set main") {
+    //                 camera.enable();
 
-                    let mut cam = world.resource::<&mut MainCamera>().unwrap();
-                    cam.0.entity = entity;
-                }
-            });
-        }
-    }
+    //                 let mut cam = world.resource::<&mut MainCamera>().unwrap();
+    //                 cam.0.entity = entity;
+    //             }
+    //         });
+    //     }
+    // }
 }
 
 
@@ -178,7 +177,7 @@ impl CameraComponent {
             let mouse_delta = mouse::get_delta();
 
             let accel_multiple = if cfg::camera::IS_CAMERA_LOOK_ACCELERATION_ENABLED {
-                130.0 * dt_secs
+                cfg::camera::MOUSE_SENSETIVITY * dt_secs
             } else { 1.0 };
 
             let angles = accel_multiple * vec3::new(mouse_delta.y, 0.0, mouse_delta.x);
@@ -194,44 +193,45 @@ impl CameraComponent {
         *frustum = Frustum::new(self, transform);
     }
 
-    /// Spawns camera control window.
-    pub fn spawn_control_window(&mut self, ui: &imgui::Ui, transform: &mut Transform, speed: &mut Speed) {
-        use crate::graphics::ui::imgui_ext::make_window;
+    // FIXME:
+    // Spawns camera control window.
+    // pub fn spawn_control_window(&mut self, ui: &imgui::Ui, transform: &mut Transform, speed: &mut Speed) {
+    //     use crate::graphics::ui::imgui_ext::make_window;
 
-        make_window(ui, "Camera").build(|| {
-            ui.text("Position");
-            ui.text(transform.translation.to_string());
+    //     make_window(ui, "Camera").build(|| {
+    //         ui.text("Position");
+    //         ui.text(transform.translation.to_string());
 
-            ui.text("Rotation");
-            ui.text(transform.rotation.to_string());
+    //         ui.text("Rotation");
+    //         ui.text(transform.rotation.to_string());
 
-            ui.separator();
+    //         ui.separator();
 
-            {
-                let mut speed_module = speed.len();
+    //         {
+    //             let mut speed_module = speed.len();
 
-                ui.slider_config("Speed", 5.0, 300.0)
-                    .display_format("%.1f")
-                    .build(&mut speed_module);
+    //             ui.slider_config("Speed", 5.0, 300.0)
+    //                 .display_format("%.1f")
+    //                 .build(&mut speed_module);
 
-                *speed = speed.with_len(speed_module).into();
-            }
+    //             *speed = speed.with_len(speed_module).into();
+    //         }
 
-            ui.slider_config("Speed falloff", 0.0, 1.0)
-                .display_format("%.3f")
-                .build(&mut self.speed_falloff);
+    //         ui.slider_config("Speed falloff", 0.0, 1.0)
+    //             .display_format("%.3f")
+    //             .build(&mut self.speed_falloff);
 
-            {
-                let mut fov = self.fov.get_degrees();
+    //         {
+    //             let mut fov = self.fov.get_degrees();
 
-                ui.slider_config("FOV", 1.0, 180.0)
-                    .display_format("%.0f")
-                    .build(&mut fov);
+    //             ui.slider_config("FOV", 1.0, 180.0)
+    //                 .display_format("%.0f")
+    //                 .build(&mut fov);
 
-                self.fov.set_degrees(fov);
-            }
-        });
-    }
+    //             self.fov.set_degrees(fov);
+    //         }
+    //     });
+    // }
 
     pub fn on_window_resize(&mut self, size: UInt2) {
         self.aspect_ratio = cfg::window::aspect_ratio(size.x as f32, size.y as f32);

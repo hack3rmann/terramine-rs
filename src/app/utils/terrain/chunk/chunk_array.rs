@@ -174,7 +174,7 @@ impl ChunkArray {
         world.despawn(self.array_entity).unwrap();
         self.array_entity = Entity::DANGLING;
 
-        for chunk_entity in mem::take(&mut self.chunk_entities) {
+        for chunk_entity in self.chunk_entities.drain(..) {
             world.despawn(chunk_entity).unwrap();
         }
     }
@@ -239,11 +239,11 @@ impl ChunkArray {
 
     /// Reinterprets [chunk][Chunk] as bytes. It uses Huffman's compresstion.
     pub fn chunk_as_bytes(chunk: &Chunk) -> Vec<u8> {
-        use { bit_vec::BitVec, huffman_compress as hc };
+        use { bit_vec::BitVec, huffman_compress::CodeBuilder };
 
         let pos = chunk.pos.load(Relaxed);
 
-        match chunk.info.load(Relaxed).fill_type {
+        match chunk.info.load(Relaxed).get_fill_type() {
             FillType::AllSame(id) => itertools::chain!(
                 FillType::AllSame(id).as_bytes(),
                 pos.as_bytes(),
@@ -261,7 +261,7 @@ impl ChunkArray {
                         .map(|id| id.load(Relaxed))
                 );
 
-                let (book, _) = hc::CodeBuilder::from_iter(
+                let (book, _) = CodeBuilder::from_iter(
                     freqs.iter().map(|(&k, &v)| (k, v))
                 ).finish();
                 let mut bits = BitVec::new();
@@ -284,7 +284,7 @@ impl ChunkArray {
 
     /// Reads bytes as [chunk][Chunk].
     pub fn chunk_from_bytes(bytes: &[u8]) -> Chunk {
-        use { bit_vec::BitVec, huffman_compress as hc };
+        use { bit_vec::BitVec, huffman_compress::CodeBuilder };
 
         let mut reader = ByteReader::new(bytes);
         let fill_type: FillType = reader.read()
@@ -301,7 +301,7 @@ impl ChunkArray {
                 let bits: BitVec = reader.read()
                     .expect("failed to read `BitVec` from bytes");
 
-                let (_, tree) = hc::CodeBuilder::from_iter(freqs).finish();
+                let (_, tree) = CodeBuilder::from_iter(freqs).finish();
                 let voxel_ids: Vec<_> = tree.unbounded_decoder(bits).collect();
 
                 let is_id_valid = voxel_ids.iter()
@@ -604,8 +604,9 @@ impl ChunkArray {
     }
 
     /// TODO: missing docs
+    #[profile]
     pub async fn update_meshes(
-        &mut self, world: &World, cam_pos: vec3, frustum: &Frustum,
+        &mut self, world: &World, cam_pos: vec3, _frustum: &Frustum,
     ) -> Result<(), ChunkRenderError> {
         #![allow(clippy::await_holding_refcell_ref)]
 
@@ -689,7 +690,7 @@ impl ChunkArray {
 
             // FIXME: make cam vis-check for light.
             if chunk.can_render_active_lod(&mesh) /* && chunk.is_in_frustum(frustum) */ {
-                mesh.active_lod = chunk.info.load(Relaxed).active_lod;
+                mesh.active_lod = chunk.info.load(Relaxed).get_active_lod();
                 mesh.enable();
             } else {
                 mesh.disable();
@@ -699,6 +700,7 @@ impl ChunkArray {
         Ok(())
     }
 
+    #[profile]
     pub fn render(
         &self, world: &World, common_binds: &Binds,
         encoder: &mut CommandEncoder, view: TextureView,
@@ -808,59 +810,60 @@ impl ChunkArray {
             .all(Chunk::is_generated)
     }
 
-    pub fn spawn_control_window(&self, ui: &imgui::Ui) {
-        use crate::app::utils::graphics::ui::imgui_ext::make_window;
+    // FIXME:
+    // pub fn spawn_control_window(&self, ui: &imgui::Ui) {
+    //     use crate::app::utils::graphics::ui::imgui_ext::make_window;
 
-        make_window(ui, "Chunk array")
-            .always_auto_resize(true)
-            .build(|| {
-                ui.text(format!(
-                    "{n} chunk generation tasks.",
-                    n = self.tasks.voxels_gen.len(),
-                ));
+    //     make_window(ui, "Chunk array")
+    //         .always_auto_resize(true)
+    //         .build(|| {
+    //             ui.text(format!(
+    //                 "{n} chunk generation tasks.",
+    //                 n = self.tasks.voxels_gen.len(),
+    //             ));
 
-                ui.text(format!(
-                    "{n} mesh generation tasks.",
-                    n = self.tasks.low.len() + self.tasks.full.len(),
-                ));
+    //             ui.text(format!(
+    //                 "{n} mesh generation tasks.",
+    //                 n = self.tasks.low.len() + self.tasks.full.len(),
+    //             ));
 
-                ui.text(format!(
-                    "{n} partition generation tasks.",
-                    n = self.tasks.partition.len(),
-                ));
+    //             ui.text(format!(
+    //                 "{n} partition generation tasks.",
+    //                 n = self.tasks.partition.len(),
+    //             ));
 
-                // FIXME: temp removed lod threashold slider
-                // ui.slider(
-                //     "Chunks lod threashold",
-                //     0.01, 20.0,
-                //     &mut self.lod_threashold,
-                // );
+    //             // FIXME: temp removed lod threashold slider
+    //             // ui.slider(
+    //             //     "Chunks lod threashold",
+    //             //     0.01, 20.0,
+    //             //     &mut self.lod_threashold,
+    //             // );
 
-                ui.separator();
+    //             ui.separator();
 
-                ui.text("Generate new");
+    //             ui.text("Generate new");
 
-                let mut sizes = GENERATOR_SIZES.lock();
+    //             let mut sizes = GENERATOR_SIZES.lock();
 
-                ui.input_scalar_n("Sizes", &mut *sizes).build();
+    //             ui.input_scalar_n("Sizes", &mut *sizes).build();
 
-                // FIXME: temp removed generate button
-                // if ui.button("Generate") {
-                //     self.tasks.stop_all();
+    //             // FIXME: temp removed generate button
+    //             // if ui.button("Generate") {
+    //             //     self.tasks.stop_all();
 
-                //     let chunks = tokio::task::block_in_place(|| RUNTIME.block_on(
-                //         Self::new_empty_chunks(world, USize3::from(*sizes))
-                //     ));
+    //             //     let chunks = tokio::task::block_in_place(|| RUNTIME.block_on(
+    //             //         Self::new_empty_chunks(world, USize3::from(*sizes))
+    //             //     ));
 
-                //     match chunks {
-                //         Ok(new_chunks) => {
-                //             let _ = mem::replace(self, new_chunks);
-                //         },
-                //         Err(err) => logger::log!(Error, from = "chunk-array", "{err}")
-                //     }
-                // }
-            });
-    }
+    //             //     match chunks {
+    //             //         Ok(new_chunks) => {
+    //             //             let _ = mem::replace(self, new_chunks);
+    //             //         },
+    //             //         Err(err) => logger::log!(Error, from = "chunk-array", "{err}")
+    //             //     }
+    //             // }
+    //         });
+    // }
 
     pub async fn proccess_command(
         &mut self, world: &World,

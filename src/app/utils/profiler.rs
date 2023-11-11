@@ -131,35 +131,37 @@ pub fn start_capture(target_name: impl Into<String>, id: MeasureId) -> Measure {
 }
 
 /// Updates profiler and builds ImGui window.
-pub fn update_and_build_window(ui: &imgui::Ui, dt: TimeStep) {
+pub fn update_and_build_window(/* FIXME: ui: &imgui::Ui, */dt: TimeStep) {
     if keyboard::just_pressed(cfg::key_bindings::ENABLE_PROFILER_WINDOW) {
         let _ = IS_DRAWING_ENABLED.fetch_update(AcqRel, Relaxed, |prev| Some(!prev));
     }
 
     let mut lock = PROFILER.lock();
-    let data = lock.profiles
-        .iter_mut()
-        .map(|(_, profile)| {
-            let time_summary: f64 = profile.measures.iter()
-                .copied()
-                .sum();
-            let cur_max = profile.measures.iter()
-                .copied()
-                .reduce(f64::max)
-                .unwrap_or(0.0);
-            profile.max_time = profile.max_time.max(cur_max);
+    // FIXME:
+    // let data = lock.profiles
+    //     .iter_mut()
+    //     .map(|(_, profile)| {
+    //         let time_summary: f64 = profile.measures.iter()
+    //             .copied()
+    //             .sum();
+    //         let cur_max = profile.measures.iter()
+    //             .copied()
+    //             .reduce(f64::max)
+    //             .unwrap_or(0.0);
+    //         profile.max_time = profile.max_time.max(cur_max);
 
-            Data {
-                name: profile.target_name.as_str(),
-                call_freq: profile.measures.len(),
-                frame_time: time_summary / dt.as_secs_f64(),
-                time: time_summary,
-                max_time: profile.max_time,
-            }
-        })
-        .collect();
+    //         Data {
+    //             name: profile.target_name.as_str(),
+    //             call_freq: profile.measures.len(),
+    //             frame_time: time_summary / dt.as_secs_f64(),
+    //             time: time_summary,
+    //             max_time: profile.max_time,
+    //         }
+    //     })
+    //     .collect();
     
-    build_window(ui, data);
+    // FIXME
+    // build_window(ui, data);
     drop(lock);
 
     update();
@@ -174,39 +176,40 @@ pub fn update() {
     }
 }
 
-/// Builds ImGui window of capturing results
-pub fn build_window(ui: &imgui::Ui, profiler_result: Vec<Data<'_>>) {
-    use crate::app::utils::graphics::ui::imgui_ext::make_window;
-
-    if !profiler_result.is_empty() && IS_DRAWING_ENABLED.load(Relaxed) {
-        make_window(ui, "Profiler")
-            .always_auto_resize(true)
-            .build(|| {
-            /* Build all elements. Separate only existing lines. */
-            for (i, data) in profiler_result.iter().enumerate() {
-                /* Target name */
-                ui.text(data.name);
-
-                /* Call count */
-                ui.text(format!("Call per frame: {}", data.call_freq));
-
-                /* Time that function need */
-                ui.text(format!("Time: {:.3}ms", data.time * 1000.0));
-
-                /* Percent of frame time */
-                ui.text(format!("Frame time: {:.3}%", data.frame_time * 100.0));
-
-                /* Percent of frame time */
-                ui.text(format!("Max time: {:.3}ms", data.max_time * 1000.0));
-
-                /* Separator to next result */
-                if i != profiler_result.len() - 1 {
-                    ui.separator();
-                }
-            }
-        });
-    }
-}
+// FIXME:
+// Builds ImGui window of capturing results
+// pub fn build_window(ui: &imgui::Ui, profiler_result: Vec<Data<'_>>) {
+//     use crate::app::utils::graphics::ui::imgui_ext::make_window;
+// 
+//     if !profiler_result.is_empty() && IS_DRAWING_ENABLED.load(Relaxed) {
+//         make_window(ui, "Profiler")
+//             .always_auto_resize(true)
+//             .build(|| {
+//             /* Build all elements. Separate only existing lines. */
+//             for (i, data) in profiler_result.iter().enumerate() {
+//                 /* Target name */
+//                 ui.text(data.name);
+// 
+//                 /* Call count */
+//                 ui.text(format!("Call per frame: {}", data.call_freq));
+// 
+//                 /* Time that function need */
+//                 ui.text(format!("Time: {:.3}ms", data.time * 1000.0));
+// 
+//                 /* Percent of frame time */
+//                 ui.text(format!("Frame time: {:.3}%", data.frame_time * 100.0));
+// 
+//                 /* Percent of frame time */
+//                 ui.text(format!("Max time: {:.3}ms", data.max_time * 1000.0));
+// 
+//                 /* Separator to next result */
+//                 if i != profiler_result.len() - 1 {
+//                     ui.separator();
+//                 }
+//             }
+//         });
+//     }
+// }
 
 
 

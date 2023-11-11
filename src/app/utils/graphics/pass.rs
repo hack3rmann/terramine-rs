@@ -26,7 +26,7 @@ impl<'s> ClearPass<'s> {
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(clear_color),
-                    store: true,
+                    store: wgpu::StoreOp::Store,
                 },
             }))
             .collect();
@@ -36,6 +36,10 @@ impl<'s> ClearPass<'s> {
                 label: Some("clear_pass"),
                 color_attachments: &color_attachments,
                 depth_stencil_attachment: None,
+                // TODO: configurate this
+                timestamp_writes: None,
+                // TODO: configure this
+                occlusion_query_set: None,
             },
         );
 
@@ -64,7 +68,7 @@ impl<'s> RenderPass<'s> {
         encoder: &'s mut CommandEncoder,
         target_views: impl IntoIterator<Item = &'s TextureView>
     ) -> Self {
-        use wgpu::{RenderPassColorAttachment, Operations, LoadOp, RenderPassDescriptor};
+        use wgpu::{RenderPassColorAttachment, Operations, LoadOp, StoreOp, RenderPassDescriptor};
 
         let color_attachments: Vec<_> = target_views.into_iter()
             .map(|view| Some(RenderPassColorAttachment {
@@ -72,7 +76,7 @@ impl<'s> RenderPass<'s> {
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Load,
-                    store: true,
+                    store: StoreOp::Store,
                 },
             }))
             .collect();
@@ -82,6 +86,10 @@ impl<'s> RenderPass<'s> {
                 label: Some(label),
                 color_attachments: &color_attachments,
                 depth_stencil_attachment: None,
+                // TODO: configure this
+                timestamp_writes: None,
+                // TODO: configure this
+                occlusion_query_set: None,
             },
         );
 

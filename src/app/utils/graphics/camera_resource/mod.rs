@@ -223,46 +223,47 @@ impl Camera {
     /// Returns Z component of pos vector.
     pub fn get_z(&self) -> f32 { self.pos.z }
 
-    /// Spawns camera control window.
-    pub fn spawn_control_window(&mut self, ui: &imgui::Ui) {
-        use crate::app::utils::graphics::ui::imgui_ext::make_window;
+    // FIXME:
+    // /// Spawns camera control window.
+    // pub fn spawn_control_window(&mut self, ui: &imgui::Ui) {
+    //     use crate::app::utils::graphics::ui::imgui_ext::make_window;
 
-        /* UI building */
-        make_window(ui, "Camera").build(|| {
-            ui.text("Position");
-            ui.text(format!(
-                "x: {x:.3}, y: {y:.3}, z: {z:.3}",
-                x = self.get_x(),
-                y = self.get_y(),
-                z = self.get_z(),
-            ));
+    //     /* UI building */
+    //     make_window(ui, "Camera").build(|| {
+    //         ui.text("Position");
+    //         ui.text(format!(
+    //             "x: {x:.3}, y: {y:.3}, z: {z:.3}",
+    //             x = self.get_x(),
+    //             y = self.get_y(),
+    //             z = self.get_z(),
+    //         ));
 
-            ui.text("Rotation");
-            ui.text(format!(
-                "roll: {roll:.3}, pitch: {pitch:.3}, yaw: {yaw:.3}",
-                roll = self.roll,
-                pitch = self.pitch,
-                yaw = self.yaw,
-            ));
+    //         ui.text("Rotation");
+    //         ui.text(format!(
+    //             "roll: {roll:.3}, pitch: {pitch:.3}, yaw: {yaw:.3}",
+    //             roll = self.roll,
+    //             pitch = self.pitch,
+    //             yaw = self.yaw,
+    //         ));
 
-            ui.separator();
+    //         ui.separator();
 
-            ui.slider_config("Speed", 5.0, 300.0)
-                .display_format("%.1f")
-                .build(&mut self.speed_factor);
+    //         ui.slider_config("Speed", 5.0, 300.0)
+    //             .display_format("%.1f")
+    //             .build(&mut self.speed_factor);
 
-            ui.slider_config("Speed falloff", 0.0, 1.0)
-                .display_format("%.3f")
-                .build(&mut self.speed_falloff);
+    //         ui.slider_config("Speed falloff", 0.0, 1.0)
+    //             .display_format("%.3f")
+    //             .build(&mut self.speed_falloff);
 
-            let mut fov = self.fov.get_degrees();
-            ui.slider_config("FOV", 1.0, 180.0)
-                .display_format("%.0f")
-                .build(&mut fov);
+    //         let mut fov = self.fov.get_degrees();
+    //         ui.slider_config("FOV", 1.0, 180.0)
+    //             .display_format("%.0f")
+    //             .build(&mut fov);
 
-            self.fov.set_degrees(fov);
-        });
-    }
+    //         self.fov.set_degrees(fov);
+    //     });
+    // }
 }
 
 impl Default for Camera {

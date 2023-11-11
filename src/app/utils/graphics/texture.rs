@@ -1,8 +1,9 @@
-use crate::{
-    prelude::*,
-    graphics::{Device, Queue, Image},
+use {
+    crate::{
+        prelude::*,
+        graphics::{Device, Queue, Image},
+    },
 };
-
 
 
 pub use wgpu::{
@@ -55,8 +56,8 @@ impl Texture {
             image,
             ImageDataLayout {
                 offset: 0,
-                bytes_per_row: std::num::NonZeroU32::new(width * mem::size_of::<f32>() as u32),
-                rows_per_image: std::num::NonZeroU32::new(height),
+                bytes_per_row: Some(width * mem::size_of::<f32>() as u32),
+                rows_per_image: Some(height),
             },
             size,
         );

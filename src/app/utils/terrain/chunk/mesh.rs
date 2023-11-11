@@ -1,9 +1,7 @@
-use {
-    crate::{
-        prelude::*,
-        graphics::*,
-        terrain::chunk::{prelude::*, chunk_array::ChunkRenderPipeline},
-    },
+use crate::{
+    prelude::*,
+    graphics::*,
+    terrain::chunk::{prelude::*, chunk_array::ChunkRenderPipeline},
 };
 
 
@@ -253,6 +251,7 @@ impl ChunkMesh {
     }
 
     /// Renders a [mesh][ChunkMesh].
+    #[profile]
     pub fn render<'rp, 's: 'rp>(
         &'s self, pipeline: &'rp ChunkRenderPipeline, render_pass: &mut RenderPass<'rp>,
     ) -> Result<(), ChunkRenderError> {

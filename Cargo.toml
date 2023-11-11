@@ -7,18 +7,18 @@ edition = '2021'
 
 [dependencies]
 # Graphics
-wgpu = '0.15.1'
+wgpu = '0.18.0'
 encase = '0.6.1'
 
 # Platform
-winit = '0.27.5'
+winit = '0.28.7'
 image = '0.24.3'
 winapi = '0.3.9'
 
 # Gui
-imgui = '0.10.0'
-imgui-winit-support = '0.10.0'
-imgui-wgpu = '0.22.0'
+# imgui = '0.11.0'
+# imgui-winit-support = '0.11.0'
+# imgui-wgpu = '0.24.0'
 
 # Runtime
 tokio = { version = '1.27.0', features = ['full'] }
@@ -28,7 +28,7 @@ futures = '0.3.28'
 crossbeam = '0.8.1'
 rayon = '1.7.0'
 portable-atomic = { version = '1.2.0', features = ['float'] }
-atomic = '0.5.1'
+atomic = '0.6.0'
 cpython = { version = '0.7.1', features = ['extension-module'] }
 parking_lot = { version = '0.12.1', features = ['nightly'] }
 ctor = '0.2.0'
@@ -56,8 +56,8 @@ huffman-compress = '0.6.1'
 bit-vec = '0.6.3'
 array-init = '2.1.0'
 smallvec = { version = '1.10.0', features = ['const_generics', 'const_new'] }
-itertools = '0.10.5'
-ordered-float = '3.6.0'
+itertools = '0.11.0'
+ordered-float = '4.1.1'
 rand = '0.8.5'
 static_assertions = '1.1.0'
 env_logger = '0.10.0'
@@ -69,6 +69,10 @@ terramine_ecs = { path = '../terramine_ecs', version = '0.1.0' }
 terramine_macros = { version = '*', path = '../terramine_macros' }
 terramine_profiler_macros = { path = '../terramine_profiler_macros' }
 math_linear = { version = '0.1.0', path = '../math_linear', features = ['byte_muck', 'nightly'] }
+
+# egui-wgpu = "0.23.0"
+egui = "0.23.0"
+egui_wgpu_backend = "0.27.0"
 
 
 

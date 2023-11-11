@@ -28,7 +28,8 @@ module_constructor! {
 
 
 
-#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, IsVariant)]
+#[repr(u8)]
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, IsVariant, NoUninit)]
 pub enum KeyState {
     Pressed,
     Released,

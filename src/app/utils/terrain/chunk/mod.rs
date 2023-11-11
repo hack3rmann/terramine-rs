@@ -16,7 +16,7 @@ use {
         LoweredVoxel,
         shape::{CubeDetailed, CubeLowered},
         voxel_data::{data::*, Id},
-        generator as gen,
+        // TODO: remove: generator as gen,
     },
     mesh::{FullVertex, LowVertex, ChunkMesh},
     chunk_array::{ChunkAdj, ChunkRenderPipeline},
@@ -38,7 +38,7 @@ pub struct Chunk {
     pub pos: Atomic<Int3>,
     // TODO: try use `Arc<[Atomic<Id>]> instead.
     pub voxel_ids: Vec<Atomic<Id>>,
-    pub info: Atomic<ChunkInfo>,
+    pub info: Atomic<ChunkInfoPacked>,
 }
 assert_impl_all!(Chunk: Send, Sync, Component);
 
@@ -47,11 +47,7 @@ impl ConstDefault for Chunk {
     const DEFAULT: Self = Self {
         voxel_ids: const_default(),
         pos: const_default(),
-        info: Atomic::new(ChunkInfo {
-            fill_type: FillType::AllSame(AIR_VOXEL_DATA.id),
-            is_filled: true,
-            active_lod: None,
-        }),
+        info: const_default(),
     };
 }
 
@@ -114,14 +110,14 @@ impl Chunk {
     /// Checks if chunk is empty.
     pub fn is_empty(&self) -> bool {
         self.voxel_ids.is_empty() || matches!(
-            self.info.load(Relaxed).fill_type,
+            self.info.load(Relaxed).get_fill_type(),
             FillType::AllSame(id) if id == AIR_VOXEL_DATA.id
         )
     }
 
     /// Gives `Some()` with fill id or returns `None`.
     pub fn fill_id(&self) -> Option<Id> {
-        match self.info.load(Relaxed).fill_type {
+        match self.info.load(Relaxed).get_fill_type() {
             FillType::AllSame(id) => Some(id),
             _ => None,
         }
@@ -134,7 +130,7 @@ impl Chunk {
 
     /// Checks if chunk is filled with non-air voxels.
     pub fn is_filled(&self) -> bool {
-        self.info.load(Relaxed).is_filled
+        self.info.load(Relaxed).is_filled()
     }
 
     /// Gives [`Vec`] with full detail vertices mesh of [`Chunk`].
@@ -143,7 +139,7 @@ impl Chunk {
         if self.is_empty() || is_filled_and_blocked { return default() }
 
         let info = self.info.load(Relaxed);
-        let pos_iter: Box<dyn Iterator<Item = Int3>> = match info.fill_type {
+        let pos_iter: Box<dyn Iterator<Item = Int3>> = match info.get_fill_type() {
             FillType::Unspecified =>
                 Box::new(Chunk::local_pos_iter()),
 
@@ -208,8 +204,8 @@ impl Chunk {
 
                 vertices
             })
-            .collect();
-
+            .collect_vec();
+        
         Mesh::new(vertices, None, default())
     }
 
@@ -408,7 +404,7 @@ impl Chunk {
     pub fn get_id(&self, idx: usize) -> Option<Id> {
         ensure_or!(idx < Chunk::VOLUME, return None);
 
-        Some(match self.info.load(Relaxed).fill_type {
+        Some(match self.info.load(Relaxed).get_fill_type() {
             FillType::AllSame(id) => id,
             FillType::Unspecified => self.voxel_ids[idx].load(Relaxed)
         })
@@ -474,11 +470,11 @@ impl Chunk {
     }
 
     /// Generates voxel id array.
-    pub fn generate_voxels(chunk_pos: Int3, chunk_array_sizes: USize3) -> Vec<Id> {
+    pub fn generate_voxels(chunk_pos: Int3, _chunk_array_sizes: USize3) -> Vec<Id> {
         let mut result = Vec::with_capacity(Self::VOLUME);
 
         for pos in Self::global_pos_iter(chunk_pos) {
-            let height = -1;//FIXME: gen::perlin(pos, chunk_array_sizes);
+            let height = 10 - rand::random::<i32>() % 2; // gen::perlin(pos, chunk_array_sizes);
 
             let id = if pos.y <= height - 5 {
                 STONE_VOXEL_DATA.id
@@ -506,14 +502,11 @@ impl Chunk {
         Self::from_voxels(vec![], chunk_pos)
     }
 
+    /// Constructs new [chunk][Chunk] filled with the same voxel
     pub fn new_same_filled(chunk_pos: Int3, fill_id: Id) -> Self {
         Self {
             voxel_ids: vec![Atomic::new(fill_id)],
-            info: Atomic::new(ChunkInfo {
-                fill_type: FillType::AllSame(fill_id),
-                is_filled: true,
-                active_lod: None,
-            }),
+            info: const_default(),
             ..Self::new_empty(chunk_pos)
         }
     }
@@ -575,7 +568,7 @@ impl Chunk {
     pub fn set_id(&mut self, idx: usize, new_id: Id) -> Result<Id, EditError> {
         ensure!(idx < Self::VOLUME, EditError::IdxOutOfBounds { idx, len: Self::VOLUME });
 
-        let old_id = match self.info.load(Relaxed).fill_type {
+        let old_id = match self.info.load(Relaxed).get_fill_type() {
             FillType::Unspecified => {
                 let old_id = self.voxel_ids[idx].swap(new_id, AcqRel);
                 if old_id != new_id { self.optimize() }
@@ -691,7 +684,7 @@ impl Chunk {
         ensure_or!(self.is_generated(), return);
         
         let mut info = ChunkInfo {
-            active_lod: self.info.load(Acquire).active_lod,
+            active_lod: self.info.load(Acquire).get_active_lod(),
             ..default()
         };
 
@@ -709,12 +702,14 @@ impl Chunk {
             .all(|voxel_id| voxel_id.load(Relaxed) != AIR_VOXEL_DATA.id);
         info.is_filled = is_all_not_air;
 
-        self.info.store(info, Release);
+        let packed_info = ChunkInfoPacked::from(info);
+
+        self.info.store(packed_info, Release);
     }
 
     /// Disapplies storage optimizations.
     pub fn unoptimize(&mut self) {
-        let mut info = self.info.load(Acquire);
+        let mut info = self.info.load(Acquire).unpack();
 
         if let FillType::AllSame(id) = info.fill_type {
             self.voxel_ids = std::iter::from_fn(|| Some(Atomic::new(id)))
@@ -724,7 +719,7 @@ impl Chunk {
 
         info.fill_type = FillType::Unspecified;
 
-        self.info.store(info, Release);
+        self.info.store(info.into(), Release);
     }
 
     /// Converts chunk position to world position.
@@ -828,14 +823,14 @@ impl Chunk {
 
     /// Tries to set active LOD to given value.
     pub fn try_set_active_lod(&self, mesh: &ChunkMesh, lod: Lod) -> Result<(), SetLodError> {
-        let mut info = self.info.load(Acquire);
+        let mut info: ChunkInfo = self.info.load(Acquire).into();
 
         mesh.get_available_lods()
             .contains(&lod)
             .then(|| info.active_lod = Some(lod))
             .ok_or(SetLodError::SetActiveLod { tried: lod, active: info.active_lod })?;
 
-        self.info.store(info, Release);
+        self.info.store(info.into(), Release);
         Ok(())
     }
 
@@ -858,7 +853,7 @@ impl Chunk {
 
     pub fn can_render_active_lod(&self, mesh: &ChunkMesh) -> bool {
         matches!(
-            self.info.load(Relaxed).active_lod,
+            self.info.load(Relaxed).get_active_lod(),
             Some(lod) if mesh.get_available_lods().contains(&lod)
         )
     }
@@ -888,11 +883,119 @@ pub enum ChunkRenderError {
 
 
 
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Hash)]
 pub struct ChunkInfo {
     pub fill_type: FillType,
     pub is_filled: bool,
     pub active_lod: Option<Lod>,
+}
+
+impl From<ChunkInfoPacked> for ChunkInfo {
+    fn from(value: ChunkInfoPacked) -> Self {
+        value.unpack()
+    }
+}
+
+
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, NoUninit, Display)]
+pub struct ChunkInfoPacked {
+    /// `bits`: `[fill_id u16][FillType u1: 0 = Unspecified, 1 = AllSame]`\
+    /// `[is_filled u1: 0 = false, 1 = true][padding u14][active_lod u32, u32::MAX for None]`
+    pub bits: u64,
+}
+assert_impl_all!(ChunkInfoPacked: Send, Sync);
+
+impl ChunkInfoPacked {
+    pub const NO_ACTIVE_LOD: u32 = u32::MAX;
+
+    pub const fn new(value: ChunkInfo) -> Self {
+        let mut bits = 0;
+
+        match value.fill_type {
+            FillType::Unspecified => (),
+            FillType::AllSame(id) => {
+                bits |= (id as u64) << 48;
+                bits |= 1_u64 << 47;
+            },
+        }
+
+        bits |= (value.is_filled as u64) << 46;
+
+        match value.active_lod {
+            None => bits |= u32::MAX as u64,
+            Some(lod) => bits |= lod as u64,
+        }
+
+        Self { bits }
+    }
+
+    pub const fn unpack(self) -> ChunkInfo {
+        ChunkInfo {
+            fill_type: match (self.bits >> 47) & 1 {
+                0 => FillType::Unspecified,
+                1 => FillType::AllSame((self.bits >> 48) as Id),
+                _ => unreachable!(),
+            },
+            is_filled: 0 != (self.bits >> 46) & 1,
+            active_lod: if self.bits & u32::MAX as u64 != ChunkInfoPacked::NO_ACTIVE_LOD as u64 {
+                Some(self.bits as u32)
+            } else { None }
+        }
+    }
+
+    pub const fn is_fill_type_unspecified(self) -> bool {
+        0 == self.bits & (1_u64 << 47)
+    }
+
+    pub const fn is_fill_type_all_same(self) -> bool {
+        !self.is_fill_type_unspecified()
+    }
+
+    pub const fn get_fill_type(self) -> FillType {
+        match self.get_fill_id() {
+            None => FillType::Unspecified,
+            Some(id) => FillType::AllSame(id),
+        }
+    }
+
+    pub const fn is_filled(self) -> bool {
+        0 != self.bits & (1_u64 << 46)
+    }
+
+    pub const fn get_fill_id(self) -> Option<Id> {
+        if self.is_fill_type_all_same() {
+            Some((self.bits >> 48) as u16)
+        } else { None }
+    }
+
+    pub const fn get_active_lod(self) -> Option<Lod> {
+        if self.bits as u32 != u32::MAX {
+            Some(self.bits as u32)
+        } else { None }
+    }
+}
+
+impl ConstDefault for ChunkInfoPacked {
+    const DEFAULT: Self = Self::new(ChunkInfo {
+        fill_type: FillType::Unspecified,
+        is_filled: false,
+        active_lod: None,
+    });
+}
+
+impl Default for ChunkInfoPacked {
+    fn default() -> Self {
+        Self::DEFAULT
+    }
+}
+
+impl From<ChunkInfo> for ChunkInfoPacked {
+    fn from(value: ChunkInfo) -> Self {
+        Self::new(value)
+    }
 }
 
 
@@ -902,6 +1005,15 @@ pub enum FillType {
     #[default]
     Unspecified,
     AllSame(Id),
+}
+
+impl From<Option<Id>> for FillType {
+    fn from(value: Option<Id>) -> Self {
+        match value {
+            None => Self::Unspecified,
+            Some(id) => Self::AllSame(id),
+        }
+    }
 }
 
 impl AsBytes for FillType {
@@ -930,8 +1042,7 @@ impl FromBytes for FillType {
 
 impl DynamicSize for FillType {
     fn dynamic_size(&self) -> usize {
-        u8::static_size() +
-        match self {
+        u8::static_size() + match self {
             Self::Unspecified => 0,
             Self::AllSame(_) => Id::static_size(),
         }
@@ -968,4 +1079,29 @@ pub enum EditError {
 
     #[error("invalid id {0}")]
     InvalidId(Id),
+}
+
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_chunk_info_packed() {
+        let test = |info|
+            assert_eq!(ChunkInfoPacked::new(info).unpack(), info);
+
+        test(ChunkInfo {
+            fill_type: FillType::Unspecified,
+            is_filled: true,
+            active_lod: Some(0),
+        });
+
+        test(ChunkInfo {
+            fill_type: FillType::AllSame(23),
+            is_filled: true,
+            active_lod: None,
+        });
+    }
 }

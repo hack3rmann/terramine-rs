@@ -8,14 +8,15 @@ use {
 
 
 module_constructor! {
-    use crate::graphics::ui::imgui_ext::push_window_builder_lock_free;
+    // use crate::graphics::ui::imgui_ext::push_window_builder_lock_free;
 
     // * Safety
     // * 
     // * Safe, because it's going on in module
     // * constructor, so no one access the update list.
     unsafe {
-        push_window_builder_lock_free(spawn_info_window);
+        // FIXME:
+        // push_window_builder_lock_free(spawn_info_window);
         app::update::push_function_lock_free(update);
     }
 }
@@ -84,19 +85,20 @@ impl Loadings {
         }
     }
 
-    pub fn spawn_info_window(&self, ui: &imgui::Ui) {
-        use crate::app::utils::graphics::ui::imgui_ext::make_window;
+    // FIXME:
+    // pub fn spawn_info_window(&self, ui: &imgui::Ui) {
+    //     use crate::app::utils::graphics::ui::imgui_ext::make_window;
 
-        ensure_or!(!self.list.is_empty(), return);
+    //     ensure_or!(!self.list.is_empty(), return);
 
-        make_window(ui, "Loadings").build(|| {
-            for (name, &value) in self.list.iter() {
-                imgui::ProgressBar::new(value)
-                    .overlay_text(&format!("{name}: {percent:.1}%", percent = 100.0 * value))
-                    .build(ui);
-            }
-        });
-    }
+    //     make_window(ui, "Loadings").build(|| {
+    //         for (name, &value) in self.list.iter() {
+    //             imgui::ProgressBar::new(value)
+    //                 .overlay_text(&format!("{name}: {percent:.1}%", percent = 100.0 * value))
+    //                 .build(ui);
+    //         }
+    //     });
+    // }
 }
 
 
@@ -213,11 +215,12 @@ pub type CommandSender = UnboundedSender<LoadingCommand>;
 
 
 
-pub fn spawn_info_window(ui: &imgui::Ui) {
-    LOADINGS.lock()
-        .loads
-        .spawn_info_window(ui)
-}
+// FIXME:
+// pub fn spawn_info_window(ui: &imgui::Ui) {
+//     LOADINGS.lock()
+//         .loads
+//         .spawn_info_window(ui)
+// }
 
 pub fn recv_all() -> Result<(), LoadingError> {
     LOADINGS.lock().recv_all()

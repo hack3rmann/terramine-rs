@@ -46,7 +46,7 @@ pub use {
     lazy_static::lazy_static,
     ordered_float::NotNan,
     rayon::prelude::*,
-    bytemuck::{Pod, Zeroable},
+    bytemuck::{Pod, Zeroable, NoUninit},
     smart_default::SmartDefault,
     static_assertions::{assert_impl_all, assert_obj_safe},
     terramine_ecs::*,
