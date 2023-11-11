@@ -28,13 +28,11 @@ pub use {
 
     wgpu::{
         SurfaceError, CommandEncoder, Features,
-        DeviceDescriptor, RequestAdapterOptions, Backends, InstanceDescriptor, Instance,
-        SurfaceConfiguration, Adapter, Surface, Queue,
+        DeviceDescriptor, RequestAdapterOptions, Backends, InstanceDescriptor,
+        Instance, SurfaceConfiguration, Adapter, Surface, Queue,
         BufferBindingType, BindingType, Device,
         util::{DeviceExt, BufferInitDescriptor}, Extent3d,
     },
-    // FIXME:
-    // imgui_wgpu::{Renderer as ImguiRenderer, RendererConfig as ImguiRendererConfig},
     winit::{event_loop::EventLoop, event::Event},
 
     // FIXME:
@@ -80,6 +78,17 @@ assert_impl_all!(RenderStage: Send, Sync);
 
 
 
+#[derive(Deref)]
+pub struct DemoWindowsUnsafe {
+    pub inner: egui_demo_lib::DemoWindows,
+}
+
+// FIXME: !Send + !Sync
+unsafe impl Send for DemoWindowsUnsafe { }
+unsafe impl Sync for DemoWindowsUnsafe { }
+
+
+
 /// Graphics handler.
 #[derive(Debug)]
 pub struct Graphics {
@@ -91,10 +100,6 @@ pub struct Graphics {
 
     /// Holds rendering information during render proccess.
     pub render_stage: Option<RenderStage>,
-
-    /// Handle to [`imgui`] rendering stuff.
-    // FIXME: remove this
-    // pub imgui: ImGui,
 
     /// Common shader uniforms buffer. Holds uniforms like time, screen resolution, etc.
     pub common_uniforms: CommonUniformsBuffer,
@@ -228,20 +233,29 @@ impl Graphics {
             EguiRenderPass::new(&context.device, SURFACE_CFG.read().format, 1)
         );
 
+        sandbox.insert_resource(
+            egui_winit_platform::Platform::new(
+                egui_winit_platform::PlatformDescriptor {
+                    physical_width: window.inner_size().width,
+                    physical_height: window.inner_size().height,
+                    scale_factor: window.scale_factor(),
+                    font_definitions: default(),
+                    style: default(),
+                }
+            )
+        );
+
+        let demo_window = egui_demo_lib::DemoWindows::default();
+
+        sandbox.insert_resource(DemoWindowsUnsafe { inner: demo_window });
+
         
         
-        // FIXME: remove this
-        // let imgui = ImGui::new(&context, &SURFACE_CFG.read(), &window);
-
-
-
         Ok(Self {
             sandbox,
             window,
             context,
             common_uniforms,
-            // FIXME: remove this
-            // imgui,
             render_stage: None,
         })
     }
@@ -295,7 +309,10 @@ impl Graphics {
 
         let swapchain_capabilities = surface.get_capabilities(&adapter);
         let swapchain_format = *swapchain_capabilities.formats.get(0)
-            .expect("failed to get swap chain format 0: the surface is incompatible with the adapter");
+            .expect(
+                "failed to get swap chain format 0: the
+                surface is incompatible with the adapter"
+            );
         
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
@@ -317,12 +334,21 @@ impl Graphics {
 
     pub fn render_sandbox(&mut self, cam: &CameraUniformBuffer) {
         let render_stage = self.render_stage.as_mut()
-            .expect("`render_sadbox` should be called after `begin_render` and before `finish_render`");
+            .expect(
+                "`render_sadbox` should be called after
+                `begin_render` and before `finish_render`"
+            );
 
         {
-            let mut query = self.sandbox.query::<(&BindsRef, &GpuMesh, &RenderPipeline)>();
+            let mut query = self.sandbox.query::<(
+                &BindsRef, &GpuMesh, &RenderPipeline
+            )>();
 
-            let mut pass = RenderPass::new("logo_draw_pass", &mut render_stage.encoder, [&render_stage.view]);
+            let mut pass = RenderPass::new(
+                "logo_draw_pass",
+                &mut render_stage.encoder,
+                [&render_stage.view]
+            );
 
             for (_entity, (binds, mesh, pipeline)) in query.into_iter() {
                 Binds::bind_all(&mut pass, [
@@ -334,11 +360,51 @@ impl Graphics {
                 let Ok(()) = mesh.render(pipeline, &mut pass);
             }
         }
+
+        {
+            let mut platform = self.sandbox
+                .resource::<&mut egui_winit_platform::Platform>()
+                .unwrap();
+
+            let mut demo_window = self.sandbox
+                .resource::<&mut DemoWindowsUnsafe>()
+                .unwrap();
+
+            let mut pass = self.sandbox
+                .resource::<&mut egui_wgpu_backend::RenderPass>()
+                .unwrap();
+
+            platform.begin_frame();
+
+            demo_window.ui(&platform.context());
+
+            let full_output = platform.end_frame(Some(&self.window));
+            let paint_jobs = platform.context().tessellate(full_output.shapes);
+
+            let screen_descriptor = egui_wgpu_backend::ScreenDescriptor {
+                physical_width: SURFACE_CFG.read().width,
+                physical_height: SURFACE_CFG.read().height,
+                scale_factor: self.window.scale_factor() as f32,
+            };
+            let tdelta: egui::TexturesDelta = full_output.textures_delta;
+            pass.add_textures(&self.context.device, &self.context.queue, &tdelta)
+                .expect("add texture ok");
+            pass.update_buffers(&self.context.device, &self.context.queue, &paint_jobs, &screen_descriptor);
+
+            // Record all render passes.
+            pass.execute(
+                &mut render_stage.encoder,
+                &render_stage.view,
+                &paint_jobs,
+                &screen_descriptor,
+                Some(wgpu::Color::BLACK),
+            ).unwrap();
+        }
     }
 
-    pub fn render_with_sandbox/* FIXME <F: FnOnce(&mut imgui::Ui)>*/(
-        &mut self, time: Time, /*use_ui: F, */world: &World,
-    ) -> AnyResult<()> {
+    pub fn render_with_sandbox(&mut self, time: Time, world: &World)
+        -> AnyResult<()>
+    {
         self.begin_render(time)?;
 
         {
@@ -346,14 +412,13 @@ impl Graphics {
             self.render_sandbox(&cam);
         }
 
-        self.finish_render(/* FIXME: use_ui*/)?;
+        self.finish_render()?;
 
         Ok(())
     }
 
-    pub fn render</*F, */R>(&mut self, time: Time, /*use_ui: F,*/ render: R) -> AnyResult<()>
+    pub fn render<R>(&mut self, time: Time, render: R) -> AnyResult<()>
     where
-        // FIXME: F: FnOnce(&mut imgui::Ui),
         R: FnOnce(&Binds, &mut CommandEncoder, &TextureView) -> AnyResult<()>,
     {
         self.begin_render(time)?;
@@ -361,12 +426,19 @@ impl Graphics {
         {
             // * Safety
             // * 
-            // * Safe, because in `begin_render` `render_stage` is set to `Some`.
-            let render_stage = unsafe { self.render_stage.as_mut().unwrap_unchecked() };
-            render(&self.common_uniforms.binds, &mut render_stage.encoder, &render_stage.view)?;
+            // * Safe, because in `begin_render` `render_stage` is set to `Some`
+            let render_stage = unsafe {
+                self.render_stage.as_mut().unwrap_unchecked()
+            };
+
+            render(
+                &self.common_uniforms.binds,
+                &mut render_stage.encoder,
+                &render_stage.view
+            )?;
         }
 
-        self.finish_render(/* FIXME: use_ui*/)?;
+        self.finish_render()?;
 
         Ok(())
     }
@@ -374,6 +446,7 @@ impl Graphics {
     /// Begins a render proccess.
     pub fn begin_render(&mut self, time: Time) -> Result<(), SurfaceError> {
         let size = self.window.inner_size();
+
         self.common_uniforms.update(&self.context.queue, CommonUniforms {
             time: time.as_secs_f32(),
             screen_resolution: vecf!(size.width, size.height),
@@ -381,54 +454,39 @@ impl Graphics {
         });
 
         let output = self.context.surface.get_current_texture()?;
-        let view = TextureView::from(output.texture.create_view(&default()));
-        let mut encoder = self.context.device.create_command_encoder(&default());
+
+        let view = TextureView::from(
+            output.texture.create_view(&default())
+        );
+
+        let mut encoder
+            = self.context.device.create_command_encoder(&default());
 
         ClearPass::clear(&mut encoder, [&view], cfg::shader::CLEAR_COLOR);
 
-        self.render_stage = Some(RenderStage::new(view, encoder, output.into()));
+        self.render_stage = Some(
+            RenderStage::new(view, encoder, output.into())
+        );
 
         Ok(())
     }
 
     /// Ends rendering proccess.
-    pub fn finish_render/*FIXME: remove this: <F: FnOnce(&mut imgui::Ui)>*/(&mut self/*, use_imgui: F*/) -> AnyResult<()> {
-        let mut render_stage = self.render_stage.take()
-            .context("`finish_render` should be called only once and `begin_render` should be called before")?;
+    pub fn finish_render(&mut self) -> AnyResult<()> {
+        let render_stage = self.render_stage.take()
+            .context(
+                "`finish_render` should be called only once
+                and `begin_render` should be called before"
+            )?;
 
-        // FIXME: remove this
-        // self.render_imgui(use_imgui, &mut render_stage.encoder, &render_stage.view)?;
-    
         self.context.queue.submit([render_stage.encoder.finish()]);
+
         Arc::into_inner(render_stage.output.inner)
             .expect("Render stage's output should be owned by `Graphics`")
             .present();
 
         Ok(())
     }
-
-    // FIXME: remove this:
-    // fn render_imgui<UseImgui>(
-    //     &mut self, use_imgui: UseImgui, encoder: &mut CommandEncoder, view: &TextureView,
-    // ) -> AnyResult<()>
-    // where
-    //     UseImgui: FnOnce(&mut imgui::Ui),
-    // {
-    //     let mut render_pass = RenderPass::new("imgui_draw_pass", encoder, [view]);
-
-    //     let ui = self.imgui.context.new_frame();
-
-    //     use_imgui(ui);
-    //     ui::imgui_ext::use_each_window_builder(ui);
-
-    //     self.imgui.platform.prepare_render(ui, &self.window);
-
-    //     let draw_data = self.imgui.context.render();
-    //     self.imgui.renderer.render(draw_data, &self.context.queue, &self.context.device, &mut render_pass)
-    //         .context("failed to render imgui")?;
-
-    //     Ok(())
-    // }
 
     /// Handles window resize event by [`Graphics`].
     pub fn on_window_resize(&mut self, new_size: UInt2) {
@@ -444,7 +502,13 @@ impl Graphics {
 
         let mut graphics = world.resource::<&mut Self>()?;
 
-        if let Event::WindowEvent { event: WindowEvent::Resized(new_size), .. } = event {
+        graphics.sandbox.resource::<&mut egui_winit_platform::Platform>()
+            .unwrap()
+            .handle_event(event);
+
+        if let Event::WindowEvent { event: WindowEvent::Resized(new_size), .. }
+            = event
+        {
             let new_size = new_size.to_vec2();
 
             graphics.on_window_resize(new_size);
@@ -455,19 +519,11 @@ impl Graphics {
             }
         }
 
-        // FIXME:
-        // graphics.handle_event_imgui(event);
-
         Ok(())
     }
 
-    // FIXME: remove this
-    // pub fn handle_event_imgui(&mut self, event: &Event<'_, ()>) {
-    //     self.imgui.handle_event(event, &self.window);
-    // }
-
     pub async fn update(world: &World) -> AnyResult<()> {
-        let mut graphics = world.resource::<&mut Self>()?;
+        let graphics = world.resource::<&mut Self>()?;
 
         {
             let MainCamera(camera) = world.copy_resource::<MainCamera>()
@@ -477,105 +533,13 @@ impl Graphics {
             uniform_buffer.update(&graphics.context.queue, &cam_uniform);
         }
 
-        let dt = world.resource::<&Timer>()?.time_step();
-
-        // FIXME: remove this
-        // graphics.imgui.context
-        //     .io_mut()
-        //     .update_delta_time(dt);
-
         Ok(())
     }
 
-    pub fn prepare_frame(&mut self, fps: f32) /*-> Result<(), winit::error::ExternalError>*/ {
+    pub fn prepare_frame(&mut self, fps: f32) {
         self.window.set_title(&format!("Terramine: {fps:.0} FPS"));
-
-        // FIXME: remove this
-        // self.imgui.platform
-        //     .prepare_frame(self.imgui.context.io_mut(), &self.window)
     }
 }
-
-
-
-// FIXME: remove this
-// `imgui-wgpu` crate uses only `wgpu` stuff that are [`Send`] _and_ [`Sync`]
-// but `imgui` context is not [`Send`] nor [`Sync`]. Use carefully.
-// #[derive(Debug)]
-// pub struct ImGui {
-//     /// ImGui context.
-//     pub context: imgui::Context,
-// 
-//     /// ImGui winit support.
-//     pub platform: imgui_winit_support::WinitPlatform,
-// 
-//     /// ImGui WGPU renderer.
-//     pub renderer: ImGuiRendererWrapper,
-// }
-// 
-// impl ImGui {
-//     pub fn new(
-//         render_context: &RenderContext,
-//         surface_config: &SurfaceConfiguration,
-//         window: &Window,
-//     ) -> Self {
-//         use { imgui::{Context, FontSource}, imgui_winit_support::{WinitPlatform, HiDpiMode} };
-// 
-//         // Create ImGui context and set `.ini` file name.
-//         let mut context = Context::create();
-//         context.set_ini_filename(Some(PathBuf::from("src/imgui_settings.ini")));
-// 
-//         // Bind ImGui to winit.
-//         let mut platform = WinitPlatform::init(&mut context);
-//         platform.attach_window(context.io_mut(), window, HiDpiMode::Rounded);
-// 
-//         // Style configuration.
-//         context.fonts().add_font(&[FontSource::DefaultFontData { config: None }]);
-//         context.io_mut().font_global_scale = (1.0 / platform.hidpi_factor()) as f32;
-//         // context.style_mut().window_rounding = 16.0;
-// 
-//         // Create ImGui renderer.
-//         let renderer = ImguiRenderer::new(
-//             &mut context,
-//             &render_context.device,
-//             &render_context.queue,
-//             ImguiRendererConfig {
-//                 texture_format: surface_config.format,
-//                 ..default()
-//             },
-//         );
-// 
-//         Self {
-//             context,
-//             platform,
-//             renderer: ImGuiRendererWrapper(renderer),
-//         }
-//     }
-// 
-//     pub fn handle_event(&mut self, event: &Event<'_, ()>, window: &Window) {
-//         self.platform.handle_event(
-//             self.context.io_mut(),
-//             window,
-//             event,
-//         )
-//     }
-// }
-// 
-// // imgui-wgpu uses only wgpu stuff that are Send and Sync
-// // but imgui context is not Send nor Sync. Use carefully.
-// unsafe impl Send for ImGui { }
-// unsafe impl Sync for ImGui { }
-
-
-
-// #[derive(Deref)]
-// pub struct ImGuiRendererWrapper(ImguiRenderer);
-// 
-// impl std::fmt::Debug for ImGuiRendererWrapper {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "ImguiRenderer {{ ... }}")
-//     }
-// }
 
 
 

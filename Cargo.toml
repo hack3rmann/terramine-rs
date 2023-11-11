@@ -73,6 +73,8 @@ math_linear = { version = '0.1.0', path = '../math_linear', features = ['byte_mu
 # egui-wgpu = "0.23.0"
 egui = "0.23.0"
 egui_wgpu_backend = "0.27.0"
+egui_winit_platform = "0.20.0"
+egui_demo_lib = "0.23.0"
 
 
 

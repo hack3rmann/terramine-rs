@@ -131,7 +131,7 @@ pub fn start_capture(target_name: impl Into<String>, id: MeasureId) -> Measure {
 }
 
 /// Updates profiler and builds ImGui window.
-pub fn update_and_build_window(/* FIXME: ui: &imgui::Ui, */dt: TimeStep) {
+pub fn update_and_build_window(dt: TimeStep) {
     if keyboard::just_pressed(cfg::key_bindings::ENABLE_PROFILER_WINDOW) {
         let _ = IS_DRAWING_ENABLED.fetch_update(AcqRel, Relaxed, |prev| Some(!prev));
     }

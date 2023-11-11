@@ -178,9 +178,6 @@ impl App {
             mouse::update(&graphics.window)
                 .log_error("app", "failed to update mouse input");
 
-            // FIXME:
-            // keyboard::set_input_capture(graphics.imgui.context.io().want_text_input);
-    
             if keyboard::just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
                 let camera = self.world.resource::<&MainCamera>()?;
                 mouse::set_capture(
@@ -202,8 +199,6 @@ impl App {
 
         // Prepare frame to render.
         graphics.prepare_frame(fps);
-        // FIXME:
-        //    .context("failed to prepare a frame")?;
 
         Ok(())
     }
@@ -212,21 +207,13 @@ impl App {
     async fn draw_frame(&mut self, _window_id: WindowId) -> AnyResult<()> {
         let timer = self.world.resource::<&Timer>()?;
 
-        // FIXME:
-        // InGui draw data.
-        // let use_ui = |ui: &mut imgui::Ui| {
-        //     CameraHandle::spawn_control_windows(&self.world, ui);
-        //     profiler::update_and_build_window(ui, timer.time_step());
-        //     chunk_array.spawn_control_window(ui);
-        // };
-
         let mut graphics = self.world.resource::<&mut Graphics>()?;
 
         // graphics.render(timer.time(), use_ui, |binds, encoder, view|
         //     chunk_array.render(&self.world, binds, encoder, view.clone())
         // )?;
 
-        graphics.render_with_sandbox(timer.time(), /* FIXME: use_ui, */&self.world)?;
+        graphics.render_with_sandbox(timer.time(), &self.world)?;
 
         Ok(())
     }
