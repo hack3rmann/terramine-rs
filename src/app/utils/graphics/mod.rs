@@ -172,7 +172,11 @@ impl Graphics {
             (gpu_image_bind_group, Some(gpu_image_bind_layout)),
         ]);
 
-        let mesh = Mesh::new(TEST_VERTICES.to_vec(), None, PrimitiveTopology::TriangleList);
+        let mesh = Mesh::new(
+            TEST_VERTICES.to_vec(),
+            None,
+            PrimitiveTopology::TriangleList
+        );
 
         let gpu_mesh = GpuMesh::new(
             GpuMeshDescriptor {
@@ -183,7 +187,9 @@ impl Graphics {
             },
         );
 
-        let camera_uniform = camera::CameraUniformBuffer::new(&context.device, &default());
+        let camera_uniform = camera::CameraUniformBuffer::new(
+            &context.device, &default()
+        );
 
         let layout = {
             let bind_group_layouts: Vec<_> = itertools::chain!(
@@ -233,21 +239,21 @@ impl Graphics {
             EguiRenderPass::new(&context.device, SURFACE_CFG.read().format, 1)
         );
 
-        sandbox.insert_resource(
-            egui_winit_platform::Platform::new(
-                egui_winit_platform::PlatformDescriptor {
-                    physical_width: window.inner_size().width,
-                    physical_height: window.inner_size().height,
-                    scale_factor: window.scale_factor(),
-                    font_definitions: default(),
-                    style: default(),
-                }
-            )
+        let egui_platform = egui_winit_platform::Platform::new(
+            egui_winit_platform::PlatformDescriptor {
+                physical_width: window.inner_size().width,
+                physical_height: window.inner_size().height,
+                scale_factor: window.scale_factor(),
+                font_definitions: default(),
+                style: default(),
+            }
         );
 
         let demo_window = egui_demo_lib::DemoWindows::default();
 
         sandbox.insert_resource(DemoWindowsUnsafe { inner: demo_window });
+
+        sandbox.insert_resource(egui_platform);
 
         
         

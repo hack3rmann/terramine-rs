@@ -8,7 +8,7 @@ use crate::{
 
 
 module_constructor! {
-    // use crate::graphics::ui::imgui_ext::push_window_builder_lock_free;
+    use crate::graphics::ui::egui_util::push_window_builder_lock_free;
 
     env_logger::init();
 
@@ -17,8 +17,7 @@ module_constructor! {
     // * Safe, because it's going on in module
     // * constructor, so no one access the update list.
     unsafe {
-        // FIXME:
-        // push_window_builder_lock_free(spawn_window);
+        push_window_builder_lock_free(Box::new(build_window));
         app::update::push_function_lock_free(update);
     }
 }
@@ -240,6 +239,26 @@ pub macro scope(from = $from:expr, $($content:tt)*) {
 //             }
 //         });
 // }
+
+pub fn build_window(ui: &mut egui::Ui) {
+    // const PADDING: f32 = 10.0;
+
+    egui::TopBottomPanel::bottom("Console").show(ui.ctx(), |ui| {
+        egui::ScrollArea::new([false, true])
+            .max_height(ui.available_height() * 0.3)
+            .stick_to_bottom(true)
+            .show(ui, |ui| {
+                for msg in LOG_MESSAGES.lock().iter().rev() {
+                    let color = match msg.msg_type {
+                        MsgType::Error => egui::Color32::RED,
+                        MsgType::Info  => egui::Color32::GRAY,
+                    };
+
+                    ui.label(egui::RichText::new(format!("{msg}")).color(color));
+                }
+            });
+    });
+}
 
 
 
