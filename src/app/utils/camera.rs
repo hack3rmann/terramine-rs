@@ -7,6 +7,15 @@ use crate::{prelude::*, transform::*, graphics::{Buffer, Binds, Device, Queue}, 
 pub struct MainCamera(pub CameraHandle);
 assert_impl_all!(MainCamera: Component, Send, Sync);
 
+impl MainCamera {
+    pub fn set(world: &World, camera: Entity) -> AnyResult<()> {
+        let mut main = world.resource::<&mut Self>()
+            .context("failed to find main camera")?;
+        main.0.entity = camera;
+        Ok(())
+    }
+}
+
 
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, From, Into)]
@@ -51,53 +60,58 @@ impl CameraHandle {
         Ok(CameraUniform::new(cam, transform))
     }
 
-    // FIXME:
-    // pub fn spawn_control_windows(world: &World, ui: &imgui::Ui) {
-    //     use crate::graphics::ui::imgui_ext::make_window;
+    pub fn spawn_control_window(world: &World, ctx: &mut egui::Context) {
+        let mut query = world.query::<(
+            &mut CameraComponent,
+            Option<&mut Transform>
+        )>();
 
-    //     let mut query = world.query::<(&mut CameraComponent, Option<&mut Transform>)>();
-    //     for (entity, (camera, transform)) in query.into_iter() {
-    //         make_window(ui, format!("Camera #{}", entity.id())).build(|| {
-    //             let transform = match transform {
-    //                 Some(t) => &*t,
-    //                 None => &Transform::DEFAULT,
-    //             };
+        for (entity, (camera, transform)) in query.iter() {
+            egui::Window::new(format!("Camera #{}", entity.id())).show(ctx, |ui| {
+                let transform = match transform {
+                    None => &Transform::DEFAULT,
+                    Some(t) => t,
+                };
 
-    //             ui.text("Position");
-    //             ui.text(transform.translation.to_string());
+                ui.label("Position");
+                ui.label(transform.translation.to_string());
 
-    //             ui.text("Rotation");
-    //             ui.text(transform.rotation.to_string());
+                ui.label("Rotation");
+                ui.label(transform.rotation.to_string());
 
-    //             ui.separator();
+                ui.separator();
 
-    //             ui.slider_config("Speed", 5.0, 300.0)
-    //                 .display_format("%.1f")
-    //                 .build(&mut camera.speed_factor);
+                ui.add(
+                    egui::Slider::new(&mut camera.speed_factor, 5.0..=300.0)
+                        .text("Speed")
+                        .max_decimals(1)
+                );
+ 
+                ui.add(
+                    egui::Slider::new(&mut camera.speed_falloff, 0.0..=1.0)
+                        .text("Speed falloff")
+                        .max_decimals(3)
+                );
 
-    //             ui.slider_config("Speed falloff", 0.0, 1.0)
-    //                 .display_format("%.3f")
-    //                 .build(&mut camera.speed_falloff);
+                {
+                    let mut fov = camera.fov.get_degrees();
 
-    //             {
-    //                 let mut fov = camera.fov.get_degrees();
+                    ui.add(
+                        egui::Slider::new(&mut fov, 1.0..=180.0)
+                            .text("FOV")
+                            .integer()
+                    );
 
-    //                 ui.slider_config("FOV", 1.0, 180.0)
-    //                     .display_format("%.0f")
-    //                     .build(&mut fov);
+                    camera.fov.set_degrees(fov);
+                }
 
-    //                 camera.fov.set_degrees(fov);
-    //             }
-
-    //             if ui.button("Set main") {
-    //                 camera.enable();
-
-    //                 let mut cam = world.resource::<&mut MainCamera>().unwrap();
-    //                 cam.0.entity = entity;
-    //             }
-    //         });
-    //     }
-    // }
+                if ui.button("Set main").clicked() {
+                    camera.enable();
+                    MainCamera::set(world, entity).unwrap();
+                }
+            });
+        }
+    }
 }
 
 

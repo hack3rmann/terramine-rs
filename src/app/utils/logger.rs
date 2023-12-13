@@ -17,7 +17,7 @@ module_constructor! {
     // * Safe, because it's going on in module
     // * constructor, so no one access the update list.
     unsafe {
-        push_window_builder_lock_free(Box::new(build_window));
+        push_window_builder_lock_free(build_window);
         app::update::push_function_lock_free(update);
     }
 }
@@ -124,7 +124,7 @@ pub macro info {
 
 pub macro error {
     (from = $from:expr, $($fmt:tt)*) => {
-        $crate::logger::log!(Error, from = $from, $($fmt)*);
+        $crate::logger::log!(Error, from = $from, $($fmt)*)
     },
 
     ($($fmt:tt)*) => { $crate::logger::error!(from = "*unknown*", $($fmt)*); },
@@ -147,117 +147,151 @@ pub macro scope(from = $from:expr, $($content:tt)*) {
 
 
 
-// FIXME: 
-// pub fn spawn_window(ui: &imgui::Ui) {
-//     use {
-//         crate::app::utils::{
-//             graphics::ui::imgui_ext::make_window,
-//         },
-//         cpython::{Python, PyResult, py_fn, PyDict},
-//     };
-// 
-//     const ERROR_COLOR: [f32; 4] = [0.8, 0.1, 0.05, 1.0];
-//     const INFO_COLOR:  [f32; 4] = [1.0, 1.0, 1.0,  1.0];
-// 
-//     const PADDING: f32 = 10.0;
-//     const HEIGHT:  f32 = 300.0;
-// 
-//     let [width, height] = ui.io().display_size;
-// 
-//     make_window(ui, "Log list")
-//         .collapsed(true, imgui::Condition::Appearing)
-//         .save_settings(false)
-//         .collapsible(true)
-//         .bg_alpha(0.8)
-//         .position([PADDING, height - PADDING], imgui::Condition::Always)
-//         .position_pivot([0.0, 1.0])
-//         .size([width - 2.0 * PADDING, HEIGHT], imgui::Condition::Always)
-//         .build(|| {
-//             use crate::app::utils::terrain::chunk::commands::{Command, command};
-// 
-//             let messages = LOG_MESSAGES.lock();
-// 
-//             static INPUT: Mutex<String> = Mutex::new(String::new());
-//             let mut input = INPUT.lock();
-// 
-//             let is_enter_pressed = ui.input_text("Console", &mut input)
-//                 .enter_returns_true(true)
-//                 .build();
-// 
-//             let buf = input.replace("^;", "\n");
-// 
-//             let gil = Python::acquire_gil();
-//             let py = gil.python();
-//         
-//             let voxel_set = py_fn!(py, voxel_set(x: i32, y: i32, z: i32, new_id: u16) -> PyResult<i32> {
-//                 command(Command::SetVoxel { pos: veci!(x, y, z), new_id });
-//                 Ok(0)
-//             });
-// 
-//             let voxel_fill = py_fn!(py, voxel_fill(
-//                 sx: i32, sy: i32, sz: i32,
-//                 ex: i32, ey: i32, ez: i32, new_id: u16
-//             ) -> PyResult<i32> {
-//                 command(Command::FillVoxels { pos_from: veci!(sx, sy, sz), pos_to: veci!(ex, ey, ez), new_id });
-//                 Ok(0)
-//             });
-// 
-//             let drop_all_meshes = py_fn!(py, drop_all_meshes() -> PyResult<i32> {
-//                 command(Command::DropAllMeshes);
-//                 Ok(0)
-//             });
-// 
-//             let locals = PyDict::new(py);
-// 
-//             locals.set_item(py, "voxel_set", voxel_set)
-//                 .unwrap_or_else(|err|
-//                     log!(Error, from = "logger", "failed to set 'voxel_set' item: {err:?}")
-//                 );
-// 
-//             locals.set_item(py, "voxel_fill", voxel_fill)
-//                 .unwrap_or_else(|err|
-//                     log!(Error, from = "logger", "failed to set 'voxel_fill' item: {err:?}")
-//                 );
-//                 
-//             locals.set_item(py, "drop_all_meshes", drop_all_meshes)
-//                 .unwrap_or_else(|err|
-//                     log!(Error, from = "logger", "failed to set 'drop_all_meshes' item: {err:?}")
-//                 );
-// 
-//             if is_enter_pressed {
-//                 py.run(&buf, None, Some(&locals))
-//                     .unwrap_or_else(|err| log!(Error, from = "logger", "{err:?}"));
-//             }
-// 
-//             for msg in messages.iter().rev() {
-//                 let color = match msg.msg_type {
-//                     MsgType::Error => ERROR_COLOR,
-//                     MsgType::Info  => INFO_COLOR,
-//                 };
-// 
-//                 ui.text_colored(color, &format!("[LOG]: {msg}"));
-//             }
-//         });
-// }
+pub mod python {
+    use {
+        super::*,
+        cpython::{PyDict, Python, py_fn, PyResult, PyObject},
+        crate::app::utils::terrain::chunk::commands::{Command, command},
+    };
 
-pub fn build_window(ui: &mut egui::Ui) {
-    // const PADDING: f32 = 10.0;
+    lazy_static! {
+        pub static ref LOCALS: PyDict = {
+            let gil = Python::acquire_gil();
+            let py = gil.python();
 
-    egui::TopBottomPanel::bottom("Console").show(ui.ctx(), |ui| {
-        egui::ScrollArea::new([false, true])
-            .max_height(ui.available_height() * 0.3)
-            .stick_to_bottom(true)
-            .show(ui, |ui| {
-                for msg in LOG_MESSAGES.lock().iter().rev() {
-                    let color = match msg.msg_type {
-                        MsgType::Error => egui::Color32::RED,
-                        MsgType::Info  => egui::Color32::GRAY,
-                    };
-
-                    ui.label(egui::RichText::new(format!("{msg}")).color(color));
-                }
+            let voxel_set = py_fn!(py, voxel_set(x: i32, y: i32, z: i32, new_id: u16) -> PyResult<i32> {
+                command(Command::SetVoxel { pos: veci!(x, y, z), new_id });
+                Ok(0)
             });
-    });
+
+            let voxel_fill = py_fn!(py, voxel_fill(
+                sx: i32, sy: i32, sz: i32,
+                ex: i32, ey: i32, ez: i32, new_id: u16
+            ) -> PyResult<i32> {
+                command(Command::FillVoxels { pos_from: veci!(sx, sy, sz), pos_to: veci!(ex, ey, ez), new_id });
+                Ok(0)
+            });
+
+            let drop_all_meshes = py_fn!(py, drop_all_meshes() -> PyResult<i32> {
+                command(Command::DropAllMeshes);
+                Ok(0)
+            });
+
+            let log = py_fn!(py, log(value: PyObject) -> PyResult<i32> {
+                logger::info!("{}", value);
+                Ok(0)
+            });
+
+            let locals = PyDict::new(py);
+
+            locals.set_item(py, "voxel_set", voxel_set)
+                .unwrap_or_else(|err|
+                    log!(Error, from = "logger", "failed to set 'voxel_set' item: {err:?}")
+                );
+
+            locals.set_item(py, "voxel_fill", voxel_fill)
+                .unwrap_or_else(|err|
+                    log!(Error, from = "logger", "failed to set 'voxel_fill' item: {err:?}")
+                );
+                
+            locals.set_item(py, "drop_all_meshes", drop_all_meshes)
+                .unwrap_or_else(|err|
+                    log!(Error, from = "logger", "failed to set 'drop_all_meshes' item: {err:?}")
+                );
+
+            locals.set_item(py, "log", log)
+                .unwrap_or_else(|err|
+                    log!(Error, from = "logger", "failed to log a message: {err:?}")
+                );
+
+            locals
+        };
+    }
+
+    pub fn run(code: &str) {
+        let gil = Python::acquire_gil();
+        let py = gil.python();
+
+        py.run(code, None, Some(&LOCALS))
+            .unwrap_or_else(|err| logger::error!(from = "logger", "{err:?}"));
+    }
+}
+
+
+
+pub fn build_window(ctx: &mut egui::Context) {
+    const OFFSET: f32 = 10.0;
+
+    egui::Window::new("Console")
+        .anchor(egui::Align2::CENTER_BOTTOM, [0.0, -OFFSET])
+        .min_width(ctx.available_rect().x_range().span() - 2.0 * OFFSET)
+        .show(ctx, |ui| {
+            static INPUT_HISTORY: Mutex<Vec<String>> = const_default();
+            let mut input_history = INPUT_HISTORY.lock();
+
+            static INPUT: Mutex<String> = const_default();
+            let mut input = INPUT.lock();
+
+            macros::atomic_static! {
+                static LAST_SEARCH_INDEX: usize = usize::MAX;
+            }
+            
+            let text_edit_response = ui.add(
+                egui::TextEdit::singleline(input.deref_mut())
+                    .cursor_at_end(true)
+                    .hint_text("Input a command here...")
+                    .desired_width(f32::INFINITY)
+                    .font(egui::TextStyle::Monospace)
+            );
+
+            if text_edit_response.lost_focus() {
+                if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                    let code = input.replace("^;", "\n");
+
+                    python::run(&code);
+
+                    LAST_SEARCH_INDEX.store(0, Release);
+                }
+
+                input_history.push(mem::take(input.deref_mut()));
+            } else if !input_history.is_empty() && text_edit_response.has_focus() {
+                let mut index = LAST_SEARCH_INDEX.load(Acquire);
+
+                if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+                    match index {
+                        0 | usize::MAX => index = input_history.len() - 1,
+                        _ => index -= 1,
+                    }
+
+                    match input_history.get(index) {
+                        None => input.clear(),
+                        Some(src) => input.clone_from(src),
+                    }
+                } else if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+                    if index < input_history.len() - 1 {
+                        index += 1;
+                        input.clone_from(&input_history[index]);
+                    } else {
+                        index = usize::MAX;
+                        input.clear();
+                    }
+                }
+
+                LAST_SEARCH_INDEX.store(index, Release);
+            }
+
+            for msg in LOG_MESSAGES.lock().iter().rev() {
+                let color = match msg.msg_type {
+                    MsgType::Error => egui::Color32::RED,
+                    MsgType::Info  => egui::Color32::GRAY,
+                };
+
+                ui.label(egui::RichText::new(msg.to_string())
+                    .color(color)
+                    .monospace()
+                );
+            }
+        });
 }
 
 

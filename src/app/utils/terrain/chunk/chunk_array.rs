@@ -810,61 +810,6 @@ impl ChunkArray {
             .all(Chunk::is_generated)
     }
 
-    // FIXME:
-    // pub fn spawn_control_window(&self, ui: &imgui::Ui) {
-    //     use crate::app::utils::graphics::ui::imgui_ext::make_window;
-
-    //     make_window(ui, "Chunk array")
-    //         .always_auto_resize(true)
-    //         .build(|| {
-    //             ui.text(format!(
-    //                 "{n} chunk generation tasks.",
-    //                 n = self.tasks.voxels_gen.len(),
-    //             ));
-
-    //             ui.text(format!(
-    //                 "{n} mesh generation tasks.",
-    //                 n = self.tasks.low.len() + self.tasks.full.len(),
-    //             ));
-
-    //             ui.text(format!(
-    //                 "{n} partition generation tasks.",
-    //                 n = self.tasks.partition.len(),
-    //             ));
-
-    //             // FIXME: temp removed lod threashold slider
-    //             // ui.slider(
-    //             //     "Chunks lod threashold",
-    //             //     0.01, 20.0,
-    //             //     &mut self.lod_threashold,
-    //             // );
-
-    //             ui.separator();
-
-    //             ui.text("Generate new");
-
-    //             let mut sizes = GENERATOR_SIZES.lock();
-
-    //             ui.input_scalar_n("Sizes", &mut *sizes).build();
-
-    //             // FIXME: temp removed generate button
-    //             // if ui.button("Generate") {
-    //             //     self.tasks.stop_all();
-
-    //             //     let chunks = tokio::task::block_in_place(|| RUNTIME.block_on(
-    //             //         Self::new_empty_chunks(world, USize3::from(*sizes))
-    //             //     ));
-
-    //             //     match chunks {
-    //             //         Ok(new_chunks) => {
-    //             //             let _ = mem::replace(self, new_chunks);
-    //             //         },
-    //             //         Err(err) => logger::log!(Error, from = "chunk-array", "{err}")
-    //             //     }
-    //             // }
-    //         });
-    // }
-
     pub async fn proccess_command(
         &mut self, world: &World,
         command: Command, change_tracker: &mut ChangeTracker,
@@ -1003,6 +948,53 @@ impl ChunkArray {
         // }
 
         Ok(())
+    }
+    
+    pub fn spawn_control_window(&self, world: &World, ctx: &mut egui::Context) {
+        egui::Window::new("Chunk array").show(ctx, |ui| {
+            ui.label(format!(
+                "{} chunk generation tasks",
+                self.tasks.voxels_gen.len(),
+            ));
+
+            ui.label(format!(
+                "{} mesh generation tasks",
+                self.tasks.low.len() + self.tasks.full.len(),
+            ));
+
+            ui.label(format!(
+                "{} partition generation tasks",
+                self.tasks.partition.len(),
+            ));
+
+            ui.separator();
+
+            ui.label("Generate new");
+
+            let mut sizes = GENERATOR_SIZES.lock();
+
+            ui.horizontal(|ui| {
+                ui.label("Sizes: ");
+
+                ui.add(egui::DragValue::new(&mut sizes[0]));
+                ui.add(egui::DragValue::new(&mut sizes[1]));
+                ui.add(egui::DragValue::new(&mut sizes[2]));
+            });
+
+            // FIXME: generate button
+            // if ui.button("Generate").clicked() {
+            //     self.tasks.stop_all();
+            //     
+            //     let chunks = tokio::task::block_in_place(|| RUNTIME.block_on(
+            //         Self::new_empty_chunks(world, USize3::from(*sizes))
+            //     ));
+
+            //     match chunks {
+            //         Ok(new_chunks) => _ = mem::replace(self, new_chunks),
+            //         Err(err) => logger::error!(from = "chunk-array", "{err}")
+            //     }
+            // }
+        });
     }
 }
 

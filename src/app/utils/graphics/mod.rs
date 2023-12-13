@@ -338,34 +338,58 @@ impl Graphics {
         )
     }
 
-    pub fn render_sandbox(&mut self, cam: &CameraUniformBuffer) {
+    pub fn logo_pass(&mut self, cam: &CameraUniformBuffer) {
+        let render_stage = self.render_stage.as_mut().unwrap();
+
+        let mut query = self.sandbox.query::<(
+            &BindsRef, &GpuMesh, &RenderPipeline
+        )>();
+
+        let mut pass = RenderPass::new(
+            "logo_draw_pass",
+            &mut render_stage.encoder,
+            [&render_stage.view]
+        );
+
+        for (_entity, (binds, mesh, pipeline)) in query.into_iter() {
+            Binds::bind_all(&mut pass, [
+                &self.common_uniforms.binds,
+                binds,
+                &cam.binds,
+            ]);
+            
+            let Ok(()) = mesh.render(pipeline, &mut pass);
+        }
+    }
+
+    pub fn ui(world: &World, _time: Time, time_step: TimeStep, ctx: &mut egui::Context) {
+        keyboard::set_input_capture(ctx.wants_keyboard_input());
+
+        use crate::terrain::chunk::chunk_array::ChunkArray;
+
+        ui::egui_util::use_each_window_builder(ctx);
+        camera::CameraHandle::spawn_control_window(world, ctx);
+
+        {
+            let chunk_array = world.resource::<&ChunkArray>().unwrap();
+            chunk_array.spawn_control_window(world, ctx);
+        }
+
+        crate::profiler::update_and_build_window(ctx, time_step);
+    }
+
+    pub fn render_sandbox(&mut self) {
+        // self.logo_pass(cam);
+
+        
+    }
+
+    pub fn render_egui(&mut self, time: Time, time_step: TimeStep, world: &World) {
         let render_stage = self.render_stage.as_mut()
             .expect(
                 "`render_sadbox` should be called after
                 `begin_render` and before `finish_render`"
             );
-
-        {
-            let mut query = self.sandbox.query::<(
-                &BindsRef, &GpuMesh, &RenderPipeline
-            )>();
-
-            let mut pass = RenderPass::new(
-                "logo_draw_pass",
-                &mut render_stage.encoder,
-                [&render_stage.view]
-            );
-
-            for (_entity, (binds, mesh, pipeline)) in query.into_iter() {
-                Binds::bind_all(&mut pass, [
-                    &self.common_uniforms.binds,
-                    binds,
-                    &cam.binds,
-                ]);
-                
-                let Ok(()) = mesh.render(pipeline, &mut pass);
-            }
-        }
 
         {
             let mut platform = self.sandbox
@@ -382,19 +406,25 @@ impl Graphics {
 
             platform.begin_frame();
 
-            demo_window.ui(&platform.context());
+            Self::ui(world, time, time_step, &mut platform.context());
+            // demo_window.ui(&platform.context());
 
             let full_output = platform.end_frame(Some(&self.window));
             let paint_jobs = platform.context().tessellate(full_output.shapes);
 
+            let (width, height) = {
+                let surface_cfg = SURFACE_CFG.read();
+                (surface_cfg.width, surface_cfg.height)
+            };
+
             let screen_descriptor = egui_wgpu_backend::ScreenDescriptor {
-                physical_width: SURFACE_CFG.read().width,
-                physical_height: SURFACE_CFG.read().height,
+                physical_width: width,
+                physical_height: height,
                 scale_factor: self.window.scale_factor() as f32,
             };
             let tdelta: egui::TexturesDelta = full_output.textures_delta;
             pass.add_textures(&self.context.device, &self.context.queue, &tdelta)
-                .expect("add texture ok");
+                .expect("failed to add texture");
             pass.update_buffers(&self.context.device, &self.context.queue, &paint_jobs, &screen_descriptor);
 
             // Record all render passes.
@@ -403,21 +433,34 @@ impl Graphics {
                 &render_stage.view,
                 &paint_jobs,
                 &screen_descriptor,
-                Some(wgpu::Color::BLACK),
+                None,
             ).unwrap();
         }
     }
 
-    pub fn render_with_sandbox(&mut self, time: Time, world: &World)
-        -> AnyResult<()>
+    pub fn render_with_sandbox<R>(
+        &mut self, time: Time, time_step: TimeStep, world: &World, render: R,
+    ) -> AnyResult<()>
+    where
+        R: FnOnce(&Binds, &mut CommandEncoder, &TextureView, &World) -> AnyResult<()>,
     {
         self.begin_render(time)?;
 
         {
-            let cam = world.resource::<&CameraUniformBuffer>().unwrap();
-            self.render_sandbox(&cam);
+            let render_stage = unsafe {
+                self.render_stage.as_mut().unwrap_unchecked()
+            };
+
+            render(
+                &self.common_uniforms.binds,
+                &mut render_stage.encoder,
+                &render_stage.view,
+                world
+            )?;
         }
 
+        self.render_sandbox();
+        self.render_egui(time, time_step, world);
         self.finish_render()?;
 
         Ok(())

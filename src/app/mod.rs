@@ -204,16 +204,20 @@ impl App {
     }
 
     /// Draws a frame on main window.
+    #[profile]
     async fn draw_frame(&mut self, _window_id: WindowId) -> AnyResult<()> {
-        let timer = self.world.resource::<&Timer>()?;
+        let (time, time_step) = {
+            let timer = self.world.resource::<&Timer>()?;
+            (timer.time(), timer.time_step())
+        };
 
         let mut graphics = self.world.resource::<&mut Graphics>()?;
 
-        // graphics.render(timer.time(), use_ui, |binds, encoder, view|
-        //     chunk_array.render(&self.world, binds, encoder, view.clone())
-        // )?;
+        let chunk_array = self.world.resource::<&ChunkArray>()?;
 
-        graphics.render_with_sandbox(timer.time(), &self.world)?;
+        graphics.render_with_sandbox(time, time_step, &self.world, |binds, encoder, view, world| {
+            chunk_array.render(world, binds, encoder, view.clone())
+        })?;
 
         Ok(())
     }

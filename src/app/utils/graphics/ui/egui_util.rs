@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 
 
-pub type WindowBuilder = Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>;
+pub type WindowBuilder = fn(&mut egui::Context);
 
 pub static WINDOW_BUILDERS: Mutex<SmallVec<[WindowBuilder; 64]>>
     = const_default();
@@ -27,15 +27,15 @@ pub unsafe fn push_window_builder_lock_free(builder: WindowBuilder) {
 }
 
 /// Applies builders to `ui`.
-pub fn use_each_window_builder(ui: &mut egui::Ui) {
+pub fn use_each_window_builder(ctx: &mut egui::Context) {
     for build in WINDOW_BUILDERS.lock().iter() {
-        build(ui)
+        build(ctx)
     }
 }
 
 
 
 pub trait ShowDebugUi {
-    fn show_debug_ui(&mut self, ui: &mut egui::Ui);
+    fn show_debug_ui(&mut self, ctx: &mut egui::Context);
 }
 assert_obj_safe!(ShowDebugUi);
