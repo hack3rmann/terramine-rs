@@ -90,7 +90,7 @@ pub struct Profiler {
 
 
 macros::atomic_static! {
-    static IS_DRAWING_ENABLED: bool = false;
+    static IS_PROFILER_ENABLED: bool = false;
 }
 
 lazy_static! {
@@ -131,10 +131,15 @@ pub fn start_capture(target_name: impl Into<String>, id: MeasureId) -> Measure {
 }
 
 /// Updates profiler and builds ImGui window.
-pub fn update_and_build_window(ctx: &mut egui::Context, dt: TimeStep) {
+pub fn update_and_build_window(dt: TimeStep, ui: &mut egui::Ui) {
     if keyboard::just_pressed(cfg::key_bindings::ENABLE_PROFILER_WINDOW) {
-        _ = IS_DRAWING_ENABLED.fetch_xor(true, AcqRel);
+        _ = IS_PROFILER_ENABLED.fetch_xor(true, AcqRel);
     }
+
+    _ = IS_PROFILER_ENABLED.fetch_update(AcqRel, Relaxed, |mut is_enabled| {
+        ui.checkbox(&mut is_enabled, "Profiler enabled");
+        Some(is_enabled)
+    });
 
     let mut lock = PROFILER.lock();
     let data = lock.profiles
@@ -159,7 +164,7 @@ pub fn update_and_build_window(ctx: &mut egui::Context, dt: TimeStep) {
         })
         .collect();
     
-    build_window(ctx, data);
+    build_window(data, ui);
     drop(lock);
 
     update();
@@ -174,22 +179,20 @@ pub fn update() {
     }
 }
 
-pub fn build_window(ctx: &mut egui::Context, profiler_result: Vec<Data<'_>>) {
-    if !profiler_result.is_empty() && IS_DRAWING_ENABLED.load(Relaxed) {
-        egui::Window::new("Profiler").show(ctx, |ui| {
-            for (i, data) in profiler_result.iter().enumerate() {
-                ui.label(data.name);
+pub fn build_window(profiler_result: Vec<Data<'_>>, ui: &mut egui::Ui) {
+    if !profiler_result.is_empty() && IS_PROFILER_ENABLED.load(Relaxed) {
+        for (i, data) in profiler_result.iter().enumerate() {
+            ui.label(egui::RichText::new(data.name).monospace());
 
-                ui.label(format!("Calls per frame: {}", data.call_freq));
-                ui.label(format!("Time: {:.3}ms", data.time * 1000.0));
-                ui.label(format!("Frame time: {:.3}%", data.frame_time * 100.0));
-                ui.label(format!("Max time: {:.3}ms", data.max_time * 1000.0));
+            ui.label(format!("Calls per frame: {}", data.call_freq));
+            ui.label(format!("Time: {:.3}ms", data.time * 1000.0));
+            ui.label(format!("Frame time: {:.3}%", data.frame_time * 100.0));
+            ui.label(format!("Max time: {:.3}ms", data.max_time * 1000.0));
 
-                if i + 1 != profiler_result.len() {
-                    ui.separator();
-                }
+            if i + 1 != profiler_result.len() {
+                ui.separator();
             }
-        });
+        }
     }
 }
 

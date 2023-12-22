@@ -284,9 +284,13 @@ pub fn is_captured() -> bool {
 pub fn capture(window: &Window) {
     use winit::window::CursorGrabMode;
 
+    if IS_CAPTURED.load(Acquire) {
+        return;
+    }
+
     window.set_cursor_grab(CursorGrabMode::Confined)
         .or_else(|_| window.set_cursor_grab(CursorGrabMode::Locked))
-        .expect("failed to set cursor grab");
+        .expect("failed to grab the cursor");
     window.set_cursor_visible(false);
 
     IS_CAPTURED.store(true, Release);
@@ -296,16 +300,20 @@ pub fn capture(window: &Window) {
 pub fn uncapture(window: &Window) {
     use winit::window::CursorGrabMode;
 
+    if !IS_CAPTURED.load(Acquire) {
+        return;
+    }
+
     window.set_cursor_grab(CursorGrabMode::None)
-        .expect("failed to release cursor");
+        .expect("failed to release the cursor");
     window.set_cursor_visible(true);
 
     IS_CAPTURED.store(false, Release);
 }
 
 /// Sets capture mode.
-pub fn set_capture(window: &Window, is_captured: bool) {
-    if is_captured {
+pub fn set_capture(window: &Window, do_capture: bool) {
+    if do_capture {
         capture(window);
     } else {
         uncapture(window);

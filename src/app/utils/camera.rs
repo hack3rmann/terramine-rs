@@ -1,4 +1,7 @@
-use crate::{prelude::*, transform::*, graphics::{Buffer, Binds, Device, Queue}, geometry::frustum::Frustum};
+use crate::{
+    prelude::*, transform::*, graphics::{Buffer, Binds, Device, Queue, ui::egui_util},
+    geometry::frustum::Frustum,
+};
 
 
 
@@ -49,7 +52,10 @@ impl CameraHandle {
         let mut query = world.query::<(&mut CameraComponent, &mut Transform, &mut Speed, &mut Frustum)>();
 
         for (_entity, (camera, transform, speed, frustum)) in query.into_iter() {
-            camera.update(dt, transform, speed, frustum);
+            for _ in 0..cfg::camera::N_SIMULATIONS_STEPS {
+                let dt = dt / cfg::camera::N_SIMULATIONS_STEPS as u32;
+                camera.update(dt, transform, speed, frustum);
+            }
         }
     }
 
@@ -60,57 +66,59 @@ impl CameraHandle {
         Ok(CameraUniform::new(cam, transform))
     }
 
-    pub fn spawn_control_window(world: &World, ctx: &mut egui::Context) {
+    pub fn spawn_control_window(world: &World, ui: &mut egui::Ui) {
         let mut query = world.query::<(
             &mut CameraComponent,
             Option<&mut Transform>
         )>();
 
-        for (entity, (camera, transform)) in query.iter() {
-            egui::Window::new(format!("Camera #{}", entity.id())).show(ctx, |ui| {
-                let transform = match transform {
-                    None => &Transform::DEFAULT,
-                    Some(t) => t,
-                };
+        ui.collapsing("Cameras", |ui| {
+            for (entity, (camera, transform)) in query.iter() {
+                ui.collapsing(format!("Camera #{}", entity.id()), |ui| {
+                    let mut new_transform = match transform {
+                        None => Transform::DEFAULT,
+                        Some(ref transform) => (*transform).clone(),
+                    };
 
-                ui.label("Position");
-                ui.label(transform.translation.to_string());
+                    ui.add(egui_util::TransformWidget::new(&mut new_transform));
 
-                ui.label("Rotation");
-                ui.label(transform.rotation.to_string());
+                    if let Some(transform) = transform {
+                        *transform = new_transform;
+                    }
 
-                ui.separator();
-
-                ui.add(
-                    egui::Slider::new(&mut camera.speed_factor, 5.0..=300.0)
-                        .text("Speed")
-                        .max_decimals(1)
-                );
- 
-                ui.add(
-                    egui::Slider::new(&mut camera.speed_falloff, 0.0..=1.0)
-                        .text("Speed falloff")
-                        .max_decimals(3)
-                );
-
-                {
-                    let mut fov = camera.fov.get_degrees();
+                    ui.separator();
 
                     ui.add(
-                        egui::Slider::new(&mut fov, 1.0..=180.0)
-                            .text("FOV")
-                            .integer()
+                        egui::Slider::new(&mut camera.speed_factor, 5.0..=300.0)
+                            .text("Speed")
+                            .max_decimals(1)
+                    );
+    
+                    ui.add(
+                        egui::Slider::new(&mut camera.speed_falloff, 0.0..=1.0)
+                            .text("Speed falloff")
+                            .max_decimals(3)
                     );
 
-                    camera.fov.set_degrees(fov);
-                }
+                    {
+                        let mut fov = camera.fov.get_degrees();
 
-                if ui.button("Set main").clicked() {
-                    camera.enable();
-                    MainCamera::set(world, entity).unwrap();
-                }
-            });
-        }
+                        ui.add(
+                            egui::Slider::new(&mut fov, 1.0..=180.0)
+                                .text("FOV")
+                                .integer()
+                        );
+
+                        camera.fov.set_degrees(fov);
+                    }
+
+                    if ui.button("Set main").clicked() {
+                        camera.enable();
+                        MainCamera::set(world, entity).unwrap();
+                    }
+                });
+            }
+        });
     }
 }
 

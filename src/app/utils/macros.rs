@@ -181,5 +181,10 @@ pub macro Vec3 {
     (f64) => { ::math_linear::prelude::Double3 },
     (isize) => { ::math_linear::prelude::ISize3 },
     (usize) => { ::math_linear::prelude::USize3 },
-    ($other:ty) => { crate::macros::Vec2!($other) },
+    ($other:ty) => { compile_error("only primitive types are supported") },
+}
+
+/// BUilds a query on world
+pub macro query($world:expr, $(qvalue:ty),+ $(,)?) {
+    world.query::<($(qvalue,)+)>();
 }

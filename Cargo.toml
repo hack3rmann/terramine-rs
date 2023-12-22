@@ -56,7 +56,7 @@ huffman-compress = '0.6.1'
 bit-vec = '0.6.3'
 array-init = '2.1.0'
 smallvec = { version = '1.10.0', features = ['const_generics', 'const_new'] }
-itertools = '0.11.0'
+itertools = '0.12.0'
 ordered-float = '4.1.1'
 rand = '0.8.5'
 static_assertions = '1.1.0'
@@ -71,10 +71,11 @@ terramine_profiler_macros = { path = '../terramine_profiler_macros' }
 math_linear = { version = '0.1.0', path = '../math_linear', features = ['byte_muck', 'nightly'] }
 
 # egui-wgpu = "0.23.0"
-egui = "0.23.0"
-egui_wgpu_backend = "0.27.0"
-egui_winit_platform = "0.20.0"
-egui_demo_lib = "0.23.0"
+egui = '0.23.0'
+egui_dock = '0.8.2'
+egui_wgpu_backend = '0.27.0'
+egui_winit_platform = '0.20.0'
+egui_demo_lib = '0.24.1'
 
 
 

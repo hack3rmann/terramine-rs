@@ -950,8 +950,8 @@ impl ChunkArray {
         Ok(())
     }
     
-    pub fn spawn_control_window(&self, world: &World, ctx: &mut egui::Context) {
-        egui::Window::new("Chunk array").show(ctx, |ui| {
+    pub fn spawn_control_window(&self, _world: &World, ui: &mut egui::Ui) {
+        ui.collapsing("Chunk array", |ui| {
             ui.label(format!(
                 "{} chunk generation tasks",
                 self.tasks.voxels_gen.len(),

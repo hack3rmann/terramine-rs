@@ -124,8 +124,16 @@ impl App {
                 graphics.window.request_redraw();
             },
 
-            Event::RedrawRequested(window_id) =>
-                self.do_frame(window_id).await?,
+            Event::RedrawRequested(window_id) => {
+                self.do_frame(window_id).await?;
+                
+                let best_time = Duration::from_secs_f32(1.0 / 120.0);
+                let time_step = self.world.resource::<&Timer>()?.time_step();
+
+                if time_step < best_time {
+                    tokio::time::sleep(best_time - time_step).await;
+                }
+            }
 
             _ => (),
         }

@@ -46,8 +46,8 @@ lazy_static! {
 
 
 
-pub fn spawn_control_window(ctx: &mut egui::Context) {
-    egui::Window::new("Generator settings").show(ctx, |ui| {
+pub fn spawn_control_window(ui: &mut egui::Ui) {
+    ui.collapsing("Generator settings", |ui| {
         _ = FREQUENCY.fetch_update(AcqRel, Relaxed, |mut value| {
             ui.add(egui::DragValue::new(&mut value).prefix("Frequency: "));
             Some(value)

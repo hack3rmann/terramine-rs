@@ -35,8 +35,8 @@ pub use {
     },
     winit::{event_loop::EventLoop, event::Event},
 
-    // FIXME:
     egui_wgpu_backend::{RenderPass as EguiRenderPass, ScreenDescriptor as EguiScreenDescriptor},
+    ui::egui_util::{EguiContexts, EguiDockState, Tab},
 };
 
 
@@ -251,6 +251,10 @@ impl Graphics {
 
         let demo_window = egui_demo_lib::DemoWindows::default();
 
+        sandbox.insert_resource(EguiDockState::new(
+            egui_dock::DockState::new(vec![Tab::Properties, Tab::Profiler]),
+        ));
+
         sandbox.insert_resource(DemoWindowsUnsafe { inner: demo_window });
 
         sandbox.insert_resource(egui_platform);
@@ -362,26 +366,63 @@ impl Graphics {
         }
     }
 
-    pub fn ui(world: &World, _time: Time, time_step: TimeStep, ctx: &mut egui::Context) {
-        keyboard::set_input_capture(ctx.wants_keyboard_input());
+    pub fn ui(world: &World, _time: Time, time_step: TimeStep, contexts: EguiContexts) {
+        use egui_dock::{DockArea, TabViewer};
 
-        use crate::terrain::chunk::chunk_array::ChunkArray;
-
-        ui::egui_util::use_each_window_builder(ctx);
-        camera::CameraHandle::spawn_control_window(world, ctx);
-
-        {
-            let chunk_array = world.resource::<&ChunkArray>().unwrap();
-            chunk_array.spawn_control_window(world, ctx);
+        #[derive(Clone, Copy, Debug)]
+        struct MyTabViewer<'w> {
+            time_step: TimeStep,
+            world: &'w World,
         }
 
-        crate::profiler::update_and_build_window(ctx, time_step);
+        impl TabViewer for MyTabViewer<'_> {
+            type Tab = Tab;
+
+            fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
+                tab.name().into()
+            }
+
+            fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
+                match tab {
+                    Tab::Properties => {
+                        ui::egui_util::use_each_window_builder(ui);
+                    
+                        {
+                            let chunk_array = self.world.resource::<&ChunkArray>().unwrap();
+                            chunk_array.spawn_control_window(self.world, ui);
+                        }
+
+                        camera::CameraHandle::spawn_control_window(self.world, ui);
+                    },
+
+                    Tab::Profiler => crate::profiler::update_and_build_window(self.time_step, ui),
+
+                    Tab::Other { .. } => (),
+                }
+            }
+        }
+
+        {
+            let mut dock = contexts.dock.value.write();
+
+            egui::SidePanel::right("right")
+                .default_width(0.25 * contexts.ctx().available_rect().width())
+                .min_width(0.2 * contexts.ctx().available_rect().width())
+                .max_width(0.3 * contexts.ctx().available_rect().width())
+                .show(contexts.ctx(), |ui| {
+                    DockArea::new(&mut dock)
+                        .style(egui_dock::Style::from_egui(&contexts.ctx().style()))
+                        .show_inside(ui, &mut MyTabViewer { world, time_step });
+                });
+        }
+
+        keyboard::set_input_capture(contexts.ctx().wants_keyboard_input());
+
+        use crate::terrain::chunk::chunk_array::ChunkArray;
     }
 
     pub fn render_sandbox(&mut self) {
         // self.logo_pass(cam);
-
-        
     }
 
     pub fn render_egui(&mut self, time: Time, time_step: TimeStep, world: &World) {
@@ -396,18 +437,22 @@ impl Graphics {
                 .resource::<&mut egui_winit_platform::Platform>()
                 .unwrap();
 
-            let mut demo_window = self.sandbox
-                .resource::<&mut DemoWindowsUnsafe>()
-                .unwrap();
-
             let mut pass = self.sandbox
                 .resource::<&mut egui_wgpu_backend::RenderPass>()
                 .unwrap();
 
             platform.begin_frame();
 
-            Self::ui(world, time, time_step, &mut platform.context());
-            // demo_window.ui(&platform.context());
+            let contexts = {
+                let dock_state = self.sandbox.resource::<&EguiDockState>()
+                    .expect("sandbox should have EguiDockState")
+                    .deref()
+                    .clone();
+
+                EguiContexts::new(platform.context(), dock_state)
+            };
+
+            Self::ui(world, time, time_step, contexts);
 
             let full_output = platform.end_frame(Some(&self.window));
             let paint_jobs = platform.context().tessellate(full_output.shapes);

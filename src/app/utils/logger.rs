@@ -178,7 +178,7 @@ pub mod python {
             });
 
             let log = py_fn!(py, log(value: PyObject) -> PyResult<i32> {
-                logger::info!("{}", value);
+                logger::info!(from = "python-interpreter", "{}", value);
                 Ok(0)
             });
 
@@ -219,13 +219,13 @@ pub mod python {
 
 
 
-pub fn build_window(ctx: &mut egui::Context) {
+pub fn build_window(ui: &mut egui::Ui) {
     const OFFSET: f32 = 10.0;
 
     egui::Window::new("Console")
         .anchor(egui::Align2::CENTER_BOTTOM, [0.0, -OFFSET])
-        .min_width(ctx.available_rect().x_range().span() - 2.0 * OFFSET)
-        .show(ctx, |ui| {
+        .min_width(ui.ctx().available_rect().x_range().span() - 2.0 * OFFSET)
+        .show(ui.ctx(), |ui| {
             static INPUT_HISTORY: Mutex<Vec<String>> = const_default();
             let mut input_history = INPUT_HISTORY.lock();
 

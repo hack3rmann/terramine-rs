@@ -37,6 +37,7 @@ impl Window {
     fn load_icon() -> Icon {
         // Bytes vector from bmp file
         // File formatted in BGRA
+        // TODO: reformat file to RGBA format so we can avoid byteswapping at the program start
         let raw_data = include_bytes!("../../../image/terramine_icon_32p.bmp");
         let mut raw_data = *raw_data;
 
@@ -60,7 +61,6 @@ impl Window {
         let mut data = Vec::with_capacity(raw_data.len());
         data.extend_from_slice(raw_data);
         Icon::from_rgba(data, 32, 32)
-            .expect("length of data should be divisible by 4, \
-                     and width * height must equal data.len() / 4")
+            .expect("failed to load icon")
     }
 }
