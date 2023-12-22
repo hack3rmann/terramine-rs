@@ -8,8 +8,6 @@ use crate::{
 
 
 module_constructor! {
-    use crate::graphics::ui::egui_util::push_window_builder_lock_free;
-
     env_logger::init();
 
     // * Safety
@@ -17,7 +15,6 @@ module_constructor! {
     // * Safe, because it's going on in module
     // * constructor, so no one access the update list.
     unsafe {
-        push_window_builder_lock_free(build_window);
         app::update::push_function_lock_free(update);
     }
 }
@@ -220,78 +217,71 @@ pub mod python {
 
 
 pub fn build_window(ui: &mut egui::Ui) {
-    const OFFSET: f32 = 10.0;
+    static INPUT_HISTORY: Mutex<Vec<String>> = const_default();
+    let mut input_history = INPUT_HISTORY.lock();
 
-    egui::Window::new("Console")
-        .anchor(egui::Align2::CENTER_BOTTOM, [0.0, -OFFSET])
-        .min_width(ui.ctx().available_rect().x_range().span() - 2.0 * OFFSET)
-        .show(ui.ctx(), |ui| {
-            static INPUT_HISTORY: Mutex<Vec<String>> = const_default();
-            let mut input_history = INPUT_HISTORY.lock();
+    static INPUT: Mutex<String> = const_default();
+    let mut input = INPUT.lock();
 
-            static INPUT: Mutex<String> = const_default();
-            let mut input = INPUT.lock();
+    macros::atomic_static! {
+        static LAST_SEARCH_INDEX: usize = usize::MAX;
+    }
+    
+    let text_edit_response = ui.add(
+        egui::TextEdit::singleline(input.deref_mut())
+            .cursor_at_end(true)
+            .hint_text("Input a command here...")
+            .desired_width(f32::INFINITY)
+            .font(egui::TextStyle::Monospace)
+    );
 
-            macros::atomic_static! {
-                static LAST_SEARCH_INDEX: usize = usize::MAX;
-            }
-            
-            let text_edit_response = ui.add(
-                egui::TextEdit::singleline(input.deref_mut())
-                    .cursor_at_end(true)
-                    .hint_text("Input a command here...")
-                    .desired_width(f32::INFINITY)
-                    .font(egui::TextStyle::Monospace)
-            );
+    if text_edit_response.lost_focus() {
+        if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+            let code = input.replace("^;", "\n");
 
-            if text_edit_response.lost_focus() {
-                if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-                    let code = input.replace("^;", "\n");
+            python::run(&code);
 
-                    python::run(&code);
+            LAST_SEARCH_INDEX.store(0, Release);
+        }
 
-                    LAST_SEARCH_INDEX.store(0, Release);
-                }
+        input_history.push(mem::take(input.deref_mut()));
+    } else if !input_history.is_empty() && text_edit_response.has_focus() {
+        let mut index = LAST_SEARCH_INDEX.load(Acquire);
 
-                input_history.push(mem::take(input.deref_mut()));
-            } else if !input_history.is_empty() && text_edit_response.has_focus() {
-                let mut index = LAST_SEARCH_INDEX.load(Acquire);
-
-                if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-                    match index {
-                        0 | usize::MAX => index = input_history.len() - 1,
-                        _ => index -= 1,
-                    }
-
-                    match input_history.get(index) {
-                        None => input.clear(),
-                        Some(src) => input.clone_from(src),
-                    }
-                } else if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
-                    if index < input_history.len() - 1 {
-                        index += 1;
-                        input.clone_from(&input_history[index]);
-                    } else {
-                        index = usize::MAX;
-                        input.clear();
-                    }
-                }
-
-                LAST_SEARCH_INDEX.store(index, Release);
+        if ui.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+            match index {
+                0 | usize::MAX => index = input_history.len() - 1,
+                _ => index -= 1,
             }
 
-            for msg in LOG_MESSAGES.lock().iter().rev() {
-                let color = match msg.msg_type {
-                    MsgType::Error => egui::Color32::RED,
-                    MsgType::Info  => egui::Color32::GRAY,
-                };
-
-                ui.label(egui::RichText::new(msg.to_string())
-                    .color(color)
-                    .monospace()
-                );
+            match input_history.get(index) {
+                None => input.clear(),
+                Some(src) => input.clone_from(src),
             }
-        });
+        } else if ui.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+            if index < input_history.len() - 1 {
+                index += 1;
+                input.clone_from(&input_history[index]);
+            } else {
+                index = usize::MAX;
+                input.clear();
+            }
+        }
+
+        LAST_SEARCH_INDEX.store(index, Release);
+    }
+
+    for msg in LOG_MESSAGES.lock().iter().rev() {
+        let color = match msg.msg_type {
+            MsgType::Error => egui::Color32::RED,
+            MsgType::Info  => egui::Color32::GRAY,
+        };
+
+        ui.label(egui::RichText::new(msg.to_string())
+            .color(color)
+            .monospace()
+        );
+    }
 }
 
 

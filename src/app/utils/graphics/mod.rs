@@ -36,7 +36,7 @@ pub use {
     winit::{event_loop::EventLoop, event::Event},
 
     egui_wgpu_backend::{RenderPass as EguiRenderPass, ScreenDescriptor as EguiScreenDescriptor},
-    ui::egui_util::{EguiContexts, EguiDockState, Tab},
+    ui::egui_util::{EguiContext, EguiDockState, Tab},
 };
 
 
@@ -71,21 +71,11 @@ pub static SURFACE_CFG: RwLock<GlobalAsset<SurfaceConfiguration>> = const_defaul
 #[derive(Debug, Constructor)]
 pub struct RenderStage {
     pub view: TextureView,
+    pub depth: TextureView,
     pub encoder: CommandEncoder,
     pub output: SurfaceTexture,
 }
 assert_impl_all!(RenderStage: Send, Sync);
-
-
-
-#[derive(Deref)]
-pub struct DemoWindowsUnsafe {
-    pub inner: egui_demo_lib::DemoWindows,
-}
-
-// FIXME: !Send + !Sync
-unsafe impl Send for DemoWindowsUnsafe { }
-unsafe impl Sync for DemoWindowsUnsafe { }
 
 
 
@@ -103,6 +93,9 @@ pub struct Graphics {
 
     /// Common shader uniforms buffer. Holds uniforms like time, screen resolution, etc.
     pub common_uniforms: CommonUniformsBuffer,
+
+    /// `egui` handle.
+    pub egui: Egui,
 
     pub sandbox: World,
 }
@@ -235,33 +228,20 @@ impl Graphics {
         sandbox.spawn((gpu_mesh, pipeline, binds_ref, layout));
         sandbox.insert_resource(camera_uniform);
 
-        sandbox.insert_resource(
-            EguiRenderPass::new(&context.device, SURFACE_CFG.read().format, 1)
+
+
+        // ----------------- Egui initialization -----------------
+
+        let egui = Egui::new(
+            &context.device,
+            window.inner_size().to_vec2(),
+            window.scale_factor(),
         );
-
-        let egui_platform = egui_winit_platform::Platform::new(
-            egui_winit_platform::PlatformDescriptor {
-                physical_width: window.inner_size().width,
-                physical_height: window.inner_size().height,
-                scale_factor: window.scale_factor(),
-                font_definitions: default(),
-                style: default(),
-            }
-        );
-
-        let demo_window = egui_demo_lib::DemoWindows::default();
-
-        sandbox.insert_resource(EguiDockState::new(
-            egui_dock::DockState::new(vec![Tab::Properties, Tab::Profiler]),
-        ));
-
-        sandbox.insert_resource(DemoWindowsUnsafe { inner: demo_window });
-
-        sandbox.insert_resource(egui_platform);
 
         
         
         Ok(Self {
+            egui,
             sandbox,
             window,
             context,
@@ -352,7 +332,8 @@ impl Graphics {
         let mut pass = RenderPass::new(
             "logo_draw_pass",
             &mut render_stage.encoder,
-            [&render_stage.view]
+            [&render_stage.view],
+            Some(&render_stage.depth),
         );
 
         for (_entity, (binds, mesh, pipeline)) in query.into_iter() {
@@ -366,129 +347,60 @@ impl Graphics {
         }
     }
 
-    pub fn ui(world: &World, _time: Time, time_step: TimeStep, contexts: EguiContexts) {
-        use egui_dock::{DockArea, TabViewer};
+    pub fn ui(world: &World, context: EguiContext) {
+        use egui_dock::DockArea;
 
-        #[derive(Clone, Copy, Debug)]
-        struct MyTabViewer<'w> {
-            time_step: TimeStep,
-            world: &'w World,
-        }
+        let mut dock = context.dock.value.write();
 
-        impl TabViewer for MyTabViewer<'_> {
-            type Tab = Tab;
-
-            fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
-                tab.name().into()
-            }
-
-            fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
-                match tab {
-                    Tab::Properties => {
-                        ui::egui_util::use_each_window_builder(ui);
-                    
-                        {
-                            let chunk_array = self.world.resource::<&ChunkArray>().unwrap();
-                            chunk_array.spawn_control_window(self.world, ui);
-                        }
-
-                        camera::CameraHandle::spawn_control_window(self.world, ui);
-                    },
-
-                    Tab::Profiler => crate::profiler::update_and_build_window(self.time_step, ui),
-
-                    Tab::Other { .. } => (),
-                }
-            }
-        }
-
-        {
-            let mut dock = contexts.dock.value.write();
-
-            egui::SidePanel::right("right")
-                .default_width(0.25 * contexts.ctx().available_rect().width())
-                .min_width(0.2 * contexts.ctx().available_rect().width())
-                .max_width(0.3 * contexts.ctx().available_rect().width())
-                .show(contexts.ctx(), |ui| {
-                    DockArea::new(&mut dock)
-                        .style(egui_dock::Style::from_egui(&contexts.ctx().style()))
-                        .show_inside(ui, &mut MyTabViewer { world, time_step });
-                });
-        }
-
-        keyboard::set_input_capture(contexts.ctx().wants_keyboard_input());
-
-        use crate::terrain::chunk::chunk_array::ChunkArray;
+        egui::SidePanel::right("right")
+            .default_width(0.25 * context.ctx().available_rect().width())
+            .min_width(0.2 * context.ctx().available_rect().width())
+            .max_width(0.3 * context.ctx().available_rect().width())
+            .show(context.ctx(), |ui| {
+                DockArea::new(&mut dock)
+                    .style(egui_dock::Style::from_egui(&context.ctx().style()))
+                    .show_inside(ui, &mut EguiTabViewer { world });
+            });
     }
 
     pub fn render_sandbox(&mut self) {
         // self.logo_pass(cam);
     }
 
-    pub fn render_egui(&mut self, time: Time, time_step: TimeStep, world: &World) {
+    pub fn render_egui(&mut self, world: &World)
+        -> Result<(), egui_wgpu_backend::BackendError>
+    {
         let render_stage = self.render_stage.as_mut()
             .expect(
                 "`render_sadbox` should be called after
                 `begin_render` and before `finish_render`"
             );
 
-        {
-            let mut platform = self.sandbox
-                .resource::<&mut egui_winit_platform::Platform>()
-                .unwrap();
+        self.egui.begin_frame();
 
-            let mut pass = self.sandbox
-                .resource::<&mut egui_wgpu_backend::RenderPass>()
-                .unwrap();
+        Self::ui(world, self.egui.context());
 
-            platform.begin_frame();
+        let full_output = self.egui.end_frame(&self.window);
 
-            let contexts = {
-                let dock_state = self.sandbox.resource::<&EguiDockState>()
-                    .expect("sandbox should have EguiDockState")
-                    .deref()
-                    .clone();
+        self.egui.render(
+            &self.context.device,
+            &self.context.queue,
+            render_stage,
+            full_output,
+            self.window.scale_factor() as f32
+        )?;
 
-                EguiContexts::new(platform.context(), dock_state)
-            };
-
-            Self::ui(world, time, time_step, contexts);
-
-            let full_output = platform.end_frame(Some(&self.window));
-            let paint_jobs = platform.context().tessellate(full_output.shapes);
-
-            let (width, height) = {
-                let surface_cfg = SURFACE_CFG.read();
-                (surface_cfg.width, surface_cfg.height)
-            };
-
-            let screen_descriptor = egui_wgpu_backend::ScreenDescriptor {
-                physical_width: width,
-                physical_height: height,
-                scale_factor: self.window.scale_factor() as f32,
-            };
-            let tdelta: egui::TexturesDelta = full_output.textures_delta;
-            pass.add_textures(&self.context.device, &self.context.queue, &tdelta)
-                .expect("failed to add texture");
-            pass.update_buffers(&self.context.device, &self.context.queue, &paint_jobs, &screen_descriptor);
-
-            // Record all render passes.
-            pass.execute(
-                &mut render_stage.encoder,
-                &render_stage.view,
-                &paint_jobs,
-                &screen_descriptor,
-                None,
-            ).unwrap();
-        }
+        Ok(())
     }
 
     pub fn render_with_sandbox<R>(
-        &mut self, time: Time, time_step: TimeStep, world: &World, render: R,
+        &mut self, world: &World, render: R,
     ) -> AnyResult<()>
     where
-        R: FnOnce(&Binds, &mut CommandEncoder, &TextureView, &World) -> AnyResult<()>,
+        R: FnOnce(&Binds, &mut CommandEncoder, &TextureView, Option<&TextureView>, &World)
+            -> AnyResult<()>,
     {
+        let time = world.resource::<&Timer>()?.time();
         self.begin_render(time)?;
 
         {
@@ -500,12 +412,13 @@ impl Graphics {
                 &self.common_uniforms.binds,
                 &mut render_stage.encoder,
                 &render_stage.view,
+                Some(&render_stage.depth),
                 world
             )?;
         }
 
         self.render_sandbox();
-        self.render_egui(time, time_step, world);
+        self.render_egui(world)?;
         self.finish_render()?;
 
         Ok(())
@@ -547,6 +460,34 @@ impl Graphics {
             _padding: 0,
         });
 
+        let depth = {
+            let surface_cfg = SURFACE_CFG.read();
+
+            let size = wgpu::Extent3d {
+                width: surface_cfg.width,
+                height: surface_cfg.height,
+                depth_or_array_layers: 1,
+            };
+
+            let desc = wgpu::TextureDescriptor {
+                label: Some("depth_texture"),
+                size,
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Depth32Float,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                    | wgpu::TextureUsages::TEXTURE_BINDING,
+                view_formats: &[],
+            };
+
+            let texture = self.context.device.create_texture(&desc);
+
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+
+            TextureView::from(view)
+        };
+
         let output = self.context.surface.get_current_texture()?;
 
         let view = TextureView::from(
@@ -556,10 +497,12 @@ impl Graphics {
         let mut encoder
             = self.context.device.create_command_encoder(&default());
 
-        ClearPass::clear(&mut encoder, [&view], cfg::shader::CLEAR_COLOR);
+        ClearPass::clear(
+            &mut encoder, [&view], Some(&depth), cfg::shader::CLEAR_COLOR
+        );
 
         self.render_stage = Some(
-            RenderStage::new(view, encoder, output.into())
+            RenderStage::new(view, depth, encoder, output.into())
         );
 
         Ok(())
@@ -596,9 +539,7 @@ impl Graphics {
 
         let mut graphics = world.resource::<&mut Self>()?;
 
-        graphics.sandbox.resource::<&mut egui_winit_platform::Platform>()
-            .unwrap()
-            .handle_event(event);
+        graphics.egui.platform.handle_event(event);
 
         if let Event::WindowEvent { event: WindowEvent::Resized(new_size), .. }
             = event
@@ -616,7 +557,7 @@ impl Graphics {
         Ok(())
     }
 
-    pub async fn update(world: &World) -> AnyResult<()> {
+    pub fn update(world: &World) -> AnyResult<()> {
         let graphics = world.resource::<&mut Self>()?;
 
         {
@@ -626,6 +567,8 @@ impl Graphics {
             let uniform_buffer = world.resource::<&CameraUniformBuffer>()?;
             uniform_buffer.update(&graphics.context.queue, &cam_uniform);
         }
+
+        keyboard::set_input_capture(graphics.egui.context().wants_keyboard_input());
 
         Ok(())
     }
@@ -709,5 +652,144 @@ impl CommonUniformsBuffer {
     pub fn update(&self, queue: &Queue, uniforms: CommonUniforms) {
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[uniforms]));
         queue.submit(None);
+    }
+}
+
+
+
+pub struct Egui {
+    render_pass: egui_wgpu_backend::RenderPass,
+    platform: egui_winit_platform::Platform,
+    dock_state: EguiDockState,
+}
+assert_impl_all!(Egui: Send, Sync);
+
+impl Egui {
+    pub fn new(device: &Device, window_sizes: UInt2, scale_factor: f64) -> Self {
+        Self {
+            render_pass: egui_wgpu_backend::RenderPass::new(
+                device, SURFACE_CFG.read().format, 1
+            ),
+            platform: egui_winit_platform::Platform::new(
+                egui_winit_platform::PlatformDescriptor {
+                    physical_width: window_sizes.x,
+                    physical_height: window_sizes.y,
+                    scale_factor,
+                    font_definitions: default(),
+                    style: default(),
+                },
+            ),
+            dock_state: default(),
+        }
+    }
+
+    pub fn begin_frame(&mut self) {
+        self.platform.begin_frame();
+    }
+
+    pub fn end_frame(&mut self, window: &Window) -> egui::FullOutput {
+        // `end_frame` changes cursor visibility to change its icon.
+        // So we can't provide vindow during capturing.
+        self.platform.end_frame(
+            (!mouse::is_captured()).then_some(window)
+        )
+    }
+
+    pub fn context(&self) -> EguiContext {
+        EguiContext::new(self.platform.context(), self.dock_state.clone())
+    }
+
+    pub fn render(
+        &mut self,
+        device: &Device,
+        queue: &Queue,
+        render_stage: &mut RenderStage,
+        full_output: egui::FullOutput,
+        scale_factor: f32,
+    ) -> Result<(), egui_wgpu_backend::BackendError> {
+        let paint_jobs = self.context().tessellate(full_output.shapes);
+
+        let (width, height) = {
+            let cfg = SURFACE_CFG.read();
+            (cfg.width, cfg.height)
+        };
+
+        let screen_descriptor = egui_wgpu_backend::ScreenDescriptor {
+            physical_width: width,
+            physical_height: height,
+            scale_factor,
+        };
+
+        self.render_pass.add_textures(
+            device, queue, &full_output.textures_delta,
+        )?;
+
+        self.render_pass.update_buffers(
+            device, queue, &paint_jobs, &screen_descriptor,
+        );
+
+        self.render_pass.execute(
+            &mut render_stage.encoder,
+            &render_stage.view,
+            &paint_jobs,
+            &screen_descriptor,
+            None
+        )?;
+
+        Ok(())
+    }
+}
+
+impl std::fmt::Debug for Egui {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Egui {{ dock_state: {:?}, .. }}", self.dock_state)
+    }
+}
+
+
+
+#[derive(Clone, Copy, Debug)]
+struct EguiTabViewer<'w> {
+    world: &'w World,
+}
+
+impl egui_dock::TabViewer for EguiTabViewer<'_> {
+    type Tab = Tab;
+
+    fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
+        tab.name().into()
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
+        match tab {
+            Tab::Properties => {
+                ui::egui_util::use_each_window_builder(ui);
+            
+                {
+                    use crate::terrain::chunk::chunk_array::ChunkArray;
+
+                    let chunk_array = self.world.resource::<&ChunkArray>().unwrap();
+                    chunk_array.spawn_control_window(self.world, ui);
+                }
+
+                camera::CameraHandle::spawn_control_window(self.world, ui);
+            },
+
+            Tab::Profiler => {
+                let time_step = self.world.resource::<&Timer>()
+                    .expect("failed to find the timer")
+                    .time_step();
+
+                crate::profiler::update_and_build_window(time_step, ui);
+            }
+
+            Tab::Console => crate::logger::build_window(ui),
+
+            Tab::Other { .. } => (),
+        }
+    }
+
+    fn closeable(&mut self, tab: &mut Self::Tab) -> bool {
+        matches!(tab, Tab::Other { .. })
     }
 }

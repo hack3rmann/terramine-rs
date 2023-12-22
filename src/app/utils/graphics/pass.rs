@@ -16,6 +16,7 @@ impl<'s> ClearPass<'s> {
     pub fn new(
         encoder: &'s mut wgpu::CommandEncoder,
         target_views: impl IntoIterator<Item = &'s TextureView>,
+        target_depth: Option<&'s TextureView>,
         clear_color: wgpu::Color,
     ) -> Self {
         use wgpu::{RenderPassColorAttachment, Operations, LoadOp, RenderPassDescriptor};
@@ -35,7 +36,16 @@ impl<'s> ClearPass<'s> {
             &RenderPassDescriptor {
                 label: Some("clear_pass"),
                 color_attachments: &color_attachments,
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: target_depth.map(|view|
+                    wgpu::RenderPassDepthStencilAttachment {
+                        view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }
+                ),
                 // TODO: configurate this
                 timestamp_writes: None,
                 // TODO: configure this
@@ -50,9 +60,10 @@ impl<'s> ClearPass<'s> {
     pub fn clear(
         encoder: &'s mut CommandEncoder,
         target_views: impl IntoIterator<Item = &'s TextureView>,
+        target_depth: Option<&'s TextureView>,
         clear_color: wgpu::Color,
     ) {
-        let _pass = Self::new(encoder, target_views, clear_color);
+        let _pass = Self::new(encoder, target_views, target_depth, clear_color);
     }
 }
 
@@ -66,7 +77,8 @@ impl<'s> RenderPass<'s> {
     pub fn new(
         label: &str,
         encoder: &'s mut CommandEncoder,
-        target_views: impl IntoIterator<Item = &'s TextureView>
+        target_views: impl IntoIterator<Item = &'s TextureView>,
+        depth_view: Option<&'s TextureView>,
     ) -> Self {
         use wgpu::{RenderPassColorAttachment, Operations, LoadOp, StoreOp, RenderPassDescriptor};
 
@@ -85,7 +97,16 @@ impl<'s> RenderPass<'s> {
             &RenderPassDescriptor {
                 label: Some(label),
                 color_attachments: &color_attachments,
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: depth_view.map(|view|
+                    wgpu::RenderPassDepthStencilAttachment {
+                        view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }
+                ),
                 // TODO: configure this
                 timestamp_writes: None,
                 // TODO: configure this

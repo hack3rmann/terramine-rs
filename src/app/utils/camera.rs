@@ -80,6 +80,11 @@ impl CameraHandle {
         )>();
 
         ui.collapsing("Cameras", |ui| {
+            ui.label(format!(
+                "Press '{:?}' to spawn new camera",
+                cfg::key_bindings::SPAWN_CAMERA
+            ));
+
             for (entity, (camera, transform)) in query.iter() {
                 ui.collapsing(format!("Camera #{}", entity.id()), |ui| {
                     let mut new_transform = match transform {

@@ -142,7 +142,7 @@ macros::atomic_static! {
     pub(super) static X: f32 = 0.0;
     pub(super) static Y: f32 = 0.0;
     pub(super) static IS_ON_WINDOW: bool = false;
-    pub(super) static IS_CAPTURED: bool = false;
+    pub(crate) static IS_CAPTURED: bool = false;
 }
 
 pub fn get_x() -> f32 { X.load(Relaxed) }

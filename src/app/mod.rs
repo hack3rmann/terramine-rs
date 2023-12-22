@@ -120,7 +120,7 @@ impl App {
                     return Ok(());
                 }
 
-                if keyboard::just_pressed(Key::C) {
+                if keyboard::just_pressed(cfg::key_bindings::SPAWN_CAMERA) {
                     self.world.spawn(camera::make_new());
                 }
 
@@ -148,7 +148,7 @@ impl App {
     /// Updates `ecs`'s systems. Note that non of resources can be borrowed at this point.
     async fn update_systems(&mut self) -> AnyResult<()> {
         CameraHandle::update_all(&self.world);
-        Graphics::update(&self.world).await?;
+        Graphics::update(&self.world)?;
 
         Ok(())
     }
@@ -218,17 +218,12 @@ impl App {
     /// Draws a frame on main window.
     #[profile]
     async fn draw_frame(&mut self, _window_id: WindowId) -> AnyResult<()> {
-        let (time, time_step) = {
-            let timer = self.world.resource::<&Timer>()?;
-            (timer.time(), timer.time_step())
-        };
-
         let mut graphics = self.world.resource::<&mut Graphics>()?;
 
         let chunk_array = self.world.resource::<&ChunkArray>()?;
 
-        graphics.render_with_sandbox(time, time_step, &self.world, |binds, encoder, view, world| {
-            chunk_array.render(world, binds, encoder, view.clone())
+        graphics.render_with_sandbox(&self.world, |binds, encoder, view, depth, world| {
+            chunk_array.render(world, binds, encoder, view.clone(), depth.cloned())
         })?;
 
         Ok(())

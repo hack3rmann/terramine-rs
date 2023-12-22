@@ -47,6 +47,7 @@ pub enum Tab {
     #[default]
     Properties,
     Profiler,
+    Console,
     Other {
         name: String,
     },
@@ -60,6 +61,7 @@ impl Tab {
         match name.deref() {
             "Properties" => Self::Properties,
             "Profiler" => Self::Profiler,
+            "Console" => Self::Console,
             _ => Self::Other { name: name.to_string() },
         }
     }
@@ -68,6 +70,7 @@ impl Tab {
         match self {
             Self::Properties => "Properties",
             Self::Profiler => "Profiler",
+            Self::Console => "Console",
             Self::Other { name } => name,
         }
     }
@@ -89,22 +92,32 @@ impl EguiDockState {
 
 impl Default for EguiDockState {
     fn default() -> Self {
-        use egui_dock::DockState;
+        use egui_dock::{DockState, SurfaceIndex, NodeIndex};
 
-        Self::new(DockState::new(vec![]))
+        let mut result = DockState::new(vec![Tab::Properties, Tab::Profiler]);
+
+        let tree = result.get_surface_mut(SurfaceIndex::main())
+            .expect("main surface should exist")
+            .node_tree_mut()
+            .expect("node tree borrowed only once");
+
+        tree.split_below(NodeIndex::root(), 0.6, vec![Tab::Console]);
+
+        Self::new(result)
     }
 }
 
 
 
-#[derive(Debug, Clone)]
-pub struct EguiContexts {
+#[derive(Debug, Clone, Deref)]
+pub struct EguiContext {
+    #[deref]
     pub(crate) ctx: egui::Context,
     pub(crate) dock: EguiDockState,
 }
-assert_impl_all!(EguiContexts: Send, Sync);
+assert_impl_all!(EguiContext: Send, Sync);
 
-impl EguiContexts {
+impl EguiContext {
     pub fn new(ctx: egui::Context, dock: EguiDockState) -> Self {
         Self { ctx, dock }
     }
@@ -115,6 +128,72 @@ impl EguiContexts {
 
     pub fn ctx_mut(&mut self) -> &mut egui::Context {
         &mut self.ctx
+    }
+}
+
+
+
+pub struct DragValue3<'src, 'str, T> {
+    src: &'src mut T,
+    label: egui::WidgetText,
+    x_prefix: StrView<'str>,
+    y_prefix: StrView<'str>,
+    z_prefix: StrView<'str>,
+}
+assert_impl_all!(DragValue3<i32>: Send, Sync);
+
+impl<'src, 'str, T> DragValue3<'src, 'str, T> {
+    pub fn new(src: &'src mut T) -> Self {
+        Self {
+            src,
+            label: "".into(),
+            x_prefix: "x: ".into(),
+            y_prefix: "y: ".into(),
+            z_prefix: "z: ".into(),
+        }
+    }
+
+    pub fn label(mut self, label: impl Into<egui::WidgetText>) -> Self {
+        self.label = label.into();
+        self
+    }
+
+    pub fn x_prefix(mut self, value: impl Into<StrView<'str>>) -> Self {
+        self.x_prefix = value.into();
+        self
+    }
+
+    pub fn y_prefix(mut self, value: impl Into<StrView<'str>>) -> Self {
+        self.y_prefix = value.into();
+        self
+    }
+
+    pub fn z_prefix(mut self, value: impl Into<StrView<'str>>) -> Self {
+        self.z_prefix = value.into();
+        self
+    }
+
+    pub fn prefixes(
+        mut self,
+        x_prefix: impl Into<StrView<'str>>,
+        y_prefix: impl Into<StrView<'str>>,
+        z_prefix: impl Into<StrView<'str>>,
+    ) -> Self {
+        self = self.x_prefix(x_prefix);
+        self = self.y_prefix(y_prefix);
+        self = self.z_prefix(z_prefix);
+        self
+    }
+}
+
+impl egui::Widget for DragValue3<'_, '_, vec3> {
+    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+        ui.horizontal(|ui| {
+            ui.label(self.label)
+                | ui.add(egui::DragValue::new(&mut self.src.x).prefix(self.x_prefix))
+                | ui.add(egui::DragValue::new(&mut self.src.y).prefix(self.y_prefix))
+                | ui.add(egui::DragValue::new(&mut self.src.z).prefix(self.z_prefix))
+        }).inner
     }
 }
 
@@ -134,26 +213,19 @@ impl<'t> TransformWidget<'t> {
 
 impl egui::Widget for TransformWidget<'_> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        let transform_response = ui.horizontal(|ui| {
-            ui.label("Position")
-            | ui.add(egui::DragValue::new(&mut self.transform.translation.x).prefix("x: "))
-            | ui.add(egui::DragValue::new(&mut self.transform.translation.y).prefix("y: "))
-            | ui.add(egui::DragValue::new(&mut self.transform.translation.z).prefix("z: "))
-        }).inner;
+        let transform_response = ui.add(
+            DragValue3::new(&mut self.transform.translation.position).label("Position")
+        );
     
-        let rotation_response = ui.horizontal(|ui| {
-            ui.label("Rotation")
-            | ui.add(egui::DragValue::new(&mut self.transform.rotation.angles.x).prefix("roll: "))
-            | ui.add(egui::DragValue::new(&mut self.transform.rotation.angles.y).prefix("pitch: "))
-            | ui.add(egui::DragValue::new(&mut self.transform.rotation.angles.z).prefix("yaw: "))
-        }).inner;
+        let rotation_response = ui.add(
+            DragValue3::new(&mut self.transform.rotation.angles)
+                .label("Rotation")
+                .prefixes("roll: ", "pitch: ", "yaw: ")
+        );
 
-        let scaling_response = ui.horizontal(|ui| {
-            ui.label("Scaling")
-            | ui.add(egui::DragValue::new(&mut self.transform.scaling.amount.x).prefix("x: "))
-            | ui.add(egui::DragValue::new(&mut self.transform.scaling.amount.y).prefix("y: "))
-            | ui.add(egui::DragValue::new(&mut self.transform.scaling.amount.z).prefix("z: "))
-        }).inner;
+        let scaling_response = ui.add(
+            DragValue3::new(&mut self.transform.scaling.amount).label("Scaling")
+        );
 
         transform_response | rotation_response | scaling_response
     }

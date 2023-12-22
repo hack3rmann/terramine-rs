@@ -704,6 +704,7 @@ impl ChunkArray {
     pub fn render(
         &self, world: &World, common_binds: &Binds,
         encoder: &mut CommandEncoder, view: TextureView,
+        depth: Option<TextureView>,
     ) -> AnyResult<()> {
         let cam_unform = world.resource::<&CameraUniformBuffer>()?;
         let binds = world.get::<&ChunkBinds>(self.array_entity)?;
@@ -711,7 +712,7 @@ impl ChunkArray {
 
         let mut query = world.query::<&ChunkMesh>();
 
-        let mut pass = RenderPass::new("chunk_array_render_pass", encoder, [&view]);
+        let mut pass = RenderPass::new("chunk_array_render_pass", encoder, [&view], depth.as_ref());
 
         for (_entity, mesh) in query.into_iter() {
             let Some(details) = mesh.details() else { continue };

@@ -23,7 +23,7 @@ pub mod camera {
         pub const FAR_PLANE:      f32 = 10_000.0;
 
         pub const SPEED:	      f32 = 10.0;
-        pub const SPEED_FALLOFF:  f32 = 0.88;
+        pub const SPEED_FALLOFF:  f32 = 0.995;
         pub const FOV_IN_DEGREES: f32 = 60.0;
         pub const MOUSE_SENSETIVITY: f32 = 0.2;
     }
@@ -146,6 +146,7 @@ pub mod key_bindings {
     pub const ENABLE_PROFILER_WINDOW:         Key = Key::E;
     pub const SWITCH_RENDER_SHADOWS:          Key = Key::U;
     pub const RELOAD_RESOURCES:               Key = Key::H;
+    pub const SPAWN_CAMERA:                   Key = Key::C;
 }
 
 pub mod timer {
