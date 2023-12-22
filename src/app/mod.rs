@@ -120,6 +120,10 @@ impl App {
                     return Ok(());
                 }
 
+                if keyboard::just_pressed(Key::C) {
+                    self.world.spawn(camera::make_new());
+                }
+
                 let graphics = self.world.resource::<&Graphics>()?;
                 graphics.window.request_redraw();
             },

@@ -17,6 +17,13 @@ impl MainCamera {
         main.0.entity = camera;
         Ok(())
     }
+
+    pub fn is_main(world: &World, camera: Entity) -> AnyResult<bool> {
+        let main = world.resource::<&Self>()
+            .context("failed to find main camera")?;
+
+        Ok(main.0.entity == camera)
+    }
 }
 
 
@@ -112,9 +119,14 @@ impl CameraHandle {
                         camera.fov.set_degrees(fov);
                     }
 
-                    if ui.button("Set main").clicked() {
-                        camera.enable();
-                        MainCamera::set(world, entity).unwrap();
+                    if MainCamera::is_main(world, entity).unwrap() {
+                        ui.label(egui::RichText::new("main").color(egui::Color32::GREEN));
+                    } else {
+                        ui.label(egui::RichText::new("not main").color(egui::Color32::RED));
+                        if ui.button("Set main").clicked() {
+                            camera.enable();
+                            MainCamera::set(world, entity).unwrap();
+                        }
                     }
                 });
             }
@@ -290,12 +302,16 @@ impl Default for CameraComponent {
 pub type CameraBundle = (CameraComponent, Transform, Speed, Frustum);
 
 pub fn make_new_enabled() -> CameraBundle {
-    let mut cam = CameraComponent::DEFAULT;
+    let mut result = make_new();
+    result.0.enable();
+    result
+}
+
+pub fn make_new() -> CameraBundle {
+    let cam = CameraComponent::DEFAULT;
     let transform = Transform::DEFAULT;
     let speed = Speed::DEFAULT;
     let frustum = Frustum::new(&cam, &transform);
-    
-    cam.enable();
 
     (cam, transform, speed, frustum)
 }
