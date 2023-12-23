@@ -766,10 +766,9 @@ impl egui_dock::TabViewer for EguiTabViewer<'_> {
                 ui::egui_util::use_each_window_builder(ui);
             
                 {
-                    use crate::terrain::chunk::chunk_array::ChunkArray;
+                    use crate::terrain::chunk::chunk_array_old::ChunkArray;
 
-                    let chunk_array = self.world.resource::<&ChunkArray>().unwrap();
-                    chunk_array.spawn_control_window(self.world, ui);
+                    ChunkArray::spawn_control_window(self.world, ui);
                 }
 
                 camera::CameraHandle::spawn_control_window(self.world, ui);

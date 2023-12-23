@@ -1,3 +1,5 @@
+use super::commands;
+
 use {
     crate::{
         prelude::*,
@@ -97,7 +99,7 @@ impl ChunkArray {
             sizes,
             chunk_entities,
             array_entity: self_entity,
-            lod_threashold: 1.0,// FIXME: 5.8,
+            lod_threashold: 5.8,
             tasks: default(),
         })
     }
@@ -145,8 +147,8 @@ impl ChunkArray {
     /// Computes start and end poses from chunk array sizes.
     pub fn pos_bounds(sizes: USize3) -> (Int3, Int3) {
         (
-            Self::coord_idx_to_pos(sizes, USize3::ZERO),
-            Self::coord_idx_to_pos(sizes, sizes),
+            Self::volume_index_to_pos(sizes, USize3::ZERO),
+            Self::volume_index_to_pos(sizes, sizes),
         )
     }
 
@@ -170,11 +172,17 @@ impl ChunkArray {
     }
 
     /// Clears all [chunk array][ChunkArray] stuff out from the `world`.
-    pub fn clean_world(&mut self, world: &mut World) {
-        world.despawn(self.array_entity).unwrap();
-        self.array_entity = Entity::DANGLING;
+    pub fn remove(world: &mut World) {
+        let mut this = world.resource::<&mut Self>().unwrap();
 
-        for chunk_entity in self.chunk_entities.drain(..) {
+        let array_entity = this.array_entity;
+        let mut chunk_entities = mem::take(&mut this.chunk_entities);
+
+        drop(this);
+
+        world.despawn(array_entity).unwrap();
+
+        for chunk_entity in chunk_entities.drain(..) {
             world.despawn(chunk_entity).unwrap();
         }
     }
@@ -325,7 +333,7 @@ impl ChunkArray {
 
     /// Gets a [chunk][Chunk] from the `world` without panic.
     pub fn get_chunk(&self, world: &World, pos: Int3) -> Option<ChunkRef> {
-        let chunk_pos = Chunk::local_pos(pos);
+        let chunk_pos = Chunk::global_to_local(pos);
         let chunk_idx = Self::pos_to_idx(self.sizes, chunk_pos)?;
         self.get_chunk_by_idx(world, chunk_idx)
     }
@@ -377,8 +385,8 @@ impl ChunkArray {
 
     /// Fills volume of voxels to same [id][Id] and returnes `is_changed`.
     pub fn fill_voxels(&mut self, world: &World, pos_from: Int3, pos_to: Int3, new_id: Id) -> Result<bool, EditError> {
-        let chunk_pos_from = Chunk::local_pos(pos_from);
-        let chunk_pos_to   = Chunk::local_pos(pos_to + Int3::from(Chunk::SIZES) - Int3::ONE);
+        let chunk_pos_from = Chunk::global_to_local(pos_from);
+        let chunk_pos_to   = Chunk::global_to_local(pos_to + Int3::from(Chunk::SIZES) - Int3::ONE);
 
         Self::pos_to_idx(self.sizes, chunk_pos_from)
             .ok_or(EditError::PosIdConversion(chunk_pos_from))?;
@@ -392,7 +400,7 @@ impl ChunkArray {
             let idx = Self::pos_to_idx(self.sizes, chunk_pos)
                 .expect("chunk_pos already valid");
 
-            let min_voxel_pos = Chunk::global_pos(chunk_pos);
+            let min_voxel_pos = Chunk::local_to_global(chunk_pos);
             let end_voxel_pos = min_voxel_pos + Int3::from(Chunk::SIZES);
 
             let pos_from = Int3::new(
@@ -435,7 +443,7 @@ impl ChunkArray {
     pub fn drop_all_meshes(&self, world: &World) {
         for idx in 0..self.chunk_entities.len() {
             let mut mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
-            *mesh = default();
+            _ = mem::take(mesh.deref_mut());
         }
     }
 
@@ -453,21 +461,26 @@ impl ChunkArray {
     }
 
     pub async fn apply_new(
-        &mut self, world: &mut World, sizes: USize3, chunks: Vec<Chunk>,
+        world: &mut World, sizes: USize3, chunks: Vec<Chunk>,
     ) -> AnyResult<()> {
         ensure_eq!(
             Self::volume(sizes),
             chunks.len(),
             StrError::from("chunk-array should have same len as sizes")
         );
-
+        
         let chunks = chunks.into_iter()
             .map(Arc::new)
             .collect();
 
-        let new_chunks = ChunkArray::from_chunks(world, sizes, chunks).await?;
-        self.tasks.stop_all();
-        let _ = mem::replace(self, new_chunks);
+        let new_array = ChunkArray::from_chunks(world, sizes, chunks).await?;
+
+        ChunkArray::remove(world);
+
+        let mut this = world.resource::<&mut Self>()?;
+
+        this.tasks.stop_all();
+        _ = mem::replace(this.deref_mut(), new_array);
 
         Ok(())
     }
@@ -477,23 +490,23 @@ impl ChunkArray {
         arr_sizes.x * arr_sizes.y * arr_sizes.z
     }
 
-    pub fn voxel_pos_to_coord_idx(voxel_pos: Int3, chunk_array_sizes: USize3) -> Option<USize3> {
-        let chunk_pos = Chunk::local_pos(voxel_pos);
+    pub fn voxel_pos_to_volume_index(voxel_pos: Int3, chunk_array_sizes: USize3) -> Option<USize3> {
+        let chunk_pos = Chunk::global_to_local(voxel_pos);
         let local_voxel_pos = Chunk::global_to_local_pos(chunk_pos, voxel_pos);
 
-        let chunk_coord_idx = Self::pos_to_coord_idx(chunk_array_sizes, chunk_pos)?;
-        let voxel_offset_by_chunk: USize3 = Chunk::global_pos(chunk_coord_idx.into()).into();
+        let chunk_coord_idx = Self::local_pos_to_volume_index(chunk_array_sizes, chunk_pos)?;
+        let voxel_offset_by_chunk: USize3 = Chunk::local_to_global(chunk_coord_idx.into()).into();
 
         Some(voxel_offset_by_chunk + USize3::from(local_voxel_pos))
     }
 
     /// Convertes 3d index into chunk pos.
-    pub fn coord_idx_to_pos(sizes: USize3, coord_idx: USize3) -> Int3 {
+    pub fn volume_index_to_pos(sizes: USize3, coord_idx: USize3) -> Int3 {
         Int3::from(coord_idx) - Int3::from(sizes) / 2
     }
 
     /// Convertes chunk pos to 3d index.
-    pub fn pos_to_coord_idx(sizes: USize3, pos: Int3) -> Option<USize3> {
+    pub fn local_pos_to_volume_index(sizes: USize3, pos: Int3) -> Option<USize3> {
         let sizes = Int3::from(sizes);
         let shifted = pos + sizes / 2;
 
@@ -505,25 +518,25 @@ impl ChunkArray {
     }
 
     /// Convertes 3d index to an array index.
-    pub fn coord_idx_to_idx(sizes: USize3, coord_idx: USize3) -> usize {
+    pub fn volume_index_to_linear(sizes: USize3, coord_idx: USize3) -> usize {
         sdex::get_index(&coord_idx.as_array(), &sizes.as_array())
     }
 
     /// Convertes [chunk][Chunk] pos to an array index.
     pub fn pos_to_idx(sizes: USize3, pos: Int3) -> Option<usize> {
-        let coord_idx = Self::pos_to_coord_idx(sizes, pos)?;
-        Some(Self::coord_idx_to_idx(sizes, coord_idx))
+        let coord_idx = Self::local_pos_to_volume_index(sizes, pos)?;
+        Some(Self::volume_index_to_linear(sizes, coord_idx))
     }
 
     /// Convertes array index to 3d index.
-    pub fn idx_to_coord_idx(idx: usize, sizes: USize3) -> USize3 {
-        iterator::idx_to_coord_idx(idx, sizes)
+    pub fn linear_index_to_volume(idx: usize, sizes: USize3) -> USize3 {
+        iterator::linear_index_to_volume(idx, sizes)
     }
 
     /// Converts array index to chunk pos.
-    pub fn idx_to_pos(idx: usize, sizes: USize3) -> Int3 {
-        let coord_idx = Self::idx_to_coord_idx(idx, sizes);
-        Self::coord_idx_to_pos(sizes, coord_idx)
+    pub fn index_to_pos(idx: usize, sizes: USize3) -> Int3 {
+        let coord_idx = Self::linear_index_to_volume(idx, sizes);
+        Self::volume_index_to_pos(sizes, coord_idx)
     }
 
     /// Gives adjacent chunks references by center chunk position.
@@ -593,7 +606,7 @@ impl ChunkArray {
 
         result.sort_by_key(|&idx| {
             let chunk = self.chunk_by_idx(world, idx);
-            let pos = Chunk::global_pos(chunk.pos.load(Relaxed));
+            let pos = Chunk::local_to_global(chunk.pos.load(Relaxed));
             let dot = vec3::sqr(cam_pos - pos.into());
             
             NotNan::new(dot)
@@ -606,32 +619,34 @@ impl ChunkArray {
     /// TODO: missing docs
     #[profile]
     pub async fn update_meshes(
-        &mut self, world: &World, cam_pos: vec3, _frustum: &Frustum,
+        world: &World, cam_pos: vec3, _frustum: &Frustum,
     ) -> Result<(), ChunkRenderError> {
         #![allow(clippy::await_holding_refcell_ref)]
 
-        let sizes = self.sizes;
+        let mut this = world.resource::<&mut Self>().unwrap();
+
+        let sizes = this.sizes;
         ensure_or!(sizes != USize3::ZERO, return Ok(()));
 
         let graphics = world.resource::<&Graphics>().unwrap();
         let device = &graphics.context.device;
 
-        self.try_finish_all_tasks(world, device).await;
+        this.try_finish_all_tasks(world, device).await;
 
-        for idx in self.get_indices_sorted(world, cam_pos) {
-            let mut chunk = self.chunk_by_idx(world, idx);
+        for idx in this.get_indices_sorted(world, cam_pos) {
+            let mut chunk = this.chunk_by_idx(world, idx);
             let chunk_pos = chunk.pos.load(Relaxed);
             
-            let chunk_adj = self.get_adj_chunks(world, chunk_pos);
-            let mut mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
+            let chunk_adj = this.get_adj_chunks(world, chunk_pos);
+            let mut mesh = this.chunk_component::<&mut ChunkMesh>(world, idx);
 
-            let lod = Self::desired_lod_at(chunk_pos, cam_pos, self.lod_threashold);
+            let lod = Self::desired_lod_at(chunk_pos, cam_pos, this.lod_threashold);
 
 
             if !chunk.is_generated() {
-                if self.tasks.is_gen_running(chunk_pos) {
-                    if let Some(new_chunk) = self.tasks.try_finish_gen(chunk_pos).await {
-                        self.tasks.stop_all_meshes(chunk_pos);
+                if this.tasks.is_gen_running(chunk_pos) {
+                    if let Some(new_chunk) = this.tasks.try_finish_gen(chunk_pos).await {
+                        this.tasks.stop_all_meshes(chunk_pos);
 
                         // * Safety:
                         // * Safe, because there's no chunk readers due to tasks drop above
@@ -639,8 +654,8 @@ impl ChunkArray {
                             let _ = mem::replace(Arc::get_mut_unchecked(&mut chunk), new_chunk);
                         }
                     }
-                } else if self.tasks.can_start_mesh() {
-                    self.tasks.start_gen(chunk_pos, sizes);
+                } else if this.tasks.can_start_mesh() {
+                    this.tasks.start_gen(chunk_pos, sizes);
                     continue;
                 } else {
                     continue;
@@ -656,10 +671,10 @@ impl ChunkArray {
             // ) <= CHUNK_MESH_PARTITION_DIST;
 
             // if chunk_is_close_to_be_partitioned &&
-            //    !self.tasks.partition.contains_key(&chunk_pos) &&
+            //    !this.tasks.partition.contains_key(&chunk_pos) &&
             //    !mesh.is_partial()
             // {
-            //     self.tasks.start_partitioning(&chunk, chunk_adj.clone());
+            //     this.tasks.start_partitioning(&chunk, chunk_adj.clone());
             // }
 
             // let chunnk_can_be_connected =
@@ -673,16 +688,16 @@ impl ChunkArray {
 
             let can_set_new_lod =
                 mesh.get_available_lods().contains(&lod) ||
-                self.tasks.is_mesh_running(chunk_pos, lod) &&
-                self.tasks.try_finish_mesh(chunk_pos, lod, &mut mesh, device).await;
+                this.tasks.is_mesh_running(chunk_pos, lod) &&
+                this.tasks.try_finish_mesh(chunk_pos, lod, &mut mesh, device).await;
 
             if can_set_new_lod {
                 chunk.set_active_lod(&mesh, lod);
-            } else if self.tasks.can_start_mesh() {
-                self.tasks.start_mesh(&chunk, chunk_adj.clone(), lod).await;
+            } else if this.tasks.can_start_mesh() {
+                this.tasks.start_mesh(&chunk, chunk_adj.clone(), lod).await;
             }
 
-            self.tasks.stop_all_useless(lod, chunk_pos);
+            this.tasks.stop_all_useless(lod, chunk_pos);
 
             if !chunk.can_render_active_lod(&mesh) {
                 chunk.try_set_best_fit_lod(&mesh, lod);
@@ -702,13 +717,15 @@ impl ChunkArray {
 
     #[profile]
     pub fn render(
-        &self, world: &World, common_binds: &Binds,
+        world: &World, common_binds: &Binds,
         encoder: &mut CommandEncoder, view: TextureView,
         depth: Option<TextureView>,
     ) -> AnyResult<()> {
+        let this = world.resource::<&Self>()?;
+
         let cam_unform = world.resource::<&CameraUniformBuffer>()?;
-        let binds = world.get::<&ChunkBinds>(self.array_entity)?;
-        let pipeline = world.get::<&ChunkRenderPipeline>(self.array_entity)?;
+        let binds = world.get::<&ChunkBinds>(this.array_entity)?;
+        let pipeline = world.get::<&ChunkRenderPipeline>(this.array_entity)?;
 
         let mut query = world.query::<&ChunkMesh>();
 
@@ -811,13 +828,30 @@ impl ChunkArray {
             .all(Chunk::is_generated)
     }
 
+    pub async fn generate_new(world: &mut World, sizes: USize3) {
+        // world.resource::<&mut Self>().unwrap()
+        //     .tasks
+        //     .stop_all();
+        
+        let chunks = Self::new_empty_chunks(world, sizes).await;
+
+        match chunks {
+            Ok(new_chunks) => {
+                let mut this = world.resource::<&mut Self>().unwrap();
+                _ = mem::replace(this.deref_mut(), new_chunks);
+            }
+            Err(err) => logger::error!(from = "chunk-array", "{err}"),
+        }
+    }
+
     pub async fn proccess_command(
-        &mut self, world: &World,
-        command: Command, change_tracker: &mut ChangeTracker,
+        world: &mut World, command: Command, change_tracker: &mut ChangeTracker,
     ) {
+        let mut this = world.resource::<&mut Self>().unwrap();
+
         match command {
             Command::SetVoxel { pos, new_id } => {
-                let old_id = self.set_voxel(world, pos, new_id)
+                let old_id = this.set_voxel(world, pos, new_id)
                     .log_error("chunk-array", "failed to set voxel");
 
                 if old_id != new_id {
@@ -826,23 +860,31 @@ impl ChunkArray {
             },
 
             Command::FillVoxels { pos_from, pos_to, new_id } => {
-                let _is_changed = self.fill_voxels(world, pos_from, pos_to, new_id)
+                let _is_changed = this.fill_voxels(world, pos_from, pos_to, new_id)
                     .log_error("chunk-array", "failed to fill voxels");
             }
 
-            Command::DropAllMeshes => self.drop_all_meshes(world),
+            Command::DropAllMeshes => this.drop_all_meshes(world),
+
+            Command::GenerateNew { sizes } => {
+                drop(this);
+                Self::generate_new(world, sizes).await;
+            },
         }
     }
 
-    pub async fn process_commands(&mut self, world: &World) {
+    pub async fn process_commands(world: &mut World) {
         #![allow(clippy::await_holding_lock)]
 
         use crate::terrain::chunk::commands::*;
 
-        let mut change_tracker = ChangeTracker::new(self.sizes);
+        let mut change_tracker = {
+            let this = world.resource::<&Self>().unwrap();
+            ChangeTracker::new(this.sizes)
+        };
         
         while let Ok(command) = COMMAND_CHANNEL.lock().receiver.try_recv() {
-            self.proccess_command(world, command, &mut change_tracker).await;
+            Self::proccess_command(world, command, &mut change_tracker).await;
         }
 
         let idxs_to_reload = change_tracker.idxs_to_reload_partitioning();
@@ -853,7 +895,7 @@ impl ChunkArray {
             let device = &graphics.context.device;
 
             for (idx, partition_idx) in idxs_to_reload {
-                self.reload_chunk_partitioning(device, world, idx, partition_idx).await;
+                Self::reload_chunk_partitioning(world, device, idx, partition_idx).await;
             }
         }
 
@@ -863,23 +905,25 @@ impl ChunkArray {
     }
 
     pub async fn reload_chunk(&self, world: &World, device: &Device, idx: usize) {
-        let chunk_pos = Self::idx_to_pos(idx, self.sizes);
+        let chunk_pos = Self::index_to_pos(idx, self.sizes);
         let adj = self.get_adj_chunks(world, chunk_pos);
 
         if let Some(chunk) = self.get_chunk_by_idx(world, idx) {
             let mut mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
-            chunk.generate_mesh(&mut mesh, 0, adj, device);
+            chunk.generate_mesh(&mut mesh, 0, todo!("adj"), device);
         }
     }
 
     pub async fn reload_chunk_partitioning(
-        &self, device: &Device, world: &World, chunk_idx: usize, partition_idx: usize,
+        world: &World, device: &Device, chunk_idx: usize, partition_idx: usize,
     ) {
-        let chunk_pos = Self::idx_to_pos(chunk_idx, self.sizes);
-        let adj = self.get_adj_chunks(world, chunk_pos);
+        let this = world.resource::<&Self>().unwrap();
 
-        if let Some(chunk) = self.get_chunk_by_idx(world, chunk_idx) {
-            let mut chunk_mesh = self.chunk_component::<&mut ChunkMesh>(world, chunk_idx);
+        let chunk_pos = Self::index_to_pos(chunk_idx, this.sizes);
+        let adj = todo!("this.get_adj_chunks(world, chunk_pos)");
+
+        if let Some(chunk) = this.get_chunk_by_idx(world, chunk_idx) {
+            let mut chunk_mesh = this.chunk_component::<&mut ChunkMesh>(world, chunk_idx);
 
             if chunk_mesh.is_partial() {
                 let mesh = chunk.make_partition(&adj, partition_idx);
@@ -917,56 +961,67 @@ impl ChunkArray {
     //     }
     // }
 
-    pub async fn update(&mut self, world: &World) -> Result<(), UpdateError> {
-        // FIXME: add camera input
-        // self.proccess_camera_input(world, cam).await;
-        self.process_commands(world).await;
+    pub async fn update(world: &mut World) -> Result<(), UpdateError> {
+        Self::process_commands(world).await;
+        
+        let mut this = world.resource::<&mut Self>().unwrap();
 
+        // FIXME: add camera input
+        // this.proccess_camera_input(world, cam).await;
+        
         if keyboard::just_pressed_combo(&[Key::LControl, Key::S]) {
-            let chunks = self.chunks(world).collect_vec();
+            let chunks = this.chunks(world).collect_vec();
             let handle = tokio::spawn(
-                ChunkArray::save_to_file(self.sizes, chunks, "world", "world")
+                Self::save_to_file(this.sizes, chunks, "world", "world")
             );
-            self.tasks.saving = Nullable::new(handle);
+            this.tasks.saving = Nullable::new(handle);
         }
 
-        if !self.tasks.saving.is_null() && self.tasks.saving.is_finished() {
-            let handle = self.tasks.saving.take();
+        if !this.tasks.saving.is_null() && this.tasks.saving.is_finished() {
+            let handle = this.tasks.saving.take();
             handle.await??;
         }
 
         if keyboard::just_pressed_combo(&[Key::LControl, Key::O]) {
-            self.tasks.reading = Nullable::new(
-                tokio::spawn(ChunkArray::read_from_file("world", "world"))
+            this.tasks.reading = Nullable::new(
+                tokio::spawn(Self::read_from_file("world", "world"))
             );
         }
 
-        // FIXME: uncomment
-        // if !self.tasks.reading.is_null() && self.tasks.reading.is_finished() {
-        //     let handle = self.tasks.reading.take();
-        //     let (sizes, arr) = handle.await??;
-        //     self.apply_new(world, sizes, arr).await?;
-        // }
+        if !this.tasks.reading.is_null() && this.tasks.reading.is_finished() {
+            let handle = this.tasks.reading.take();
+            let (sizes, arr) = handle.await??;
+
+            drop(this);
+            Self::apply_new(world, sizes, arr).await?;
+        }
 
         Ok(())
     }
-    
-    pub fn spawn_control_window(&self, _world: &World, ui: &mut egui::Ui) {
+
+    pub fn spawn_control_window(world: &World, ui: &mut egui::Ui) {
+        let mut chunk_array = world.resource::<&mut Self>().unwrap();
+        
         ui.collapsing("Chunk array", |ui| {
             ui.label(format!(
                 "{} chunk generation tasks",
-                self.tasks.voxels_gen.len(),
+                chunk_array.tasks.voxels_gen.len(),
             ));
 
             ui.label(format!(
                 "{} mesh generation tasks",
-                self.tasks.low.len() + self.tasks.full.len(),
+                chunk_array.tasks.low.len() + chunk_array.tasks.full.len(),
             ));
 
             ui.label(format!(
                 "{} partition generation tasks",
-                self.tasks.partition.len(),
+                chunk_array.tasks.partition.len(),
             ));
+
+            ui.add(
+                egui::Slider::new(&mut chunk_array.lod_threashold, 0.01..=20.0)
+                    .prefix("LOD threashold: ")
+            );
 
             ui.separator();
 
@@ -982,19 +1037,9 @@ impl ChunkArray {
                 ui.add(egui::DragValue::new(&mut sizes[2]));
             });
 
-            // FIXME: generate button
-            // if ui.button("Generate").clicked() {
-            //     self.tasks.stop_all();
-            //     
-            //     let chunks = tokio::task::block_in_place(|| RUNTIME.block_on(
-            //         Self::new_empty_chunks(world, USize3::from(*sizes))
-            //     ));
-
-            //     match chunks {
-            //         Ok(new_chunks) => _ = mem::replace(self, new_chunks),
-            //         Err(err) => logger::error!(from = "chunk-array", "{err}")
-            //     }
-            // }
+            if ui.button("Generate").clicked() {
+                commands::command(Command::GenerateNew { sizes: USize3::from(*sizes) });
+            }
         });
     }
 }
@@ -1026,7 +1071,7 @@ impl ChangeTracker {
         let mut result = HashSet::new();
 
         for &voxel_pos in self.voxel_poses.iter() {
-            let chunk_pos = Chunk::local_pos(voxel_pos);
+            let chunk_pos = Chunk::global_to_local(voxel_pos);
             let local_pos = Chunk::global_to_local_pos(chunk_pos, voxel_pos);
 
             let Some(chunk_idx) = ChunkArray::pos_to_idx(self.sizes, chunk_pos) else { continue };
@@ -1048,11 +1093,11 @@ impl ChangeTracker {
         for &voxel_pos in self.voxel_poses.iter() {
             let chunk_sizes = Int3::from(Chunk::SIZES);
 
-            let chunk_pos = Chunk::local_pos(voxel_pos);
+            let chunk_pos = Chunk::global_to_local(voxel_pos);
             let local_pos = Chunk::global_to_local_pos(chunk_pos, voxel_pos);
             let voxel_coord_idx = USize3::from(local_pos);
 
-            let partition_idx = ChunkArray::coord_idx_to_idx(
+            let partition_idx = ChunkArray::volume_index_to_linear(
                 USize3::all(2),
                 voxel_coord_idx / (Chunk::SIZES / 2),
             );
@@ -1064,13 +1109,13 @@ impl ChangeTracker {
             let local_rem = local_pos.rem_euclid(chunk_sizes / 2);
             for offset in iterator::offsets_from_border(local_rem, Int3::ZERO .. chunk_sizes / 2) {
                 let adj_voxel_global_pos = voxel_pos + offset;
-                let adj_chunk_pos = Chunk::local_pos(adj_voxel_global_pos);
+                let adj_chunk_pos = Chunk::global_to_local(adj_voxel_global_pos);
                 let local_adj_voxel_pos = Chunk::global_to_local_pos(
                     adj_chunk_pos,
                     adj_voxel_global_pos
                 );
                 let voxel_coord_idx = USize3::from(local_adj_voxel_pos);
-                let partition_idx = ChunkArray::coord_idx_to_idx(
+                let partition_idx = ChunkArray::volume_index_to_linear(
                     USize3::all(2),
                     voxel_coord_idx / (Chunk::SIZE / 2),
                 );
@@ -1163,13 +1208,15 @@ impl ChunkArrayTasks {
     /// Starts new mesh generation task.
     pub async fn start_mesh(&mut self, chunk: &ChunkRef, adj: ChunkAdj, lod: Lod) {
         let chunk = ChunkRef::clone(chunk);
-
+        
         let chunk_pos = chunk.pos.load(Relaxed);
         if lod == 0 && self.full.contains_key(&chunk_pos)
-        || lod != 0 && self.low.contains_key(&(chunk_pos, lod))
-        || !chunk.is_generated()
-        || !ChunkArray::is_adj_generated(&adj).await
+            || lod != 0 && self.low.contains_key(&(chunk_pos, lod))
+            || !chunk.is_generated()
+            || !ChunkArray::is_adj_generated(&adj).await
         { return }
+    
+        let adj = todo!();
 
         let prev_is_none = match lod {
             0 => self.full.insert(chunk_pos, Task::spawn(async move {
@@ -1189,7 +1236,7 @@ impl ChunkArrayTasks {
         let chunk = ChunkRef::clone(chunk);
 
         let prev_value = self.partition.insert(chunk.pos.load(Relaxed), Task::spawn(async move {
-            chunk.make_partitial_meshes(adj)
+            chunk.make_partitial_meshes(todo!("adj"))
         }));
         assert!(prev_value.is_none(), "there should be only one task");
     }

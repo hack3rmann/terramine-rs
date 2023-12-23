@@ -101,13 +101,14 @@ impl CameraHandle {
                     ui.separator();
 
                     ui.add(
-                        egui::Slider::new(&mut camera.speed_factor, 5.0..=300.0)
-                            .text("Speed")
+                        egui::DragValue::new(&mut camera.speed_factor)
+                            .clamp_range(0.0..=100_000.0)
+                            .prefix("Speed: ")
                             .max_decimals(1)
                     );
     
                     ui.add(
-                        egui::Slider::new(&mut camera.speed_falloff, 0.0..=1.0)
+                        egui::Slider::new(&mut camera.speed_falloff, 0.99..=1.0)
                             .text("Speed falloff")
                             .max_decimals(3)
                     );

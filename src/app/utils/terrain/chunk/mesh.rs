@@ -1,7 +1,7 @@
 use crate::{
     prelude::*,
     graphics::*,
-    terrain::chunk::{prelude::*, chunk_array::ChunkRenderPipeline},
+    terrain::chunk::{prelude::*, chunk_array_old::ChunkRenderPipeline},
 };
 
 

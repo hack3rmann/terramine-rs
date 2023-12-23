@@ -5,7 +5,7 @@ use {
         prelude::*,
         graphics::Graphics,
         camera::{*, self},
-        terrain::chunk::chunk_array::ChunkArray,
+        terrain::chunk::chunk_array_old::ChunkArray,
     },
     winit::{
         event::{Event, WindowEvent},
@@ -149,6 +149,7 @@ impl App {
     async fn update_systems(&mut self) -> AnyResult<()> {
         CameraHandle::update_all(&self.world);
         Graphics::update(&self.world)?;
+        ChunkArray::update(&mut self.world).await?;
 
         Ok(())
     }
@@ -172,15 +173,13 @@ impl App {
         {
             use crate::{transform::Transform, geometry::frustum::Frustum};
 
-            let mut arr = self.world.resource::<&mut ChunkArray>()?;
             let MainCamera(cam) = self.world.copy_resource::<MainCamera>()?;
 
             let mut query = self.world
                 .query_one::<(&CameraComponent, &Transform, &Frustum)>(cam.entity).unwrap();
             let (_cam, transform, frustum) = query.get().unwrap();
 
-            arr.update_meshes(&self.world, transform.translation.position, frustum).await?;
-            arr.update(&self.world).await?;
+            ChunkArray::update_meshes(&self.world, transform.translation.position, frustum).await?;
         }
 
         {
@@ -220,10 +219,8 @@ impl App {
     async fn draw_frame(&mut self, _window_id: WindowId) -> AnyResult<()> {
         let mut graphics = self.world.resource::<&mut Graphics>()?;
 
-        let chunk_array = self.world.resource::<&ChunkArray>()?;
-
         graphics.render_with_sandbox(&self.world, |binds, encoder, view, depth, world| {
-            chunk_array.render(world, binds, encoder, view.clone(), depth.cloned())
+            ChunkArray::render(world, binds, encoder, view.clone(), depth.cloned())
         })?;
 
         Ok(())

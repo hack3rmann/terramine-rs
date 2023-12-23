@@ -3,7 +3,7 @@ pub mod noise;
 use {
     crate::{
         prelude::*,
-        terrain::chunk::{Chunk, chunk_array::{GENERATOR_SIZES, ChunkArray}},
+        terrain::chunk::{Chunk, chunk_array_old::{GENERATOR_SIZES, ChunkArray}},
     },
     self::noise::Noise2d,
     spin::RwLock,
@@ -89,7 +89,7 @@ pub fn spawn_control_window(ui: &mut egui::Ui) {
 }
 
 pub fn perlin(pos: Int3, chunk_array_sizes: USize3) -> i32 {
-    let coord_idx = ChunkArray::voxel_pos_to_coord_idx(
+    let coord_idx = ChunkArray::voxel_pos_to_volume_index(
         pos,
         chunk_array_sizes,
     ).expect("failed to convert voxel pos to coord idx");

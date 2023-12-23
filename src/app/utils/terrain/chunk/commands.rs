@@ -22,6 +22,10 @@ pub enum Command {
     },
 
     DropAllMeshes,
+
+    GenerateNew {
+        sizes: USize3,
+    },
 }
 
 pub fn command(command: Command) {

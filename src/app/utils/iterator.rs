@@ -281,7 +281,7 @@ impl Range3d {
     }
 
     const fn coord_idx_from_idx(idx: usize, sizes: USize3) -> USize3 {
-        idx_to_coord_idx(idx, sizes)
+        linear_index_to_volume(idx, sizes)
     }
 
     const fn pos_from_coord_idx(idx: USize3, back_shift: Int3) -> Int3 {
@@ -346,7 +346,7 @@ impl ExactSizeIterator for Range3d {
 }
 
 /// Position function.
-pub const fn idx_to_coord_idx(idx: usize, sizes: USize3) -> USize3 {
+pub const fn linear_index_to_volume(idx: usize, sizes: USize3) -> USize3 {
     let xy = idx / sizes.z;
 
     let z = idx % sizes.z;
@@ -749,7 +749,7 @@ mod border_test {
         const MAX: i32 = Chunk::SIZE as i32 - 1;
 
         let works = (0..Chunk::VOLUME)
-            .map(|i| Int3::from(idx_to_coord_idx(i, Chunk::SIZES)))
+            .map(|i| Int3::from(linear_index_to_volume(i, Chunk::SIZES)))
             .filter(|pos|
                 pos.x == 0 || pos.x == MAX ||
                 pos.y == 0 || pos.y == MAX ||

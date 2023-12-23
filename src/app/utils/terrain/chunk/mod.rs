@@ -1,7 +1,8 @@
-pub mod chunk_array;
+pub mod chunk_array_old;
 pub mod tasks;
 pub mod commands;
 pub mod mesh;
+pub mod array;
 
 use {
     crate::{
@@ -19,7 +20,8 @@ use {
         // TODO: remove: generator as gen,
     },
     mesh::{FullVertex, LowVertex, ChunkMesh},
-    chunk_array::{ChunkAdj, ChunkRenderPipeline},
+    chunk_array_old::ChunkRenderPipeline,
+    array::ChunkAdj,
 };
 
 
@@ -27,7 +29,7 @@ use {
 pub mod prelude {
     pub use super::{
         Chunk, SetLodError, ChunkRenderError, ChunkInfo, Lod,
-        ChunkOption, FillType, chunk_array::ChunkArray,
+        ChunkOption, FillType, chunk_array_old::ChunkArray,
     };
 }
 
@@ -274,7 +276,7 @@ impl Chunk {
     }
 
     pub fn make_partition(&self, chunk_adj: &ChunkAdj, partition_idx: usize) -> Mesh<FullVertex> {
-        let coord_idx = iterator::idx_to_coord_idx(partition_idx, USize3::all(2));
+        let coord_idx = iterator::linear_index_to_volume(partition_idx, USize3::all(2));
         let chunk_adj = Self::optimize_chunk_adj_for_partitioning(chunk_adj.clone(), coord_idx);
 
         let start_pos = Int3::from(coord_idx * Chunk::SIZES / 2);
@@ -445,7 +447,7 @@ impl Chunk {
 
     /// Tests that chunk is visible by camera.
     pub fn is_in_frustum(&self, frustum: &Frustum) -> bool {
-        let global_chunk_pos = Chunk::global_pos(self.pos.load(Relaxed));
+        let global_chunk_pos = Chunk::local_to_global(self.pos.load(Relaxed));
         let global_chunk_pos = vec3::from(global_chunk_pos) * Voxel::SIZE;
 
         let lo = global_chunk_pos - 0.5 * vec3::all(Voxel::SIZE);
@@ -460,7 +462,17 @@ impl Chunk {
     }
 
     /// Transmutes [`Vec<Id>`] into [`Vec<Atomic<Id>>`].
-    pub const fn transmute_ids(src: Vec<Id>) -> Vec<Atomic<Id>> {
+    pub const fn transmute_ids_to_atomic(src: Vec<Id>) -> Vec<Atomic<Id>> {
+        // * Safety
+        // * 
+        // * Safe, because memory layout of `T` is same as `Atomic<T>`,
+        // * because `Atomic<T>` is `repr(transparent)` of `UnsafeCell<T>`
+        // * and `UnsafeCell<T>` is `repr(transparent)` of `T`.
+        unsafe { mem::transmute(src) }
+    }
+
+    /// Transmutes [`Vec<Atomic<Id>>`] into [`Vec<Id>`].
+    pub const fn transmute_ids_from_atomic(src: Vec<Atomic<Id>>) -> Vec<Id> {
         // * Safety
         // * 
         // * Safe, because memory layout of `T` is same as `Atomic<T>`,
@@ -537,7 +549,7 @@ impl Chunk {
 
                 Self {
                     pos: Atomic::new(chunk_pos),
-                    voxel_ids: Self::transmute_ids(voxel_ids),
+                    voxel_ids: Self::transmute_ids_to_atomic(voxel_ids),
                     info: default(),
                 }.as_optimized()
             },
@@ -592,7 +604,7 @@ impl Chunk {
     /// 
     /// - `idx` < `Chunk::VOLUME`
     /// - `self.info.fill_type` should be [`FillType::Unspecified`].
-    pub unsafe fn set_id_fast(&self, idx: usize, new_id: Id) -> Id {
+    pub unsafe fn set_id_unchecked(&self, idx: usize, new_id: Id) -> Id {
         self.voxel_ids.get_unchecked(idx).swap(new_id, AcqRel)
     }
 
@@ -644,7 +656,7 @@ impl Chunk {
             // * # Safety
             // * 
             // * Safe, because `idx` is valid and `self` is unoptimized.
-            unsafe { self.set_id_fast(idx, new_id) };
+            unsafe { self.set_id_unchecked(idx, new_id) };
         }
 
         self.optimize();
@@ -723,23 +735,23 @@ impl Chunk {
     }
 
     /// Converts chunk position to world position.
-    pub fn global_pos(chunk_pos: Int3) -> Int3 {
+    pub fn local_to_global(chunk_pos: Int3) -> Int3 {
         chunk_pos * Self::SIZE as i32
     }
 
     /// Converts all in-chunk world positions to that chunk position.
-    pub fn local_pos(world_pos: Int3) -> Int3 {
+    pub fn global_to_local(world_pos: Int3) -> Int3 {
         world_pos.div_euclid(Int3::from(Self::SIZES))
     }
 
     /// Computes global position from relative to chunk position.
     pub fn local_to_global_pos(chunk_pos: Int3, relative_voxel_pos: Int3) -> Int3 {
-        Self::global_pos(chunk_pos) + relative_voxel_pos
+        Self::local_to_global(chunk_pos) + relative_voxel_pos
     }
 
     /// Computes local (relative to chunk) position from global position.
     pub fn global_to_local_pos(chunk_pos: Int3, global_voxel_pos: Int3) -> Int3 {
-        global_voxel_pos - Self::global_pos(chunk_pos)
+        global_voxel_pos - Self::local_to_global(chunk_pos)
     }
 
     /// Computes local (relative to chunk) position from global position.
@@ -856,6 +868,20 @@ impl Chunk {
             self.info.load(Relaxed).get_active_lod(),
             Some(lod) if mesh.get_available_lods().contains(&lod)
         )
+    }
+}
+
+impl Clone for Chunk {
+    fn clone(&self) -> Self {
+        Self {
+            pos: Atomic::new(self.pos.load(Relaxed)),
+            voxel_ids: unsafe {
+                Self::transmute_ids_to_atomic(
+                    mem::transmute::<_, &Vec<Id>>(&self.voxel_ids).clone()
+                )
+            },
+            info: Atomic::new(self.info.load(Relaxed)),
+        }
     }
 }
 
