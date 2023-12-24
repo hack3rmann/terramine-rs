@@ -29,7 +29,7 @@ assert_impl_all!(RenderPipeline: Send, Sync);
 
 impl RenderPipeline {
     pub fn new(desc: RenderPipelineDescriptor) -> Self {
-        let shader = desc.material.get_shader().as_module();
+        let shader = desc.material.get_shader();
 
         let pipeline = desc.device.create_render_pipeline(
             &wgpu::RenderPipelineDescriptor {

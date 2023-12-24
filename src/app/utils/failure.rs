@@ -4,11 +4,11 @@ use { crate::prelude::*, derive_more::{Error, Display} };
 
 
 
+assert_impl_all!(StrError: Send, Sync, Into<AnyError>);
 #[derive(Clone, Debug, Display, Error, Constructor)]
 pub struct StrError {
     pub inner: StaticStr,
 }
-assert_impl_all!(StrError: Send, Sync, Into<AnyError>);
 
 impl<IntoStr: Into<StaticStr>> From<IntoStr> for StrError {
     fn from(value: IntoStr) -> Self {
@@ -22,11 +22,11 @@ pub macro fmt_error($(fmt:tt)*) {
 
 
 
-pub macro ensure_or($cond:expr, $diverging_expr:expr) {
+pub macro ensure_or($cond:expr, $diverging_expr:expr $(,)?) {
     if !$cond { $diverging_expr }
 }
 
-pub macro ensure($cond:expr, $err:expr) {
+pub macro ensure($cond:expr, $err:expr $(,)?) {
     ensure_or!($cond, return Err($err.into()))
 }
 

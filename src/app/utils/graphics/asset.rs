@@ -1,71 +1,7 @@
 use {
-    crate::{
-        prelude::*,
-        graphics::{Shader, ShaderSource, Device, DefaultVertex, Vertex},
-    },
+    crate::prelude::*,
     std::cell::UnsafeCell,
 };
-
-
-
-pub static DEFAULT_SHADER: GlobalAsset<Arc<Shader>> = GlobalAsset::unloaded();
-
-/// Uploads shader into [`DEFAULT_SHADER`].
-/// 
-/// # Safety
-/// 
-/// - no one used this [asset][GlobalAsset].
-/// - called only once.
-pub async unsafe fn load_default_shader(device: &Device) {
-    let source = ShaderSource::from_file("default.wgsl")
-        .await
-        .expect("failed to load default.wgsl");
-
-    let shader = Shader::new(device, source, vec![DefaultVertex::BUFFER_LAYOUT]);
-
-    DEFAULT_SHADER.upload(Arc::new(shader))
-}
-
-/// Uploads default assets.
-/// 
-/// # Safety
-/// 
-/// - no one used any default [asset][GlobalAsset]s.
-/// - called only once.
-pub async unsafe fn load_default_assets(device: &Device) {
-    load_default_shader(device).await;
-}
-
-
-
-#[derive(Clone, Debug, Default, From)]
-pub enum ShaderRef {
-    #[default]
-    Default,
-    Module(Arc<Shader>),
-}
-assert_impl_all!(ShaderRef: Send, Sync);
-
-impl ShaderRef {
-    pub fn as_module(&self) -> Arc<Shader> {
-        match self {
-            Self::Default => Arc::clone(&DEFAULT_SHADER),
-            Self::Module(module) => Arc::clone(module),
-        }
-    }
-}
-
-impl From<Shader> for ShaderRef {
-    fn from(value: Shader) -> Self {
-        Self::from(Arc::new(value))
-    }
-}
-
-impl From<&Arc<Shader>> for ShaderRef {
-    fn from(value: &Arc<Shader>) -> Self {
-        Self::from(Arc::clone(value))
-    }
-}
 
 
 

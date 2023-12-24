@@ -1,7 +1,15 @@
-use { crate::{prelude::*, iterator::Sides}, super::Chunk, std::ptr::NonNull };
+use {
+    crate::{
+        prelude::*,
+        iterator::Sides,
+        terrain::{voxel::{voxel_data::VoxelId, Voxel}, chunk::Chunk},
+    },
+    std::ptr::NonNull,
+};
 
 
 
+assert_impl_all!(ChunkBorrowInfo: Send, Sync);
 #[derive(Debug, Default)]
 pub struct ChunkBorrowInfo {
     n_borrows: AtomicUsize,
@@ -65,11 +73,11 @@ impl Clone for ChunkBorrowInfo {
 
 
 
+assert_impl_all!(ChunkArray: Send, Sync, Component);
 #[derive(Debug)]
 pub struct ChunkArray {
     pub(crate) ptr: NonNull<ChunkArrayBox>,
 }
-assert_impl_all!(ChunkArray: Send, Sync, Component);
 
 unsafe impl Send for ChunkArray { }
 unsafe impl Sync for ChunkArray { }
@@ -98,9 +106,6 @@ impl ChunkArray {
     }
 
     fn allocate(array: ChunkArrayBox) -> NonNull<ChunkArrayBox> {
-        // FIXME:
-        eprintln!("ChunkArrayBox allocated");
-
         Box::leak(Box::new(array)).into()
     }
 
@@ -227,18 +232,12 @@ impl ChunkRef {
     /// 
     /// Can only be called by [`ChunkArrayBox`]
     pub unsafe fn new(parent: NonNull<ChunkArrayBox>, index: usize) -> Self {
-        // FIXME:
-        eprintln!("ChunkRef constructed");
-
         Self { parent, index }
     }
 }
 
 impl Drop for ChunkRef {
     fn drop(&mut self) {
-        // FIXME:
-        eprintln!("ChunkRef destroyed");
-
         let array = unsafe { self.parent.as_mut() };
 
         assert!(
@@ -293,18 +292,12 @@ impl ChunkMut {
     /// 
     /// Can only be called by [`ChunkArrayBox`]
     pub unsafe fn new(parent: NonNull<ChunkArrayBox>, index: usize) -> Self {
-        // FIXME:
-        eprintln!("ChunkMut constructed");
-
         Self { parent, index }
     }
 }
 
 impl Drop for ChunkMut {
     fn drop(&mut self) {
-        // FIXME:
-        eprintln!("ChunkMut destroyed");
-
         let array = unsafe { self.parent.as_mut() };
 
         assert!(
@@ -373,9 +366,6 @@ impl ChunkArrayBox {
     /// - there are no chunk references exist
     /// - chunk array box is box-allocated
     unsafe fn deallocate(this: *mut Self) {
-        // FIXME:
-        eprintln!("ChunkArrayBox deallocated");
-
         _ = unsafe { Box::from_raw(this) };
     }
 
@@ -385,9 +375,6 @@ impl ChunkArrayBox {
     /// 
     /// Can only be called by [`ChunkArray`]
     unsafe fn unown(&mut self) {
-        // FIXME:
-        eprintln!("ChunkArrayBox unowned");
-
         self.owned.store(false, Release);
         
         self.try_deallocate();
@@ -447,6 +434,37 @@ impl ChunkArrayBox {
             ChunkMut::new(NonNull::from(self), index)
         })
     }
+
+    pub fn generate(&mut self) {
+        for (chunk, borrow) in self.chunks.iter_mut().zip(self.borrow_map.iter()) {
+            assert!(borrow.is_free(), "chunk should be free to be generated");
+
+            _ = mem::replace(chunk, Chunk::new(chunk.pos.load(Relaxed), self.sizes));
+        }
+    }
+
+    pub fn set_voxel(&self, pos: Int3, new_id: VoxelId) -> AnyResult<()> {
+        let mut chunk = self.chunk_mut(pos)
+            .with_context(|| format!("failed to get chunk by voxel position {pos} uniquely"))?;
+
+        chunk.set_voxel(pos, new_id)
+            .with_context(|| format!("failed to set voxel on {pos}"))?;
+
+        Ok(())
+    }
+
+    pub fn voxel(&self, pos: Int3) -> AnyResult<Voxel> {
+        use crate::terrain::chunk::ChunkOption::*;
+
+        let chunk = self.chunk(pos)
+            .with_context(|| format!("failed to get chunk by voxel position {pos} uniquely"))?;
+
+        match chunk.get_voxel_global(pos) {
+            OutsideChunk => unreachable!("voxel at position {pos} is already in that chunk"),
+            Voxel(voxel) => Ok(voxel),
+            Failed => Err(StrError::from("caught on failed chunk"))?,
+        }
+    }
 }
 
 impl Default for ChunkArrayBox {
@@ -475,7 +493,7 @@ mod tests {
     fn array_allocations() {
         let array = ChunkArray::new_empty(USize3::new(2, 2, 2));
         let chunk_ref = array.chunk(Int3::ZERO).unwrap();
-        let array = array;
+        let mut array = array;
         let chunk_ref2 = chunk_ref.clone();
 
         assert_eq!(

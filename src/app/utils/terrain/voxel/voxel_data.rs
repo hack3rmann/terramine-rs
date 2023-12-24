@@ -3,7 +3,7 @@ use crate::prelude::*;
 
 
 /// IDs type.
-pub type Id = u16;
+pub type VoxelId = u16;
 
 
 
@@ -11,7 +11,7 @@ pub type Id = u16;
 #[derive(Debug, PartialEq)]
 pub struct VoxelData {
     pub name: &'static str,
-    pub id: Id,
+    pub id: VoxelId,
 
     pub textures: TextureSides,
     pub avarage_color: Color,
@@ -19,7 +19,7 @@ pub struct VoxelData {
 assert_impl_all!(VoxelData: Send, Sync);
 
 impl VoxelData {
-    pub const fn new(name: &'static str, id: Id, color: Color, textures: TextureSides) -> Self {
+    pub const fn new(name: &'static str, id: VoxelId, color: Color, textures: TextureSides) -> Self {
         Self { name, id, textures, avarage_color: color }
     }
 }
@@ -50,7 +50,7 @@ impl TextureSides {
 
     /// Sides and up/bottom
     #[allow(dead_code)]
-    pub const fn vertical(sides: Id, top: Id, bottom: Id) -> Self {
+    pub const fn vertical(sides: VoxelId, top: VoxelId, bottom: VoxelId) -> Self {
         Self::new(sides, sides, sides, sides, top, bottom)
     }
 

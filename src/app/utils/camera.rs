@@ -7,14 +7,16 @@ use crate::{
 
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deref, From, Into)]
-pub struct MainCamera(pub CameraHandle);
-assert_impl_all!(MainCamera: Component, Send, Sync);
+pub struct MainCamera(pub Entity);
+assert_impl_all!(MainCamera: Send, Sync, Component);
 
 impl MainCamera {
     pub fn set(world: &World, camera: Entity) -> AnyResult<()> {
         let mut main = world.resource::<&mut Self>()
             .context("failed to find main camera")?;
-        main.0.entity = camera;
+
+        main.0 = camera;
+
         Ok(())
     }
 
@@ -22,33 +24,22 @@ impl MainCamera {
         let main = world.resource::<&Self>()
             .context("failed to find main camera")?;
 
-        Ok(main.0.entity == camera)
+        Ok(main.0 == camera)
     }
 }
 
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, From, Into)]
-pub struct CameraHandle {
-    pub entity: Entity,
-}
-assert_impl_all!(CameraHandle: Send, Sync);
+#[derive(Debug, Clone, Copy, Hash)]
+pub struct CameraHandle;
 
 impl CameraHandle {
-    pub fn spawn_default(world: &mut World) -> Self {
-        Self::new(world.spawn(self::make_new_enabled()))
-    }
+    pub fn switch_mouse_capture(world: &World, camera: Entity) -> bool {
+        let mut query = world.query_one::<&mut CameraComponent>(camera).unwrap();
+        let camera_component = query.get().unwrap();
 
-    pub const fn new(entity: Entity) -> Self {
-        Self { entity }
-    }
-
-    pub fn switch_mouse_capture(&self, world: &World) -> bool {
-        let mut query = world.query_one::<&mut CameraComponent>(self.entity).unwrap();
-        let camera = query.get().unwrap();
-
-        let CameraActivity::Enabled { captures_mouse } = &mut camera.activity
-        else { return false };
+        let CameraActivity::Enabled { captures_mouse }
+            = &mut camera_component.activity else { return false };
 
         *captures_mouse = !*captures_mouse;
         *captures_mouse
@@ -66,11 +57,13 @@ impl CameraHandle {
         }
     }
 
-    pub fn get_uniform(&self, world: &World) -> AnyResult<CameraUniform> {
-        let mut query = world.query_one::<(&CameraComponent, &Transform)>(self.entity)?;
-        let (cam, transform) = query.get()
+    pub fn get_uniform(world: &World, camera: Entity) -> AnyResult<CameraUniform> {
+        let mut query = world.query_one::<(&CameraComponent, &Transform)>(camera)?;
+
+        let (component, transform) = query.get()
             .context("camera entity does not have `CameraComponent` or `Transform`")?;
-        Ok(CameraUniform::new(cam, transform))
+
+        Ok(CameraUniform::new(component, transform))
     }
 
     pub fn spawn_control_window(world: &World, ui: &mut egui::Ui) {
@@ -158,6 +151,7 @@ impl Default for CameraActivity {
 
 
 
+assert_impl_all!(CameraHandle: Send, Sync);
 #[derive(Debug, Clone, PartialEq)]
 pub struct CameraComponent {
     pub fov: Angle,
@@ -172,7 +166,6 @@ pub struct CameraComponent {
     pub mouse_sensetivity: f32,
     pub activity: CameraActivity,
 }
-assert_impl_all!(CameraHandle: Send, Sync);
 
 impl CameraComponent {
     /// Returns projection matrix.
@@ -233,46 +226,6 @@ impl CameraComponent {
         *frustum = Frustum::new(self, transform);
     }
 
-    // FIXME:
-    // Spawns camera control window.
-    // pub fn spawn_control_window(&mut self, ui: &imgui::Ui, transform: &mut Transform, speed: &mut Speed) {
-    //     use crate::graphics::ui::imgui_ext::make_window;
-
-    //     make_window(ui, "Camera").build(|| {
-    //         ui.text("Position");
-    //         ui.text(transform.translation.to_string());
-
-    //         ui.text("Rotation");
-    //         ui.text(transform.rotation.to_string());
-
-    //         ui.separator();
-
-    //         {
-    //             let mut speed_module = speed.len();
-
-    //             ui.slider_config("Speed", 5.0, 300.0)
-    //                 .display_format("%.1f")
-    //                 .build(&mut speed_module);
-
-    //             *speed = speed.with_len(speed_module).into();
-    //         }
-
-    //         ui.slider_config("Speed falloff", 0.0, 1.0)
-    //             .display_format("%.3f")
-    //             .build(&mut self.speed_falloff);
-
-    //         {
-    //             let mut fov = self.fov.get_degrees();
-
-    //             ui.slider_config("FOV", 1.0, 180.0)
-    //                 .display_format("%.0f")
-    //                 .build(&mut fov);
-
-    //             self.fov.set_degrees(fov);
-    //         }
-    //     });
-    // }
-
     pub fn on_window_resize(&mut self, size: UInt2) {
         self.aspect_ratio = cfg::window::aspect_ratio(size.x as f32, size.y as f32);
     }
@@ -303,17 +256,46 @@ impl Default for CameraComponent {
     fn default() -> Self { const_default() }
 }
 
+impl egui_util::ShowUi for CameraComponent {
+    fn ui(&mut self, ui: &mut egui::Ui) {
+        ui.add(
+            egui::DragValue::new(&mut self.speed_factor)
+                .clamp_range(0.0..=100_000.0)
+                .prefix("Speed: ")
+                .max_decimals(1)
+        );
+
+        ui.add(
+            egui::Slider::new(&mut self.speed_falloff, 0.99..=1.0)
+                .text("Speed falloff")
+                .max_decimals(3)
+        );
+
+        {
+            let mut fov = self.fov.get_degrees();
+
+            ui.add(
+                egui::Slider::new(&mut fov, 1.0..=180.0)
+                    .text("FOV")
+                    .integer()
+            );
+
+            self.fov.set_degrees(fov);
+        }
+    }
+}
+
 
 
 pub type CameraBundle = (CameraComponent, Transform, Speed, Frustum);
 
-pub fn make_new_enabled() -> CameraBundle {
-    let mut result = make_new();
+pub fn make_new_camera_bundle_enabled() -> CameraBundle {
+    let mut result = make_new_camera_bundle();
     result.0.enable();
     result
 }
 
-pub fn make_new() -> CameraBundle {
+pub fn make_new_camera_bundle() -> CameraBundle {
     let cam = CameraComponent::DEFAULT;
     let transform = Transform::DEFAULT;
     let speed = Speed::DEFAULT;
@@ -324,13 +306,13 @@ pub fn make_new() -> CameraBundle {
 
 
 
+assert_impl_all!(CameraUniform: Send, Sync);
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct CameraUniform {
     pub proj: mat4,
     pub view: mat4,
 }
-assert_impl_all!(CameraUniform: Send, Sync);
 
 impl CameraUniform {
     pub fn new(cam: &CameraComponent, transform: &Transform) -> Self {

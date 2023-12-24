@@ -188,3 +188,15 @@ pub macro Vec3 {
 pub macro query($world:expr, $(qvalue:ty),+ $(,)?) {
     world.query::<($(qvalue,)+)>();
 }
+
+
+
+pub macro formula($formula:expr, where $($variable:ident = $value:expr),* $(,)?) {
+    {
+        $(
+            let $variable = $value;
+        )+
+
+        $formula
+    }
+}

@@ -48,6 +48,7 @@ pub enum Tab {
     Properties,
     Profiler,
     Console,
+    Inspector,
     Other {
         name: String,
     },
@@ -62,6 +63,7 @@ impl Tab {
             "Properties" => Self::Properties,
             "Profiler" => Self::Profiler,
             "Console" => Self::Console,
+            "Inspector" => Self::Inspector,
             _ => Self::Other { name: name.to_string() },
         }
     }
@@ -71,6 +73,7 @@ impl Tab {
             Self::Properties => "Properties",
             Self::Profiler => "Profiler",
             Self::Console => "Console",
+            Self::Inspector => "Inspector",
             Self::Other { name } => name,
         }
     }
@@ -94,7 +97,7 @@ impl Default for EguiDockState {
     fn default() -> Self {
         use egui_dock::{DockState, SurfaceIndex, NodeIndex};
 
-        let mut result = DockState::new(vec![Tab::Properties, Tab::Profiler]);
+        let mut result = DockState::new(vec![Tab::Properties, Tab::Profiler, Tab::Inspector]);
 
         let tree = result.get_surface_mut(SurfaceIndex::main())
             .expect("main surface should exist")
@@ -230,3 +233,65 @@ impl egui::Widget for TransformWidget<'_> {
         transform_response | rotation_response | scaling_response
     }
 }
+
+
+
+pub fn run_inspector(world: &World, ui: &mut egui::Ui) {
+    use crate::{components::Name, graphics::mesh::Mesh, physics::PhysicalComponent, camera::CameraComponent};
+    
+    let mut name_query = world.query::<(
+        Option<&mut Name>,
+        Option<&mut Transform>,
+        Option<&mut Mesh>,
+        Option<&mut PhysicalComponent>,
+        Option<&mut Timer>,
+    )>();
+
+    for (entity, (name, transform, mesh, phys, timer)) in name_query.iter() {
+        let heading = match name {
+            None => format!("entity {}", entity.id()),
+            Some(name) => format!("{} (entity {})", name.value, entity.id()),
+        };
+
+        ui.collapsing(heading, |ui| {
+            if let Ok(mut camera) = world.get::<&mut CameraComponent>(entity) {
+                ui.collapsing("CameraComponent", |ui| camera.ui(ui));
+            }
+
+            if let Some(transform) = transform {
+                ui.collapsing("Transform", |ui| {
+                    ui.add(TransformWidget::new(transform));
+                });
+            }
+
+            if let Some(mesh) = mesh {
+                ui.collapsing("Mesh", |ui| {
+                    ui.label(format!("Mesh: {mesh:#?}"));
+                });
+            }
+
+            if let Some(phys) = phys {
+                ui.collapsing("PhysicalComponent", |ui| {
+                    ui.label(egui::RichText::new(
+                        format!("{phys:#?}")
+                    ).monospace());
+                });
+            }
+
+            if let Some(timer) = timer {
+                ui.collapsing("Timer", |ui| {
+                    ui.label(egui::RichText::new(
+                        format!("{timer:#?}")
+                    ).monospace());
+                });
+            }
+        });
+    }
+}
+
+
+
+pub trait ShowUi {
+    fn ui(&mut self, ui: &mut egui::Ui);
+}
+assert_obj_safe!(ShowUi);

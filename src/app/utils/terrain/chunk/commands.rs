@@ -1,6 +1,6 @@
 use crate::{
     prelude::*,
-    terrain::voxel::voxel_data::Id,
+    terrain::voxel::voxel_data::VoxelId,
     concurrency::channel::Channel,
 };
 
@@ -12,13 +12,13 @@ lazy_static! {
 pub enum Command {
     SetVoxel {
         pos: Int3,
-        new_id: Id,
+        new_id: VoxelId,
     },
 
     FillVoxels {
         pos_from: Int3,
         pos_to: Int3,
-        new_id: Id,
+        new_id: VoxelId,
     },
 
     DropAllMeshes,

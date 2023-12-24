@@ -5,9 +5,9 @@ use {
         prelude::*,
         terrain::{
             chunk::{
-                prelude::*, EditError, Sides, Id,
+                prelude::*, EditError, Sides, VoxelId,
                 tasks::{FullTask, LowTask, Task, GenTask, PartitionTask},
-                mesh::{ChunkMesh, Details},
+                mesh::Resolution,
                 commands::Command,
             },
             voxel::{self, Voxel},
@@ -91,7 +91,7 @@ impl ChunkArray {
 
         let chunk_entities = world.spawn_batch(
             chunks.into_iter().map(|chunk| {
-                (chunk, ChunkMesh::default())
+                (chunk, Mesh::default())
             })
         ).collect();
 
@@ -300,7 +300,7 @@ impl ChunkArray {
 
         match fill_type {
             FillType::Unspecified => {
-                let freqs: HashMap<Id, usize> = reader.read()
+                let freqs: HashMap<VoxelId, usize> = reader.read()
                     .expect("failed to read frequencies map from bytes");
 
                 let pos: Int3 = reader.read()
@@ -361,7 +361,7 @@ impl ChunkArray {
     /// # Error
     /// 
     /// Returns [`Err`] if `new_id` is not valid or `pos` is not in this [chunk array][ChunkArray].
-    pub fn set_voxel(&mut self, world: &World, pos: Int3, new_id: Id) -> Result<Id, EditError> {
+    pub fn set_voxel(&mut self, world: &World, pos: Int3, new_id: VoxelId) -> Result<VoxelId, EditError> {
         // We know that `chunk_idx` is valid so we can get-by-index.
         let mut chunk = self.get_chunk(world, pos)
             .ok_or(EditError::PosIdConversion(pos))?;
@@ -384,7 +384,7 @@ impl ChunkArray {
     }
 
     /// Fills volume of voxels to same [id][Id] and returnes `is_changed`.
-    pub fn fill_voxels(&mut self, world: &World, pos_from: Int3, pos_to: Int3, new_id: Id) -> Result<bool, EditError> {
+    pub fn fill_voxels(&mut self, world: &World, pos_from: Int3, pos_to: Int3, new_id: VoxelId) -> Result<bool, EditError> {
         let chunk_pos_from = Chunk::global_to_local(pos_from);
         let chunk_pos_to   = Chunk::global_to_local(pos_to + Int3::from(Chunk::SIZES) - Int3::ONE);
 
@@ -425,7 +425,7 @@ impl ChunkArray {
                 is_changed = true;
                 
                 for idx in Self::get_adj_chunks_idxs(self.sizes, chunk_pos).as_array().into_iter().flatten() {
-                    let mut mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
+                    let mut mesh = self.chunk_component::<&mut Mesh>(world, idx);
                     *mesh = default();
                 }
             }
@@ -442,12 +442,12 @@ impl ChunkArray {
     /// Drops all meshes from each [chunk][Chunk].
     pub fn drop_all_meshes(&self, world: &World) {
         for idx in 0..self.chunk_entities.len() {
-            let mut mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
+            let mut mesh = self.chunk_component::<&mut Mesh>(world, idx);
             _ = mem::take(mesh.deref_mut());
         }
     }
 
-    fn count_voxel_frequencies(voxel_ids: impl IntoIterator<Item = Id>) -> HashMap<Id, usize> {
+    fn count_voxel_frequencies(voxel_ids: impl IntoIterator<Item = VoxelId>) -> HashMap<VoxelId, usize> {
         let mut result = HashMap::new();
 
         for id in voxel_ids.into_iter() {
@@ -618,11 +618,10 @@ impl ChunkArray {
 
     /// TODO: missing docs
     #[profile]
+    #[allow(clippy::await_holding_refcell_ref)]
     pub async fn update_meshes(
         world: &World, cam_pos: vec3, _frustum: &Frustum,
     ) -> Result<(), ChunkRenderError> {
-        #![allow(clippy::await_holding_refcell_ref)]
-
         let mut this = world.resource::<&mut Self>().unwrap();
 
         let sizes = this.sizes;
@@ -638,7 +637,7 @@ impl ChunkArray {
             let chunk_pos = chunk.pos.load(Relaxed);
             
             let chunk_adj = this.get_adj_chunks(world, chunk_pos);
-            let mut mesh = this.chunk_component::<&mut ChunkMesh>(world, idx);
+            let mut mesh = this.chunk_component::<&mut Mesh>(world, idx);
 
             let lod = Self::desired_lod_at(chunk_pos, cam_pos, this.lod_threashold);
 
@@ -687,29 +686,29 @@ impl ChunkArray {
             // }
 
             let can_set_new_lod =
-                mesh.get_available_lods().contains(&lod) ||
+                // mesh.get_available_lods().contains(&lod) ||
                 this.tasks.is_mesh_running(chunk_pos, lod) &&
                 this.tasks.try_finish_mesh(chunk_pos, lod, &mut mesh, device).await;
 
             if can_set_new_lod {
-                chunk.set_active_lod(&mesh, lod);
+                // chunk.set_active_lod(&mesh, lod);
             } else if this.tasks.can_start_mesh() {
                 this.tasks.start_mesh(&chunk, chunk_adj.clone(), lod).await;
             }
 
             this.tasks.stop_all_useless(lod, chunk_pos);
 
-            if !chunk.can_render_active_lod(&mesh) {
-                chunk.try_set_best_fit_lod(&mesh, lod);
-            }
+            // if !chunk.can_render_active_lod(&mesh) {
+            //     chunk.try_set_best_fit_lod(&mesh, lod);
+            // }
 
             // FIXME: make cam vis-check for light.
-            if chunk.can_render_active_lod(&mesh) /* && chunk.is_in_frustum(frustum) */ {
-                mesh.active_lod = chunk.info.load(Relaxed).get_active_lod();
-                mesh.enable();
-            } else {
-                mesh.disable();
-            }
+            // if chunk.can_render_active_lod(&mesh) /* && chunk.is_in_frustum(frustum) */ {
+            //     mesh.active_lod = chunk.info.load(Relaxed).get_active_lod();
+            //     mesh.enable();
+            // } else {
+            //     mesh.disable();
+            // }
         }
 
         Ok(())
@@ -727,21 +726,21 @@ impl ChunkArray {
         let binds = world.get::<&ChunkBinds>(this.array_entity)?;
         let pipeline = world.get::<&ChunkRenderPipeline>(this.array_entity)?;
 
-        let mut query = world.query::<&ChunkMesh>();
+        let mut query = world.query::<&Mesh>();
 
         let mut pass = RenderPass::new("chunk_array_render_pass", encoder, [&view], depth.as_ref());
 
-        for (_entity, mesh) in query.into_iter() {
-            let Some(details) = mesh.details() else { continue };
+        // for (_entity, mesh) in query.into_iter() {
+        //     let Some(details) = todo!();// mesh.details() else { continue };
 
-            Binds::bind_all(&mut pass, [
-                common_binds,
-                binds.by_details(details),
-                &cam_unform.binds,
-            ]);
+        //     Binds::bind_all(&mut pass, [
+        //         common_binds,
+        //         binds.by_details(details),
+        //         &cam_unform.binds,
+        //     ]);
 
-            mesh.render(&pipeline, &mut pass)?;
-        }
+        //     // mesh.render(&pipeline, &mut pass)?;
+        // }
 
         Ok(())
     }
@@ -756,8 +755,8 @@ impl ChunkArray {
             let idx = ChunkArray::pos_to_idx(self.sizes, pos)
                 .expect("pos should be valid");
 
-            let mut chunk_mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
-            chunk_mesh.upload_full_mesh(device, &mesh);
+            let mut chunk_mesh = self.chunk_component::<&mut Mesh>(world, idx);
+            // chunk_mesh.upload_full_mesh(device, &mesh);
         }
     }
 
@@ -771,8 +770,8 @@ impl ChunkArray {
             let idx = ChunkArray::pos_to_idx(self.sizes, pos)
                 .expect("pos should be valid");
 
-            let mut chunk_mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
-            chunk_mesh.upload_low_mesh(device, &mesh, lod);
+            let mut chunk_mesh = self.chunk_component::<&mut Mesh>(world, idx);
+            // chunk_mesh.upload_low_mesh(device, &mesh, lod);
         }
     }
 
@@ -809,8 +808,8 @@ impl ChunkArray {
             let idx = ChunkArray::pos_to_idx(self.sizes, pos)
                 .expect("pos should be valid");
 
-            let mut chunk_mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
-            chunk_mesh.upload_partial_meshes(device, &partitions);
+            let mut chunk_mesh = self.chunk_component::<&mut Mesh>(world, idx);
+            // chunk_mesh.upload_partial_meshes(device, &partitions);
         }
     }
 
@@ -909,8 +908,8 @@ impl ChunkArray {
         let adj = self.get_adj_chunks(world, chunk_pos);
 
         if let Some(chunk) = self.get_chunk_by_idx(world, idx) {
-            let mut mesh = self.chunk_component::<&mut ChunkMesh>(world, idx);
-            chunk.generate_mesh(&mut mesh, 0, todo!("adj"), device);
+            let mut mesh = self.chunk_component::<&mut Mesh>(world, idx);
+            // chunk.generate_mesh(&mut mesh, 0, todo!("adj"), device);
         }
     }
 
@@ -922,16 +921,16 @@ impl ChunkArray {
         let chunk_pos = Self::index_to_pos(chunk_idx, this.sizes);
         let adj = todo!("this.get_adj_chunks(world, chunk_pos)");
 
-        if let Some(chunk) = this.get_chunk_by_idx(world, chunk_idx) {
-            let mut chunk_mesh = this.chunk_component::<&mut ChunkMesh>(world, chunk_idx);
+        // if let Some(chunk) = this.get_chunk_by_idx(world, chunk_idx) {
+        //     let mut chunk_mesh = this.chunk_component::<&mut Mesh>(world, chunk_idx);
 
-            if chunk_mesh.is_partial() {
-                let mesh = chunk.make_partition(&adj, partition_idx);
-                chunk_mesh.upload_partition(device, &mesh, partition_idx);
-            } else {
-                chunk.partition_mesh(&mut chunk_mesh, adj, device);
-            }
-        }
+        //     if chunk_mesh.is_partial() {
+        //         let mesh = todo!();//chunk.make_partition(&adj, partition_idx);
+        //         chunk_mesh.upload_partition(device, &mesh, partition_idx);
+        //     } else {
+        //         // chunk.partition_mesh(&mut chunk_mesh, adj, device);
+        //     }
+        // }
     }
 
     pub fn trace_ray<'s>(&'s self, world: &'s World, ray: Line, max_steps: usize) -> impl Iterator<Item = Voxel> + 's {
@@ -1157,11 +1156,11 @@ assert_impl_all!(ChunkArrayTasks: Send, Sync);
 impl ChunkArrayTasks {
     /// Stops all mesh generation tasks that differst with `useful_lod` by more than `2`.
     pub fn stop_all_useless(&mut self, useful_lod: Lod, cur_pos: Int3) {
-        for lod in Chunk::get_possible_lods() {
-            if 2 < lod.abs_diff(useful_lod) {
-                self.stop_mesh(cur_pos, lod);
-            }
-        }
+        // for lod in Chunk::get_possible_lods() {
+        //     if 2 < lod.abs_diff(useful_lod) {
+        //         self.stop_mesh(cur_pos, lod);
+        //     }
+        // }
     }
 
     /// Stops all mesh generation tasks with level of details of `lod`.
@@ -1174,13 +1173,13 @@ impl ChunkArrayTasks {
 
     /// Stops all mesh generation tasks.
     pub fn stop_all_meshes(&mut self, pos: Int3) {
-        let vals_to_be_dropped = Chunk::get_possible_lods()
-            .into_iter()
-            .cartesian_product(Range3d::adj_iter(pos).chain([pos]));
+        // let vals_to_be_dropped = Chunk::get_possible_lods()
+        //     .into_iter()
+        //     .cartesian_product(Range3d::adj_iter(pos).chain([pos]));
         
-        for (lod, pos) in vals_to_be_dropped {
-            self.stop_mesh(pos, lod);
-        }
+        // for (lod, pos) in vals_to_be_dropped {
+        //     self.stop_mesh(pos, lod);
+        // }
     }
 
     /// Tests for voxel generation task running.
@@ -1207,6 +1206,8 @@ impl ChunkArrayTasks {
 
     /// Starts new mesh generation task.
     pub async fn start_mesh(&mut self, chunk: &ChunkRef, adj: ChunkAdj, lod: Lod) {
+        return;
+
         let chunk = ChunkRef::clone(chunk);
         
         let chunk_pos = chunk.pos.load(Relaxed);
@@ -1220,11 +1221,13 @@ impl ChunkArrayTasks {
 
         let prev_is_none = match lod {
             0 => self.full.insert(chunk_pos, Task::spawn(async move {
-                chunk.make_full_mesh(adj)
+                // chunk.make_full_mesh(adj);
+                todo!()
             })).is_none(),
 
             _ => self.low.insert((chunk_pos, lod), Task::spawn(async move {
-                chunk.make_low_mesh(adj, lod)
+                // chunk.make_low_mesh(adj, lod);
+                todo!()
             })).is_none(),
         };
 
@@ -1233,10 +1236,13 @@ impl ChunkArrayTasks {
 
     /// Starts new mesh partitioning task.
     pub fn start_partitioning(&mut self, chunk: &ChunkRef, adj: ChunkAdj) {
+        return;
+
         let chunk = ChunkRef::clone(chunk);
 
         let prev_value = self.partition.insert(chunk.pos.load(Relaxed), Task::spawn(async move {
-            chunk.make_partitial_meshes(todo!("adj"))
+            // chunk.make_partitial_meshes(todo!("adj"));
+            todo!()
         }));
         assert!(prev_value.is_none(), "there should be only one task");
     }
@@ -1257,7 +1263,7 @@ impl ChunkArrayTasks {
     /// Tries to finish mesh generation task and then applies it to `mesh`.
     /// Returns [`true`] if success.
     pub async fn try_finish_mesh(
-        &mut self, pos: Int3, lod: Lod, mesh: &mut ChunkMesh, device: &Device,
+        &mut self, pos: Int3, lod: Lod, mesh: &mut Mesh, device: &Device,
     ) -> bool {
         match lod {
             0 => self.try_finish_full(pos, mesh, device).await,
@@ -1268,13 +1274,13 @@ impl ChunkArrayTasks {
     /// Tries to finish full resolution mesh generation task and then applies it to `mesh`.
     /// Returns [`true`] if success.
     pub async fn try_finish_full(
-        &mut self, pos: Int3, mesh: &mut ChunkMesh, device: &Device,
+        &mut self, pos: Int3, mesh: &mut Mesh, device: &Device,
     ) -> bool {
         let Some(task) = self.full.get_mut(&pos) else { return false };
         let Some(vertices) = task.try_take_result().await else { return false };
 
-        mesh.upload_full_mesh(device, &vertices);
-        let _ = self.full.remove(&pos)
+        // mesh.upload_full_mesh(device, &vertices);
+        _ = self.full.remove(&pos)
             .expect("there should be a task due to check before");
 
         true
@@ -1283,12 +1289,12 @@ impl ChunkArrayTasks {
     /// Tries to finish low resolution mesh generation task and then applies it to `mesh`.
     /// Returns [`true`] if success.
     pub async fn try_finish_low(
-        &mut self, pos: Int3, lod: Lod, mesh: &mut ChunkMesh, device: &Device,
+        &mut self, pos: Int3, lod: Lod, mesh: &mut Mesh, device: &Device,
     ) -> bool {
         let Some(task) = self.low.get_mut(&(pos, lod)) else { return false };
         let Some(vertices) = task.try_take_result().await else { return false };
 
-        mesh.upload_low_mesh(device, &vertices, lod);
+        // mesh.upload_low_mesh(device, &vertices, lod);
         let _ = self.low.remove(&(pos, lod))
             .expect("there should be a task due to check before");
 
@@ -1328,10 +1334,10 @@ pub struct ChunkBinds {
 }
 
 impl ChunkBinds {
-    pub fn by_details(&self, details: Details) -> &Binds {
+    pub fn by_details(&self, details: Resolution) -> &Binds {
         match details {
-            Details::Full => &self.full,
-            Details::Low(_) => &self.low,
+            Resolution::High => &self.full,
+            Resolution::Low(_) => &self.low,
         }
     }
 
@@ -1445,24 +1451,24 @@ impl ChunkRenderPipeline {
     }
 
     pub async fn make_full(device: &Device, layout: &PipelineLayout) -> RenderPipeline {
-        use crate::{graphics::RenderPipelineDescriptor as Desc, terrain::chunk::mesh::FullVertex};
+        use crate::{graphics::RenderPipelineDescriptor as Desc, terrain::chunk::mesh::HiResVertex};
 
         RenderPipeline::new(Desc {
             device,
             layout,
-            material: Self::make_material::<FullVertex>(device, "chunks_full.wgsl").await.as_ref(),
+            material: Self::make_material::<HiResVertex>(device, "chunks_full.wgsl").await.as_ref(),
             primitive_state: Self::PRIMITIVE_STATE,
             label: Some("chunk_array_full_detail_render_pipeline".into()),
         })
     }
 
     pub async fn make_low(device: &Device, layout: &PipelineLayout) -> RenderPipeline {
-        use crate::{graphics::RenderPipelineDescriptor as Desc, terrain::chunk::mesh::LowVertex};
+        use crate::{graphics::RenderPipelineDescriptor as Desc, terrain::chunk::mesh::LowResVertex};
 
         RenderPipeline::new(Desc {
             device,
             layout,
-            material: Self::make_material::<LowVertex>(device, "chunks_low.wgsl").await.as_ref(),
+            material: Self::make_material::<LowResVertex>(device, "chunks_low.wgsl").await.as_ref(),
             primitive_state: Self::PRIMITIVE_STATE,
             label: Some("chunk_array_full_detail_render_pipeline".into()),
         })

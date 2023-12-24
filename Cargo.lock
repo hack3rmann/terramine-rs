@@ -2371,6 +2371,7 @@ dependencies = [
  "async-trait",
  "atomic",
  "bit-vec",
+ "bitflags 2.4.1",
  "bytemuck",
  "const-random",
  "const_format",

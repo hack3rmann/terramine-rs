@@ -22,6 +22,7 @@ pub mod const_default;
 pub mod physics;
 pub mod geometry;
 pub mod iterator;
+pub mod components;
 
 
 

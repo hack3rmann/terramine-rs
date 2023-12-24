@@ -2,11 +2,15 @@ use {
     crate::prelude::*,
     graphics::{
         Device, Queue, FromFile, Extent3d, Texture, TextureView,
-        Sampler, TextureFormat, BindGroupLayout, BindGroup, AsBindGroup,
+        Sampler, BindGroupLayout, BindGroup, AsBindGroup,
     },
     image::{ImageBuffer, Rgba, ImageError},
     tokio::{fs, io},
 };
+
+
+
+pub use wgpu::TextureFormat;
 
 
 

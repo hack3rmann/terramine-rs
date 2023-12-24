@@ -1,32 +1,36 @@
 use crate::{
     prelude::*,
-    graphics::*,
-    terrain::chunk::{prelude::*, chunk_array_old::ChunkRenderPipeline},
+    graphics::mesh::{Mesh, SimpleMesh, Vertex, vertex_attr_array, VertexAttribute},
+    terrain::{
+        chunk::{Chunk, Lod, array::ChunkAdj, FillType, ChunkOption},
+        voxel::{voxel_data::data::*, VoxelColor, Voxel, shape::{CubeDetailed, CubeLowered}},
+    },
+    iterator::CubeBoundary,
 };
 
 
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, IsVariant)]
-pub enum Details {
-    Full,
+pub enum Resolution {
+    High,
     Low(Lod),
 }
-assert_impl_all!(Details: Send, Sync);
+assert_impl_all!(Resolution: Send, Sync);
 
-impl From<Lod> for Details {
+impl From<Lod> for Resolution {
     fn from(value: Lod) -> Self {
         match value {
-            0 => Self::Full,
+            0 => Self::High,
             lod => Self::Low(lod),
         }
     }
 }
 
-impl From<Details> for Lod {
-    fn from(value: Details) -> Self {
+impl From<Resolution> for Lod {
+    fn from(value: Resolution) -> Self {
         match value {
-            Details::Full => 0,
-            Details::Low(lod) => lod,
+            Resolution::High => 0,
+            Resolution::Low(lod) => lod,
         }
     }
 }
@@ -36,20 +40,20 @@ impl From<Details> for Lod {
 /// Full-detailed vertex.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable, PartialEq, Default)]
-pub struct FullVertex {
+pub struct HiResVertex {
     pub position: vec3,
     pub tex_coords: vec2,
     pub face_idx: u32,
 }
-assert_impl_all!(FullVertex: Send, Sync);
+assert_impl_all!(HiResVertex: Send, Sync);
 
-impl FullVertex {
+impl HiResVertex {
     pub const fn new(position: vec3, tex_coords: vec2, face_idx: u32) -> Self {
         Self { position, tex_coords, face_idx }
     }
 }
 
-impl Vertex for FullVertex {
+impl Vertex for HiResVertex {
     const ATTRIBUTES: &'static [VertexAttribute] =
         &vertex_attr_array![0 => Float32x3, 1 => Float32x2, 2 => Uint32];
 }
@@ -59,228 +63,231 @@ impl Vertex for FullVertex {
 /// Low-detailed vertex.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable, PartialEq, Default)]
-pub struct LowVertex {
+pub struct LowResVertex {
     pub position: vec3,
     pub color: Color,
     pub face_idx: u32,
 }
-assert_impl_all!(LowVertex: Send, Sync);
+assert_impl_all!(LowResVertex: Send, Sync);
 
-impl LowVertex {
+impl LowResVertex {
     pub const fn new(position: vec3, color: Color, face_idx: u32) -> Self {
         Self { position, color, face_idx }
     }
 }
 
-impl Vertex for LowVertex {
+impl Vertex for LowResVertex {
     const ATTRIBUTES: &'static [VertexAttribute] =
         &vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Uint32];
 }
 
 
 
-#[derive(Debug)]
-pub enum ChunkFullMesh {
-    Standart(GpuMesh),
-    Partial(Box<[GpuMesh; 8]>),
-}
-assert_impl_all!(ChunkFullMesh: Send, Sync);
-
-impl ChunkFullMesh {
-    pub fn is_empty(&self) -> bool {
-        match self {
-            Self::Standart(mesh) => mesh.is_empty(),
-            Self::Partial(meshes) => meshes.iter()
-                .all(GpuMesh::is_empty)
-        }
+pub fn make_one(chunk: &Chunk, adj: ChunkAdj, lod: Lod) -> Mesh {
+    match lod {
+        0 => make_high_resolution(chunk, adj),
+        _ => make_low_resolution(chunk, adj, lod),
     }
 }
 
-impl Render for ChunkFullMesh {
-    type Error = !;
-    fn render<'rp, 's: 'rp>(
-        &'s self, pipeline: &'rp RenderPipeline, render_pass: &mut RenderPass<'rp>,
-    ) -> Result<(), Self::Error> {
-        match self {
-            Self::Standart(mesh) => {
-                let Ok(()) = mesh.render(pipeline, render_pass);
-            }
+pub fn make_high_resolution(chunk: &Chunk, adj: ChunkAdj) -> Mesh {
+    let is_filled_and_blocked
+        = chunk.is_filled()
+        && Chunk::is_adj_filled(&adj);
 
-            Self::Partial(meshes) => for mesh in meshes.iter() {
-                let Ok(()) = mesh.render(pipeline, render_pass);
-            }
-        }
-
-        Ok(())
-    }
-}
-
-
-
-#[derive(Debug, SmartDefault)]
-pub struct ChunkMesh {
-    pub full_mesh: Option<ChunkFullMesh>,
-    pub low_meshes: [Option<GpuMesh>; Chunk::N_LODS],
-    pub active_lod: Option<Lod>,
-
-    #[default(AtomicBool::new(true))]
-    pub is_enabled: AtomicBool,
-}
-assert_impl_all!(ChunkMesh: Send, Sync);
-
-impl ChunkMesh {
-    pub fn switch(&self) {
-        let _ = self.is_enabled.fetch_update(AcqRel, Relaxed, |old| Some(!old));
+    if chunk.is_empty() || is_filled_and_blocked {
+        return SimpleMesh::new_empty::<LowResVertex>(default(), default()).into();
     }
 
-    pub fn is_enabled(&self) -> bool {
-        self.is_enabled.load(Acquire)
-    }
+    let info = chunk.info.load(Relaxed);
+    let pos_iter: Box<dyn Iterator<Item = Int3>> = match info.get_fill_type() {
+        FillType::Unspecified =>
+            Box::new(Chunk::local_pos_iter()),
 
-    pub fn disable(&self) {
-        self.is_enabled.store(false, Release);
-    }
+        FillType::AllSame(id) => if id == AIR_VOXEL_DATA.id {
+            Box::new(std::iter::empty())
+        } else {
+            Box::new(CubeBoundary::new(Chunk::SIZE as i32))
+        },
+    };
 
-    pub fn enable(&self) {
-        self.is_enabled.store(true, Release);
-    }
-
-    pub fn details(&self) -> Option<Details> {
-        Some(Details::from(self.active_lod?))
-    }
-
-    /// Checks if [chunk][Chunk]'s mesh is partitioned.
-    pub fn is_partial(&self) -> bool {
-        matches!(self.full_mesh, Some(ChunkFullMesh::Partial(_)))
-    }
-
-    /// Connects [mesh][Mesh] partitions into one [mesh][Mesh]. If [chunk][Chunk] is not
-    /// partitioned then it will do nothing.
-    pub fn connect_partitions(&mut self, device: &Device) {
-        let Some(ChunkFullMesh::Partial(ref meshes)) = self.full_mesh else { return };
-        let meshes = meshes.iter().map(|gpu_mesh| gpu_mesh.read_vertices::<FullVertex>());
-
-        let mesh = Mesh::from_iter(meshes);
-
-        let gpu_mesh = GpuMesh::new(Self::make_partition_desc(device, &mesh));
-        self.full_mesh.replace(ChunkFullMesh::Standart(gpu_mesh));
-    }
-
-    pub fn upload_partition(
-        &mut self, device: &Device, partition: &Mesh<FullVertex>, partition_idx: usize,
-    ) {
-        let Some(ChunkFullMesh::Partial(ref mut meshes)) = self.full_mesh else {
-            panic!("cannot upload only one partition");
-        };
-
-        meshes[partition_idx] = GpuMesh::new(
-            Self::make_partition_desc(device, partition)
-        )
-    }
-
-    pub fn make_partition_desc<'s>(
-        device: &'s Device, partition: &'s Mesh<FullVertex>,
-    ) -> GpuMeshDescriptor<'s, FullVertex> {
-        GpuMeshDescriptor {
-            device,
-            label: Some("chunk_mesh_partition".into()),
-            polygon_mode: PolygonMode::Fill,
-            mesh: partition,
-        }
-    }
-
-    pub fn make_full_desc<'s>(
-        device: &'s Device, mesh: &'s Mesh<FullVertex>,
-    ) -> GpuMeshDescriptor<'s, FullVertex> {
-        GpuMeshDescriptor {
-            device,
-            label: Some("chunk_full_detail_mesh".into()),
-            polygon_mode: PolygonMode::Fill,
-            mesh,
-        }
-    }
-
-    pub fn make_low_desc<'s>(
-        device: &'s Device, mesh: &'s Mesh<LowVertex>,
-    ) -> GpuMeshDescriptor<'s, LowVertex> {
-        GpuMeshDescriptor {
-            device,
-            label: Some("chunk_low_detail_mesh".into()),
-            polygon_mode: PolygonMode::Fill,
-            mesh,
-        }
-    }
-
-    /// Sets mesh to [chunk][Chunk].
-    pub fn upload_partial_meshes(&mut self, device: &Device, meshes: &[Mesh<FullVertex>; 8]) {
-        let partitions = array_init(|i| {
-            GpuMesh::new(Self::make_partition_desc(device, &meshes[i]))
-        });
-        self.full_mesh.replace(ChunkFullMesh::Partial(Box::new(partitions)));
-    }
-
-    /// Sets mesh to [chunk][Chunk].
-    pub fn upload_full_mesh(&mut self, device: &Device, mesh: &Mesh<FullVertex>) {
-        let mesh = GpuMesh::new(Self::make_full_desc(device, mesh));
-        self.full_mesh.replace(ChunkFullMesh::Standart(mesh));
-    }
-
-    /// Sets mesh to [chunk][Chunk].
-    pub fn upload_low_mesh(&mut self, device: &Device, mesh: &Mesh<LowVertex>, lod: Lod) {
-        assert_ne!(lod, 0, "`lod` in upload_low_detail_vertices() should be not 0");
-    
-        let mesh = GpuMesh::new(Self::make_low_desc(device, mesh));
-        self.low_meshes[lod as usize - 1].replace(mesh);
-    }
-
-    /// Gives list of available [LODs][Lod].
-    pub fn get_available_lods(&self) -> SmallVec<[Lod; Chunk::N_LODS]> {
-        let mut result = smallvec![];
-    
-        if self.full_mesh.is_some() {
-            result.push(0)
-        }
-    
-        for (low_mesh, lod) in self.low_meshes.iter().zip(1 as Lod..) {
-            if low_mesh.is_some() {
-                result.push(lod)
-            }
-        }
-    
-        result
-    }
-
-    /// Renders a [mesh][ChunkMesh].
-    #[profile]
-    pub fn render<'rp, 's: 'rp>(
-        &'s self, pipeline: &'rp ChunkRenderPipeline, render_pass: &mut RenderPass<'rp>,
-    ) -> Result<(), ChunkRenderError> {
-        use ChunkRenderError as Err;
-
-        ensure_or!(self.is_enabled(), return Ok(()));
-
-        match self.details() {
-            None => return Ok(()),
-
-            Some(Details::Full) => {
-                let mesh = self.full_mesh
-                    .as_ref()
-                    .ok_or(Err::NoMesh(0))?;
-
-                let Ok(()) = mesh.render(&pipeline.full, render_pass);
+    let vertices = pos_iter
+        .filter_map(|pos| match chunk.get_voxel_local(pos) {
+            None => {
+                logger::log!(Error, from = "chunk", "failed to get voxel from pos {pos}");
+                None
             },
+            some => some,
+        })
+        .filter(|voxel| !voxel.is_air())
+        .flat_map(|voxel| {
+            let side_iter = Range3d::adj_iter(Int3::ZERO)
+                .filter(|&offset| {
+                    let adj_chunk = adj.by_offset(offset);
 
-            Some(Details::Low(lod)) => {
-                let mesh = self.low_meshes
-                    .get(lod as usize - 1)
-                    .ok_or(Err::TooBigLod(lod))?
-                    .as_ref()
-                    .ok_or(Err::NoMesh(lod))?;
+                    match chunk.get_voxel_global(voxel.pos + offset) {
+                        ChunkOption::Voxel(voxel) => voxel.is_air(),
 
-                let Ok(()) = mesh.render(&pipeline.low, render_pass);
+                        ChunkOption::OutsideChunk => match adj_chunk {
+                            None => true,
+
+                            Some(chunk) => match chunk.get_voxel_global(voxel.pos + offset) {
+                                ChunkOption::Voxel(voxel) => voxel.is_air(),
+                                ChunkOption::OutsideChunk => true,
+                                ChunkOption::Failed => {
+                                    logger::log!(
+                                        Error, from = "chunk",
+                                        "caught on failed chunk voxel in {pos}",
+                                        pos = voxel.pos + offset,
+                                    );
+                                    true
+                                },
+                            }
+                        },
+
+                        ChunkOption::Failed => {
+                            logger::log!(
+                                Error, from = "chunk",
+                                "caught on failed chunk voxel in {pos}",
+                                pos = voxel.pos + offset,
+                            );
+                            true
+                        },
+                    }
+                });
+
+            const N_CUBE_VERTICES: usize = 36;
+            let mut vertices = SmallVec::<[_; N_CUBE_VERTICES]>::new();
+
+            let mesh_builder = CubeDetailed::new(voxel.data);
+
+            for offset in side_iter {
+                mesh_builder.by_offset(offset, voxel.pos.into(), &mut vertices);
             }
-        }
 
-        Ok(())
+            vertices
+        })
+        .collect_vec();
+    
+    SimpleMesh::new(vertices, None, default(), default()).into()
+}
+
+pub fn make_low_resolution(chunk: &Chunk, adj: ChunkAdj, lod: Lod) -> Mesh {
+    if lod == 0 {
+        logger::error!(
+            from = "chunk-mesh",
+            "failed to make low resolution mesh with lod = 0, making high resolution mesh instead",
+        );
+
+        return make_high_resolution(chunk, adj);
     }
+    
+    let is_filled_and_blocked = chunk.is_filled() && Chunk::is_adj_filled(&adj);
+
+    ensure_or!(
+        !chunk.is_empty() && !is_filled_and_blocked,
+        return SimpleMesh::new_empty::<LowResVertex>(default(), default()).into()
+    );
+
+    // TODO: optimize for same-filled chunks
+    let sub_chunk_size = 1 << lod;
+    let vertices = chunk.low_voxel_iter(lod)
+        .filter_map(|(voxel, p)| match voxel {
+            VoxelColor::Transparent => None,
+            VoxelColor::Colored(color) => Some((color, p)),
+        })
+        .flat_map(|(voxel_color, local_low_pos)| {
+            let local_pos = local_low_pos * sub_chunk_size;
+            let global_pos = Chunk::local_to_global_pos(chunk.pos.load(Relaxed), local_pos);
+
+            let center_pos = macros::formula!(
+                pos + 0.5 * chunk_size - 0.5 * voxel_size, where
+                pos = vec3::from(global_pos),
+                chunk_size = vec3::all(sub_chunk_size as f32) * Voxel::SIZE,
+                voxel_size = 0.5 * vec3::all(Voxel::SIZE),
+            );
+                        
+            let is_blocking_voxel = |pos: Int3, offset: Int3| match chunk.get_voxel_global(pos) {
+                ChunkOption::OutsideChunk => {
+                    match adj.by_offset(offset) {
+                        // There is no chunk so voxel isn't blocked
+                        None => false,
+                        
+                        Some(chunk) => match chunk.get_voxel_global(pos) {
+                            ChunkOption::OutsideChunk => unreachable!("Can't fall out of an adjacent chunk"),
+                            ChunkOption::Voxel(voxel) => !voxel.is_air(),
+                            ChunkOption::Failed => {
+                                logger::log!(Error, from = "chunk", "caught failed chunk voxel in {pos}");
+                                false
+                            },
+                        },
+                    }
+                },
+
+                ChunkOption::Voxel(voxel) => !voxel.is_air(),
+
+                ChunkOption::Failed => {
+                    logger::log!(Error, from = "chunk", "caught failed chunk voxel in {pos}");
+                    false
+                },
+            };
+
+            let is_blocked_subchunk = |offset: Int3| -> bool {
+                let start_pos = global_pos + offset * sub_chunk_size;
+                let end_pos   = global_pos + (offset + Int3::ONE) * sub_chunk_size;
+
+                let is_on_surface = match offset.as_tuple() {
+                    (-1, 0, 0) if 0 == local_pos.x => true,
+                    (0, -1, 0) if 0 == local_pos.y => true,
+                    (0, 0, -1) if 0 == local_pos.z => true,
+                    (1, 0, 0) if Chunk::SIZE as i32 == local_pos.x + sub_chunk_size => true,
+                    (0, 1, 0) if Chunk::SIZE as i32 == local_pos.y + sub_chunk_size => true,
+                    (0, 0, 1) if Chunk::SIZE as i32 == local_pos.z + sub_chunk_size => true,
+                    _ => false,
+                };
+                
+                let mut iter = Range3d::from(start_pos..end_pos);
+                let pred = |pos| is_blocking_voxel(pos, offset);
+
+                if let Some(_) = adj.by_offset(offset) && is_on_surface {
+                    iter.all(pred)
+                } else {
+                    iter.any(pred)
+                }
+            };
+
+            let mesh_builder = CubeLowered::new(
+                sub_chunk_size as f32 * Voxel::SIZE
+            );
+            
+            const N_CUBE_VERTICES: usize = 36;
+            let mut vertices = Vec::with_capacity(N_CUBE_VERTICES);
+
+            for offset in Range3d::adj_iter(Int3::ZERO).filter(|&o| !is_blocked_subchunk(o)) {
+                mesh_builder.by_offset(offset, center_pos, voxel_color, &mut vertices);
+            }
+
+            vertices
+        })
+        .collect();
+
+    SimpleMesh::new(vertices, None, default(), default()).into()
+}
+
+pub fn insert(parent: &mut Mesh, node: Mesh, lod: Lod)
+    -> Option<Mesh>
+{
+    if parent.is_simple() {
+        logger::error!(
+            from = "chunk-mesh",
+            "failed to insert a simple mesh, only chained \
+            mesh supported under chunk array, making tree mesh instead",
+        );
+
+        parent.to_tree();
+    }
+
+    let Mesh::Tree(meshes) = parent else { unreachable!() };
+
+    Some(mem::replace(meshes.get_mut(lod as usize)?, node))
 }

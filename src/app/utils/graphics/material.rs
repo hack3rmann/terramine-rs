@@ -1,10 +1,14 @@
 use {
     crate::{
         prelude::*,
-        graphics::{ShaderRef, SURFACE_CFG},
+        graphics::{Shader, SURFACE_CFG},
     },
     std::fmt::Debug,
 };
+
+
+
+pub type ShaderRef = Arc<Shader>;
 
 
 
@@ -53,7 +57,7 @@ assert_impl_all!(DefaultMaterial: Send, Sync, Component);
 
 impl Material for DefaultMaterial {
     fn get_shader(&self) -> ShaderRef {
-        default()
+        todo!()
     }
 
     fn get_color_states(&self) -> &'static [Option<ColorTargetState>] {

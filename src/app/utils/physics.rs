@@ -96,3 +96,12 @@ impl PhysicalComponent {
         self.affect_translation(&mut transform.translation);
     }
 }
+
+impl Debug for PhysicalComponent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PhysicalComponent")
+            .field("kin_state", &self.kin_state)
+            .field("mass", &self.mass)
+            .finish_non_exhaustive()
+    }
+}

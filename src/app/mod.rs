@@ -5,7 +5,7 @@ use {
         prelude::*,
         graphics::Graphics,
         camera::{*, self},
-        terrain::chunk::chunk_array_old::ChunkArray,
+        components::Name,
     },
     winit::{
         event::{Event, WindowEvent},
@@ -52,8 +52,12 @@ impl App {
         logger::scope!(from = "app", "setup()");
 
         self.world.init_resource::<Timer>();
+        self.world.insert_resource(Name::new("Resources"));
 
-        let camera = self.world.spawn(camera::make_new_enabled()).into();
+        let camera = self.world.spawn(camera::make_new_camera_bundle_enabled());
+        self.world.insert_one(camera, Name::new("Initial camera"))?;
+        self.world.insert_one(camera, crate::physics::PhysicalComponent::default())?;
+
         self.world.insert_resource(MainCamera(camera));
 
         let graphics = Graphics::new(&self.event_loop)
@@ -64,15 +68,13 @@ impl App {
 
         self.world.insert_resource(graphics);
 
-        let chunk_array = ChunkArray::new(&mut self.world, vecs!(2, 2, 2)).await?;
-        self.world.insert_resource(chunk_array);
-
         Ok(())
     }
 
     /// Runs an [app][App]. Runs [`winit`]'s `event_loop`.
     pub fn run(mut self) -> ! {
         let event_loop = self.event_loop.take();
+
         event_loop.run(move |event, elw_target, control_flow| {
             let result = RUNTIME.block_on(
                 self.run_frame_loop(event, elw_target, control_flow)
@@ -80,7 +82,10 @@ impl App {
 
             if let Err(error) = result {
                 logger::error!(from = "app", "failed to run event loop: {error:#?}");
-                panic!("panicked on {error}");
+                
+                if cfg::app::PANIC_ON_ERROR {
+                    panic!("panicked on {error}");
+                }
             }
         })
     }
@@ -121,7 +126,7 @@ impl App {
                 }
 
                 if keyboard::just_pressed(cfg::key_bindings::SPAWN_CAMERA) {
-                    self.world.spawn(camera::make_new());
+                    self.world.spawn(camera::make_new_camera_bundle());
                 }
 
                 let graphics = self.world.resource::<&Graphics>()?;
@@ -147,9 +152,11 @@ impl App {
 
     /// Updates `ecs`'s systems. Note that non of resources can be borrowed at this point.
     async fn update_systems(&mut self) -> AnyResult<()> {
+        use crate::physics::PhysicalComponent;
+
         CameraHandle::update_all(&self.world);
-        Graphics::update(&self.world)?;
-        ChunkArray::update(&mut self.world).await?;
+        Graphics::update(&mut self.world)?;
+        PhysicalComponent::update_all(&self.world)?;
 
         Ok(())
     }
@@ -160,28 +167,6 @@ impl App {
             update();
         }
 
-        if keyboard::just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
-            let arr_entity = self.world.resource::<&ChunkArray>()?.array_entity;
-            ChunkArray::make_binds(&mut self.world, arr_entity).await;
-        }
-
-        if keyboard::just_pressed(Key::N) {
-            let arr = ChunkArray::new(&mut self.world, vecs!(2, 2, 2)).await?;
-            self.world.insert_resource(arr);
-        }
-
-        {
-            use crate::{transform::Transform, geometry::frustum::Frustum};
-
-            let MainCamera(cam) = self.world.copy_resource::<MainCamera>()?;
-
-            let mut query = self.world
-                .query_one::<(&CameraComponent, &Transform, &Frustum)>(cam.entity).unwrap();
-            let (_cam, transform, frustum) = query.get().unwrap();
-
-            ChunkArray::update_meshes(&self.world, transform.translation.position, frustum).await?;
-        }
-
         {
             self.world.resource::<&mut Timer>()?.update();
             let graphics = self.world.resource::<&Graphics>()?;
@@ -190,10 +175,11 @@ impl App {
                 .log_error("app", "failed to update mouse input");
 
             if keyboard::just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
-                let camera = self.world.resource::<&MainCamera>()?;
+                let MainCamera(camera) = self.world.copy_resource::<MainCamera>()?;
+
                 mouse::set_capture(
                     &graphics.window,
-                    camera.switch_mouse_capture(&self.world),
+                    CameraHandle::switch_mouse_capture(&self.world, camera),
                 )
             }
         }
@@ -219,9 +205,7 @@ impl App {
     async fn draw_frame(&mut self, _window_id: WindowId) -> AnyResult<()> {
         let mut graphics = self.world.resource::<&mut Graphics>()?;
 
-        graphics.render_with_sandbox(&self.world, |binds, encoder, view, depth, world| {
-            ChunkArray::render(world, binds, encoder, view.clone(), depth.cloned())
-        })?;
+        graphics.render_with_sandbox(&self.world, |_, _, _, _, _| Ok(()))?;
 
         Ok(())
     }

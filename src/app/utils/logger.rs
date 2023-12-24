@@ -41,7 +41,7 @@ assert_impl_all!(Message: Send, Sync);
 
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Default, Display)]
-#[display(style = "UPPERCASE")]
+#[display(style = "lowercase")]
 pub enum MsgType {
     #[default]
     Info,
@@ -66,10 +66,12 @@ pub fn update() {
 pub fn log(msg_type: MsgType, from: impl Into<StaticStr>, content: impl Into<StaticStr>) {
     let (from, content) = (from.into(), content.into());
 
-    eprintln!("{msg_type} from {from}: {content}");
+    let message = Message { msg_type, from, content};
+
+    eprintln!("{message}");
     CHANNEL.lock()
         .sender
-        .send(Message { msg_type, from, content})
+        .send(message)
         .expect("failed to send message");
 }
 

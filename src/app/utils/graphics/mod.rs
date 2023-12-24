@@ -7,14 +7,14 @@ pub mod render_resource;
 pub mod pipeline;
 pub mod pass;
 pub mod gpu_conversions;
-pub mod material;
 pub mod bind_group;
 pub mod buffer;
 pub mod texture;
 pub mod sprite;
 pub mod shader;
-pub mod asset;
 pub mod image;
+pub mod asset;
+pub mod material;
 
 use crate::prelude::*;
 
@@ -38,18 +38,6 @@ pub use {
     egui_wgpu_backend::{RenderPass as EguiRenderPass, ScreenDescriptor as EguiScreenDescriptor},
     ui::egui_util::{EguiContext, EguiDockState, Tab},
 };
-
-
-
-// FIXME: remove this
-const TEST_VERTICES: &[TexturedVertex] = &[
-    TexturedVertex::new(vecf!(-0.4, -0.5, 0.0), vecf!(0.0, 1.0)),
-    TexturedVertex::new(vecf!( 0.4, -0.5, 0.0), vecf!(1.0, 1.0)),
-    TexturedVertex::new(vecf!( 0.4,  0.5, 0.0), vecf!(1.0, 0.0)),
-    TexturedVertex::new(vecf!(-0.4, -0.5, 0.0), vecf!(0.0, 1.0)),
-    TexturedVertex::new(vecf!( 0.4,  0.5, 0.0), vecf!(1.0, 0.0)),
-    TexturedVertex::new(vecf!(-0.4,  0.5, 0.0), vecf!(0.0, 0.0)),
-];
 
 
 
@@ -102,6 +90,14 @@ pub struct Graphics {
 assert_impl_all!(Graphics: Send, Sync, Component);
 
 impl Graphics {
+    pub fn device(&self) -> Arc<Device> {
+        Arc::clone(&self.context.device)
+    }
+
+    pub fn queue(&self) -> Arc<Queue> {
+        Arc::clone(&self.context.queue)
+    }
+
     /// Creates new [`Graphics`] that holds some renderer stuff.
     pub async fn new(event_loop: &EventLoop<()>) -> AnyResult<Self> {
         logger::scope!(from = "graphics", "new()");
@@ -128,7 +124,7 @@ impl Graphics {
         // * 
         // * This is graphics intialization so device does not exists anywhere before
         // * so assets can not been used before or been initialized.
-        unsafe { asset::load_default_assets(&context.device) }.await;
+        // unsafe { asset::load_default_assets(&context.device) }.await;
 
         let common_uniforms = CommonUniformsBuffer::new(
             &context.device,
@@ -143,90 +139,7 @@ impl Graphics {
 
         // ------------ Renderng tests stuff ------------
 
-        let mut sandbox = World::new();
-
-        let image = Image::from_file("TerramineIcon32p.png")
-            .await
-            .expect("failed to load TerramineIcon32p.png image");
-
-        let gpu_image = GpuImage::new(
-            GpuImageDescriptor {
-                device: &context.device,
-                queue: &context.queue,
-                image: &image,
-                label: Some("test_image".into()),
-            }
-        );
-
-        let gpu_image_bind_layout = GpuImage::bind_group_layout(&context.device);
-        let gpu_image_bind_group = gpu_image.as_bind_group(&context.device, &gpu_image_bind_layout);
-
-        let binds = Binds::from_iter([
-            (gpu_image_bind_group, Some(gpu_image_bind_layout)),
-        ]);
-
-        let mesh = Mesh::new(
-            TEST_VERTICES.to_vec(),
-            None,
-            PrimitiveTopology::TriangleList
-        );
-
-        let gpu_mesh = GpuMesh::new(
-            GpuMeshDescriptor {
-                mesh: &mesh,
-                device: &context.device,
-                label: Some("test_mesh".into()),
-                polygon_mode: default(),
-            },
-        );
-
-        let camera_uniform = camera::CameraUniformBuffer::new(
-            &context.device, &default()
-        );
-
-        let layout = {
-            let bind_group_layouts: Vec<_> = itertools::chain!(
-                common_uniforms.binds.layouts(),
-                binds.layouts(),
-                camera_uniform.binds.layouts(),
-            ).collect();
-
-            PipelineLayout::new(
-                &context.device,
-                &PipelineLayoutDescriptor {
-                    label: Some("test_pipeline_layout"),
-                    bind_group_layouts: &bind_group_layouts,
-                    push_constant_ranges: &[],
-                },
-            )
-        };
-
-        let material = {
-            let source = ShaderSource::from_file("shader.wgsl")
-                .await
-                .expect("failed to load shader.wgsl from file");
-
-            let shader = Shader::new(
-                &context.device, source, vec![TexturedVertex::BUFFER_LAYOUT]
-            );
-
-            ShaderMaterial::from(shader).to_arc()
-        };
-
-        let pipeline = RenderPipeline::new(
-            RenderPipelineDescriptor {
-                device: &context.device,
-                material: material.as_ref(),
-                primitive_state: gpu_mesh.primitive_state,
-                label: Some("test_render_pipeline".into()),
-                layout: &layout,
-            },
-        );
-
-        let binds_ref = BindsRef::from(binds);
-
-        sandbox.spawn((gpu_mesh, pipeline, binds_ref, layout));
-        sandbox.insert_resource(camera_uniform);
+        let sandbox = World::new();
 
 
 
@@ -343,7 +256,7 @@ impl Graphics {
                 &cam.binds,
             ]);
             
-            let Ok(()) = mesh.render(pipeline, &mut pass);
+            mesh.render(pipeline, &mut pass);
         }
     }
 
@@ -557,14 +470,18 @@ impl Graphics {
         Ok(())
     }
 
-    pub fn update(world: &World) -> AnyResult<()> {
+    pub fn update(world: &mut World) -> AnyResult<()> {
+        mesh::GpuMesh::make_renderable_system(world);
+
         let graphics = world.resource::<&mut Self>()?;
 
         {
             let MainCamera(camera) = world.copy_resource::<MainCamera>()
                 .context("main camera has to be set")?;
-            let cam_uniform = camera.get_uniform(world)?;
+
+            let cam_uniform = CameraHandle::get_uniform(world, camera)?;
             let uniform_buffer = world.resource::<&CameraUniformBuffer>()?;
+
             uniform_buffer.update(&graphics.context.queue, &cam_uniform);
         }
 
@@ -764,12 +681,6 @@ impl egui_dock::TabViewer for EguiTabViewer<'_> {
         match tab {
             Tab::Properties => {
                 ui::egui_util::use_each_window_builder(ui);
-            
-                {
-                    use crate::terrain::chunk::chunk_array_old::ChunkArray;
-
-                    ChunkArray::spawn_control_window(self.world, ui);
-                }
 
                 camera::CameraHandle::spawn_control_window(self.world, ui);
             },
@@ -783,6 +694,8 @@ impl egui_dock::TabViewer for EguiTabViewer<'_> {
             }
 
             Tab::Console => crate::logger::build_window(ui),
+
+            Tab::Inspector => ui::egui_util::run_inspector(self.world, ui),
 
             Tab::Other { .. } => (),
         }

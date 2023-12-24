@@ -1,7 +1,7 @@
 use {
     crate::{
         prelude::*,
-        terrain::chunk::{Id, mesh::{FullVertex, LowVertex}},
+        terrain::chunk::VoxelId,
         graphics::Mesh,
     },
     std::future::Future,
@@ -79,7 +79,7 @@ impl<Item> Drop for Task<Item> {
 
 
 
-pub type FullTask = Task<Mesh<FullVertex>>;
-pub type LowTask  = Task<Mesh<LowVertex>>;
-pub type GenTask  = Task<Vec<Id>>;
-pub type PartitionTask = Task<[Mesh<FullVertex>; 8]>;
+pub type FullTask = Task<Mesh>;
+pub type LowTask  = Task<Mesh>;
+pub type GenTask  = Task<Vec<VoxelId>>;
+pub type PartitionTask = Task<[Mesh; 8]>;

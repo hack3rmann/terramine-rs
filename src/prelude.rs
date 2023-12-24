@@ -17,6 +17,7 @@ pub use {
         const_default::ConstDefault,
         iterator::Range3d,
         geometry::{Intersects, Contains},
+        graphics::ui::egui_util,
     },
     smallvec::{SmallVec, smallvec},
     array_init::array_init,
@@ -57,4 +58,5 @@ pub use {
     const_random::const_random,
     const_format::formatcp,
     terramine_macros::ConstDefault,
+    bitflags::bitflags,
 };

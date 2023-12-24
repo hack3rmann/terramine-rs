@@ -152,3 +152,7 @@ pub mod key_bindings {
 pub mod timer {
     pub const N_FAMES_TO_MEASURE: usize = 16;
 }
+
+pub mod app {
+    pub const PANIC_ON_ERROR: bool = false;
+}
