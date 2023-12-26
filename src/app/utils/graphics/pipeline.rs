@@ -38,13 +38,13 @@ impl RenderPipeline {
 
                 vertex: wgpu::VertexState {
                     module: &shader.module,
-                    entry_point: cfg::shader::WGSL_VERTEX_ENTRY,
+                    entry_point: cfg::shader::WGSL_VERTEX_ENTRY_NAME,
                     buffers: &shader.vertex_layout,
                 },
 
                 fragment: Some(wgpu::FragmentState {
                     module: &shader.module,
-                    entry_point: cfg::shader::WGSL_FRAGMENT_ENTRY,
+                    entry_point: cfg::shader::WGSL_FRAGMENT_ENTRY_NAME,
                     targets: desc.material.get_color_states(),
                 }),
 

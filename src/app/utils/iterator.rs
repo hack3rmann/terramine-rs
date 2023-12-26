@@ -458,8 +458,8 @@ impl<T> Sides<T> {
         Self { inner: sides }
     }
 
-    pub const fn all(side: T) -> Self where T: Copy {
-        Self::new([side; 6])
+    pub fn all(side: T) -> Self where T: Clone {
+        Self::new(array_init(|_| side.clone()))
     }
 
     pub const fn independent(back: T, front: T, top: T, bottom: T, right: T, left: T) -> Self {

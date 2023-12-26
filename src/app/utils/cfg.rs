@@ -129,8 +129,8 @@ pub mod shader {
     pub const VERTEX_FILE_EXTENTION:   &str = "vert";
     pub const FRAGMENT_FILE_EXTENTION: &str = "frag";
 
-    pub const WGSL_VERTEX_ENTRY: &str = "vs_main";
-    pub const WGSL_FRAGMENT_ENTRY: &str = "fs_main";
+    pub const WGSL_VERTEX_ENTRY_NAME: &str = "vs_main";
+    pub const WGSL_FRAGMENT_ENTRY_NAME: &str = "fs_main";
     
     /// That constant is shared with shader. See `postprocessing.frag`.
     pub const CLEAR_COLOR: wgpu::Color = wgpu::Color { r: 0.02, g: 0.02, b: 0.02, a: 1.0 };

@@ -5,6 +5,8 @@ pub use {
         logger::{self, LogError},
         reinterpreter::*,
         cfg,
+        format::*,
+        asset_loader::AssetLoader,
         user_io::{keyboard, mouse, Key, self},
         terrain::voxel::voxel_data::data as voxels,
         concurrency::loading,

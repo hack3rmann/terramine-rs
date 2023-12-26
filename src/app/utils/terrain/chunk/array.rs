@@ -341,10 +341,10 @@ impl DerefMut for ChunkMut {
 
 #[derive(Debug)]
 pub struct ChunkArrayBox {
-    pub sizes: USize3,
-    pub owned: AtomicBool,
-    pub borrow_map: Vec<ChunkBorrowInfo>,
-    pub chunks: Vec<Chunk>,
+    pub(crate) sizes: USize3,
+    pub(crate) owned: AtomicBool,
+    pub(crate) borrow_map: Vec<ChunkBorrowInfo>,
+    pub(crate) chunks: Vec<Chunk>,
 }
 assert_impl_all!(ChunkArrayBox: Send, Sync);
 
@@ -463,6 +463,29 @@ impl ChunkArrayBox {
             OutsideChunk => unreachable!("voxel at position {pos} is already in that chunk"),
             Voxel(voxel) => Ok(voxel),
             Failed => Err(StrError::from("caught on failed chunk"))?,
+        }
+    }
+
+    pub fn chunk_adj(&self, pos: Int3) -> ChunkAdj {
+        Range3d::adj_iter(pos)
+            .map(|pos| self.chunk(pos))
+            .collect()
+    }
+
+    pub fn chunk_with_adj(&self, pos: Int3) -> (Option<ChunkRef>, ChunkAdj) {
+        (self.chunk(pos), self.chunk_adj(pos))
+    }
+
+    pub fn size(&self) -> USize3 {
+        self.sizes
+    }
+
+    pub fn generate_all(&self) {
+        for pos in ChunkArray::chunk_pos_range(self.size()) {
+            let mut chunk = self.chunk_mut(pos)
+                .expect("failed to generate borrowed chunk");
+
+            _ = mem::replace(chunk.deref_mut(), Chunk::new(pos, self.size()));
         }
     }
 }

@@ -236,8 +236,14 @@ impl egui::Widget for TransformWidget<'_> {
 
 
 
+#[profile]
 pub fn run_inspector(world: &World, ui: &mut egui::Ui) {
-    use crate::{components::Name, graphics::mesh::Mesh, physics::PhysicalComponent, camera::CameraComponent};
+    use crate::{
+        components::Name,
+        graphics::mesh::{Mesh, GpuMesh},
+        physics::PhysicalComponent,
+        camera::CameraComponent,
+    };
     
     let mut name_query = world.query::<(
         Option<&mut Name>,
@@ -265,8 +271,51 @@ pub fn run_inspector(world: &World, ui: &mut egui::Ui) {
             }
 
             if let Some(mesh) = mesh {
-                ui.collapsing("Mesh", |ui| {
-                    ui.label(format!("Mesh: {mesh:#?}"));
+                ui.collapsing(format!("Mesh ({})", Bytes(mesh.size())), |ui| {
+                    ui.label(egui::RichText::new(
+                        format!("Mesh: {mesh:#?}")
+                    ).monospace());
+                });
+            }
+
+            if let Ok(mesh) = world.get::<&mut GpuMesh>(entity) {
+                ui.collapsing("GpuMesh", |ui| {
+                    ui.label(egui::RichText::new(
+                        format!("{:#?}", mesh)
+                    ).monospace());
+                });
+            }
+
+            if let Ok(mut loader) = world.get::<&mut AssetLoader>(entity) {
+                ui.collapsing("AssetManager", |ui| {
+                    static NAME: RwLock<String> = const_default();
+                    let mut name = NAME.write();
+
+                    if ui.text_edit_singleline(name.deref_mut()).lost_focus()
+                        && ui.input(|s| s.key_pressed(egui::Key::Enter))
+                    {
+                        loader.start_loading(name.deref(), |bytes| Ok(String::from_utf8(bytes)?));
+                    }
+
+                    ui.label("Loading:");
+
+                    for path in loader.unloaded.keys() {
+                        ui.label(path.as_os_str().to_string_lossy());
+                    }
+
+                    ui.separator();
+
+                    ui.label("Finished");
+
+                    for (path, asset) in loader.loaded.iter() {
+                        ui.label(format!("{asset:?}"));
+
+                        ui.collapsing(path.as_os_str().to_string_lossy(), |ui| {
+                            if let Some(string) = asset.get::<String>() {
+                                ui.label(egui::RichText::new(string).monospace());
+                            }
+                        });
+                    }
                 });
             }
 

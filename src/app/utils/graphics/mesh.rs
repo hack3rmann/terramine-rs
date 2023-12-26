@@ -74,7 +74,7 @@ impl Default for MeshFlags {
 pub struct SimpleMesh {
     pub flags: MeshFlags,
     pub vertex_type: TypeId,
-    pub vertices: Vec<u8>,
+    pub vertices: Vec<u32>,
     pub indices: Option<Indices>,
     pub primitive_topology: PrimitiveTopology,
     pub polygon_mode: PolygonMode,
@@ -86,11 +86,15 @@ impl SimpleMesh {
         vertices: Vec<V>, indices: Option<Indices>,
         primitive_topology: PrimitiveTopology,
         polygon_mode: PolygonMode,
+        flags: MeshFlags,
     ) -> Self {
         Self {
-            flags: MeshFlags::DEFAULT,
+            flags,
             vertex_type: TypeId::of::<V>(),
-            vertices: bytemuck::cast_vec(vertices),
+            vertices: match bytemuck::try_cast_vec(vertices) {
+                Ok(value) => value,
+                Err((error, _)) => panic!("{error}"),
+            },
             indices,
             primitive_topology,
             polygon_mode,
@@ -98,9 +102,9 @@ impl SimpleMesh {
     }
 
     pub fn new_empty<V: Vertex>(
-        primitive_topology: PrimitiveTopology, polygon_mode: PolygonMode
+        primitive_topology: PrimitiveTopology, polygon_mode: PolygonMode, flags: MeshFlags,
     ) -> Self {
-        Self::new::<V>(vec![], None, primitive_topology, polygon_mode)
+        Self::new::<V>(vec![], None, primitive_topology, polygon_mode, flags)
     }
     
     pub fn connect(meshes: impl IntoIterator<Item = Self>) -> Self {
@@ -135,6 +139,11 @@ impl SimpleMesh {
 
             acc
         }).expect("failed to connect 0 meshes")
+    }
+
+    pub fn size(&self) -> usize {
+        // TODO: add indices to a count
+        self.vertices.len() * mem::size_of::<u32>()
     }
 }
 
@@ -230,6 +239,13 @@ impl Mesh {
                 .unwrap_or_default(),
         }
     }
+
+    pub fn size(&self) -> usize {
+        match self {
+            Self::Simple(simple) => simple.size(),
+            Self::Tree(tree) => tree.iter().map(Self::size).sum()
+        }
+    }
 }
 
 impl Default for Mesh {
@@ -242,6 +258,12 @@ impl Default for Mesh {
 impl From<SimpleMesh> for Mesh {
     fn from(value: SimpleMesh) -> Self {
         Self::Simple(value)
+    }
+}
+
+impl FromIterator<Mesh> for Mesh {
+    fn from_iter<T: IntoIterator<Item = Mesh>>(iter: T) -> Self {
+        Self::Tree(iter.into_iter().collect())
     }
 }
 
@@ -316,6 +338,7 @@ impl SimpleGpuMesh {
             vertex_type_id,
             is_enabled: AtomicBool::new(true),
             buffer: vertices,
+            // FIXME: count vertices properly
             n_vertices: mesh.vertices.len(),
             indices,
             label,
@@ -330,7 +353,7 @@ impl SimpleGpuMesh {
 
     pub fn read_vertices(&self) -> SimpleMesh {
         let vertices_view = self.get_vertex_buffer_view();
-        let vertices: &[u8] = bytemuck::cast_slice(&vertices_view);
+        let vertices: &[u32] = bytemuck::cast_slice(&vertices_view);
 
         let indices = match self.indices {
             GpuIndices::Unindexed => None,
@@ -464,7 +487,7 @@ impl GpuMesh {
             = world.query::<(&Mesh, Option<&Name>, Option<&GpuMesh>)>()
             .into_iter()
             .filter_map(|(entity, (mesh, maybe_name, gpu_mesh))| {
-                if gpu_mesh.is_some() || mesh.flags().contains(MeshFlags::RENDERABLE) {
+                if gpu_mesh.is_some() || !mesh.flags().contains(MeshFlags::RENDERABLE) {
                     return None;
                 }
 

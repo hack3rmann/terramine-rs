@@ -1,8 +1,8 @@
 use crate::{
     prelude::*,
-    graphics::mesh::{Mesh, SimpleMesh, Vertex, vertex_attr_array, VertexAttribute},
+    graphics::{Mesh, SimpleMesh, Vertex, vertex_attr_array, VertexAttribute, MeshFlags},
     terrain::{
-        chunk::{Chunk, Lod, array::ChunkAdj, FillType, ChunkOption},
+        chunk::{Chunk, Lod, array::{ChunkAdj, ChunkArray}, FillType, ChunkOption},
         voxel::{voxel_data::data::*, VoxelColor, Voxel, shape::{CubeDetailed, CubeLowered}},
     },
     iterator::CubeBoundary,
@@ -83,20 +83,31 @@ impl Vertex for LowResVertex {
 
 
 
-pub fn make_one(chunk: &Chunk, adj: ChunkAdj, lod: Lod) -> Mesh {
+pub fn make(array: &ChunkArray) -> Mesh {
+    ChunkArray::chunk_pos_range(array.size())
+        .filter_map(|pos| {
+            let (chunk, adj) = array.chunk_with_adj(pos);
+            chunk.map(|chunk| make_high_resolution(&chunk, adj, MeshFlags::RENDERABLE))
+        })
+        .collect()
+}
+
+pub fn make_one(chunk: &Chunk, adj: ChunkAdj, lod: Lod, flags: MeshFlags) -> Mesh {
     match lod {
-        0 => make_high_resolution(chunk, adj),
-        _ => make_low_resolution(chunk, adj, lod),
+        0 => make_high_resolution(chunk, adj, flags),
+        _ => make_low_resolution(chunk, adj, lod, flags),
     }
 }
 
-pub fn make_high_resolution(chunk: &Chunk, adj: ChunkAdj) -> Mesh {
+pub fn make_high_resolution(chunk: &Chunk, adj: ChunkAdj, flags: MeshFlags) -> Mesh {
     let is_filled_and_blocked
         = chunk.is_filled()
         && Chunk::is_adj_filled(&adj);
 
     if chunk.is_empty() || is_filled_and_blocked {
-        return SimpleMesh::new_empty::<LowResVertex>(default(), default()).into();
+        return SimpleMesh::new_empty::<LowResVertex>(
+            default(), default(), default(),
+        ).into();
     }
 
     let info = chunk.info.load(Relaxed);
@@ -169,24 +180,24 @@ pub fn make_high_resolution(chunk: &Chunk, adj: ChunkAdj) -> Mesh {
         })
         .collect_vec();
     
-    SimpleMesh::new(vertices, None, default(), default()).into()
+    SimpleMesh::new(vertices, None, default(), default(), flags).into()
 }
 
-pub fn make_low_resolution(chunk: &Chunk, adj: ChunkAdj, lod: Lod) -> Mesh {
+pub fn make_low_resolution(chunk: &Chunk, adj: ChunkAdj, lod: Lod, flags: MeshFlags) -> Mesh {
     if lod == 0 {
         logger::error!(
             from = "chunk-mesh",
             "failed to make low resolution mesh with lod = 0, making high resolution mesh instead",
         );
 
-        return make_high_resolution(chunk, adj);
+        return make_high_resolution(chunk, adj, flags);
     }
     
     let is_filled_and_blocked = chunk.is_filled() && Chunk::is_adj_filled(&adj);
 
     ensure_or!(
         !chunk.is_empty() && !is_filled_and_blocked,
-        return SimpleMesh::new_empty::<LowResVertex>(default(), default()).into()
+        return SimpleMesh::new_empty::<LowResVertex>(default(), default(), flags).into()
     );
 
     // TODO: optimize for same-filled chunks
@@ -271,7 +282,7 @@ pub fn make_low_resolution(chunk: &Chunk, adj: ChunkAdj, lod: Lod) -> Mesh {
         })
         .collect();
 
-    SimpleMesh::new(vertices, None, default(), default()).into()
+    SimpleMesh::new(vertices, None, default(), default(), flags).into()
 }
 
 pub fn insert(parent: &mut Mesh, node: Mesh, lod: Lod)

@@ -23,6 +23,8 @@ pub mod physics;
 pub mod geometry;
 pub mod iterator;
 pub mod components;
+pub mod format;
+pub mod asset_loader;
 
 
 

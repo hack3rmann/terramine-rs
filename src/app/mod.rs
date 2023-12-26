@@ -6,6 +6,7 @@ use {
         graphics::Graphics,
         camera::{*, self},
         components::Name,
+        terrain::chunk::array::ChunkArray,
     },
     winit::{
         event::{Event, WindowEvent},
@@ -64,7 +65,31 @@ impl App {
             .await
             .context("failed to create graphics")?;
 
-        self.world.insert_resource(CameraUniformBuffer::new(&graphics.context.device, &default()));
+        self.world.insert_resource(CameraUniformBuffer::new(&graphics.context.device, &default())); 
+
+        let mut asset_manager = AssetLoader::default();
+        asset_manager.start_loading(
+            Path::new("README.md"),
+            |src| Ok(String::from_utf8(src)?)
+        );
+
+        self.world.insert_resource(asset_manager);
+
+        #[allow(unused)]
+        {
+            use crate::terrain::chunk::mesh;
+
+            let mut array = ChunkArray::new();
+            // array.generate();
+
+            // let mesh = mesh::make(&array);
+
+            self.world.spawn((
+                array,
+                // mesh,
+                Name::new("Chunk array"),
+            ));
+        }
 
         self.world.insert_resource(graphics);
 
@@ -157,6 +182,7 @@ impl App {
         CameraHandle::update_all(&self.world);
         Graphics::update(&mut self.world)?;
         PhysicalComponent::update_all(&self.world)?;
+        graphics::GpuMesh::make_renderable_system(&mut self.world);
 
         Ok(())
     }
@@ -166,6 +192,9 @@ impl App {
         for update in update::UPDATE_FUNCTIONS.lock().iter() {
             update();
         }
+
+        self.world.resource::<&mut AssetLoader>()?
+            .try_finish_all().await;
 
         {
             self.world.resource::<&mut Timer>()?.update();
