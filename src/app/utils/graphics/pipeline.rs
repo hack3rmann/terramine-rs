@@ -1,6 +1,6 @@
 use crate::{
     prelude::*,
-    graphics::{Device, PrimitiveState, Material},
+    graphics::{Device, PrimitiveState, ColorTargetState, Shader}, define_atomic_id,
 };
 
 
@@ -11,8 +11,8 @@ pub use wgpu::PipelineLayoutDescriptor;
 
 #[derive(Debug)]
 pub struct RenderPipelineDescriptor<'s> {
-    pub device: &'s Device,
-    pub material: &'s dyn Material,
+    pub shader: &'s Shader,
+    pub color_states: &'s [Option<ColorTargetState>],
     pub primitive_state: PrimitiveState,
     pub label: Option<StaticStr>,
     pub layout: &'s wgpu::PipelineLayout,
@@ -20,32 +20,33 @@ pub struct RenderPipelineDescriptor<'s> {
 
 
 
+define_atomic_id!(PipelineId);
+
 #[derive(Debug, Clone)]
 pub struct RenderPipeline {
     pub inner: Arc<wgpu::RenderPipeline>,
+    pub id: PipelineId,
     pub label: Option<StaticStr>,
 }
 assert_impl_all!(RenderPipeline: Send, Sync);
 
 impl RenderPipeline {
-    pub fn new(desc: RenderPipelineDescriptor) -> Self {
-        let shader = desc.material.get_shader();
-
-        let pipeline = desc.device.create_render_pipeline(
+    pub fn new(device: &Device, desc: RenderPipelineDescriptor) -> Self {
+        let pipeline = device.create_render_pipeline(
             &wgpu::RenderPipelineDescriptor {
                 label: desc.label.as_deref(),
                 layout: Some(desc.layout),
 
                 vertex: wgpu::VertexState {
-                    module: &shader.module,
+                    module: &desc.shader.module,
                     entry_point: cfg::shader::WGSL_VERTEX_ENTRY_NAME,
-                    buffers: &shader.vertex_layout,
+                    buffers: &desc.shader.vertex_layout,
                 },
 
                 fragment: Some(wgpu::FragmentState {
-                    module: &shader.module,
+                    module: &desc.shader.module,
                     entry_point: cfg::shader::WGSL_FRAGMENT_ENTRY_NAME,
-                    targets: desc.material.get_color_states(),
+                    targets: desc.color_states,
                 }),
 
                 primitive: desc.primitive_state,
@@ -68,13 +69,21 @@ impl RenderPipeline {
             },
         );
 
-        Self { inner: Arc::new(pipeline), label: desc.label }
+        Self {
+            inner: Arc::new(pipeline),
+            label: desc.label,
+            id: PipelineId::new(),
+        }
+    }
+
+    pub fn id(&self) -> PipelineId {
+        self.id
     }
 }
 
 impl From<wgpu::RenderPipeline> for RenderPipeline {
     fn from(value: wgpu::RenderPipeline) -> Self {
-        Self { inner: Arc::new(value), label: None }
+        Self { inner: Arc::new(value), label: None, id: PipelineId::new() }
     }
 }
 
@@ -104,4 +113,35 @@ impl From<wgpu::PipelineLayout> for PipelineLayout {
     fn from(value: wgpu::PipelineLayout) -> Self {
         Self { inner: value }
     }
+}
+
+
+
+/// Cache for all of the pipelines. See [`PipelineBound`]
+#[derive(Debug, Default)]
+pub struct PipelineCache {
+    pub(crate) pipelines: HashMap<PipelineId, RenderPipeline>,
+}
+assert_impl_all!(PipelineCache: Send, Sync, Component);
+
+impl PipelineCache {
+    pub fn new() -> Self {
+        Self { pipelines: default() }
+    }
+
+    pub fn insert(&mut self, pipeline: RenderPipeline) -> Option<RenderPipeline> {
+        self.pipelines.insert(pipeline.id, pipeline)
+    }
+
+    pub fn get(&self, bound: &impl PipelineBound) -> Option<&RenderPipeline> {
+        self.pipelines.get(&bound.id())
+    }
+}
+
+
+
+/// A trait to mark specific component as a pipeline bound
+pub trait PipelineBound: Sized {
+    fn id(&self) -> PipelineId;
+    fn from_pipeline(pipeline: &RenderPipeline) -> Self;
 }

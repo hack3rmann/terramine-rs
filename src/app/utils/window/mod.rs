@@ -18,20 +18,32 @@ use {
 /// Wrapper around `winit`'s window.
 #[derive(Debug, Deref, From, Into)]
 pub struct Window {
+    #[deref]
     pub inner: WinitWindow,
+    pub event_loop: Nullable<EventLoop<()>>,
 }
+
+// TODO: block `event_loop` from usage
+unsafe impl Send for Window { }
+unsafe impl Sync for Window { }
 
 impl Window {
     /// Constructs window.
-    pub fn new(event_loop: &EventLoop<()>, sizes: USize2) -> Result<Self, OsError> {
+    pub fn new(sizes: USize2) -> Result<Self, OsError> {
+        let event_loop = EventLoop::default();
+
         let window = WindowBuilder::new()
             .with_title("Terramine")
             .with_resizable(true)
             .with_inner_size(PhysicalSize::new(sizes.x as u32, sizes.y as u32))
             .with_window_icon(Some(Self::load_icon()))
-            .build(event_loop)?;
+            .build(&event_loop)?;
         
-        Ok(Self::from(window))
+        Ok(Self { inner: window, event_loop: Nullable::new(event_loop) })
+    }
+
+    pub fn take_event_loop(&mut self) -> EventLoop<()> {
+        self.event_loop.take()
     }
 
     fn load_icon() -> Icon {

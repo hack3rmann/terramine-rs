@@ -7,6 +7,7 @@ pub mod render_resource;
 pub mod pipeline;
 pub mod pass;
 pub mod gpu_conversions;
+pub mod bind_group_old;
 pub mod bind_group;
 pub mod buffer;
 pub mod texture;
@@ -22,7 +23,7 @@ use crate::prelude::*;
 
 pub use {
     material::*, gpu_conversions::*, pass::*,
-    bind_group::*, buffer::*, texture::*, window::Window,
+    bind_group_old::*, buffer::*, texture::*, window::Window,
     mesh::*, shader::*, asset::*, pipeline::*, self::image::*,
     camera::*,
 
@@ -41,6 +42,27 @@ pub use {
 
 
 
+#[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct GraphicsPlugin;
+
+impl Plugin for GraphicsPlugin {
+    async fn init(self, world: &mut World) -> AnyResult<()> {
+        world.init_resource::<PipelineCache>();
+
+        let graphics = Graphics::new()
+            .await
+            .context("failed to create graphics")?;
+
+        world.insert_resource(CameraUniformBuffer::new(graphics.device(), &default()));
+        
+        world.insert_resource(graphics);
+
+        Ok(())
+    }
+}
+
+
+
 #[derive(Debug)]
 pub struct RenderContext {
     pub device: Arc<Device>,
@@ -49,6 +71,16 @@ pub struct RenderContext {
     pub surface: Surface,
 }
 assert_impl_all!(RenderContext: Send, Sync);
+
+impl RenderContext {
+    pub fn device(&self) -> &Device {
+        &self.device
+    }
+
+    pub fn queue(&self) -> &Queue {
+        &self.queue
+    }
+}
 
 
 
@@ -76,7 +108,7 @@ pub struct Graphics {
     /// Wraps [queue][Queue], [device][Device], [adapter][Adapter] and render [surface][Surface].
     pub context: RenderContext,
 
-    /// Holds rendering information during render proccess.
+    /// Holds rendering information during rendering proccess.
     pub render_stage: Option<RenderStage>,
 
     /// Common shader uniforms buffer. Holds uniforms like time, screen resolution, etc.
@@ -90,19 +122,27 @@ pub struct Graphics {
 assert_impl_all!(Graphics: Send, Sync, Component);
 
 impl Graphics {
-    pub fn device(&self) -> Arc<Device> {
+    pub fn get_device(&self) -> Arc<Device> {
         Arc::clone(&self.context.device)
     }
 
-    pub fn queue(&self) -> Arc<Queue> {
+    pub fn get_queue(&self) -> Arc<Queue> {
         Arc::clone(&self.context.queue)
     }
 
+    pub fn device(&self) -> &Device {
+        self.context.device()
+    }
+
+    pub fn queue(&self) -> &Queue {
+        self.context.queue()
+    }
+
     /// Creates new [`Graphics`] that holds some renderer stuff.
-    pub async fn new(event_loop: &EventLoop<()>) -> AnyResult<Self> {
+    pub async fn new() -> AnyResult<Self> {
         logger::scope!(from = "graphics", "new()");
 
-        let window = Window::new(event_loop, cfg::window::default::SIZES)
+        let window = Window::new(cfg::window::default::SIZES)
             .context("failed to initialize a window")?;
 
 
@@ -146,7 +186,7 @@ impl Graphics {
         // ----------------- Egui initialization -----------------
 
         let egui = Egui::new(
-            &context.device,
+            context.device(),
             window.inner_size().to_vec2(),
             window.scale_factor(),
         );
@@ -211,12 +251,12 @@ impl Graphics {
         let queue = Arc::new(queue);
 
         let swapchain_capabilities = surface.get_capabilities(&adapter);
-        let swapchain_format = *swapchain_capabilities.formats.get(0)
+        let swapchain_format = *swapchain_capabilities.formats.first()
             .expect(
                 "failed to get swap chain format 0: the
                 surface is incompatible with the adapter"
             );
-        
+
         let config = SurfaceConfiguration {
             usage: TextureUsages::RENDER_ATTACHMENT,
             format: swapchain_format,
@@ -238,8 +278,27 @@ impl Graphics {
     pub fn logo_pass(&mut self, cam: &CameraUniformBuffer) {
         let render_stage = self.render_stage.as_mut().unwrap();
 
+        let pipeline_cache = self.sandbox.resource::<&mut PipelineCache>()
+            .expect("failed to get pipeline cache");
+        
+        #[derive(Clone, Copy, Hash, PartialEq, Eq)]
+        struct LogoPipeline(PipelineId);
+        assert_impl_all!(LogoPipeline: Send, Sync, Component);
+
+        impl PipelineBound for LogoPipeline {
+            fn id(&self) -> PipelineId {
+                self.0
+            }
+
+            fn from_pipeline(pipeline: &RenderPipeline) -> Self {
+                Self(pipeline.id())
+            }
+        }
+
+        struct LogoComponent;
+
         let mut query = self.sandbox.query::<(
-            &BindsRef, &GpuMesh, &RenderPipeline
+            &BindsRef, &GpuMesh, &LogoPipeline, &LogoComponent,
         )>();
 
         let mut pass = RenderPass::new(
@@ -249,12 +308,14 @@ impl Graphics {
             Some(&render_stage.depth),
         );
 
-        for (_entity, (binds, mesh, pipeline)) in query.into_iter() {
+        for (_entity, (binds, mesh, pipeline, _logo)) in query.into_iter() {
             Binds::bind_all(&mut pass, [
                 &self.common_uniforms.binds,
                 binds,
                 &cam.binds,
             ]);
+
+            let pipeline = pipeline_cache.get(pipeline).unwrap();
             
             mesh.render(pipeline, &mut pass);
         }
@@ -264,11 +325,12 @@ impl Graphics {
         use egui_dock::DockArea;
 
         let mut dock = context.dock.value.write();
+        let width = context.ctx().available_rect().width();
 
         egui::SidePanel::right("right")
-            .default_width(0.25 * context.ctx().available_rect().width())
-            .min_width(0.2 * context.ctx().available_rect().width())
-            .max_width(0.3 * context.ctx().available_rect().width())
+            .default_width(0.25 * width)
+            .min_width(0.2 * width)
+            .max_width(0.3 * width)
             .show(context.ctx(), |ui| {
                 DockArea::new(&mut dock)
                     .style(egui_dock::Style::from_egui(&context.ctx().style()))
@@ -342,7 +404,7 @@ impl Graphics {
         R: FnOnce(&Binds, &mut CommandEncoder, &TextureView) -> AnyResult<()>,
     {
         self.begin_render(time)?;
-        
+
         {
             // * Safety
             // * 
@@ -373,6 +435,7 @@ impl Graphics {
             _padding: 0,
         });
 
+        // FIXME: create depth view once
         let depth = {
             let surface_cfg = SURFACE_CFG.read();
 
@@ -703,5 +766,28 @@ impl egui_dock::TabViewer for EguiTabViewer<'_> {
 
     fn closeable(&mut self, tab: &mut Self::Tab) -> bool {
         matches!(tab, Tab::Other { .. })
+    }
+}
+
+
+
+pub type RunRenderNode = fn(
+    &World, &mut CommandEncoder, &[TextureView], Option<&TextureView>,
+) -> AnyResult<()>;
+
+
+
+#[derive(Clone, Copy, Debug, Hash)]
+pub struct RenderNode {
+    pub run: RunRenderNode,
+}
+assert_impl_all!(RenderNode: Send, Sync);
+
+impl RenderNode {
+    pub fn run(
+        self, world: &World, encoder: &mut CommandEncoder,
+        targets: &[TextureView], depth: Option<&TextureView>,
+    ) -> AnyResult<()> {
+        (self.run)(world, encoder, targets, depth)
     }
 }

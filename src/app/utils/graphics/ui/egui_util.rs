@@ -294,7 +294,10 @@ pub fn run_inspector(world: &World, ui: &mut egui::Ui) {
                     if ui.text_edit_singleline(name.deref_mut()).lost_focus()
                         && ui.input(|s| s.key_pressed(egui::Key::Enter))
                     {
-                        loader.start_loading(name.deref(), |bytes| Ok(String::from_utf8(bytes)?));
+                        loader.start_loading(
+                            name.deref(),
+                            |bytes| Ok(String::from_utf8(bytes)?),
+                        );
                     }
 
                     ui.label("Loading:");
@@ -330,7 +333,7 @@ pub fn run_inspector(world: &World, ui: &mut egui::Ui) {
             if let Some(timer) = timer {
                 ui.collapsing("Timer", |ui| {
                     ui.label(egui::RichText::new(
-                        format!("{timer:#?}")
+                        timer.to_string()
                     ).monospace());
                 });
             }

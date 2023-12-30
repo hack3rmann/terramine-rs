@@ -1,16 +1,16 @@
 pub mod utils;
+pub mod plugin;
 
 use {
     crate::{
         prelude::*,
-        graphics::Graphics,
+        graphics::{Graphics, GraphicsPlugin},
         camera::{*, self},
         components::Name,
-        terrain::chunk::array::ChunkArray,
     },
     winit::{
         event::{Event, WindowEvent},
-        event_loop::{ControlFlow, EventLoopWindowTarget, EventLoop},
+        event_loop::{ControlFlow, EventLoopWindowTarget},
         window::WindowId,
     },
 };
@@ -20,7 +20,7 @@ use {
 /// Struct that handles [application][App] stuff.
 pub struct App {
     pub world: World,
-    pub event_loop: Nullable<EventLoop<()>>,
+    pub startup_is_done: bool,
 }
 
 impl App {
@@ -40,7 +40,7 @@ impl App {
 
         let mut app = Self {
             world: World::new(),
-            event_loop: Nullable::new(default()),
+            startup_is_done: false,
         };
 
         app.setup().await?;
@@ -48,57 +48,44 @@ impl App {
         Ok(app)
     }
 
+    pub async fn insert_plugin(&mut self, plugin: impl Plugin) -> AnyResult<()> {
+        plugin.init(&mut self.world).await
+    }
+
+    pub async fn init_plugin<P: Plugin + Default>(&mut self) -> AnyResult<()> {
+        self.insert_plugin(P::default()).await
+    }
+
     /// Setups an [`App`] after creation.
     pub async fn setup(&mut self) -> AnyResult<()> {
         logger::scope!(from = "app", "setup()");
 
-        self.world.init_resource::<Timer>();
         self.world.insert_resource(Name::new("Resources"));
+        
+        self.init_plugin::<GraphicsPlugin>().await?;
+        self.init_plugin::<CameraPlugin>().await?;
+        
+        self.world.init_resource::<Timer>();
+        self.world.init_resource::<AssetLoader>();
 
-        let camera = self.world.spawn(camera::make_new_camera_bundle_enabled());
-        self.world.insert_one(camera, Name::new("Initial camera"))?;
-        self.world.insert_one(camera, crate::physics::PhysicalComponent::default())?;
-
-        self.world.insert_resource(MainCamera(camera));
-
-        let graphics = Graphics::new(&self.event_loop)
-            .await
-            .context("failed to create graphics")?;
-
-        self.world.insert_resource(CameraUniformBuffer::new(&graphics.context.device, &default())); 
-
-        let mut asset_manager = AssetLoader::default();
-        asset_manager.start_loading(
-            Path::new("README.md"),
-            |src| Ok(String::from_utf8(src)?)
-        );
-
-        self.world.insert_resource(asset_manager);
-
-        #[allow(unused)]
         {
-            use crate::terrain::chunk::mesh;
+            use crate::terrain::chunk::array::ChunkArray;
 
-            let mut array = ChunkArray::new();
-            // array.generate();
+            let mut array = ChunkArray::new_empty(USize3::new(2, 2, 2));
+            array.generate();
 
-            // let mesh = mesh::make(&array);
-
-            self.world.spawn((
-                array,
-                // mesh,
-                Name::new("Chunk array"),
-            ));
+            self.world.insert_resource(array);
         }
-
-        self.world.insert_resource(graphics);
-
+        
         Ok(())
     }
 
     /// Runs an [app][App]. Runs [`winit`]'s `event_loop`.
     pub fn run(mut self) -> ! {
-        let event_loop = self.event_loop.take();
+        let event_loop = self.world.resource::<&mut Graphics>()
+            .expect("failed to get graphics")
+            .window
+            .take_event_loop();
 
         event_loop.run(move |event, elw_target, control_flow| {
             let result = RUNTIME.block_on(
@@ -126,6 +113,11 @@ impl App {
         _elw_target: &EventLoopWindowTarget<()>, control_flow: &mut ControlFlow,
     ) -> AnyResult<()> {
         *control_flow = ControlFlow::Poll;
+
+        if !self.startup_is_done {
+            self.run_startup_systems().await?;
+            self.startup_is_done = true;
+        }
 
         let cur_window_id = {
             Graphics::handle_event(&self.world, &event)?;
@@ -171,6 +163,14 @@ impl App {
 
             _ => (),
         }
+
+        Ok(())
+    }
+
+    async fn run_startup_systems(&mut self) -> AnyResult<()> {
+        use crate::terrain::chunk::array::render;
+        
+        render::setup_pipeline(&mut self.world)?;
 
         Ok(())
     }

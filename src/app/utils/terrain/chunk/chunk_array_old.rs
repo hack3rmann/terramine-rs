@@ -1453,10 +1453,14 @@ impl ChunkRenderPipeline {
     pub async fn make_full(device: &Device, layout: &PipelineLayout) -> RenderPipeline {
         use crate::{graphics::RenderPipelineDescriptor as Desc, terrain::chunk::mesh::HiResVertex};
 
-        RenderPipeline::new(Desc {
-            device,
+        let material = Self::make_material::<HiResVertex>(
+            device, "chunks_full.wgsl",
+        ).await;
+
+        RenderPipeline::new(device, Desc {
             layout,
-            material: Self::make_material::<HiResVertex>(device, "chunks_full.wgsl").await.as_ref(),
+            shader: &material.get_shader(),
+            color_states: material.get_color_states(),
             primitive_state: Self::PRIMITIVE_STATE,
             label: Some("chunk_array_full_detail_render_pipeline".into()),
         })
@@ -1465,10 +1469,14 @@ impl ChunkRenderPipeline {
     pub async fn make_low(device: &Device, layout: &PipelineLayout) -> RenderPipeline {
         use crate::{graphics::RenderPipelineDescriptor as Desc, terrain::chunk::mesh::LowResVertex};
 
-        RenderPipeline::new(Desc {
-            device,
+        let material = Self::make_material::<LowResVertex>(
+            device, "chunks_low.wgsl",
+        ).await;
+
+        RenderPipeline::new(device, Desc {
             layout,
-            material: Self::make_material::<LowResVertex>(device, "chunks_low.wgsl").await.as_ref(),
+            shader: &material.get_shader(),
+            color_states: material.get_color_states(),
             primitive_state: Self::PRIMITIVE_STATE,
             label: Some("chunk_array_full_detail_render_pipeline".into()),
         })

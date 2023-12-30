@@ -481,7 +481,7 @@ impl GpuMesh {
     }
 
     pub fn make_renderable_system(world: &mut World) {
-        let device = world.resource::<&Graphics>().unwrap().device();
+        let device = world.resource::<&Graphics>().unwrap().get_device();
 
         let insert_map: Vec<(Entity, GpuMesh)>
             = world.query::<(&Mesh, Option<&Name>, Option<&GpuMesh>)>()

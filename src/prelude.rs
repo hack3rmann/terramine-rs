@@ -1,6 +1,6 @@
 pub use {
     crate::{
-        app::{self, utils::*},
+        app::{self, utils::*, plugin::Plugin},
         profiler::{prelude::*, self},
         logger::{self, LogError},
         reinterpreter::*,
@@ -12,7 +12,7 @@ pub use {
         concurrency::loading,
         runtime::RUNTIME,
         time::timer::{Timer, Time, TimeStep},
-        str_view::{StrView, StaticStr},
+        str_view::{StrView, StaticStr, SharedStr},
         wrapper::*,
         macros,
         failure::{ensure_or, ensure, ensure_eq, ensure_ne, bail, bail_str, fmt_error, ensure_fmt, StrError},

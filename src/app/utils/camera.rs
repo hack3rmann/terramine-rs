@@ -5,6 +5,24 @@ use crate::{
 
 
 
+#[derive(Clone, Copy, Default, Hash, PartialEq, PartialOrd, Eq, Ord)]
+pub struct CameraPlugin;
+
+impl Plugin for CameraPlugin {
+    async fn init(self, world: &mut World) -> AnyResult<()> {
+        use crate::components::Name;
+
+        let camera = world.spawn(make_new_camera_bundle_enabled());
+        world.insert_one(camera, Name::new("Initial camera"))?;
+
+        world.insert_resource(MainCamera(camera));
+
+        Ok(())
+    }
+}
+
+
+
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deref, From, Into)]
 pub struct MainCamera(pub Entity);

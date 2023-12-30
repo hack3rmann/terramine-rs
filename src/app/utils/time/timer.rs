@@ -69,6 +69,18 @@ impl Timer {
     pub const fn time(&self) -> Time { self.time }
 }
 
+impl std::fmt::Display for Timer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "time: {:.1}s\ntime step: {:.1}ms\nfps: {:.1}",
+            self.time.as_secs_f32(),
+            1000.0 * self.dt.as_secs_f32(),
+            self.fps
+        )
+    }
+}
+
 
 
 pub type TimeStep = Duration;

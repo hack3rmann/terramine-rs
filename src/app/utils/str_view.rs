@@ -3,7 +3,6 @@ use { crate::prelude::*, std::borrow::Borrow };
 
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash, Display, Default)]
-#[display("{inner}")]
 pub struct StrView<'s> {
     pub inner: Cow<'s, str>,
 }
@@ -65,3 +64,69 @@ impl Borrow<str> for StrView<'_> {
 
 
 pub type StaticStr = StrView<'static>;
+
+
+
+#[derive(Clone, Debug)]
+pub enum SharedStr {
+    Owned(Arc<str>),
+    Static(&'static str),
+}
+
+impl From<String> for SharedStr {
+    fn from(value: String) -> Self {
+        Self::Owned(value.into())
+    }
+}
+
+impl From<&'static str> for SharedStr {
+    fn from(value: &'static str) -> Self {
+        Self::Static(value)
+    }
+}
+
+impl From<StaticStr> for SharedStr {
+    fn from(value: StaticStr) -> Self {
+        match value.inner {
+            Cow::Borrowed(string) => Self::Static(string),
+            Cow::Owned(string) => Self::Owned(string.into()),
+        }
+    }
+}
+
+impl Deref for SharedStr {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Owned(owned) => owned,
+            Self::Static(value) => value,
+        }
+    }
+}
+
+impl PartialEq for SharedStr {
+    fn eq(&self, other: &Self) -> bool {
+        PartialEq::eq(self.deref(), other.deref())
+    }
+}
+
+impl Eq for SharedStr { }
+
+impl PartialOrd for SharedStr {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(Ord::cmp(self, other))
+    }
+}
+
+impl Ord for SharedStr {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        Ord::cmp(self.deref(), other.deref())
+    }
+}
+
+impl std::hash::Hash for SharedStr {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.deref().hash(state)
+    }
+}

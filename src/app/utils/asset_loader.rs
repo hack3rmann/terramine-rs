@@ -175,8 +175,8 @@ impl AssetLoader {
         Self::default()
     }
 
-    pub fn get<A: Any>(&mut self, path: &Path) -> Option<Box<A>> {
-        match self.loaded.remove(path) {
+    pub fn get<A: Any>(&mut self, path: impl AsRef<Path>) -> Option<Box<A>> {
+        match self.loaded.remove(path.as_ref()) {
             Some(owned) => owned.get_value::<A>().ok(),
             None => None,
         }
@@ -192,6 +192,10 @@ impl AssetLoader {
         proccess.start();
 
         self.unloaded.insert(path, proccess);
+    }
+
+    pub fn is_loading(&self, path: impl AsRef<Path>) -> bool {
+        self.unloaded.contains_key(path.as_ref())
     }
 
     pub async fn try_finish_all(&mut self) {

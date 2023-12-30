@@ -503,6 +503,118 @@ impl Default for ChunkArrayBox {
 
 
 
+pub mod render {
+    use {
+        super::*,
+        crate::graphics::*,
+    };
+
+    const PRIMITIVE_STATE: PrimitiveState = PrimitiveState {
+        cull_mode: Some(Face::Back),
+        ..const_default()
+    };
+
+
+
+    #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
+    pub struct ChunkArrayPipeline {
+        id: PipelineId,
+    }
+    assert_impl_all!(ChunkArrayPipeline: Send, Sync, Component);
+
+    impl PipelineBound for ChunkArrayPipeline {
+        fn id(&self) -> PipelineId {
+            self.id
+        }
+
+        fn from_pipeline(pipeline: &RenderPipeline) -> Self {
+            Self { id: pipeline.id() }
+        }
+    }
+
+
+    
+    pub fn try_make_pipeline(device: &Device) -> Option<RenderPipeline> {
+        use { graphics::*, crate::terrain::chunk::mesh::HiResVertex };
+
+        // TODO: load via `AssetLoader`
+        let shader_src
+            = std::fs::read_to_string("src/shaders/chunks_full.wgsl").ok()?;
+
+        let shader = Shader::new(
+            device, shader_src, vec![HiResVertex::BUFFER_LAYOUT],
+        );
+
+        let layout = PipelineLayout::new(device, &PipelineLayoutDescriptor {
+            label: Some("chunk_array_pipeline_layout"),
+            bind_group_layouts: &[],
+            push_constant_ranges: &[],
+        });
+
+        Some(RenderPipeline::new(device, RenderPipelineDescriptor {
+            shader: &shader,
+            color_states: &[],
+            primitive_state: PRIMITIVE_STATE,
+            label: Some("chunk_array_render_pipeline".into()),
+            layout: &layout,
+        }))
+    }
+
+    pub fn setup_pipeline(world: &mut World) -> AnyResult<()> {
+        use crate::graphics::*;
+
+        let device = world.resource::<&Graphics>()?.get_device();
+
+        let pipeline = try_make_pipeline(&device)
+            .context("failed to make pipeline")?;
+
+        let array_pipeline = ChunkArrayPipeline::from_pipeline(&pipeline);
+
+        world.resource::<&mut PipelineCache>()?
+            .insert(pipeline);
+
+        let entities = world.query::<&ChunkArray>()
+            .iter()
+            .map(|(entity, _)| entity)
+            .collect_vec();
+
+        for entity in entities {
+            world.insert_one(entity, array_pipeline)?;
+        }
+
+        Ok(())
+    }
+
+
+
+    pub fn render(
+        world: &World, encoder: &mut CommandEncoder,
+        targets: &[TextureView], depth: Option<&TextureView>,
+    ) -> AnyResult<()> {
+        let mut query = world.query::<(&GpuMesh, &ChunkArrayPipeline)>();
+
+        let pipeline_cache = world.resource::<&PipelineCache>()?;
+        
+        let mut pass = RenderPass::new(
+            "chunk_array_render_pass", encoder, targets, depth,
+        );
+
+        for (_entity, (mesh, pipeline_bound)) in query.iter() {
+            let pipeline = pipeline_cache.get(pipeline_bound)
+                .context("failed to get find pipeline in cache")?;
+
+            // FIXME: bind binds
+
+            mesh.render(pipeline, &mut pass);
+        }
+
+        Ok(())
+    }
+}
+
+
+
+
 pub type ChunkAdj = Sides<Option<ChunkRef>>;
 
 

@@ -1,233 +1,213 @@
-#![allow(dead_code)]
-
 use crate::{
     prelude::*,
-    graphics::{Buffer, TextureView, Sampler, Device, RenderPass},
+    graphics::{Device, Buffer, Sampler, TextureView, BindingResource},
 };
 
 
 
 pub use wgpu::{
-    BindingResource, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
-    BindGroupEntry, BindGroupDescriptor,
+    BindGroupLayoutEntry, BindGroupLayoutDescriptor, BindGroupDescriptor,
+    BindGroupEntry,
 };
 
 
 
-macros::define_atomic_id!(BindGroupLayoutId);
-
-/// Handle to a binding group layout.
-///
-/// A `BindGroupLayout` is a handle to the GPU-side layout of a binding group. It can be used to
-/// create a [`BindGroupDescriptor`] object, which in turn can be used to create a [`BindGroup`]
-/// object with [`Device::create_bind_group`]. A series of `BindGroupLayout`s can also be used to
-/// create a [`PipelineLayoutDescriptor`], which can be used to create a [`PipelineLayout`].
-///
-/// It can be created with [`Device::create_bind_group_layout`].
-///
-/// Corresponds to [WebGPU `GPUBindGroupLayout`](
-/// https://gpuweb.github.io/gpuweb/#gpubindgrouplayout).
 #[derive(Clone, Debug)]
 pub struct BindGroupLayout {
-    pub inner: Arc<wgpu::BindGroupLayout>,
-    pub id: BindGroupLayoutId,
+    value: Arc<wgpu::BindGroupLayout>,
 }
 
 impl BindGroupLayout {
     pub fn new(device: &Device, desc: &BindGroupLayoutDescriptor) -> Self {
-        let layout = device.create_bind_group_layout(desc);
-        Self::from(layout)
+        Self::from(device.create_bind_group_layout(desc))
     }
 }
 
 impl From<wgpu::BindGroupLayout> for BindGroupLayout {
     fn from(value: wgpu::BindGroupLayout) -> Self {
-        Self { inner: Arc::new(value), id: BindGroupLayoutId::new() }
+        Self { value: Arc::new(value) }
     }
 }
 
 impl Deref for BindGroupLayout {
     type Target = wgpu::BindGroupLayout;
+
     fn deref(&self) -> &Self::Target {
-        self.inner.as_ref()
+        &self.value
     }
 }
 
 
 
-macros::define_atomic_id!(BindGroupId);
-
-/// Handle to a binding group.
-///
-/// A `BindGroup` represents the set of resources bound to the bindings described by a
-/// [`BindGroupLayout`]. It can be created with [`Device::create_bind_group`]. A `BindGroup` can
-/// be bound to a particular [`RenderPass`] with [`RenderPass::set_bind_group`], or to a
-/// [`ComputePass`] with [`ComputePass::set_bind_group`].
-///
-/// Corresponds to [WebGPU `GPUBindGroup`](https://gpuweb.github.io/gpuweb/#gpubindgroup).
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct BindGroup {
-    pub inner: Arc<wgpu::BindGroup>,
-    pub id: BindGroupId,
+    pub(crate) value: Arc<wgpu::BindGroup>,
 }
 assert_impl_all!(BindGroup: Send, Sync);
 
 impl BindGroup {
     pub fn new(device: &Device, desc: &BindGroupDescriptor) -> Self {
-        let bind_group = device.create_bind_group(desc);
-        Self::from(bind_group)
-    }
-
-    pub fn bind<'s>(&'s self, pass: &mut RenderPass<'s>, idx: u32) {
-        pass.set_bind_group(idx, self, &[]);
+        Self { value: Arc::new(device.create_bind_group(desc)) }
     }
 }
 
 impl From<wgpu::BindGroup> for BindGroup {
     fn from(value: wgpu::BindGroup) -> Self {
-        Self {
-            inner: Arc::new(value),
-            id: BindGroupId::new(),
-        }
-    }
-}
-
-impl From<&Arc<wgpu::BindGroup>> for BindGroup {
-    fn from(value: &Arc<wgpu::BindGroup>) -> Self {
-        Self {
-            inner: Arc::clone(value),
-            id: BindGroupId::new(),
-        }
+        Self { value: Arc::new(value) }
     }
 }
 
 impl Deref for BindGroup {
     type Target = wgpu::BindGroup;
+
     fn deref(&self) -> &Self::Target {
-        self.inner.as_ref()
+        &self.value
     }
 }
 
 
 
-/// Owned resource that can be bound to a pipeline.
-///
-/// Corresponds to [WebGPU `GPUBindingResource`](
-/// https://gpuweb.github.io/gpuweb/#typedefdef-gpubindingresource).
-#[derive(Debug, Clone, From)]
+#[derive(Debug)]
+pub struct UnpreparedBindGroup<T> {
+    pub bindings: Vec<(u32, OwnedBindingResource)>,
+    pub data: T,
+}
+
+
+
+#[derive(Debug)]
+pub struct PreparedBindGroup<T> {
+    pub unprepared: UnpreparedBindGroup<T>,
+    pub bind_group: BindGroup,
+}
+
+
+
+#[derive(Debug)]
 pub enum OwnedBindingResource {
     Buffer(Buffer),
-    Sampler(Sampler),
     TextureView(TextureView),
+    Sampler(Sampler),
 }
-assert_impl_all!(OwnedBindingResource: Send, Sync);
 
 impl OwnedBindingResource {
-    pub fn as_binding_resource(&self) -> BindingResource<'_> {
-        use OwnedBindingResource::*;
+    pub fn get_binding(&self) -> BindingResource<'_> {
         match self {
-            Buffer(buffer) => buffer.as_entire_binding(),
-            Sampler(sampler) => BindingResource::Sampler(sampler),
-            TextureView(view) => BindingResource::TextureView(view),
+            Self::Buffer(buffer) => buffer.as_entire_binding(),
+            Self::Sampler(sampler) => BindingResource::Sampler(sampler),
+            Self::TextureView(view) => BindingResource::TextureView(view),
         }
     }
 }
 
 
 
-pub trait AsBindGroup: Send + Sync + 'static {
-    fn as_bind_group(
-        &self, device: &Device, layout: &BindGroupLayout
-    ) -> BindGroup;
+pub trait AsBindGroup {
+    type Data: Send + Sync;
 
-    fn bind_group_layout(device: &Device) -> BindGroupLayout
+    fn label() -> Option<&'static str> {
+        None
+    }
+
+    fn as_bind_group(
+        &self, device: &Device, layout: &BindGroupLayout,
+    ) -> Result<PreparedBindGroup<Self::Data>, AsBindGroupError> {
+        let unprepared = self.unprepared_bind_group(device, layout)?;
+
+        let entries = unprepared.bindings.iter()
+            .map(|(index, binding)| BindGroupEntry {
+                binding: *index,
+                resource: binding.get_binding(),
+            })
+            .collect_vec();
+
+        let bind_group = BindGroup::new(device, &BindGroupDescriptor {
+            label: Self::label(),
+            entries: &entries,
+            layout,
+        });
+
+        Ok(PreparedBindGroup { bind_group, unprepared })
+    }
+
+    fn unprepared_bind_group(
+        &self, device: &Device, layout: &BindGroupLayout,
+    ) -> Result<UnpreparedBindGroup<Self::Data>, AsBindGroupError>;
+
+    fn bind_group_layout(device: &Device, entries: &[BindGroupLayoutEntry]) -> BindGroupLayout
+    where
+        Self: Sized,
+    {
+        BindGroupLayout::new(device, &BindGroupLayoutDescriptor {
+            label: Self::label(),
+            entries,
+        })
+    }
+
+    fn bind_group_layout_entries(device: &Device) -> Vec<BindGroupLayoutEntry>
     where
         Self: Sized;
 }
-assert_obj_safe!(AsBindGroup);
 
 
 
-#[derive(Debug, Default, Clone)]
-pub struct Binds {
-    pub bind_groups: Vec<BindGroup>,
-    pub layouts: Vec<Option<BindGroupLayout>>,
+#[derive(Debug, Error)]
+pub enum AsBindGroupError {
+    #[error("failed to create unprepared bind group, try next frame")]
+    RetryNextFrame,
 }
-assert_impl_all!(Binds: Send, Sync, Component);
 
-impl Binds {
-    pub fn with_capacity(cap: usize) -> Self {
-        Self {
-            bind_groups: Vec::with_capacity(cap),
-            layouts: Vec::with_capacity(cap),
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct BindableVector {
+        pos: vec3,
+    }
+
+    impl AsBindGroup for BindableVector {
+        type Data = vec3;
+
+        fn unprepared_bind_group(
+            &self, device: &Device, _: &BindGroupLayout,
+        ) -> Result<UnpreparedBindGroup<Self::Data>, AsBindGroupError> {
+            use crate::graphics::{BufferInitDescriptor, BufferUsages};
+
+            let buffer = Buffer::new(device, &BufferInitDescriptor {
+                label: Self::label(),
+                contents: bytemuck::cast_slice(&self.pos.as_array()),
+                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+            });
+
+            Ok(UnpreparedBindGroup {
+                bindings: vec![(0, OwnedBindingResource::Buffer(buffer))],
+                data: self.pos,
+            })
         }
-    }
 
-    pub fn layouts(&self) -> impl Iterator<Item = &wgpu::BindGroupLayout> + '_ {
-        self.layouts.iter().flat_map(Option::as_deref)
-    }
+        fn bind_group_layout_entries(_: &Device) -> Vec<BindGroupLayoutEntry>
+        where
+            Self: Sized,
+        {
+            use crate::graphics::{ShaderStages, BindingType, BufferBindingType};
 
-    pub fn new() -> Self {
-        default()
-    }
-
-    pub fn push(&mut self, bind_group: BindGroup, layout: Option<BindGroupLayout>) {
-        self.bind_groups.push(bind_group);
-        self.layouts.push(layout);
-    }
-
-    pub fn bind<'s>(&'s self, pass: &mut RenderPass<'s>, start_idx: u32) {
-        for (bind_group, i) in self.bind_groups.iter().zip(0..) {
-            bind_group.bind(pass, start_idx + i);
+            vec![
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::all(),
+                    ty: BindingType::Buffer {
+                        ty: BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ]
         }
-    }
-
-    pub fn bind_all<'s>(pass: &mut RenderPass<'s>, bindses: impl IntoIterator<Item = &'s Self>) {
-        let mut start_idx = 0;
-        for binds in bindses.into_iter() {
-            binds.bind(pass, start_idx);
-            start_idx += binds.count() as u32;
-        }
-    }
-
-    pub fn count(&self) -> usize {
-        self.bind_groups.len()
-    }
-
-    pub fn join(&mut self, mut other: Self) -> &mut Self {
-        self.bind_groups.append(&mut other.bind_groups);
-        self.layouts.append(&mut other.layouts);
-        self
-    }
-}
-
-impl FromIterator<(BindGroup, Option<BindGroupLayout>)> for Binds {
-    fn from_iter<T: IntoIterator<Item = (BindGroup, Option<BindGroupLayout>)>>(iter: T) -> Self {
-        let iter = iter.into_iter();
-        let (bind_groups, layouts) = iter.unzip();
-        Self { bind_groups, layouts }
-    }
-}
-
-
-
-macros::define_atomic_id!(BindsId);
-
-#[derive(Clone, Debug)]
-pub struct BindsRef {
-    pub id: BindsId,
-    pub inner: Arc<Binds>,
-}
-
-impl From<Binds> for BindsRef {
-    fn from(value: Binds) -> Self {
-        Self { inner: Arc::new(value), id: BindsId::new() }
-    }
-}
-
-impl Deref for BindsRef {
-    type Target = Binds;
-    fn deref(&self) -> &Self::Target {
-        self.inner.as_ref()
     }
 }
