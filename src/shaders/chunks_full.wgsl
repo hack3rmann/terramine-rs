@@ -25,7 +25,7 @@ struct CameraUniform {
     view: mat4x4<f32>,
 }
 
-@group(2) @binding(0) 
+@group(1) @binding(0) 
 var<uniform> camera: CameraUniform;
 
 @vertex
@@ -42,10 +42,10 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 
 
 
-@group(1) @binding(0)
+@group(2) @binding(0)
 var albedo_atlas: texture_2d<f32>;
 
-@group(1) @binding(1)
+@group(2) @binding(1)
 var albedo_sampler: sampler;
 
 struct FragmentOutput {

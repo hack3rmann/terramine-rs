@@ -2,7 +2,7 @@ use {
     crate::prelude::*,
     graphics::{
         Device, Queue, FromFile, Extent3d, Texture, TextureView,
-        Sampler, BindGroupLayout, BindGroup, AsBindGroup,
+        Sampler,
     },
     image::{ImageBuffer, Rgba, ImageError},
     tokio::{fs, io},
@@ -35,9 +35,9 @@ impl Image {
     }
 }
 
-#[async_trait]
 impl FromFile for Image {
     type Error = LoadImageError;
+
     async fn from_file(file_name: impl AsRef<Path> + Send) -> Result<Self, Self::Error> {
         let dir = Path::new(cfg::texture::DIRECTORY);
 
@@ -112,59 +112,5 @@ impl GpuImage {
         );
 
         Self { texture, sampler, view, format, label: desc.label }
-    }
-}
-
-impl AsBindGroup for GpuImage {
-    fn bind_group_layout(device: &Device) -> BindGroupLayout
-    where
-        Self: Sized,
-    {
-        use crate::graphics::*;
-
-        device.create_bind_group_layout(
-            &BindGroupLayoutDescriptor {
-                label: Some("gpu_image_binds"),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Texture {
-                            sample_type: TextureSampleType::Float { filterable: true },
-                            view_dimension: TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                        count: None,
-                    },
-                    BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: ShaderStages::FRAGMENT,
-                        ty: BindingType::Sampler(SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-            },
-        ).into()
-    }
-
-    fn as_bind_group(&self, device: &Device, layout: &BindGroupLayout) -> BindGroup {
-        use crate::graphics::{BindGroupDescriptor, BindGroupEntry, BindingResource};
-
-        device.create_bind_group(
-            &BindGroupDescriptor {
-                label: self.label.as_deref(),
-                layout,
-                entries: &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: BindingResource::TextureView(&self.view),
-                    },
-                    BindGroupEntry {
-                        binding: 1,
-                        resource: BindingResource::Sampler(&self.sampler),
-                    },
-                ],
-            },
-        ).into()
     }
 }

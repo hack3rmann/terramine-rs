@@ -1,5 +1,6 @@
 use crate::{
-    prelude::*, transform::*, graphics::{Buffer, Binds, Device, Queue, ui::egui_util},
+    prelude::*, transform::*,
+    graphics::{AsBindGroup, Device, ui::egui_util, BindGroupLayoutEntry},
     geometry::frustum::Frustum,
 };
 
@@ -16,6 +17,11 @@ impl Plugin for CameraPlugin {
         world.insert_one(camera, Name::new("Initial camera"))?;
 
         world.insert_resource(MainCamera(camera));
+
+        let cam_component = world.get::<&CameraComponent>(camera)?.deref().clone();
+        let transform = world.get::<&Transform>(camera)?.deref().clone();
+
+        world.insert_resource(CameraUniform::new(&cam_component, &transform));
 
         Ok(())
     }
@@ -322,6 +328,20 @@ pub fn make_new_camera_bundle() -> CameraBundle {
     (cam, transform, speed, frustum)
 }
 
+pub fn update(world: &World) -> AnyResult<()> {
+    CameraHandle::update_all(world);
+
+    let MainCamera(camera) = world.copy_resource::<MainCamera>()?;
+    let cam_component = world.get::<&CameraComponent>(camera)?;
+    let transform = world.get::<&Transform>(camera)?;
+
+    let mut uniform = world.resource::<&mut CameraUniform>()?;
+    uniform.proj = cam_component.get_proj();
+    uniform.view = transform.get_view();
+
+    Ok(())
+}
+
 
 
 assert_impl_all!(CameraUniform: Send, Sync);
@@ -344,69 +364,47 @@ impl Default for CameraUniform {
     }
 }
 
+impl AsBindGroup for CameraUniform {
+    type Data = Self;
 
-
-#[derive(Debug)]
-pub struct CameraUniformBuffer {
-    pub buffer: Buffer,
-    pub binds: Binds,
-}
-
-impl CameraUniformBuffer {
-    pub fn new(device: &Device, init: &CameraUniform) -> Self {
-        use crate::graphics::*;
-
-        let buffer = Buffer::new(
-            device,
-            &BufferInitDescriptor {
-                label: Some("camera_uniform_buffer"),
-                contents: bytemuck::bytes_of(init),
-                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            },
-        );
-
-        let layout = BindGroupLayout::new(
-            device,
-            &BindGroupLayoutDescriptor {
-                label: Some("camera_unifors_bind_group_layout"),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::VERTEX_FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                ],
-            },
-        );
-
-        let bind_group = BindGroup::new(
-            device,
-            &BindGroupDescriptor {
-                label: Some("common_uniforms_bind_group"),
-                layout: &layout,
-                entries: &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: buffer.as_entire_binding(),
-                    },
-                ],
-            },
-        );
-
-        let binds = Binds::from_iter([
-            (bind_group, Some(layout)),
-        ]);
-
-        Self { binds, buffer }
+    fn label() -> Option<&'static str> {
+        Some("camera_uniform")
     }
 
-    pub fn update(&self, queue: &Queue, uniform: &CameraUniform) {
-        queue.write_buffer(&self.buffer, 0, bytemuck::bytes_of(uniform));
-        queue.submit(None);
+    fn bind_group_layout_entries(_: &Device) -> Vec<BindGroupLayoutEntry>
+    where
+        Self: Sized,
+    {
+        use crate::graphics::*;
+
+        vec![
+            BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX_FRAGMENT,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ]
+    }
+
+    fn unprepared_bind_group(
+        &self, device: &Device, _: &graphics::BindGroupLayout,
+    ) -> Result<graphics::UnpreparedBindGroup<Self::Data>, graphics::AsBindGroupError> {
+        use crate::graphics::*;
+
+        let buffer = Buffer::new(device, &BufferInitDescriptor {
+            label: Self::label(),
+            contents: bytemuck::bytes_of(self),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+    
+        Ok(UnpreparedBindGroup {
+            bindings: vec![(0, OwnedBindingResource::Buffer(buffer))],
+            data: *self,
+        })
     }
 }

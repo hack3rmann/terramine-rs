@@ -7,20 +7,18 @@ pub mod array;
 use {
     crate::{
         prelude::*,
-        graphics::{Mesh, Device, RenderPass},
         geometry::frustum::Frustum,
-        iterator::{CubeBoundary, Sides},
+        iterator::Sides,
     },
     super::voxel::{
         self,
         Voxel,
         VoxelColor,
-        shape::{CubeDetailed, CubeLowered},
+        shape::CubeDetailed,
         voxel_data::{data::*, VoxelId},
         // TODO: remove: generator as gen,
     },
-    mesh::{HiResVertex, LowResVertex},
-    chunk_array_old::ChunkRenderPipeline,
+    mesh::HiResVertex,
     array::ChunkAdj,
 };
 
@@ -135,6 +133,7 @@ impl Chunk {
         self.info.load(Relaxed).is_filled()
     }
 
+    #[allow(unused)]
     fn optimize_chunk_adj_for_partitioning(mut chunk_adj: ChunkAdj, partition_coord: USize3) -> ChunkAdj {
         chunk_adj.set(
             veci!(1 - partition_coord.x as i32 * 2, 0, 0),

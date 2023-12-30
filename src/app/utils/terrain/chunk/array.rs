@@ -516,6 +516,73 @@ pub mod render {
 
 
 
+    #[derive(Debug, Clone)]
+    pub struct ChunkArrayTextures {
+        albedo: GpuImage,
+    }
+
+    impl ChunkArrayTextures {
+        pub async fn load(
+            device: &Device, queue: &Queue, path: impl AsRef<Path> + Send,
+        ) -> AnyResult<Self> {
+            let image = Image::from_file(path).await?;
+            let gpu_image = GpuImage::new(GpuImageDescriptor {
+                device,
+                queue,
+                image: &image,
+                label: Some("chunk_array_textures".into()),
+            });
+
+            Ok(Self { albedo: gpu_image })
+        }
+    }
+
+    impl AsBindGroup for ChunkArrayTextures {
+        type Data = Self;
+
+        fn label() -> Option<&'static str> {
+            Some("chunk_array_textures")
+        }
+
+        fn bind_group_layout_entries(_: &Device) -> Vec<BindGroupLayoutEntry>
+        where
+            Self: Sized,
+        {
+            vec![
+                BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Texture {
+                        sample_type: TextureSampleType::Float { filterable: true },
+                        view_dimension: TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: ShaderStages::FRAGMENT,
+                    ty: BindingType::Sampler(SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ]
+        }
+
+        fn unprepared_bind_group(
+            &self, _: &Device, _: &BindGroupLayout,
+        ) -> Result<UnpreparedBindGroup<Self::Data>, AsBindGroupError> {
+            Ok(UnpreparedBindGroup {
+                bindings: vec![
+                    (0, OwnedBindingResource::TextureView(self.albedo.view.clone())),
+                    (1, OwnedBindingResource::Sampler(self.albedo.sampler.clone())),
+                ],
+                data: self.clone(),
+            })
+        }
+    }
+
+
+
     #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
     pub struct ChunkArrayPipeline {
         id: PipelineId,
@@ -534,12 +601,33 @@ pub mod render {
 
 
     
-    pub fn try_make_pipeline(device: &Device) -> Option<RenderPipeline> {
-        use { graphics::*, crate::terrain::chunk::mesh::HiResVertex };
+    pub async fn try_make_pipeline(device: &Device, queue: &Queue) -> AnyResult<RenderPipeline> {
+        use { tokio::fs, graphics::*, crate::terrain::chunk::mesh::HiResVertex };
 
-        // TODO: load via `AssetLoader`
-        let shader_src
-            = std::fs::read_to_string("src/shaders/chunks_full.wgsl").ok()?;
+        let (shader_src, _self_uniform) = tokio::join!(
+            fs::read_to_string("src/shaders/chunks_full.wgsl"),
+            ChunkArrayTextures::load(
+                device, queue, "src/image/texture_atlas.png",
+            ),
+        );
+
+        let shader_src = shader_src?;
+        // let _self_uniform = self_uniform.ok()?;
+
+        let common_layout = {
+            let entries = CommonUniform::bind_group_layout_entries(device);
+            CommonUniform::bind_group_layout(device, &entries)
+        };
+
+        let camera_layout = {
+            let entries = CameraUniform::bind_group_layout_entries(device);
+            CameraUniform::bind_group_layout(device, &entries)
+        };
+
+        let layout = {
+            let entries = ChunkArrayTextures::bind_group_layout_entries(device);
+            ChunkArrayTextures::bind_group_layout(device, &entries)
+        };
 
         let shader = Shader::new(
             device, shader_src, vec![HiResVertex::BUFFER_LAYOUT],
@@ -547,25 +635,34 @@ pub mod render {
 
         let layout = PipelineLayout::new(device, &PipelineLayoutDescriptor {
             label: Some("chunk_array_pipeline_layout"),
-            bind_group_layouts: &[],
+            bind_group_layouts: &[&common_layout, &camera_layout, &layout],
             push_constant_ranges: &[],
         });
 
-        Some(RenderPipeline::new(device, RenderPipelineDescriptor {
+        Ok(RenderPipeline::new(device, RenderPipelineDescriptor {
             shader: &shader,
-            color_states: &[],
+            color_states: &[
+                Some(ColorTargetState {
+                    format: TextureFormat::Rgba16Float,
+                    blend: Some(BlendState::ALPHA_BLENDING),
+                    write_mask: ColorWrites::ALL,
+                }),
+            ],
             primitive_state: PRIMITIVE_STATE,
             label: Some("chunk_array_render_pipeline".into()),
             layout: &layout,
         }))
     }
 
-    pub fn setup_pipeline(world: &mut World) -> AnyResult<()> {
+    pub async fn setup_pipeline(world: &mut World) -> AnyResult<()> {
         use crate::graphics::*;
 
-        let device = world.resource::<&Graphics>()?.get_device();
+        let (device, queue) = {
+            let graphics = world.resource::<&Graphics>()?;
+            (graphics.get_device(), graphics.get_queue())
+        };
 
-        let pipeline = try_make_pipeline(&device)
+        let pipeline = try_make_pipeline(&device, &queue).await
             .context("failed to make pipeline")?;
 
         let array_pipeline = ChunkArrayPipeline::from_pipeline(&pipeline);

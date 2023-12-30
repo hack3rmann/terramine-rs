@@ -1,13 +1,13 @@
 use crate::{
     prelude::*,
-    graphics::{Device, Buffer, Sampler, TextureView, BindingResource},
+    graphics::{Device, Buffer, Sampler, TextureView},
 };
 
 
 
 pub use wgpu::{
     BindGroupLayoutEntry, BindGroupLayoutDescriptor, BindGroupDescriptor,
-    BindGroupEntry,
+    BindGroupEntry, BindingResource,
 };
 
 
@@ -172,6 +172,10 @@ mod tests {
 
     impl AsBindGroup for BindableVector {
         type Data = vec3;
+
+        fn label() -> Option<&'static str> {
+            Some("bindable_vector")
+        }
 
         fn unprepared_bind_group(
             &self, device: &Device, _: &BindGroupLayout,

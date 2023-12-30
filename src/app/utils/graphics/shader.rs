@@ -25,9 +25,9 @@ impl<Source: Into<ShaderSourceCode>> From<Source> for ShaderSource {
     }
 }
 
-#[async_trait]
 impl FromFile for ShaderSource {
     type Error = io::Error;
+    
     async fn from_file(file_name: impl AsRef<Path> + Send) -> Result<Self, Self::Error> {
         let dir = Path::new(cfg::shader::DIRECTORY);
         let source = fs::read_to_string(dir.join(file_name)).await?;

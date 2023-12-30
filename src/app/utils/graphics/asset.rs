@@ -73,8 +73,9 @@ impl<T> From<T> for GlobalAsset<T> {
 
 
 
-#[async_trait]
 pub trait FromFile: Sized {
     type Error;
-    async fn from_file(file_name: impl AsRef<Path> + Send) -> Result<Self, Self::Error>;
+
+    fn from_file(file_name: impl AsRef<Path> + Send)
+        -> impl Future<Output = Result<Self, Self::Error>>;
 }

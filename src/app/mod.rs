@@ -61,22 +61,24 @@ impl App {
         logger::scope!(from = "app", "setup()");
 
         self.world.insert_resource(Name::new("Resources"));
-        
+
         self.init_plugin::<GraphicsPlugin>().await?;
         self.init_plugin::<CameraPlugin>().await?;
-        
+
         self.world.init_resource::<Timer>();
         self.world.init_resource::<AssetLoader>();
 
         {
-            use crate::terrain::chunk::array::ChunkArray;
+            use crate::terrain::chunk::{array::ChunkArray, mesh};
 
-            let mut array = ChunkArray::new_empty(USize3::new(2, 2, 2));
+            let mut array = ChunkArray::new_empty(vecs!(2, 2, 2));
             array.generate();
 
-            self.world.insert_resource(array);
+            let mesh = mesh::make(&array);
+
+            self.world.spawn((array, mesh));
         }
-        
+
         Ok(())
     }
 
@@ -152,7 +154,7 @@ impl App {
 
             Event::RedrawRequested(window_id) => {
                 self.do_frame(window_id).await?;
-                
+
                 let best_time = Duration::from_secs_f32(1.0 / 120.0);
                 let time_step = self.world.resource::<&Timer>()?.time_step();
 
@@ -170,7 +172,7 @@ impl App {
     async fn run_startup_systems(&mut self) -> AnyResult<()> {
         use crate::terrain::chunk::array::render;
         
-        render::setup_pipeline(&mut self.world)?;
+        render::setup_pipeline(&mut self.world).await?;
 
         Ok(())
     }
@@ -179,10 +181,10 @@ impl App {
     async fn update_systems(&mut self) -> AnyResult<()> {
         use crate::physics::PhysicalComponent;
 
-        CameraHandle::update_all(&self.world);
+        camera::update(&self.world)?;
         Graphics::update(&mut self.world)?;
         PhysicalComponent::update_all(&self.world)?;
-        graphics::GpuMesh::make_renderable_system(&mut self.world);
+        graphics::GpuMesh::make_renderable(&mut self.world);
 
         Ok(())
     }
@@ -234,7 +236,7 @@ impl App {
     async fn draw_frame(&mut self, _window_id: WindowId) -> AnyResult<()> {
         let mut graphics = self.world.resource::<&mut Graphics>()?;
 
-        graphics.render_with_sandbox(&self.world, |_, _, _, _, _| Ok(()))?;
+        graphics.render(&self.world)?;
 
         Ok(())
     }

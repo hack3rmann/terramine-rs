@@ -87,7 +87,7 @@ impl ChunkArray {
 
         let self_entity = world.spawn_empty();
 
-        Self::make_binds(world, self_entity).await;
+        // Self::make_binds(world, self_entity).await;
 
         let chunk_entities = world.spawn_batch(
             chunks.into_iter().map(|chunk| {
@@ -104,28 +104,28 @@ impl ChunkArray {
         })
     }
 
-    pub async fn make_binds(world: &mut World, self_entity: Entity) {
-        let graphics = world.resource::<&Graphics>().unwrap();
-        let cam_uniform = world.resource::<&CameraUniformBuffer>().unwrap();
-        
-        let binds = ChunkBinds::new(&graphics.context.device, &graphics.context.queue)
-            .await
-            .expect("failed to make binds for chunk array");
+    // pub async fn make_binds(world: &mut World, self_entity: Entity) {
+    //     let graphics = world.resource::<&Graphics>().unwrap();
+    //     let cam_uniform = world.resource::<&CameraUniformBuffer>().unwrap();
+    //     
+    //     let binds = ChunkBinds::new(&graphics.context.device, &graphics.context.queue)
+    //         .await
+    //         .expect("failed to make binds for chunk array");
 
-        let layout = ChunkPipelineLayout::new(
-            &graphics.context.device,
-            &graphics.common_uniforms.binds,
-            &binds,
-            &cam_uniform.binds,
-        );
+    //     let layout = ChunkPipelineLayout::new(
+    //         &graphics.context.device,
+    //         &graphics.common_uniform.binds,
+    //         &binds,
+    //         &cam_uniform.binds,
+    //     );
 
-        let pipeline = ChunkRenderPipeline::new(&graphics.context.device, &layout).await;
+    //     let pipeline = ChunkRenderPipeline::new(&graphics.context.device, &layout).await;
 
-        drop(graphics);
-        drop(cam_uniform);
+    //     drop(graphics);
+    //     drop(cam_uniform);
 
-        world.insert(self_entity, (binds, pipeline, layout)).unwrap();
-    }
+    //     world.insert(self_entity, (binds, pipeline, layout)).unwrap();
+    // }
 
     /// Constructs [`ChunkArray`] with empty chunks.
     /// 
@@ -714,36 +714,36 @@ impl ChunkArray {
         Ok(())
     }
 
-    #[profile]
-    pub fn render(
-        world: &World, common_binds: &Binds,
-        encoder: &mut CommandEncoder, view: TextureView,
-        depth: Option<TextureView>,
-    ) -> AnyResult<()> {
-        let this = world.resource::<&Self>()?;
+    // #[profile]
+    // pub fn render(
+    //     world: &World, common_binds: &Binds,
+    //     encoder: &mut CommandEncoder, view: TextureView,
+    //     depth: Option<TextureView>,
+    // ) -> AnyResult<()> {
+    //     let this = world.resource::<&Self>()?;
 
-        let cam_unform = world.resource::<&CameraUniformBuffer>()?;
-        let binds = world.get::<&ChunkBinds>(this.array_entity)?;
-        let pipeline = world.get::<&ChunkRenderPipeline>(this.array_entity)?;
+    //     let cam_unform = world.resource::<&CameraUniformBuffer>()?;
+    //     let binds = world.get::<&ChunkBinds>(this.array_entity)?;
+    //     let pipeline = world.get::<&ChunkRenderPipeline>(this.array_entity)?;
 
-        let mut query = world.query::<&Mesh>();
+    //     let mut query = world.query::<&Mesh>();
 
-        let mut pass = RenderPass::new("chunk_array_render_pass", encoder, [&view], depth.as_ref());
+    //     let mut pass = RenderPass::new("chunk_array_render_pass", encoder, [&view], depth.as_ref());
 
-        // for (_entity, mesh) in query.into_iter() {
-        //     let Some(details) = todo!();// mesh.details() else { continue };
+    //     // for (_entity, mesh) in query.into_iter() {
+    //     //     let Some(details) = todo!();// mesh.details() else { continue };
 
-        //     Binds::bind_all(&mut pass, [
-        //         common_binds,
-        //         binds.by_details(details),
-        //         &cam_unform.binds,
-        //     ]);
+    //     //     Binds::bind_all(&mut pass, [
+    //     //         common_binds,
+    //     //         binds.by_details(details),
+    //     //         &cam_unform.binds,
+    //     //     ]);
 
-        //     // mesh.render(&pipeline, &mut pass)?;
-        // }
+    //     //     // mesh.render(&pipeline, &mut pass)?;
+    //     // }
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 
     pub async fn try_finish_all_full_tasks(&mut self, world: &World, device: &Device) {
         let iter = self.tasks.full.iter_mut()
@@ -1322,172 +1322,5 @@ impl ChunkArrayTasks {
         !self.full.is_empty() ||
         !self.voxels_gen.is_empty() ||
         !self.partition.is_empty()
-    }
-}
-
-
-
-#[derive(Debug, Clone)]
-pub struct ChunkBinds {
-    pub full: Binds,
-    pub low: Binds,
-}
-
-impl ChunkBinds {
-    pub fn by_details(&self, details: Resolution) -> &Binds {
-        match details {
-            Resolution::High => &self.full,
-            Resolution::Low(_) => &self.low,
-        }
-    }
-
-    pub async fn make_full(device: &Device, queue: &Queue) -> Result<Binds, LoadImageError> {
-        use crate::graphics::*;
-
-        let (albedo_image, normal_image) = tokio::try_join!(
-            Image::from_file("texture_atlas.png"),
-            Image::from_file("normal_atlas.png"),
-        )?;
-
-        let albedo = GpuImage::new(
-            GpuImageDescriptor {
-                device,
-                queue,
-                image: &albedo_image,
-                label: Some("chunk_array_albedo_image_atlas".into()),
-            },
-        );
-
-        let normal = GpuImage::new(
-            GpuImageDescriptor {
-                device,
-                queue,
-                image: &normal_image,
-                label: Some("chunk_array_normal_image_atlas".into()),
-            },
-        );
-
-        let image_layout = GpuImage::bind_group_layout(device);
-
-        let albedo_bind = albedo.as_bind_group(device, &image_layout);
-        let _normal_bind = normal.as_bind_group(device, &image_layout);
-
-        Ok(Binds::from_iter([
-            (albedo_bind, Some(image_layout)),
-            // FIXME:
-            // (normal_bind, Some(image_layout)),
-        ]))
-    }
-
-    pub async fn new(device: &Device, queue: &Queue) -> Result<Self, LoadImageError> {
-        Ok(Self {
-            full: Self::make_full(device, queue).await?,
-            low: default(),
-        })
-    }
-}
-
-
-
-#[derive(Debug)]
-pub struct ChunkPipelineLayout {
-    pub full: PipelineLayout,
-    pub low: PipelineLayout,
-}
-
-impl ChunkPipelineLayout {
-    pub fn make_pipeline_layout(device: &Device, bind_group_layouts: &[&wgpu::BindGroupLayout]) -> PipelineLayout {
-        use crate::graphics::PipelineLayoutDescriptor as Desc;
-
-        PipelineLayout::new(
-            device,
-            &Desc {
-                label: Some("chunk_array_pipeline"),
-                bind_group_layouts,
-                push_constant_ranges: &[],
-            },
-        )
-    }
-
-    pub fn new(device: &Device, common_binds: &Binds, chunk_binds: &ChunkBinds, camera_binds: &Binds) -> Self {
-        let full = Self::make_pipeline_layout(device, &itertools::chain!(
-            common_binds.layouts(),
-            chunk_binds.full.layouts(),
-            camera_binds.layouts(),
-        ).collect_vec());
-
-        let low = Self::make_pipeline_layout(device, &itertools::chain!(
-            common_binds.layouts(),
-            chunk_binds.low.layouts(),
-            camera_binds.layouts(),
-        ).collect_vec());
-
-        Self { full, low }
-    }
-}
-
-
-
-#[derive(Debug, Clone)]
-pub struct ChunkRenderPipeline {
-    pub full: RenderPipeline,
-    pub low: RenderPipeline,
-}
-assert_impl_all!(ChunkRenderPipeline: Send, Sync);
-
-impl ChunkRenderPipeline {
-    const PRIMITIVE_STATE: PrimitiveState = PrimitiveState {
-        cull_mode: Some(Face::Back),
-        ..const_default()
-    };
-
-    pub async fn make_material<V: Vertex>(device: &Device, shader_file_name: &str) -> Arc<dyn Material> {
-        let source = ShaderSource::from_file(shader_file_name).await
-            .unwrap_or_else(|err| panic!("failed to load shader from file {shader_file_name}: {err}"));
-
-        let shader = Shader::new(device, source, vec![V::BUFFER_LAYOUT]);
-
-        ShaderMaterial::from(shader).to_arc()
-    }
-
-    pub async fn make_full(device: &Device, layout: &PipelineLayout) -> RenderPipeline {
-        use crate::{graphics::RenderPipelineDescriptor as Desc, terrain::chunk::mesh::HiResVertex};
-
-        let material = Self::make_material::<HiResVertex>(
-            device, "chunks_full.wgsl",
-        ).await;
-
-        RenderPipeline::new(device, Desc {
-            layout,
-            shader: &material.get_shader(),
-            color_states: material.get_color_states(),
-            primitive_state: Self::PRIMITIVE_STATE,
-            label: Some("chunk_array_full_detail_render_pipeline".into()),
-        })
-    }
-
-    pub async fn make_low(device: &Device, layout: &PipelineLayout) -> RenderPipeline {
-        use crate::{graphics::RenderPipelineDescriptor as Desc, terrain::chunk::mesh::LowResVertex};
-
-        let material = Self::make_material::<LowResVertex>(
-            device, "chunks_low.wgsl",
-        ).await;
-
-        RenderPipeline::new(device, Desc {
-            layout,
-            shader: &material.get_shader(),
-            color_states: material.get_color_states(),
-            primitive_state: Self::PRIMITIVE_STATE,
-            label: Some("chunk_array_full_detail_render_pipeline".into()),
-        })
-    }
-
-    pub async fn new(device: &Device, layout: &ChunkPipelineLayout) -> Self {
-        let (full, low) = tokio::join!(
-            Self::make_full(device, &layout.full),
-            Self::make_low(device, &layout.low),
-        );
-
-        Self { full, low }
     }
 }

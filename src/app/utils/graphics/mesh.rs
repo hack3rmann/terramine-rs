@@ -480,7 +480,7 @@ impl GpuMesh {
         self.draw(render_pass);
     }
 
-    pub fn make_renderable_system(world: &mut World) {
+    pub fn make_renderable(world: &mut World) {
         let device = world.resource::<&Graphics>().unwrap().get_device();
 
         let insert_map: Vec<(Entity, GpuMesh)>

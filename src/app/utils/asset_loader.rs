@@ -163,6 +163,7 @@ impl Debug for LoadingProccess {
 
 
 
+// TODO: emit `Loaded(path)` event when somthing had loaded
 #[derive(Debug, Default)]
 pub struct AssetLoader {
     pub loaded: HashMap<PathBuf, OwnedAsset>,

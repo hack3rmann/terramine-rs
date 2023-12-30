@@ -23,7 +23,7 @@ use crate::prelude::*;
 
 pub use {
     material::*, gpu_conversions::*, pass::*,
-    bind_group_old::*, buffer::*, texture::*, window::Window,
+    bind_group::*, buffer::*, texture::*, window::Window,
     mesh::*, shader::*, asset::*, pipeline::*, self::image::*,
     camera::*,
 
@@ -52,10 +52,10 @@ impl Plugin for GraphicsPlugin {
         let graphics = Graphics::new()
             .await
             .context("failed to create graphics")?;
-
-        world.insert_resource(CameraUniformBuffer::new(graphics.device(), &default()));
         
         world.insert_resource(graphics);
+
+        world.insert_resource(CommonUniform::zeroed());
 
         Ok(())
     }
@@ -111,9 +111,6 @@ pub struct Graphics {
     /// Holds rendering information during rendering proccess.
     pub render_stage: Option<RenderStage>,
 
-    /// Common shader uniforms buffer. Holds uniforms like time, screen resolution, etc.
-    pub common_uniforms: CommonUniformsBuffer,
-
     /// `egui` handle.
     pub egui: Egui,
 
@@ -160,30 +157,7 @@ impl Graphics {
         // * We've got unique access to `SURFACE_CFG` so it is safe.
         unsafe { SURFACE_CFG.write().upload(config) };
 
-        // * # Safety
-        // * 
-        // * This is graphics intialization so device does not exists anywhere before
-        // * so assets can not been used before or been initialized.
-        // unsafe { asset::load_default_assets(&context.device) }.await;
-
-        let common_uniforms = CommonUniformsBuffer::new(
-            &context.device,
-            &CommonUniforms {
-                time: 0.0,
-                screen_resolution: window.inner_size().to_vec2().into(),
-                _padding: 0,
-            },
-        );
-
-
-
-        // ------------ Renderng tests stuff ------------
-
         let sandbox = World::new();
-
-
-
-        // ----------------- Egui initialization -----------------
 
         let egui = Egui::new(
             context.device(),
@@ -198,7 +172,6 @@ impl Graphics {
             sandbox,
             window,
             context,
-            common_uniforms,
             render_stage: None,
         })
     }
@@ -275,52 +248,6 @@ impl Graphics {
         )
     }
 
-    pub fn logo_pass(&mut self, cam: &CameraUniformBuffer) {
-        let render_stage = self.render_stage.as_mut().unwrap();
-
-        let pipeline_cache = self.sandbox.resource::<&mut PipelineCache>()
-            .expect("failed to get pipeline cache");
-        
-        #[derive(Clone, Copy, Hash, PartialEq, Eq)]
-        struct LogoPipeline(PipelineId);
-        assert_impl_all!(LogoPipeline: Send, Sync, Component);
-
-        impl PipelineBound for LogoPipeline {
-            fn id(&self) -> PipelineId {
-                self.0
-            }
-
-            fn from_pipeline(pipeline: &RenderPipeline) -> Self {
-                Self(pipeline.id())
-            }
-        }
-
-        struct LogoComponent;
-
-        let mut query = self.sandbox.query::<(
-            &BindsRef, &GpuMesh, &LogoPipeline, &LogoComponent,
-        )>();
-
-        let mut pass = RenderPass::new(
-            "logo_draw_pass",
-            &mut render_stage.encoder,
-            [&render_stage.view],
-            Some(&render_stage.depth),
-        );
-
-        for (_entity, (binds, mesh, pipeline, _logo)) in query.into_iter() {
-            Binds::bind_all(&mut pass, [
-                &self.common_uniforms.binds,
-                binds,
-                &cam.binds,
-            ]);
-
-            let pipeline = pipeline_cache.get(pipeline).unwrap();
-            
-            mesh.render(pipeline, &mut pass);
-        }
-    }
-
     pub fn ui(world: &World, context: EguiContext) {
         use egui_dock::DockArea;
 
@@ -368,57 +295,23 @@ impl Graphics {
         Ok(())
     }
 
-    pub fn render_with_sandbox<R>(
-        &mut self, world: &World, render: R,
-    ) -> AnyResult<()>
-    where
-        R: FnOnce(&Binds, &mut CommandEncoder, &TextureView, Option<&TextureView>, &World)
-            -> AnyResult<()>,
-    {
-        let time = world.resource::<&Timer>()?.time();
-        self.begin_render(time)?;
-
-        {
-            let render_stage = unsafe {
-                self.render_stage.as_mut().unwrap_unchecked()
-            };
-
-            render(
-                &self.common_uniforms.binds,
-                &mut render_stage.encoder,
-                &render_stage.view,
-                Some(&render_stage.depth),
-                world
-            )?;
-        }
+    pub fn render_with_sandbox(
+        &mut self, world: &World,
+    ) -> AnyResult<()> {
+        self.begin_render()?;
 
         self.render_sandbox();
         self.render_egui(world)?;
+
         self.finish_render()?;
 
         Ok(())
     }
 
-    pub fn render<R>(&mut self, time: Time, render: R) -> AnyResult<()>
-    where
-        R: FnOnce(&Binds, &mut CommandEncoder, &TextureView) -> AnyResult<()>,
-    {
-        self.begin_render(time)?;
+    pub fn render(&mut self, world: &World) -> AnyResult<()> {
+        self.begin_render()?;
 
-        {
-            // * Safety
-            // * 
-            // * Safe, because in `begin_render` `render_stage` is set to `Some`
-            let render_stage = unsafe {
-                self.render_stage.as_mut().unwrap_unchecked()
-            };
-
-            render(
-                &self.common_uniforms.binds,
-                &mut render_stage.encoder,
-                &render_stage.view
-            )?;
-        }
+        self.render_egui(world)?;
 
         self.finish_render()?;
 
@@ -426,15 +319,7 @@ impl Graphics {
     }
 
     /// Begins a render proccess.
-    pub fn begin_render(&mut self, time: Time) -> Result<(), SurfaceError> {
-        let size = self.window.inner_size();
-
-        self.common_uniforms.update(&self.context.queue, CommonUniforms {
-            time: time.as_secs_f32(),
-            screen_resolution: vecf!(size.width, size.height),
-            _padding: 0,
-        });
-
+    pub fn begin_render(&mut self) -> Result<(), SurfaceError> {
         // FIXME: create depth view once
         let depth = {
             let surface_cfg = SURFACE_CFG.read();
@@ -534,21 +419,18 @@ impl Graphics {
     }
 
     pub fn update(world: &mut World) -> AnyResult<()> {
-        mesh::GpuMesh::make_renderable_system(world);
+        mesh::GpuMesh::make_renderable(world);
 
         let graphics = world.resource::<&mut Self>()?;
-
-        {
-            let MainCamera(camera) = world.copy_resource::<MainCamera>()
-                .context("main camera has to be set")?;
-
-            let cam_uniform = CameraHandle::get_uniform(world, camera)?;
-            let uniform_buffer = world.resource::<&CameraUniformBuffer>()?;
-
-            uniform_buffer.update(&graphics.context.queue, &cam_uniform);
-        }
+        let mut common_uniform = world.resource::<&mut CommonUniform>()?;
+        let timer = world.resource::<&Timer>()?;
 
         keyboard::set_input_capture(graphics.egui.context().wants_keyboard_input());
+
+        common_uniform.screen_resolution
+            = graphics.window.inner_size().to_vec2().into();
+
+        common_uniform.time = timer.time().as_secs_f32();
 
         Ok(())
     }
@@ -562,76 +444,51 @@ impl Graphics {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
-pub struct CommonUniforms {
+pub struct CommonUniform {
     pub screen_resolution: vec2,
     pub time: f32,
     pub _padding: u32,
 }
-assert_impl_all!(CommonUniforms: Send, Sync);
+assert_impl_all!(CommonUniform: Send, Sync);
 
+impl AsBindGroup for CommonUniform {
+    type Data = Self;
 
-
-#[derive(Debug)]
-pub struct CommonUniformsBuffer {
-    pub buffer: Buffer,
-    pub binds: Binds,
-}
-assert_impl_all!(CommonUniformsBuffer: Send, Sync);
-
-impl CommonUniformsBuffer {
-    pub fn new(device: &Device, initial_value: &CommonUniforms) -> Self {
-        let buffer = Buffer::new(
-            device,
-            &BufferInitDescriptor {
-                label: Some("common_uniforms_buffer"),
-                contents: bytemuck::bytes_of(initial_value),
-                usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-            },
-        );
-
-        let layout = BindGroupLayout::new(
-            device,
-            &BindGroupLayoutDescriptor {
-                label: Some("common_uniforms_bind_group_layout"),
-                entries: &[
-                    BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: ShaderStages::VERTEX_FRAGMENT,
-                        ty: BindingType::Buffer {
-                            ty: BufferBindingType::Uniform,
-                            has_dynamic_offset: false,
-                            min_binding_size: None,
-                        },
-                        count: None,
-                    },
-                ],
-            },
-        );
-
-        let bind_group = BindGroup::new(
-            device,
-            &BindGroupDescriptor {
-                label: Some("common_uniforms_bind_group"),
-                layout: &layout,
-                entries: &[
-                    BindGroupEntry {
-                        binding: 0,
-                        resource: buffer.as_entire_binding(),
-                    },
-                ],
-            },
-        );
-
-        let binds = Binds::from_iter([
-            (bind_group, Some(layout)),
-        ]);
-
-        Self { binds, buffer }
+    fn label() -> Option<&'static str> {
+        Some("common_uniform")
     }
 
-    pub fn update(&self, queue: &Queue, uniforms: CommonUniforms) {
-        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[uniforms]));
-        queue.submit(None);
+    fn bind_group_layout_entries(_: &Device) -> Vec<BindGroupLayoutEntry>
+    where
+        Self: Sized,
+    {
+        vec![
+            BindGroupLayoutEntry {
+                binding: 0,
+                visibility: ShaderStages::VERTEX_FRAGMENT,
+                ty: BindingType::Buffer {
+                    ty: BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            },
+        ]
+    }
+
+    fn unprepared_bind_group(
+        &self, device: &Device, _: &BindGroupLayout,
+    ) -> Result<UnpreparedBindGroup<Self::Data>, AsBindGroupError> {
+        let buffer = Buffer::new(device, &BufferInitDescriptor {
+            label: Self::label(),
+            contents: bytemuck::bytes_of(self),
+            usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+        });
+
+        Ok(UnpreparedBindGroup {
+            data: *self,
+            bindings: vec![(0, OwnedBindingResource::Buffer(buffer))]
+        })
     }
 }
 

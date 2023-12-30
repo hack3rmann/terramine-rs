@@ -154,5 +154,5 @@ pub mod timer {
 }
 
 pub mod app {
-    pub const PANIC_ON_ERROR: bool = false;
+    pub const PANIC_ON_ERROR: bool = true;
 }
