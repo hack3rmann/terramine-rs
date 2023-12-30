@@ -69,6 +69,18 @@ impl App {
         self.world.init_resource::<AssetLoader>();
 
         {
+            use crate::{graphics::{RenderGraph, RunRenderNode}, terrain::chunk::array::render};
+
+            let mut render_graph = RenderGraph::new();
+
+            let render: RunRenderNode = render::render;
+
+            render_graph.add(render);
+
+            self.world.insert_resource(render_graph);
+        }
+
+        {
             use crate::terrain::chunk::{array::ChunkArray, mesh};
 
             let mut array = ChunkArray::new_empty(vecs!(2, 2, 2));
@@ -76,7 +88,7 @@ impl App {
 
             let mesh = mesh::make(&array);
 
-            self.world.spawn((array, mesh));
+            self.world.spawn((array, mesh, Name::new("Chunk array")));
         }
 
         Ok(())
@@ -191,9 +203,7 @@ impl App {
 
     /// Updates all in the [app][App].
     async fn update(&mut self, _window_id: WindowId) -> AnyResult<()> {
-        for update in update::UPDATE_FUNCTIONS.lock().iter() {
-            update();
-        }
+        update::run();
 
         self.world.resource::<&mut AssetLoader>()?
             .try_finish_all().await;
@@ -285,5 +295,11 @@ pub mod update {
             .as_mut()
             .unwrap_unchecked()
             .push(function);
+    }
+
+    pub fn run() {
+        for &update in UPDATE_FUNCTIONS.lock().iter() {
+            update();
+        }
     }
 }

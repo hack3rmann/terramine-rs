@@ -75,6 +75,7 @@ pub struct SimpleMesh {
     pub flags: MeshFlags,
     pub vertex_type: TypeId,
     pub vertices: Vec<u32>,
+    pub n_vertices: usize,
     pub indices: Option<Indices>,
     pub primitive_topology: PrimitiveTopology,
     pub polygon_mode: PolygonMode,
@@ -88,6 +89,8 @@ impl SimpleMesh {
         polygon_mode: PolygonMode,
         flags: MeshFlags,
     ) -> Self {
+        let n_vertices = vertices.len();
+
         Self {
             flags,
             vertex_type: TypeId::of::<V>(),
@@ -95,6 +98,7 @@ impl SimpleMesh {
                 Ok(value) => value,
                 Err((error, _)) => panic!("{error}"),
             },
+            n_vertices,
             indices,
             primitive_topology,
             polygon_mode,
@@ -223,6 +227,7 @@ impl Mesh {
                 primitive_topology: simple.primitive_topology,
                 polygon_mode: simple.polygon_mode,
                 vertices: vec![],
+                n_vertices: 0,
                 indices: None,
             }
         );
@@ -304,7 +309,7 @@ impl SimpleGpuMesh {
 
         let indices = match mesh.indices {
             None => GpuIndices::Unindexed,
-            
+
             Some(ref indices) => {
                 let (contents, idx_format) = match indices {
                     Indices::U16(indices) => (bytemuck::cast_slice(indices), IndexFormat::Uint16),
@@ -338,8 +343,7 @@ impl SimpleGpuMesh {
             vertex_type_id,
             is_enabled: AtomicBool::new(true),
             buffer: vertices,
-            // FIXME: count vertices properly
-            n_vertices: mesh.vertices.len(),
+            n_vertices: mesh.n_vertices,
             indices,
             label,
             primitive_state,
@@ -374,6 +378,8 @@ impl SimpleGpuMesh {
             flags: MeshFlags::DEFAULT,
             vertex_type: self.vertex_type_id,
             vertices: vertices.to_vec(),
+            // TODO: figure out what .len() returns
+            n_vertices: vertices_view.len(),
             indices,
             primitive_topology: self.primitive_state.topology,
             polygon_mode: self.primitive_state.polygon_mode,

@@ -544,6 +544,33 @@ pub mod render {
             Some("chunk_array_textures")
         }
 
+        fn update(
+            &self, _: &Device, _: &Queue,
+            bind_group: &mut PreparedBindGroup<Self::Data>,
+        ) -> bool {
+            bind_group.unprepared.data = self.clone();
+
+            for (index, _resource) in bind_group.unprepared.bindings.iter() {
+                match index {
+                    0 => {
+                        logger::error!(
+                            from = "chunk-array",
+                            "failed to update texture view (not yet implemented)",
+                        );
+                    },
+                    1 => {
+                        logger::error!(
+                            from = "chunk-array",
+                            "failed to update texture sampler (not yet implemented)",
+                        )
+                    },
+                    _ => return false,
+                }
+            }
+
+            true
+        }
+
         fn bind_group_layout_entries(_: &Device) -> Vec<BindGroupLayoutEntry>
         where
             Self: Sized,
@@ -601,18 +628,20 @@ pub mod render {
 
 
     
-    pub async fn try_make_pipeline(device: &Device, queue: &Queue) -> AnyResult<RenderPipeline> {
+    pub async fn try_make_pipeline(
+        device: &Device, queue: &Queue, cache: &mut BindsCache,
+    ) -> AnyResult<RenderPipeline> {
         use { tokio::fs, graphics::*, crate::terrain::chunk::mesh::HiResVertex };
 
-        let (shader_src, _self_uniform) = tokio::join!(
+        let (shader_src, self_uniform) = tokio::join!(
             fs::read_to_string("src/shaders/chunks_full.wgsl"),
             ChunkArrayTextures::load(
-                device, queue, "src/image/texture_atlas.png",
+                device, queue, "texture_atlas.png",
             ),
         );
 
         let shader_src = shader_src?;
-        // let _self_uniform = self_uniform.ok()?;
+        let self_uniform = self_uniform?;
 
         let common_layout = {
             let entries = CommonUniform::bind_group_layout_entries(device);
@@ -628,6 +657,9 @@ pub mod render {
             let entries = ChunkArrayTextures::bind_group_layout_entries(device);
             ChunkArrayTextures::bind_group_layout(device, &entries)
         };
+        
+        let bind_group = self_uniform.as_bind_group(device, &layout)?;
+        cache.add("chunkArrayTextures", bind_group);
 
         let shader = Shader::new(
             device, shader_src, vec![HiResVertex::BUFFER_LAYOUT],
@@ -643,7 +675,8 @@ pub mod render {
             shader: &shader,
             color_states: &[
                 Some(ColorTargetState {
-                    format: TextureFormat::Rgba16Float,
+                    // FIXME: manually take surface format
+                    format: TextureFormat::Bgra8UnormSrgb,
                     blend: Some(BlendState::ALPHA_BLENDING),
                     write_mask: ColorWrites::ALL,
                 }),
@@ -662,8 +695,12 @@ pub mod render {
             (graphics.get_device(), graphics.get_queue())
         };
 
-        let pipeline = try_make_pipeline(&device, &queue).await
-            .context("failed to make pipeline")?;
+        let pipeline = {
+            let mut cache = world.resource::<&mut BindsCache>()?;
+
+            try_make_pipeline(&device, &queue, &mut cache).await
+                .context("failed to make pipeline")?
+        };
 
         let array_pipeline = ChunkArrayPipeline::from_pipeline(&pipeline);
 
@@ -692,15 +729,31 @@ pub mod render {
 
         let pipeline_cache = world.resource::<&PipelineCache>()?;
         
+        let binds_cache = world.resource::<&BindsCache>()?;
+
         let mut pass = RenderPass::new(
             "chunk_array_render_pass", encoder, targets, depth,
         );
+
+        type CommonBind = PreparedBindGroup<<CommonUniform as AsBindGroup>::Data>;
+        let common = binds_cache.get::<CommonBind>("common")
+            .context("failed to get common uniform bind")?;
+
+        type CameraBind = PreparedBindGroup<<CameraUniform as AsBindGroup>::Data>;
+        let camera = binds_cache.get::<CameraBind>("camera")
+            .context("failed to get camera uniform bind")?;
+
+        type SelfBind = PreparedBindGroup<<ChunkArrayTextures as AsBindGroup>::Data>;
+        let textures = binds_cache.get::<SelfBind>("chunkArrayTextures")
+            .context("failed to get chunk array textures bind")?;
 
         for (_entity, (mesh, pipeline_bound)) in query.iter() {
             let pipeline = pipeline_cache.get(pipeline_bound)
                 .context("failed to get find pipeline in cache")?;
 
-            // FIXME: bind binds
+            common.bind_group.bind(&mut pass, 0);
+            camera.bind_group.bind(&mut pass, 1);
+            textures.bind_group.bind(&mut pass, 2);
 
             mesh.render(pipeline, &mut pass);
         }

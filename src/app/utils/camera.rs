@@ -1,6 +1,9 @@
 use crate::{
     prelude::*, transform::*,
-    graphics::{AsBindGroup, Device, ui::egui_util, BindGroupLayoutEntry},
+    graphics::{
+        AsBindGroup, PreparedBindGroup, Queue, Device, ui::egui_util,
+        BindGroupLayoutEntry,
+    },
     geometry::frustum::Frustum,
 };
 
@@ -329,28 +332,47 @@ pub fn make_new_camera_bundle() -> CameraBundle {
 }
 
 pub fn update(world: &World) -> AnyResult<()> {
+    use crate::graphics::*;
+
     CameraHandle::update_all(world);
 
     let MainCamera(camera) = world.copy_resource::<MainCamera>()?;
     let cam_component = world.get::<&CameraComponent>(camera)?;
     let transform = world.get::<&Transform>(camera)?;
 
-    let mut uniform = world.resource::<&mut CameraUniform>()?;
-    uniform.proj = cam_component.get_proj();
-    uniform.view = transform.get_view();
+    if let Ok(mut uniform) = world.resource::<&mut CameraUniform>() {
+        uniform.proj = cam_component.get_proj();
+        uniform.view = transform.get_view();
+
+        if let Ok(mut cache) = world.resource::<&mut BindsCache>() {
+            type CameraBind = PreparedBindGroup<<CameraUniform as AsBindGroup>::Data>;
+
+            let graphics = world.resource::<&Graphics>()?;
+
+            if let Some(camera) = cache.get_mut::<CameraBind>("camera") {
+                uniform.update(graphics.device(), graphics.queue(), camera);
+            } else {
+                let entries = CameraUniform::bind_group_layout_entries(graphics.device());
+                let layout = CameraUniform::bind_group_layout(graphics.device(), &entries);
+                let group = uniform.as_bind_group(graphics.device(), &layout)?;
+
+                cache.add("camera", group);
+            }
+        }
+    }
 
     Ok(())
 }
 
 
 
-assert_impl_all!(CameraUniform: Send, Sync);
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Pod, Zeroable)]
 pub struct CameraUniform {
     pub proj: mat4,
     pub view: mat4,
 }
+assert_impl_all!(CameraUniform: Send, Sync);
 
 impl CameraUniform {
     pub fn new(cam: &CameraComponent, transform: &Transform) -> Self {
@@ -369,6 +391,27 @@ impl AsBindGroup for CameraUniform {
 
     fn label() -> Option<&'static str> {
         Some("camera_uniform")
+    }
+
+    fn update(
+        &self, _: &Device, queue: &Queue,
+        bind_group: &mut PreparedBindGroup<Self::Data>,
+    ) -> bool {
+        use crate::graphics::*;
+
+        bind_group.unprepared.data = *self;
+
+        for (index, resource) in bind_group.unprepared.bindings.iter() {
+            if *index == 0 {
+                let OwnedBindingResource::Buffer(buffer)
+                    = resource else { return false };
+
+                queue.write_buffer(buffer, 0, bytemuck::bytes_of(self));
+                queue.submit(None);
+            }
+        }
+
+        true
     }
 
     fn bind_group_layout_entries(_: &Device) -> Vec<BindGroupLayoutEntry>

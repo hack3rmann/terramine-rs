@@ -16,6 +16,7 @@ pub mod shader;
 pub mod image;
 pub mod asset;
 pub mod material;
+pub mod render_graph;
 
 use crate::prelude::*;
 
@@ -25,7 +26,7 @@ pub use {
     material::*, gpu_conversions::*, pass::*,
     bind_group::*, buffer::*, texture::*, window::Window,
     mesh::*, shader::*, asset::*, pipeline::*, self::image::*,
-    camera::*,
+    camera::*, render_graph::*,
 
     wgpu::{
         SurfaceError, CommandEncoder, Features,
@@ -48,14 +49,14 @@ pub struct GraphicsPlugin;
 impl Plugin for GraphicsPlugin {
     async fn init(self, world: &mut World) -> AnyResult<()> {
         world.init_resource::<PipelineCache>();
+        world.init_resource::<BindsCache>();
+        world.insert_resource(CommonUniform::zeroed());
 
         let graphics = Graphics::new()
             .await
             .context("failed to create graphics")?;
         
         world.insert_resource(graphics);
-
-        world.insert_resource(CommonUniform::zeroed());
 
         Ok(())
     }
@@ -113,8 +114,6 @@ pub struct Graphics {
 
     /// `egui` handle.
     pub egui: Egui,
-
-    pub sandbox: World,
 }
 assert_impl_all!(Graphics: Send, Sync, Component);
 
@@ -157,8 +156,6 @@ impl Graphics {
         // * We've got unique access to `SURFACE_CFG` so it is safe.
         unsafe { SURFACE_CFG.write().upload(config) };
 
-        let sandbox = World::new();
-
         let egui = Egui::new(
             context.device(),
             window.inner_size().to_vec2(),
@@ -169,7 +166,6 @@ impl Graphics {
         
         Ok(Self {
             egui,
-            sandbox,
             window,
             context,
             render_stage: None,
@@ -265,10 +261,6 @@ impl Graphics {
             });
     }
 
-    pub fn render_sandbox(&mut self) {
-        // self.logo_pass(cam);
-    }
-
     pub fn render_egui(&mut self, world: &World)
         -> Result<(), egui_wgpu_backend::BackendError>
     {
@@ -295,21 +287,19 @@ impl Graphics {
         Ok(())
     }
 
-    pub fn render_with_sandbox(
-        &mut self, world: &World,
-    ) -> AnyResult<()> {
-        self.begin_render()?;
-
-        self.render_sandbox();
-        self.render_egui(world)?;
-
-        self.finish_render()?;
-
-        Ok(())
-    }
-
     pub fn render(&mut self, world: &World) -> AnyResult<()> {
         self.begin_render()?;
+
+        if let Ok(graph) = world.resource::<&RenderGraph>() {
+            let render_stage = self.render_stage.as_mut()
+                .context("failed to find render stage handle")?;
+
+            let encoder = &mut render_stage.encoder;
+            let view = render_stage.view.clone();
+            let depth = &render_stage.depth;
+            
+            graph.run(world, encoder, &[view], Some(depth))?;
+        }
 
         self.render_egui(world)?;
 
@@ -422,15 +412,35 @@ impl Graphics {
         mesh::GpuMesh::make_renderable(world);
 
         let graphics = world.resource::<&mut Self>()?;
-        let mut common_uniform = world.resource::<&mut CommonUniform>()?;
         let timer = world.resource::<&Timer>()?;
 
         keyboard::set_input_capture(graphics.egui.context().wants_keyboard_input());
 
-        common_uniform.screen_resolution
-            = graphics.window.inner_size().to_vec2().into();
+        if let Ok(mut common_uniform) = world.resource::<&mut CommonUniform>() {
+            common_uniform.screen_resolution
+                = graphics.window.inner_size().to_vec2().into();
 
-        common_uniform.time = timer.time().as_secs_f32();
+            common_uniform.time = timer.time().as_secs_f32();
+
+            if let Ok(mut cache) = world.resource::<&mut BindsCache>() {
+                type CommonBindGroup = PreparedBindGroup<<CommonUniform as AsBindGroup>::Data>;
+
+                if let Some(common) = cache.get_mut::<CommonBindGroup>("common") {
+                    AsBindGroup::update(
+                        common_uniform.deref(),
+                        graphics.device(),
+                        graphics.queue(),
+                        common,
+                    );
+                } else {
+                    let entries = CommonUniform::bind_group_layout_entries(graphics.device());
+                    let layout = CommonUniform::bind_group_layout(graphics.device(), &entries);
+                    let bind_group = common_uniform.as_bind_group(graphics.device(), &layout)?;
+
+                    cache.add("common", bind_group);
+                }
+            }
+        }
 
         Ok(())
     }
@@ -456,6 +466,27 @@ impl AsBindGroup for CommonUniform {
 
     fn label() -> Option<&'static str> {
         Some("common_uniform")
+    }
+
+    fn update(
+        &self, _: &Device, queue: &Queue,
+        bind_group: &mut PreparedBindGroup<Self::Data>,
+    ) -> bool {
+        use crate::graphics::*;
+
+        bind_group.unprepared.data = *self;
+
+        for (index, resource) in bind_group.unprepared.bindings.iter() {
+            if *index == 0 {
+                let OwnedBindingResource::Buffer(buffer)
+                    = resource else { return false };
+                
+                queue.write_buffer(buffer, 0, bytemuck::bytes_of(self));
+                queue.submit(None);
+            }
+        }
+
+        true
     }
 
     fn bind_group_layout_entries(_: &Device) -> Vec<BindGroupLayoutEntry>
@@ -623,28 +654,5 @@ impl egui_dock::TabViewer for EguiTabViewer<'_> {
 
     fn closeable(&mut self, tab: &mut Self::Tab) -> bool {
         matches!(tab, Tab::Other { .. })
-    }
-}
-
-
-
-pub type RunRenderNode = fn(
-    &World, &mut CommandEncoder, &[TextureView], Option<&TextureView>,
-) -> AnyResult<()>;
-
-
-
-#[derive(Clone, Copy, Debug, Hash)]
-pub struct RenderNode {
-    pub run: RunRenderNode,
-}
-assert_impl_all!(RenderNode: Send, Sync);
-
-impl RenderNode {
-    pub fn run(
-        self, world: &World, encoder: &mut CommandEncoder,
-        targets: &[TextureView], depth: Option<&TextureView>,
-    ) -> AnyResult<()> {
-        (self.run)(world, encoder, targets, depth)
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
     prelude::*,
-    graphics::{Device, Buffer, Sampler, TextureView},
+    graphics::{Device, Queue, Buffer, Sampler, TextureView, RenderPass},
 };
 
 
@@ -48,6 +48,10 @@ assert_impl_all!(BindGroup: Send, Sync);
 impl BindGroup {
     pub fn new(device: &Device, desc: &BindGroupDescriptor) -> Self {
         Self { value: Arc::new(device.create_bind_group(desc)) }
+    }
+
+    pub fn bind<'s>(&'s self, pass: &mut RenderPass<'s>, idx: u32) {
+        pass.set_bind_group(idx, self, &[]);
     }
 }
 
@@ -144,6 +148,11 @@ pub trait AsBindGroup {
         })
     }
 
+    fn update(
+        &self, device: &Device, queue: &Queue,
+        bind_group: &mut PreparedBindGroup<Self::Data>,
+    ) -> bool;
+
     fn bind_group_layout_entries(device: &Device) -> Vec<BindGroupLayoutEntry>
     where
         Self: Sized;
@@ -155,6 +164,43 @@ pub trait AsBindGroup {
 pub enum AsBindGroupError {
     #[error("failed to create unprepared bind group, try next frame")]
     RetryNextFrame,
+}
+
+
+
+#[derive(Debug)]
+pub struct BindsCache {
+    pub binds: HashMap<StaticStr, Box<dyn Any + Send + Sync>>,
+}
+
+impl BindsCache {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn add(&mut self, ty: impl Into<StaticStr>, bind: impl Any + Send + Sync) {
+        self.binds.insert(ty.into(), Box::new(bind));
+    }
+
+    pub fn get<'s, B>(&'s self, ty: &str) -> Option<&'s B>
+    where
+        B: Any + Sync + Send,
+    {
+        self.binds.get(ty).and_then(|value| value.downcast_ref())
+    }
+
+    pub fn get_mut<'s, B>(&'s mut self, ty: &str) -> Option<&'s mut B>
+    where
+        B: Any + Send + Sync,
+    {
+        self.binds.get_mut(ty).and_then(|value| value.downcast_mut())
+    }
+}
+
+impl Default for BindsCache {
+    fn default() -> Self {
+        Self { binds: default() }
+    }
 }
 
 
@@ -175,6 +221,29 @@ mod tests {
 
         fn label() -> Option<&'static str> {
             Some("bindable_vector")
+        }
+
+        fn update(
+            &self, _: &Device, queue: &Queue,
+            bind_group: &mut PreparedBindGroup<Self::Data>,
+        ) -> bool {
+            use crate::graphics::*;
+
+            bind_group.unprepared.data = self.pos;
+
+            for (index, resource) in bind_group.unprepared.bindings.iter() {
+                if *index == 0 {
+                    let OwnedBindingResource::Buffer(buffer)
+                        = resource else { return false };
+
+                    queue.write_buffer(
+                        buffer, 0, bytemuck::cast_slice(&self.pos.as_array()),
+                    );
+                    queue.submit(None);
+                }
+            }
+
+            true
         }
 
         fn unprepared_bind_group(
