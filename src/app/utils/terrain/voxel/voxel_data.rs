@@ -14,12 +14,12 @@ pub struct VoxelData {
     pub id: VoxelId,
 
     pub textures: TextureSides,
-    pub avarage_color: Color,
+    pub avarage_color: Vec3,
 }
 assert_impl_all!(VoxelData: Send, Sync);
 
 impl VoxelData {
-    pub const fn new(name: &'static str, id: VoxelId, color: Color, textures: TextureSides) -> Self {
+    pub const fn new(name: &'static str, id: VoxelId, color: Vec3, textures: TextureSides) -> Self {
         Self { name, id, textures, avarage_color: color }
     }
 }

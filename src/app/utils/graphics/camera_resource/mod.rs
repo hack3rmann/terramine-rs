@@ -13,6 +13,7 @@ use {
         },
     },
     frustum::Frustum,
+    math_linear::prelude::*,
 };
 
 /// Camera handler.

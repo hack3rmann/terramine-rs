@@ -41,14 +41,14 @@ impl From<Resolution> for Lod {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable, PartialEq, Default)]
 pub struct HiResVertex {
-    pub position: vec3,
-    pub tex_coords: vec2,
+    pub position: Vec3,
+    pub tex_coords: Vec2,
     pub face_idx: u32,
 }
 assert_impl_all!(HiResVertex: Send, Sync);
 
 impl HiResVertex {
-    pub const fn new(position: vec3, tex_coords: vec2, face_idx: u32) -> Self {
+    pub const fn new(position: Vec3, tex_coords: Vec2, face_idx: u32) -> Self {
         Self { position, tex_coords, face_idx }
     }
 }
@@ -64,14 +64,14 @@ impl Vertex for HiResVertex {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Pod, Zeroable, PartialEq, Default)]
 pub struct LowResVertex {
-    pub position: vec3,
-    pub color: Color,
+    pub position: Vec3,
+    pub color: Vec3,
     pub face_idx: u32,
 }
 assert_impl_all!(LowResVertex: Send, Sync);
 
 impl LowResVertex {
-    pub const fn new(position: vec3, color: Color, face_idx: u32) -> Self {
+    pub const fn new(position: Vec3, color: Vec3, face_idx: u32) -> Self {
         Self { position, color, face_idx }
     }
 }

@@ -162,7 +162,7 @@ impl ChunkArray {
 
     /// Convertes 3d index to an array index.
     pub fn volume_index_to_linear(sizes: U16Vec3, coord_idx: U16Vec3) -> u64 {
-        sdex::get_index(
+        iterator::get_index(
             &coord_idx.to_array().map(|x| x as usize),
             &sizes.to_array().map(|x| x as usize),
         ) as u64

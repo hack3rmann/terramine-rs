@@ -3,7 +3,7 @@ use {
         prelude::*,
         graphics::camera_resource::Camera,
     },
-    math_linear::math::ray::space_3d::Line,
+    math_linear::{prelude::*, math::ray::space_3d::Line},
 };
 
 /// Represents the camera frustum

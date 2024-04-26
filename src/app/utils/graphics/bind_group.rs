@@ -218,11 +218,11 @@ mod tests {
 
     #[derive(Debug, Clone, Copy)]
     pub struct BindableVector {
-        pos: vec3,
+        pos: Vec3,
     }
 
     impl AsBindGroup for BindableVector {
-        type Data = vec3;
+        type Data = Vec3;
 
         fn label() -> Option<&'static str> {
             Some("bindable_vector")
@@ -246,7 +246,7 @@ mod tests {
                         = resource else { return false };
 
                     queue.write_buffer(
-                        buffer, 0, bytemuck::cast_slice(&self.pos.as_array()),
+                        buffer, 0, bytemuck::cast_slice(&self.pos.to_array()),
                     );
                     queue.submit(None);
                 }
@@ -262,7 +262,7 @@ mod tests {
 
             let buffer = Buffer::new(device, &BufferInitDescriptor {
                 label: Self::label(),
-                contents: bytemuck::cast_slice(&self.pos.as_array()),
+                contents: bytemuck::cast_slice(&self.pos.to_array()),
                 usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
             });
 

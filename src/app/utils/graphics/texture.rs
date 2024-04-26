@@ -41,7 +41,7 @@ impl Texture {
 
     /// Writes data to the [texture][Texture] from loaded [image][Image].
     pub fn write(&self, queue: &Queue, image: &Image) {
-        let (width, height) = image.dimensions().as_tuple();
+        let [width, height] = image.dimensions().to_array();
         let size = image.extent_size();
 
         queue.write_texture(

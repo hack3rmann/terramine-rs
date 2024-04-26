@@ -1,14 +1,14 @@
-use {
-    crate::{
-        prelude::*,
-        graphics::camera_resource::Camera,
-    }
+use crate::{
+    prelude::*,
+    graphics::camera_resource::Camera,
 };
+
+
 
 #[derive(Debug, Default)]
 pub struct DirectionalLight {
     pub cam: Camera,
-    pub relative_pos: vec3,
+    pub relative_pos: Vec3,
 }
 assert_impl_all!(DirectionalLight: Send, Sync);
 
@@ -42,13 +42,14 @@ impl DirectionalLight {
     //     });
     // }
 
-    pub fn update(&mut self, cam_pos: vec3) {
+    pub fn update(&mut self, cam_pos: Vec3) {
         let interest_pos = cam_pos;
         
         let height = self.relative_pos.y;
-        let absolute_pos = self.cam.front * ((height - interest_pos.y) / self.cam.front.y) + interest_pos;
+        let front = Vec3::from_array(self.cam.front.as_array());
+        let absolute_pos = front * ((height - interest_pos.y) / front.y) + interest_pos;
 
-        let (x, y, z) = absolute_pos.as_tuple();
+        let [x, y, z] = absolute_pos.to_array();
         self.cam.set_position(x, y, z);
     }
 }

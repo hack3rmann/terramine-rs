@@ -30,6 +30,7 @@ pub mod system;
 
 
 use { crate::prelude::*, winit::dpi::{Pixel, PhysicalSize, PhysicalPosition} };
+use math_linear::prelude::*;
 
 
 
@@ -54,7 +55,7 @@ pub trait ToPhisicalSize<P: Pixel> {
 }
 assert_obj_safe!(ToPhisicalSize<u32>);
 
-impl ToPhisicalSize<u32> for UInt2 {
+impl ToPhisicalSize<u32> for UVec2 {
     fn to_physical_size(&self) -> PhysicalSize<u32> {
         PhysicalSize::new(self.x, self.y)
     }
@@ -67,7 +68,7 @@ pub trait ToPhisicalPosition<P: Pixel> {
 }
 assert_obj_safe!(ToPhisicalPosition<u32>);
 
-impl ToPhisicalPosition<u32> for UInt2 {
+impl ToPhisicalPosition<u32> for UVec2 {
     fn to_physical_position(&self) -> PhysicalPosition<u32> {
         PhysicalPosition::new(self.x, self.y)
     }
@@ -76,12 +77,12 @@ impl ToPhisicalPosition<u32> for UInt2 {
 
 
 pub trait ToVec2 {
-    fn to_vec2(&self) -> UInt2;
+    fn to_vec2(&self) -> UVec2;
 }
 
 impl ToVec2 for PhysicalSize<u32> {
-    fn to_vec2(&self) -> UInt2 {
-        UInt2::new(self.width, self.height)
+    fn to_vec2(&self) -> UVec2 {
+        UVec2::new(self.width, self.height)
     }
 }
 

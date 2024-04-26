@@ -168,7 +168,7 @@ pub mod python {
             let py = gil.python();
 
             let voxel_set = py_fn!(py, voxel_set(x: i32, y: i32, z: i32, new_id: u16) -> PyResult<i32> {
-                command(Command::SetVoxel { pos: veci!(x, y, z), new_id });
+                command(Command::SetVoxel { pos: IVec3::new(x, y, z), new_id });
                 Ok(0)
             });
 
@@ -176,7 +176,7 @@ pub mod python {
                 sx: i32, sy: i32, sz: i32,
                 ex: i32, ey: i32, ez: i32, new_id: u16
             ) -> PyResult<i32> {
-                command(Command::FillVoxels { pos_from: veci!(sx, sy, sz), pos_to: veci!(ex, ey, ez), new_id });
+                command(Command::FillVoxels { pos_from: IVec3::new(sx, sy, sz), pos_to: IVec3::new(ex, ey, ez), new_id });
                 Ok(0)
             });
 

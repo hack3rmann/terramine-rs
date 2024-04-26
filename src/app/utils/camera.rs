@@ -134,15 +134,15 @@ impl CameraHandle {
                     );
 
                     {
-                        let mut fov = camera.fov.get_degrees();
+                        let mut fov_degrees = f32::to_degrees(camera.fov_radians);
 
                         ui.add(
-                            egui::Slider::new(&mut fov, 1.0..=180.0)
+                            egui::Slider::new(&mut fov_degrees, 1.0..=180.0)
                                 .text("FOV")
                                 .integer()
                         );
 
-                        camera.fov.set_degrees(fov);
+                        camera.fov_radians = f32::to_radians(fov_degrees);
                     }
 
                     if MainCamera::is_main(world, entity).unwrap() {
@@ -181,7 +181,7 @@ impl Default for CameraActivity {
 assert_impl_all!(CameraHandle: Send, Sync);
 #[derive(Debug, Clone, PartialEq)]
 pub struct CameraComponent {
-    pub fov: Angle,
+    pub fov_radians: f32,
     pub aspect_ratio: f32,
 
     pub near_plane: f32,
@@ -198,7 +198,7 @@ impl CameraComponent {
     /// Returns projection matrix.
     pub fn get_proj(&self) -> Mat4 {
         Mat4::perspective_lh(
-            self.fov.get_radians(),
+            self.fov_radians,
             1.0 / self.aspect_ratio,
             self.near_plane,
             self.far_plane,
@@ -253,7 +253,7 @@ impl CameraComponent {
         *frustum = Frustum::new(self, transform);
     }
 
-    pub fn on_window_resize(&mut self, size: UInt2) {
+    pub fn on_window_resize(&mut self, size: UVec2) {
         self.aspect_ratio = size.y as f32 / size.x as f32;
     }
 
@@ -268,7 +268,7 @@ impl CameraComponent {
 
 impl ConstDefault for CameraComponent {
     const DEFAULT: Self = Self {
-        fov: Angle(cfg::camera::default::FOV_IN_DEGREES / 180.0 * std::f32::consts::PI),
+        fov_radians: cfg::camera::default::FOV_IN_DEGREES / 180.0 * std::f32::consts::PI,
         aspect_ratio: cfg::window::default::ASPECT_RATIO,
         near_plane: cfg::camera::default::NEAR_PLANE,
         far_plane: cfg::camera::default::FAR_PLANE,
@@ -299,7 +299,7 @@ impl egui_util::ShowUi for CameraComponent {
         );
 
         {
-            let mut fov = self.fov.get_degrees();
+            let mut fov = f32::to_degrees(self.fov_radians);
 
             ui.add(
                 egui::Slider::new(&mut fov, 1.0..=180.0)
@@ -307,7 +307,7 @@ impl egui_util::ShowUi for CameraComponent {
                     .integer()
             );
 
-            self.fov.set_degrees(fov);
+            self.fov_radians = f32::to_radians(fov)
         }
     }
 }

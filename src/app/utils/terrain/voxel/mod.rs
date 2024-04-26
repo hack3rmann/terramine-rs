@@ -42,7 +42,7 @@ pub fn is_id_valid(id: VoxelId) -> bool {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum VoxelColor {
     Transparent,
-    Colored(Color),
+    Colored(Vec3),
 }
 
 
@@ -151,12 +151,12 @@ pub mod shape {
             let face_idx = FRONT_IDX as u32;
             let hs = self.half_size;
 
-            vertices.push(HiResVertex::new(vecf!(-hs + x, -hs + y, -hs + z), vecf!(uv.hi.x, uv.hi.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x,  hs + y, -hs + z), vecf!(uv.hi.x, uv.lo.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x,  hs + y,  hs + z), vecf!(uv.lo.x, uv.lo.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x, -hs + y, -hs + z), vecf!(uv.hi.x, uv.hi.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x,  hs + y,  hs + z), vecf!(uv.lo.x, uv.lo.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x, -hs + y,  hs + z), vecf!(uv.lo.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x, -hs + y, -hs + z), Vec2::new(uv.hi.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x,  hs + y, -hs + z), Vec2::new(uv.hi.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x,  hs + y,  hs + z), Vec2::new(uv.lo.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x, -hs + y, -hs + z), Vec2::new(uv.hi.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x,  hs + y,  hs + z), Vec2::new(uv.lo.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x, -hs + y,  hs + z), Vec2::new(uv.lo.x, uv.hi.y), face_idx));
         }
 
         /// Cube back face vertex array.
@@ -169,12 +169,12 @@ pub mod shape {
             let face_idx = BACK_IDX as u32;
             let hs = self.half_size;
 
-            vertices.push(HiResVertex::new(vecf!(hs + x, -hs + y, -hs + z), vecf!(uv.lo.x, uv.hi.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(hs + x, -hs + y,  hs + z), vecf!(uv.hi.x, uv.hi.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(hs + x,  hs + y,  hs + z), vecf!(uv.hi.x, uv.lo.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(hs + x, -hs + y, -hs + z), vecf!(uv.lo.x, uv.hi.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(hs + x,  hs + y,  hs + z), vecf!(uv.hi.x, uv.lo.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(hs + x,  hs + y, -hs + z), vecf!(uv.lo.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(hs + x, -hs + y, -hs + z), Vec2::new(uv.lo.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(hs + x, -hs + y,  hs + z), Vec2::new(uv.hi.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(hs + x,  hs + y,  hs + z), Vec2::new(uv.hi.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(hs + x, -hs + y, -hs + z), Vec2::new(uv.lo.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(hs + x,  hs + y,  hs + z), Vec2::new(uv.hi.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(hs + x,  hs + y, -hs + z), Vec2::new(uv.lo.x, uv.lo.y), face_idx));
         }
 
         /// Cube top face vertex array.
@@ -187,12 +187,12 @@ pub mod shape {
             let face_idx = TOP_IDX as u32;
             let hs = self.half_size;
 
-            vertices.push(HiResVertex::new(vecf!( hs + x,  hs + y, -hs + z), vecf!(uv.lo.x, uv.hi.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!( hs + x,  hs + y,  hs + z), vecf!(uv.hi.x, uv.hi.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x,  hs + y, -hs + z), vecf!(uv.lo.x, uv.lo.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x,  hs + y, -hs + z), vecf!(uv.lo.x, uv.lo.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!( hs + x,  hs + y,  hs + z), vecf!(uv.hi.x, uv.hi.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x,  hs + y,  hs + z), vecf!(uv.hi.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new( hs + x,  hs + y, -hs + z), Vec2::new(uv.lo.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new( hs + x,  hs + y,  hs + z), Vec2::new(uv.hi.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x,  hs + y, -hs + z), Vec2::new(uv.lo.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x,  hs + y, -hs + z), Vec2::new(uv.lo.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new( hs + x,  hs + y,  hs + z), Vec2::new(uv.hi.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x,  hs + y,  hs + z), Vec2::new(uv.hi.x, uv.lo.y), face_idx));
         }
 
         /// Cube bottom face vertex array.
@@ -205,12 +205,12 @@ pub mod shape {
             let face_idx = BOTTOM_IDX as u32;
             let hs = self.half_size;
 
-            vertices.push(HiResVertex::new(vecf!(-hs + x, -hs + y, -hs + z), vecf!(uv.lo.x, uv.lo.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!( hs + x, -hs + y,  hs + z), vecf!(uv.hi.x, uv.hi.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!( hs + x, -hs + y, -hs + z), vecf!(uv.lo.x, uv.hi.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x, -hs + y, -hs + z), vecf!(uv.lo.x, uv.lo.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x, -hs + y,  hs + z), vecf!(uv.hi.x, uv.lo.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!( hs + x, -hs + y,  hs + z), vecf!(uv.hi.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x, -hs + y, -hs + z), Vec2::new(uv.lo.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new( hs + x, -hs + y,  hs + z), Vec2::new(uv.hi.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new( hs + x, -hs + y, -hs + z), Vec2::new(uv.lo.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x, -hs + y, -hs + z), Vec2::new(uv.lo.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x, -hs + y,  hs + z), Vec2::new(uv.hi.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new( hs + x, -hs + y,  hs + z), Vec2::new(uv.hi.x, uv.hi.y), face_idx));
         }
 
         /// Cube left face vertex array.
@@ -223,12 +223,12 @@ pub mod shape {
             let face_idx = LEFT_IDX as u32;
             let hs = self.half_size;
 
-            vertices.push(HiResVertex::new(vecf!( hs + x, -hs + y, -hs + z), vecf!(uv.lo.x, uv.hi.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!( hs + x,  hs + y, -hs + z), vecf!(uv.lo.x, uv.lo.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x,  hs + y, -hs + z), vecf!(uv.hi.x, uv.lo.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!( hs + x, -hs + y, -hs + z), vecf!(uv.lo.x, uv.hi.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x,  hs + y, -hs + z), vecf!(uv.hi.x, uv.lo.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x, -hs + y, -hs + z), vecf!(uv.hi.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new( hs + x, -hs + y, -hs + z), Vec2::new(uv.lo.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new( hs + x,  hs + y, -hs + z), Vec2::new(uv.lo.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x,  hs + y, -hs + z), Vec2::new(uv.hi.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new( hs + x, -hs + y, -hs + z), Vec2::new(uv.lo.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x,  hs + y, -hs + z), Vec2::new(uv.hi.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x, -hs + y, -hs + z), Vec2::new(uv.hi.x, uv.hi.y), face_idx));
         }
 
         /// Cube right face vertex array.
@@ -241,12 +241,12 @@ pub mod shape {
             let face_idx = RIGHT_IDX as u32;
             let hs = self.half_size;
 
-            vertices.push(HiResVertex::new(vecf!( hs + x, -hs + y,  hs + z), vecf!(uv.lo.x, uv.hi.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x,  hs + y,  hs + z), vecf!(uv.hi.x, uv.lo.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!( hs + x,  hs + y,  hs + z), vecf!(uv.lo.x, uv.lo.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!( hs + x, -hs + y,  hs + z), vecf!(uv.lo.x, uv.hi.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x, -hs + y,  hs + z), vecf!(uv.hi.x, uv.hi.y), face_idx));
-            vertices.push(HiResVertex::new(vecf!(-hs + x,  hs + y,  hs + z), vecf!(uv.hi.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new( hs + x, -hs + y,  hs + z), Vec2::new(uv.lo.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x,  hs + y,  hs + z), Vec2::new(uv.hi.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new( hs + x,  hs + y,  hs + z), Vec2::new(uv.lo.x, uv.lo.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new( hs + x, -hs + y,  hs + z), Vec2::new(uv.lo.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x, -hs + y,  hs + z), Vec2::new(uv.hi.x, uv.hi.y), face_idx));
+            vertices.push(HiResVertex::new(Vec3::new(-hs + x,  hs + y,  hs + z), Vec2::new(uv.hi.x, uv.lo.y), face_idx));
         }
 
         /// Cube all sides.
@@ -266,7 +266,7 @@ pub mod shape {
             Self { half_size: 0.5 * size }
         }
 
-        pub fn by_offset(&self, offset: IVec3, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+        pub fn by_offset(&self, offset: IVec3, position: Vec3, color: Vec3, vertices: &mut Vec<LowResVertex>) {
             match offset.to_array() {
                 [ 1,  0,  0] => self.back(position, color, vertices),
                 [-1,  0,  0] => self.front(position, color, vertices),
@@ -279,98 +279,98 @@ pub mod shape {
         }
 
         /// Cube front face vertex array.
-        pub fn front(&self, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+        pub fn front(&self, position: Vec3, color: Vec3, vertices: &mut Vec<LowResVertex>) {
             /* Shortcuts */
             let [x, y, z] = position.to_array();
             let face_idx = FRONT_IDX as u32;
             let hs = self.half_size;
 
-            vertices.push(LowResVertex::new(vecf!(-hs + x, -hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x,  hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x,  hs + y,  hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x, -hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x,  hs + y,  hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x, -hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x, -hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x,  hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x,  hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x, -hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x,  hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x, -hs + y,  hs + z), color, face_idx));
         }
 
         /// Cube back face vertex array.
-        pub fn back(&self, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+        pub fn back(&self, position: Vec3, color: Vec3, vertices: &mut Vec<LowResVertex>) {
             /* Shortcuts */
             let [x, y, z] = position.to_array();
             let face_idx = BACK_IDX as u32;
             let hs = self.half_size;
 
-            vertices.push(LowResVertex::new(vecf!(hs + x, -hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(hs + x, -hs + y,  hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(hs + x,  hs + y,  hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(hs + x, -hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(hs + x,  hs + y,  hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(hs + x,  hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(hs + x, -hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(hs + x, -hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(hs + x,  hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(hs + x, -hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(hs + x,  hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(hs + x,  hs + y, -hs + z), color, face_idx));
         }
 
         /// Cube top face vertex array.
-        pub fn top(&self, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+        pub fn top(&self, position: Vec3, color: Vec3, vertices: &mut Vec<LowResVertex>) {
             /* Shortcuts */
             let [x, y, z] = position.to_array();
             let face_idx = TOP_IDX as u32;
             let hs = self.half_size;
 
-            vertices.push(LowResVertex::new(vecf!( hs + x,  hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!( hs + x,  hs + y,  hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x,  hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x,  hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!( hs + x,  hs + y,  hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x,  hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new( hs + x,  hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new( hs + x,  hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x,  hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x,  hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new( hs + x,  hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x,  hs + y,  hs + z), color, face_idx));
         }
 
         /// Cube bottom face vertex array.
-        pub fn bottom(&self, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+        pub fn bottom(&self, position: Vec3, color: Vec3, vertices: &mut Vec<LowResVertex>) {
             /* Shortcuts */
             let [x, y, z] = position.to_array();
             let face_idx = BOTTOM_IDX as u32;
             let hs = self.half_size;
 
-            vertices.push(LowResVertex::new(vecf!(-hs + x, -hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!( hs + x, -hs + y,  hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!( hs + x, -hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x, -hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x, -hs + y,  hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!( hs + x, -hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x, -hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new( hs + x, -hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new( hs + x, -hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x, -hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x, -hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new( hs + x, -hs + y,  hs + z), color, face_idx));
         }
 
         /// Cube left face vertex array.
-        pub fn left(&self, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+        pub fn left(&self, position: Vec3, color: Vec3, vertices: &mut Vec<LowResVertex>) {
             /* Shortcuts */
             let [x, y, z] = position.to_array();
             let face_idx = LEFT_IDX as u32;
             let hs = self.half_size;
 
-            vertices.push(LowResVertex::new(vecf!( hs + x, -hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!( hs + x,  hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x,  hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!( hs + x, -hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x,  hs + y, -hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x, -hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new( hs + x, -hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new( hs + x,  hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x,  hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new( hs + x, -hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x,  hs + y, -hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x, -hs + y, -hs + z), color, face_idx));
         }
 
         /// Cube right face vertex array.
-        pub fn right(&self, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+        pub fn right(&self, position: Vec3, color: Vec3, vertices: &mut Vec<LowResVertex>) {
             /* Shortcuts */
             let [x, y, z] = position.to_array();
             let face_idx = RIGHT_IDX as u32;
             let hs = self.half_size;
 
-            vertices.push(LowResVertex::new(vecf!( hs + x, -hs + y,  hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x,  hs + y,  hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!( hs + x,  hs + y,  hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!( hs + x, -hs + y,  hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x, -hs + y,  hs + z), color, face_idx));
-            vertices.push(LowResVertex::new(vecf!(-hs + x,  hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new( hs + x, -hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x,  hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new( hs + x,  hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new( hs + x, -hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x, -hs + y,  hs + z), color, face_idx));
+            vertices.push(LowResVertex::new(Vec3::new(-hs + x,  hs + y,  hs + z), color, face_idx));
         }
 
         /// Cube all sides.
         #[allow(dead_code)]
-        pub fn all(&self, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+        pub fn all(&self, position: Vec3, color: Vec3, vertices: &mut Vec<LowResVertex>) {
             self.left(position, color, vertices);
             self.right(position, color, vertices);
             self.front(position, color, vertices);

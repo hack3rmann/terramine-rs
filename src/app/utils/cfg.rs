@@ -77,17 +77,15 @@ pub mod terrain {
     pub const MAX_CHUNKS: usize = 100_000;
 
     pub mod voxel_types {
-        use {
-            crate::app::utils::terrain::voxel::voxel_data::{VoxelData, TextureSides},
-            math_linear::prelude::Color,
-        };
+        use crate::app::utils::terrain::voxel::voxel_data::{VoxelData, TextureSides};
+        use glam::Vec3;
 
         pub const VOXEL_DATA: &[VoxelData] = &[
-            VoxelData::new("Air",    0, Color::new(0.00, 0.00, 0.00), TextureSides::all(0)),
-            VoxelData::new("Log",    1, Color::new(0.62, 0.52, 0.30), TextureSides::vertical(3, 1, 1)),
-            VoxelData::new("Stone",  2, Color::new(0.45, 0.45, 0.45), TextureSides::all(2)),
-            VoxelData::new("Grass",  3, Color::new(0.40, 0.64, 0.24), TextureSides::vertical(4, 6, 5)),
-            VoxelData::new("Dirt",   4, Color::new(0.59, 0.42, 0.29), TextureSides::all(5)),
+            VoxelData::new("Air",    0, Vec3::new(0.00, 0.00, 0.00), TextureSides::all(0)),
+            VoxelData::new("Log",    1, Vec3::new(0.62, 0.52, 0.30), TextureSides::vertical(3, 1, 1)),
+            VoxelData::new("Stone",  2, Vec3::new(0.45, 0.45, 0.45), TextureSides::all(2)),
+            VoxelData::new("Grass",  3, Vec3::new(0.40, 0.64, 0.24), TextureSides::vertical(4, 6, 5)),
+            VoxelData::new("Dirt",   4, Vec3::new(0.59, 0.42, 0.29), TextureSides::all(5)),
         ];
     }
 

@@ -26,7 +26,6 @@ pub use {
     thiserror::Error,
     derive_deref_rs::Deref,
     parse_display::{Display, FromStr},
-    math_linear::prelude::*,
     glam::*,
     user_error::UserFacingError,
     std::{

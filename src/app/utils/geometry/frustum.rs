@@ -2,7 +2,7 @@ use crate::{
     prelude::*,
     camera::CameraComponent,
     transform::Transform,
-    geometry::{Intersects, Contains, line::Line3d, plane::Plane3d, aabb::Aabb},
+    geometry::{Intersects, Contains, line::Line3d, plane::Plane, aabb::Aabb},
 };
 
 
@@ -10,12 +10,12 @@ use crate::{
 /// Represents the camera frustum
 #[derive(Clone, Debug)]
 pub struct Frustum {
-    pub near: Plane3d,
-    pub far: Plane3d,
-    pub left: Plane3d,
-    pub right: Plane3d,
-    pub top: Plane3d,
-    pub bottom: Plane3d,
+    pub near: Plane,
+    pub far: Plane,
+    pub left: Plane,
+    pub right: Plane,
+    pub top: Plane,
+    pub bottom: Plane,
     pub corner_rays: [Line3d; 4]
 }
 assert_impl_all!(Frustum: Send, Sync);
@@ -29,18 +29,18 @@ impl Frustum {
         let pos = transform.translation.position;
 
         // Far rectangle half size.
-        let half_vertical_side = f32::tan(0.5 * cam.fov.get_radians()) * cam.far_plane;
+        let half_vertical_side = f32::tan(0.5 * cam.fov_radians) * cam.far_plane;
         let half_horizontal_side = half_vertical_side / cam.aspect_ratio;
         
         let front_far = front_dir * cam.far_plane;
 
         // Plane3ds.
-        let near_plane   = Plane3d::new(pos + front_dir * cam.near_plane, front_dir);
-        let far_plane    = Plane3d::new(pos + front_far, -front_dir);
-        let right_plane  = Plane3d::new(pos, up_dir.cross(front_far + right_dir * half_horizontal_side).normalize());
-        let left_plane   = Plane3d::new(pos, (front_far - right_dir * half_horizontal_side).cross(up_dir).normalize());
-        let top_plane    = Plane3d::new(pos, right_dir.cross(front_far - up_dir * half_vertical_side).normalize());
-        let bottom_plane = Plane3d::new(pos, (front_far + up_dir * half_vertical_side).cross(right_dir).normalize());
+        let near_plane   = Plane::new(pos + front_dir * cam.near_plane, front_dir);
+        let far_plane    = Plane::new(pos + front_far, -front_dir);
+        let right_plane  = Plane::new(pos, up_dir.cross(front_far + right_dir * half_horizontal_side).normalize());
+        let left_plane   = Plane::new(pos, (front_far - right_dir * half_horizontal_side).cross(up_dir).normalize());
+        let top_plane    = Plane::new(pos, right_dir.cross(front_far - up_dir * half_vertical_side).normalize());
+        let bottom_plane = Plane::new(pos, (front_far + up_dir * half_vertical_side).cross(right_dir).normalize());
 
         let courner_rays = [
             Line3d::from_2_points(pos, pos + (front_far + right_dir * half_horizontal_side + up_dir * half_vertical_side)),
@@ -96,7 +96,7 @@ impl Frustum {
             && self.bottom.signed_distance(vec) > -f32::EPSILON
     }
 
-    pub const fn planes(&self) -> [Plane3d; 6] {
+    pub const fn planes(&self) -> [Plane; 6] {
         [self.near, self.far, self.left, self.right, self.top, self.bottom]
     }
 }

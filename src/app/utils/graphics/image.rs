@@ -30,12 +30,12 @@ impl Image {
         Ok(Self::from(image))
     }
 
-    pub fn dimensions(&self) -> UInt2 {
+    pub fn dimensions(&self) -> UVec2 {
         self.inner.dimensions().into()
     }
 
     pub fn extent_size(&self) -> Extent3d {
-        let (width, height) = self.dimensions().as_tuple();
+        let [width, height] = self.dimensions().to_array();
         Extent3d { width, height, depth_or_array_layers: 1 }
     }
 }

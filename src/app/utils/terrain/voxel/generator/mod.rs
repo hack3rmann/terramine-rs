@@ -40,16 +40,19 @@ macros::atomic_static! {
 }
 
 lazy_static! {
-    static ref NOISE_VALS: RwLock<Noise2d> = RwLock::new(
+    static ref NOISE_VALS: RwLock<Noise2d> = RwLock::new({
+        let sizes = Chunk::SIZES * *GENERATOR_SIZES.lock();
+
         Noise2d::new(
             SEED.load(Relaxed),
-            USize2::from((Chunk::SIZES * *GENERATOR_SIZES.lock()).xz().to_array().map(|x| x as usize)),
+            sizes.x as usize,
+            sizes.z as usize,
             FREQUENCY.load(Relaxed),
             LACUNARITY.load(Relaxed),
             N_OCTAVES.load(Relaxed),
             PERSISTENCE.load(Relaxed),
         )
-    );
+    });
 }
 
 
@@ -84,9 +87,12 @@ pub fn spawn_control_window(ui: &mut egui::Ui) {
         if ui.button("Build").clicked() {
             let mut noise_values = NOISE_VALS.write();
 
+            let sizes = Chunk::SIZES * *GENERATOR_SIZES.lock();
+
             _ = mem::replace(&mut *noise_values, Noise2d::new(
                 SEED.load(Relaxed),
-                USize2::from((Chunk::SIZES * *GENERATOR_SIZES.lock()).xz().to_array().map(|x| x as usize)),
+                sizes.x as usize,
+                sizes.z as usize,
                 FREQUENCY.load(Relaxed),
                 LACUNARITY.load(Relaxed),
                 N_OCTAVES.load(Relaxed),
@@ -96,6 +102,6 @@ pub fn spawn_control_window(ui: &mut egui::Ui) {
     });
 }
 
-pub fn perlin(pos: Int3, chunk_array_sizes: USize3) -> i32 {
+pub fn perlin(pos: IVec3, chunk_array_sizes: U16Vec3) -> i32 {
     todo!()
 }

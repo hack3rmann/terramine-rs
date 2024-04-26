@@ -103,10 +103,12 @@ assert_impl_all!(RenderStage: Send, Sync);
 
 impl RenderStage {
     pub fn new(device: &Device) -> Self {
-        let depth = Self::make_depth_image(device, {
+        let sizes = {
             let cfg = SURFACE_CFG.read();
-            UInt2::new(cfg.width, cfg.height)
-        });
+            UVec2::new(cfg.width, cfg.height)
+        };
+
+        let depth = Self::make_depth_image(device, sizes);
 
         Self {
             depth,
@@ -158,11 +160,11 @@ impl RenderStage {
         ))
     }
 
-    fn on_window_resize(&mut self, device: &Device, new_size: UInt2) {
+    fn on_window_resize(&mut self, device: &Device, new_size: UVec2) {
         self.depth = Self::make_depth_image(device, new_size);
     }
 
-    fn make_depth_image(device: &Device, size: UInt2) -> GpuImage {
+    fn make_depth_image(device: &Device, size: UVec2) -> GpuImage {
         let size = wgpu::Extent3d {
             width: size.x,
             height: size.y,
@@ -437,7 +439,7 @@ impl Graphics {
     }
 
     /// Handles window resize event by [`Graphics`].
-    pub fn on_window_resize(&mut self, new_size: UInt2) {
+    pub fn on_window_resize(&mut self, new_size: UVec2) {
         if new_size.x > 0 && new_size.y > 0 {
             let mut config = SURFACE_CFG.write();
             (config.width, config.height) = (new_size.x, new_size.y);
@@ -480,7 +482,7 @@ impl Graphics {
 
         if let Ok(mut common_uniform) = world.resource::<&mut CommonUniform>() {
             common_uniform.screen_resolution
-                = graphics.window.inner_size().to_vec2().into();
+                = graphics.window.inner_size().to_vec2().as_vec2();
 
             common_uniform.time = timer.time().as_secs_f32();
 
@@ -516,7 +518,7 @@ impl Graphics {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 pub struct CommonUniform {
-    pub screen_resolution: vec2,
+    pub screen_resolution: Vec2,
     pub time: f32,
     pub _padding: u32,
 }
@@ -598,7 +600,7 @@ pub struct Egui {
 assert_impl_all!(Egui: Send, Sync);
 
 impl Egui {
-    pub fn new(device: &Device, window_sizes: UInt2, scale_factor: f64) -> Self {
+    pub fn new(device: &Device, window_sizes: UVec2, scale_factor: f64) -> Self {
         Self {
             render_pass: egui_wgpu_backend::RenderPass::new(
                 device, SURFACE_CFG.read().format, 1

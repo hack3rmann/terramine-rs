@@ -11,20 +11,20 @@ lazy_static! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Command {
     SetVoxel {
-        pos: Int3,
+        pos: IVec3,
         new_id: VoxelId,
     },
 
     FillVoxels {
-        pos_from: Int3,
-        pos_to: Int3,
+        pos_from: IVec3,
+        pos_to: IVec3,
         new_id: VoxelId,
     },
 
     DropAllMeshes,
 
     GenerateNew {
-        sizes: USize3,
+        sizes: U16Vec3,
     },
 }
 

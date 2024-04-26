@@ -4,6 +4,7 @@ pub mod plane;
 pub mod aabb;
 
 pub use line::Line3d;
+pub use plane::Plane;
 pub use aabb::Aabb;
 pub use frustum::Frustum;
 use static_assertions::assert_obj_safe;

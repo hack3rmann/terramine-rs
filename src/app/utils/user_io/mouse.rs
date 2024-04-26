@@ -151,11 +151,11 @@ macros::atomic_static! {
 
 pub fn get_x() -> f32 { X.load(Relaxed) }
 pub fn get_y() -> f32 { Y.load(Relaxed) }
-pub fn get_pos() -> vec2 { vecf!(get_x(), get_y()) }
+pub fn get_pos() -> Vec2 { Vec2::new(get_x(), get_y()) }
 
 pub fn get_dx() -> f32 { DX.load(Relaxed) }
 pub fn get_dy() -> f32 { DY.load(Relaxed) }
-pub fn get_delta() -> vec2 { vecf!(get_dx(), get_dy()) }
+pub fn get_delta() -> Vec2 { Vec2::new(get_dx(), get_dy()) }
 
 pub fn press(button: ExtendedMouseButton) {
     if !button.is_other() {
@@ -229,7 +229,7 @@ pub fn just_middle_pressed() -> bool {
 
 pub fn update_cursor_position(window: &Window) -> Result<(), MouseError> {
     // Get cursor position from `winapi`.
-    let (x, y) = get_cursor_pos(window)?.as_tuple();
+    let [x, y] = get_cursor_pos(window)?.to_array();
     let (prev_x, prev_y) = macros::load!(Acquire: X, Y);
 
     macros::store!(Release: X = x, Y = y, DX = x - prev_x, DY = y - prev_y);
@@ -256,7 +256,7 @@ pub fn update(window: &Window) -> Result<(), MouseError> {
 }
 
 /// Gives cursor position in screen cordinates.
-pub fn get_cursor_screen_pos() -> Result<Int2, MouseError> {
+pub fn get_cursor_screen_pos() -> Result<IVec2, MouseError> {
     use winapi::{
         um::winuser::GetCursorPos as win_get_cursor_pos,
         shared::windef::POINT as Point,
@@ -268,16 +268,16 @@ pub fn get_cursor_screen_pos() -> Result<Int2, MouseError> {
     // Checks if WinAPI `GetCursorPos()` success then return cursor position else error.
     match unsafe { win_get_cursor_pos(&mut pt) } {
         0 => Err(MouseError::GetCursorPos),
-        _ => Ok(veci!(pt.x, pt.y))
+        _ => Ok(IVec2::new(pt.x, pt.y))
     }
 }
 
 /// Gives cursor position in window cordinates.
-pub fn get_cursor_pos(window: &Window) -> Result<vec2, MouseError> {
-    let (x, y) = vec2::from(get_cursor_screen_pos()?).as_tuple();
+pub fn get_cursor_pos(window: &Window) -> Result<Vec2, MouseError> {
+    let [x, y] = get_cursor_screen_pos()?.to_array();
     let window_pos = window.inner_position()?;
 
-    Ok(vecf!(x - window_pos.x as f32, y - window_pos.y as f32))
+    Ok(IVec2::new(x - window_pos.x, y - window_pos.y).as_vec2())
 }
 
 pub fn is_captured() -> bool {

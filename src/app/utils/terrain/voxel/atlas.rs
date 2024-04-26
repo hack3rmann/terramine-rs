@@ -16,23 +16,23 @@ pub const ATLAS_PADDING_F: f32 = ITEM_PADDING_IN_PIXELS as f32 / ATLAS_ROW_SIZE_
 /// Handles UV information.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct UV {
-    pub lo: vec2,
-    pub hi: vec2,
+    pub lo: Vec2,
+    pub hi: Vec2,
 }
 
 impl UV {
     /// Gives id information to struct
     pub fn new(id: u16) -> Self {
-        let mut lo = vec2::new(
+        let mut lo = Vec2::new(
             (id as usize % ITEMS_COUNT_IN_ROW) as f32 * TEXTURE_SIZE_F,
             (id as usize / ITEMS_COUNT_IN_ROW) as f32 * TEXTURE_SIZE_F,
         );
 
-        let mut hi = lo + vec2::all(TEXTURE_SIZE_F);
+        let mut hi = lo + Vec2::splat(TEXTURE_SIZE_F);
 
         /* Biasing */
-        lo += vec2::all(BIAS);
-        hi += vec2::all(BIAS);
+        lo += Vec2::splat(BIAS);
+        hi += Vec2::splat(BIAS);
 
         /* Applying padding */
         lo.x += ATLAS_PADDING_F;

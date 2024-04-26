@@ -93,7 +93,7 @@ impl Chunk {
                     })
                     .filter(|voxel| !voxel.is_air())
                     .map(|voxel| voxel.data.avarage_color)
-                    .fold((Color::ZERO, 0_usize), |(col_acc, n_acc), col|
+                    .fold((Vec3::ZERO, 0_usize), |(col_acc, n_acc), col|
                         (col_acc + col, n_acc + 1)
                     );
 
@@ -132,7 +132,7 @@ impl Chunk {
     }
 
     #[allow(unused)]
-    fn optimize_chunk_adj_for_partitioning(mut chunk_adj: ChunkAdj, partition_coord: USize3) -> ChunkAdj {
+    fn optimize_chunk_adj_for_partitioning(mut chunk_adj: ChunkAdj, partition_coord: U16Vec3) -> ChunkAdj {
         chunk_adj.set(
             IVec3::new(1 - partition_coord.x as i32 * 2, 0, 0),
             None,
@@ -591,7 +591,7 @@ impl Chunk {
     pub fn voxel_pos_to_idx(pos: IVec3) -> Option<usize> {
         ensure_or!(pos.x >= 0 && pos.y >= 0 && pos.z >= 0, return None);
 
-        let idx = sdex::get_index(&pos.to_array().map(|x| x as usize), &[Self::SIZE; 3]);
+        let idx = iterator::get_index(&pos.to_array().map(|x| x as usize), &[Self::SIZE; 3]);
 
         (idx < Self::VOLUME).then_some(idx)
     }
@@ -599,7 +599,7 @@ impl Chunk {
     /// Gives index in voxel array by it's 3D-index (or relative to chunk position)
     /// without idx-safe ckeck.
     pub fn voxel_pos_to_idx_unchecked(pos: IVec3) -> usize {
-        sdex::get_index(&pos.to_array().map(|x| x as usize), &[Self::SIZE; 3])
+        iterator::get_index(&pos.to_array().map(|x| x as usize), &[Self::SIZE; 3])
     }
 
     // FIXME: write mesh analog

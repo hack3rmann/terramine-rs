@@ -6,16 +6,16 @@ use serde::{Serialize, Deserialize};
 /// Represents a plane
 #[derive(Clone, Copy, Debug)]
 #[derive(Serialize, Deserialize)]
-pub struct Plane3d {
+pub struct Plane {
     pub normal: Vec3,
     pub distance: f32,
 }
 
-impl Plane3d {
+impl Plane {
     /// Constructs plane from origin and normal
     pub fn new(origin: Vec3, normal: Vec3) -> Self {
         assert!(normal.is_normalized(), "normal should be normalized");
-        Plane3d { normal, distance: origin.dot(normal) }
+        Plane { normal, distance: origin.dot(normal) }
     }
 
     /// Checks if gitven vector is in positive side of plane
