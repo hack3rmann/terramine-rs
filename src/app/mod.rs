@@ -77,7 +77,7 @@ impl App {
         {
             use crate::terrain::chunk::{array::ChunkArray, mesh};
 
-            let mut array = ChunkArray::new_empty(vecs!(2, 2, 2));
+            let mut array = ChunkArray::new_empty(U16Vec3::new(2, 2, 2));
             array.generate();
 
             let mesh = mesh::make(&array);

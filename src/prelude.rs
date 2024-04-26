@@ -27,6 +27,7 @@ pub use {
     derive_deref_rs::Deref,
     parse_display::{Display, FromStr},
     math_linear::prelude::*,
+    glam::*,
     user_error::UserFacingError,
     std::{
         sync::Arc, rc::Rc, cell::{RefCell, Cell}, mem, cmp, ops, fmt, pin::Pin, fmt::Debug, hint,

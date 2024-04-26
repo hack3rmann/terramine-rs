@@ -466,6 +466,13 @@ reinterpret_3d_vectors! {
     Double3 = (x, y, z): f64;
     Color   = (r, g, b): f32;
     Color64 = (r, g, b): f64;
+    U16Vec3 = (x, y, z): u16;
+    I16Vec3 = (x, y, z): i16;
+    UVec3   = (x, y, z): u32;
+    IVec3   = (x, y, z): i32;
+    U64Vec3 = (x, y, z): u64;
+    I64Vec3 = (x, y, z): i64;
+    Vec3    = (x, y, z): f32;
 }
 
 

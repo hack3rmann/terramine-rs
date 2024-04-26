@@ -31,6 +31,8 @@ macro_rules! impl_vecs_const_default {
 impl_vecs_const_default! {
     Byte2, Byte3, UByte2, UByte3, Short2, Short3, UShort2, UShort3, Int2, Int3, UInt2, UInt3,
     Long2, Long3, ULong2, ULong3, Large2, Large3, ULarge2, ULarge3, Float2, Float3, Double2, Double3,
+    Vec2, Vec3, Vec4, Vec3A, I16Vec2, I16Vec3, I16Vec4, IVec2, IVec3, IVec4,
+    UVec2, UVec3, UVec4, U64Vec2, U64Vec3, U64Vec4,
 }
 
 impl ConstDefault for bool {

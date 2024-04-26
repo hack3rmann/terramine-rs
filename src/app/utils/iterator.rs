@@ -36,35 +36,35 @@ use {
 /// ```
 #[derive(Clone, Debug)]
 pub struct CubeBoundary {
-    prev: Int3,
+    prev: IVec3,
     size: i32,
 }
 
 impl CubeBoundary {
     const INITIAL_STATE: i32 = -1;
     pub const fn new(size: i32) -> Self {
-        Self { prev: Int3::all(Self::INITIAL_STATE), size }
+        Self { prev: IVec3::splat(Self::INITIAL_STATE), size }
     }
 }
 
 impl Iterator for CubeBoundary {
-    type Item = Int3;
+    type Item = IVec3;
     fn next(&mut self) -> Option<Self::Item> {
         /* Maximun corrdinate value in border */
         let max: i32 = self.size - 1;
         let max_minus_one: i32 = max - 1;
 
         /* Return if maximum reached */
-        if self.prev == Int3::all(max) {
+        if self.prev == IVec3::splat(max) {
             return None
-        } else if self.prev == Int3::all(Self::INITIAL_STATE) {
-            let new = Int3::all(0);
+        } else if self.prev == IVec3::splat(Self::INITIAL_STATE) {
+            let new = IVec3::splat(0);
             self.prev = new;
             return Some(new)
         }
 
         /* Previous x, y and z */
-        let (x, y, z) = self.prev.as_tuple();
+        let [x, y, z] = self.prev.to_array();
 
         /* Returning local function */
         let mut give = |pos| {
@@ -76,8 +76,8 @@ impl Iterator for CubeBoundary {
         if x >= 1 && x <= max_minus_one {
             /* If position is slicing square */
             if y >= 1 && y <= max_minus_one  {
-                if z == 0 { give(Int3::new(x, y, max)) }
-                else if z == max { give(Int3::new(x, y + 1, 0)) }
+                if z == 0 { give(IVec3::new(x, y, max)) }
+                else if z == max { give(IVec3::new(x, y + 1, 0)) }
                 else { unreachable!(
                     "Invalid z position! Must be in 0 or {max}! But actual value is {y}.",
                     max = max,
@@ -87,8 +87,8 @@ impl Iterator for CubeBoundary {
 
             /* If position is on flat bottom of square */
             else if y == 0 {
-                if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-                else if z == max { give(Int3::new(x, y + 1, 0)) }
+                if z >= 0 && z <= max_minus_one { give(IVec3::new(x, y, z + 1)) }
+                else if z == max { give(IVec3::new(x, y + 1, 0)) }
                 else { unreachable!(
                     "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
                     size = self.size,
@@ -98,8 +98,8 @@ impl Iterator for CubeBoundary {
 
             /* If position is on flat top of square */
             else if y == max {
-                if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-                else if z == max { give(Int3::new(x + 1, 0, 0)) }
+                if z >= 0 && z <= max_minus_one { give(IVec3::new(x, y, z + 1)) }
+                else if z == max { give(IVec3::new(x + 1, 0, 0)) }
                 else { unreachable!(
                     "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
                     size = self.size,
@@ -119,8 +119,8 @@ impl Iterator for CubeBoundary {
         else if x == 0 {
             /* Y is not maximum */
             if y >= 0 && y <= max_minus_one {
-                if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-                else if z == max { give(Int3::new(x, y + 1, 0)) }
+                if z >= 0 && z <= max_minus_one { give(IVec3::new(x, y, z + 1)) }
+                else if z == max { give(IVec3::new(x, y + 1, 0)) }
                 else { unreachable!(
                     "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
                     size = self.size,
@@ -130,8 +130,8 @@ impl Iterator for CubeBoundary {
 
             /* Y is maximum */
             else if y == max {
-                if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-                else if z == max { give(Int3::new(x + 1, 0, 0)) }
+                if z >= 0 && z <= max_minus_one { give(IVec3::new(x, y, z + 1)) }
+                else if z == max { give(IVec3::new(x + 1, 0, 0)) }
                 else { unreachable!(
                     "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
                     size = self.size,
@@ -151,8 +151,8 @@ impl Iterator for CubeBoundary {
         else if x == max {
             /* Y is not maximum */
             if y >= 0 && y <= max_minus_one {
-                if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-                else if z == max { give(Int3::new(x, y + 1, 0)) }
+                if z >= 0 && z <= max_minus_one { give(IVec3::new(x, y, z + 1)) }
+                else if z == max { give(IVec3::new(x, y + 1, 0)) }
                 else { unreachable!(
                     "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
                     size = self.size,
@@ -162,8 +162,8 @@ impl Iterator for CubeBoundary {
 
             /* Y is maximum */
             else if y == max {
-                if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-                else if z == max { give(Int3::new(max, max, max)) }
+                if z >= 0 && z <= max_minus_one { give(IVec3::new(x, y, z + 1)) }
+                else if z == max { give(IVec3::new(max, max, max)) }
                 else { unreachable!(
                     "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
                     size = self.size,
@@ -194,7 +194,7 @@ impl Iterator for CubeBoundary {
 /// 
 /// ```
 /// use crate::app::utils::{
-///     math::Int3,
+///     math::IVec3,
 ///     terrain::chunk::iterator::SpaceIter,
 /// };
 /// 
@@ -202,7 +202,7 @@ impl Iterator for CubeBoundary {
 /// let mut res2 = vec![];
 /// 
 /// // [`SpaceIter`] equivalent
-/// for pos in SpaceIter::new(Int3::ZERO..Int3::all(16)) {
+/// for pos in SpaceIter::new(IVec3::ZERO..IVec3::splat(16)) {
 ///     res1.push(pos)
 /// }
 /// 
@@ -210,22 +210,22 @@ impl Iterator for CubeBoundary {
 /// for x in 0..16 {
 /// for y in 0..16 {
 /// for z in 0..16 {
-///     res2.push(veci!(x, y, z))
+///     res2.push(IVec3::new(x, y, z))
 /// }}}
 /// 
 /// assert_eq!(res1, res2);
 /// ```
 #[derive(Debug, Clone)]
 pub struct Range3d {
-    back_shift: Int3,
-    sizes: USize3,
-    idx: usize,
-    size: usize,
+    back_shift: IVec3,
+    sizes: U64Vec3,
+    idx: u64,
+    size: u64,
 }
 
 impl Range3d {
-    pub const fn new(range: Range<Int3>) -> Self {
-        let diff = Int3::new(
+    pub fn new(range: Range<IVec3>) -> Self {
+        let diff = IVec3::new(
             range.end.x - range.start.x,
             range.end.y - range.start.y,
             range.end.z - range.start.z,
@@ -236,29 +236,29 @@ impl Range3d {
             "start position should be not greater by each coordinate than end."
         );
 
-        let sizes = USize3::new(diff.x as usize, diff.y as usize, diff.z as usize);
+        let sizes = diff.as_u64vec3();
         let size = sizes.x * sizes.y * sizes.z;
 
         Self { sizes, size, idx: 0, back_shift: range.start }
     }
 
-    pub const fn new_cubed(range: Range<i32>) -> Self {
+    pub fn new_cubed(range: Range<i32>) -> Self {
         assert!(range.start <= range.end, "space iter cannot go back");
-        Self::new(Int3::all(range.start)..Int3::all(range.end))
+        Self::new(IVec3::splat(range.start)..IVec3::splat(range.end))
     }
 
     #[allow(dead_code)]
-    pub const fn zeroed(end: Int3) -> Self {
-        Self::new(Int3::ZERO..end)
+    pub fn zeroed(end: IVec3) -> Self {
+        Self::new(IVec3::ZERO..end)
     }
 
-    pub const fn zeroed_cubed(end: i32) -> Self {
+    pub fn zeroed_cubed(end: i32) -> Self {
         Self::new_cubed(0..end)
     }
 
-    pub fn split_chunks(iter_size: Int3, chunk_size: Int3) -> impl ExactSizeIterator<Item = Self> {
+    pub fn split_chunks(iter_size: IVec3, chunk_size: IVec3) -> impl ExactSizeIterator<Item = Self> {
         assert_eq!(
-            iter_size % chunk_size, Int3::ZERO,
+            iter_size % chunk_size, IVec3::ZERO,
             "iter_size (value is {iter_size:?}) should be divisible by chunk_size (value is {chunk_size:?})"
         );
 
@@ -269,30 +269,30 @@ impl Range3d {
             })
     }
 
-    pub fn adj_iter(pos: Int3) -> std::array::IntoIter<Int3, 6> {
+    pub fn adj_iter(pos: IVec3) -> std::array::IntoIter<IVec3, 6> {
         [
-            pos + veci!( 1,  0,  0),
-            pos + veci!(-1,  0,  0),
-            pos + veci!( 0,  1,  0),
-            pos + veci!( 0, -1,  0),
-            pos + veci!( 0,  0,  1),
-            pos + veci!( 0,  0, -1),
+            pos + IVec3::new( 1,  0,  0),
+            pos + IVec3::new(-1,  0,  0),
+            pos + IVec3::new( 0,  1,  0),
+            pos + IVec3::new( 0, -1,  0),
+            pos + IVec3::new( 0,  0,  1),
+            pos + IVec3::new( 0,  0, -1),
         ].into_iter()
     }
 
-    const fn coord_idx_from_idx(idx: usize, sizes: USize3) -> USize3 {
+    const fn coord_idx_from_idx(idx: u64, sizes: U64Vec3) -> U64Vec3 {
         linear_index_to_volume(idx, sizes)
     }
 
-    const fn pos_from_coord_idx(idx: USize3, back_shift: Int3) -> Int3 {
-        Int3::new(
+    const fn pos_from_coord_idx(idx: U64Vec3, back_shift: IVec3) -> IVec3 {
+        IVec3::new(
             back_shift.x + idx.x as i32,
             back_shift.y + idx.y as i32,
             back_shift.z + idx.z as i32,
         )
     }
 
-    const fn pos_from_idx(idx: usize, back_shift: Int3, sizes: USize3) -> Int3 {
+    const fn pos_from_idx(idx: u64, back_shift: IVec3, sizes: U64Vec3) -> IVec3 {
         Self::pos_from_coord_idx(
             Self::coord_idx_from_idx(idx, sizes),
             back_shift,
@@ -300,18 +300,18 @@ impl Range3d {
     }
 }
 
-impl<R: RangeBounds<Int3>> From<R> for Range3d {
+impl<R: RangeBounds<IVec3>> From<R> for Range3d {
     fn from(range: R) -> Self {
         use std::ops::Bound::*;
 
         let start = match range.start_bound() {
             Included(&bound) => bound,
-            Excluded(&bound) => bound + Int3::ONE,
+            Excluded(&bound) => bound + IVec3::ONE,
             Unbounded => panic!("unbounded SpaceIter can't be implemented"),
         };
 
         let end = match range.end_bound() {
-            Included(&bound) => bound + Int3::ONE,
+            Included(&bound) => bound + IVec3::ONE,
             Excluded(&bound) => bound,
             Unbounded => panic!("unbounded SpaceIter can't be implemented"),
         };
@@ -324,7 +324,7 @@ impl<R: RangeBounds<Int3>> From<R> for Range3d {
             end,
         );
 
-        let sizes = USize3::from(diff);
+        let sizes = diff.as_u64vec3();
         let size = sizes.x * sizes.y * sizes.z;
 
         Self { sizes, size, idx: 0, back_shift: start }
@@ -332,7 +332,7 @@ impl<R: RangeBounds<Int3>> From<R> for Range3d {
 }
 
 impl Iterator for Range3d {
-    type Item = Int3;
+    type Item = IVec3;
     fn next(&mut self) -> Option<Self::Item> {
         (self.idx < self.size).then(|| {
             self.idx += 1;
@@ -342,18 +342,18 @@ impl Iterator for Range3d {
 }
 
 impl ExactSizeIterator for Range3d {
-    fn len(&self) -> usize { self.size }
+    fn len(&self) -> usize { self.size as usize }
 }
 
 /// Position function.
-pub const fn linear_index_to_volume(idx: usize, sizes: USize3) -> USize3 {
+pub const fn linear_index_to_volume(idx: u64, sizes: U64Vec3) -> U64Vec3 {
     let xy = idx / sizes.z;
 
     let z = idx % sizes.z;
     let y = xy % sizes.y;
     let x = xy / sizes.y;
 
-    vecs!(x, y, z)
+    U64Vec3::new(x, y, z)
 }
 
 
@@ -374,8 +374,8 @@ pub const fn linear_index_to_volume(idx: usize, sizes: USize3) -> USize3 {
 /// };
 /// 
 /// fn example() {
-///     let split = ChunkSplitten::new(Int3::all(16), Int3::all(2));
-///     let space: Vec<_> = SpaceIter::new(Int3::ZERO..Int3::all(16)).collect();
+///     let split = ChunkSplitten::new(IVec3::splat(16), IVec3::splat(2));
+///     let space: Vec<_> = SpaceIter::new(IVec3::ZERO..IVec3::splat(16)).collect();
 /// 
 ///     for (entire, _) in split {
 ///         assert!(space.contains(&entire));
@@ -386,27 +386,27 @@ pub const fn linear_index_to_volume(idx: usize, sizes: USize3) -> USize3 {
 pub struct ChunkSplitten {
     inner: Range3d,
     outer: Range3d,
-    current: Option<Int3>,
+    current: Option<IVec3>,
 
-    chunk_size: Int3,
+    chunk_size: IVec3,
 }
 
 impl ChunkSplitten {
-    /// Creates new [`ChunkSplitten`] from [`Int3`] of sizes of
-    /// entire data and [`Int3`] of chunk sizes in elements of entire data structure.
+    /// Creates new [`ChunkSplitten`] from [`IVec3`] of sizes of
+    /// entire data and [`IVec3`] of chunk sizes in elements of entire data structure.
     /// 
     /// # Panic
     /// Pnics if entire chunk size is not divisible into smaller chunk sizes.
     #[allow(dead_code)] 
-    pub fn new(entire: Int3, chunk_size: Int3) -> Self {
+    pub fn new(entire: IVec3, chunk_size: IVec3) -> Self {
         /* Check that entire chunk are divisible into smaller ones */
-        assert_eq!(entire % chunk_size, Int3::ZERO);
+        assert_eq!(entire % chunk_size, IVec3::ZERO);
 
-        let mut outer = Range3d::from(Int3::ZERO .. entire / chunk_size);
+        let mut outer = Range3d::from(IVec3::ZERO .. entire / chunk_size);
         let current = outer.next().unwrap();
 
         Self {
-            inner: Range3d::from(Int3::ZERO..chunk_size),
+            inner: Range3d::from(IVec3::ZERO..chunk_size),
             outer, current: Some(current), chunk_size,
         }
     }
@@ -414,11 +414,11 @@ impl ChunkSplitten {
 
 impl Iterator for ChunkSplitten {
     // Types for outer and inner positions.
-    type Item = (Int3, Int3, Int3);
+    type Item = (IVec3, IVec3, IVec3);
     fn next(&mut self) -> Option<Self::Item> {
         let inner = self.inner.next().unwrap_or_else(|| {
             self.current = self.outer.next();
-            self.inner = Range3d::from(Int3::ZERO..self.chunk_size);
+            self.inner = Range3d::from(IVec3::ZERO..self.chunk_size);
 
             self.inner.next().unwrap()
         });
@@ -470,28 +470,28 @@ impl<T> Sides<T> {
         self.inner.clone()
     }
 
-    pub fn set(&mut self, offset: Int3, item: T) -> AnyResult<()> {
-        match offset.as_tuple() {
-            ( 1,  0,  0) => self.inner[0] = item,
-            (-1,  0,  0) => self.inner[1] = item,
-            ( 0,  1,  0) => self.inner[2] = item,
-            ( 0, -1,  0) => self.inner[3] = item,
-            ( 0,  0,  1) => self.inner[4] = item,
-            ( 0,  0, -1) => self.inner[5] = item,
+    pub fn set(&mut self, offset: IVec3, item: T) -> AnyResult<()> {
+        match offset.to_array() {
+            [ 1,  0,  0] => self.inner[0] = item,
+            [-1,  0,  0] => self.inner[1] = item,
+            [ 0,  1,  0] => self.inner[2] = item,
+            [ 0, -1,  0] => self.inner[3] = item,
+            [ 0,  0,  1] => self.inner[4] = item,
+            [ 0,  0, -1] => self.inner[5] = item,
             _ => bail_str!("Offset should be small (adjacent) but {offset:?}"),
         }
 
         Ok(())
     }
 
-    pub fn by_offset(&self, offset: Int3) -> T where T: Clone {
-        match offset.as_tuple() {
-            ( 1,  0,  0) => self.back(),
-            (-1,  0,  0) => self.front(),
-            ( 0,  1,  0) => self.top(),
-            ( 0, -1,  0) => self.bottom(),
-            ( 0,  0,  1) => self.right(),
-            ( 0,  0, -1) => self.left(),
+    pub fn by_offset(&self, offset: IVec3) -> T where T: Clone {
+        match offset.to_array() {
+            [ 1,  0,  0] => self.back(),
+            [-1,  0,  0] => self.front(),
+            [ 0,  1,  0] => self.top(),
+            [ 0, -1,  0] => self.bottom(),
+            [ 0,  0,  1] => self.right(),
+            [ 0,  0, -1] => self.left(),
             _ => panic!("Offset should be small (adjacent) but {offset:?}"),
         }
     }
@@ -538,40 +538,40 @@ impl<T> std::ops::IndexMut<usize> for Sides<T> {
 }
 
 #[allow(dead_code)]
-pub fn offsets_from_border(pos: Int3, bounds: impl RangeBounds<Int3>) -> SmallVec<[Int3; 6]> {
+pub fn offsets_from_border(pos: IVec3, bounds: impl RangeBounds<IVec3>) -> SmallVec<[IVec3; 6]> {
     let mut result = SmallVec::new();
 
     use std::ops::Bound::*;
 
     let start = match bounds.start_bound() {
         Included(&bound) => bound,
-        Excluded(&bound) => bound + Int3::ONE,
+        Excluded(&bound) => bound + IVec3::ONE,
         Unbounded => panic!("unbounded can't be implemented"),
     };
 
     let end = match bounds.end_bound() {
-        Included(&bound) => bound + Int3::ONE,
+        Included(&bound) => bound + IVec3::ONE,
         Excluded(&bound) => bound,
         Unbounded => panic!("unbounded can't be implemented"),
     };
 
-    if pos.x == start.x { result.push(veci!(-1, 0, 0)) }
-    if pos.y == start.y { result.push(veci!(0, -1, 0)) }
-    if pos.z == start.z { result.push(veci!(0, 0, -1)) }
-    if pos.x == end.x - 1 { result.push(veci!(1, 0, 0)) }
-    if pos.y == end.y - 1 { result.push(veci!(0, 1, 0)) }
-    if pos.z == end.z - 1 { result.push(veci!(0, 0, 1)) }
+    if pos.x == start.x { result.push(IVec3::new(-1, 0, 0)) }
+    if pos.y == start.y { result.push(IVec3::new(0, -1, 0)) }
+    if pos.z == start.z { result.push(IVec3::new(0, 0, -1)) }
+    if pos.x == end.x - 1 { result.push(IVec3::new(1, 0, 0)) }
+    if pos.y == end.y - 1 { result.push(IVec3::new(0, 1, 0)) }
+    if pos.z == end.z - 1 { result.push(IVec3::new(0, 0, 1)) }
 
     result
 }
 
 #[cfg(test)]
 mod space_iter_tests {
-    use {super::*, math_linear::veci};
+    use super::*;
 
     #[test]
     fn test_new() {
-        let range = veci!(-10, -3, -1)..veci!(-3, 4, 2);
+        let range = IVec3::new(-10, -3, -1)..IVec3::new(-3, 4, 2);
         let poses1: Vec<_> = Range3d::from(range.clone())
             .collect();
         let poses2: Vec<_> = Range3d::from(range)
@@ -590,7 +590,7 @@ mod space_iter_tests {
     fn test_split_chunks() {
         let sample: Vec<_> = Range3d::zeroed_cubed(4)
             .collect();
-        let chunked: Vec<_> = Range3d::split_chunks(Int3::all(4), Int3::all(2))
+        let chunked: Vec<_> = Range3d::split_chunks(IVec3::splat(4), IVec3::splat(2))
             .flatten()
             .collect();
     
@@ -612,14 +612,14 @@ mod space_iter_tests {
         let mut res1 = vec![];
         let mut res2 = vec![];
 
-        for pos in Range3d::from(Int3::zero() .. Int3::all(5)) {
+        for pos in Range3d::from(IVec3::ZERO .. IVec3::splat(5)) {
             res1.push(pos)
         }
 
         for x in 0..5 {
         for y in 0..5 {
         for z in 0..5 {
-            res2.push(Int3::new(x, y, z))
+            res2.push(IVec3::new(x, y, z))
         }}}
 
         assert_eq!(res1, res2);
@@ -630,14 +630,14 @@ mod space_iter_tests {
         let mut res1 = vec![];
         let mut res2 = vec![];
 
-        for pos in Range3d::from(Int3::zero() .. Int3::new(16, 4, 9)) {
+        for pos in Range3d::from(IVec3::ZERO .. IVec3::new(16, 4, 9)) {
             res1.push(pos)
         }
 
         for x in 0..16 {
         for y in 0..4 {
         for z in 0..9 {
-            res2.push(Int3::new(x, y, z))
+            res2.push(IVec3::new(x, y, z))
         }}}
 
         assert_eq!(res1, res2);
@@ -648,14 +648,14 @@ mod space_iter_tests {
         let mut res1 = vec![];
         let mut res2 = vec![];
 
-        for pos in Range3d::from(Int3::all(-5) .. Int3::all(5)) {
+        for pos in Range3d::from(IVec3::splat(-5) .. IVec3::splat(5)) {
             res1.push(pos)
         }
 
         for x in -5..5 {
         for y in -5..5 {
         for z in -5..5 {
-            res2.push(veci!(x, y, z))
+            res2.push(IVec3::new(x, y, z))
         }}}
 
         assert_eq!(res1, res2);
@@ -666,14 +666,14 @@ mod space_iter_tests {
         let mut res1 = vec![];
         let mut res2 = vec![];
 
-        for pos in Range3d::from(Int3::new(-8, 2, -10) .. Int3::new(9, 5, -5)) {
+        for pos in Range3d::from(IVec3::new(-8, 2, -10) .. IVec3::new(9, 5, -5)) {
             res1.push(pos)
         }
 
         for x in -8..9 {
         for y in 2..5 {
         for z in -10..-5 {
-            res2.push(Int3::new(x, y, z))
+            res2.push(IVec3::new(x, y, z))
         }}}
 
         assert_eq!(res1, res2);
@@ -681,7 +681,7 @@ mod space_iter_tests {
 
     #[test]
     fn uniqueness() {
-        let iter = Range3d::from(veci!(-8, 2, -10) .. veci!(9, 5, -5));
+        let iter = Range3d::from(IVec3::new(-8, 2, -10) .. IVec3::new(9, 5, -5));
         let mut map = std::collections::HashSet::new();
 
         for pos in iter {
@@ -704,12 +704,12 @@ mod border_test {
             Top, Bottom, Left, Right, Front, Back,
         }
         
-        let back   = veci!( 1,  0,  0);
-        let front  = veci!(-1,  0,  0);
-        let top    = veci!( 0,  1,  0);
-        let bottom = veci!( 0, -1,  0);
-        let right  = veci!( 0,  0,  1);
-        let left   = veci!( 0,  0, -1);
+        let back   = IVec3::new( 1,  0,  0);
+        let front  = IVec3::new(-1,  0,  0);
+        let top    = IVec3::new( 0,  1,  0);
+        let bottom = IVec3::new( 0, -1,  0);
+        let right  = IVec3::new( 0,  0,  1);
+        let left   = IVec3::new( 0,  0, -1);
     
         let mut sides = Sides::new([Side::Top; 6]);
         sides.set(back,   Side::Back).unwrap();
@@ -736,9 +736,9 @@ mod border_test {
             eprintln!("{:?}", pos);
 
             assert!(
-                pos.x() == 0 || pos.x() == MAX ||
-                pos.y() == 0 || pos.y() == MAX ||
-                pos.z() == 0 || pos.z() == MAX
+                pos.x == 0 || pos.x == MAX ||
+                pos.y == 0 || pos.y == MAX ||
+                pos.z == 0 || pos.z == MAX
             );
         }
     }
@@ -749,7 +749,7 @@ mod border_test {
         const MAX: i32 = Chunk::SIZE as i32 - 1;
 
         let works = (0..Chunk::VOLUME)
-            .map(|i| Int3::from(linear_index_to_volume(i, Chunk::SIZES)))
+            .map(|i| linear_index_to_volume(i as u64, Chunk::SIZES.as_u64vec3()).as_ivec3())
             .filter(|pos|
                 pos.x == 0 || pos.x == MAX ||
                 pos.y == 0 || pos.y == MAX ||
@@ -768,8 +768,8 @@ mod splitten_tests {
 
     #[test]
     fn space_contains_split() {
-        let split = ChunkSplitten::new(Int3::all(16), Int3::all(2));
-        let space: Vec<_> = Range3d::from(Int3::zero() .. Int3::all(16)).collect();
+        let split = ChunkSplitten::new(IVec3::splat(16), IVec3::splat(2));
+        let space: Vec<_> = Range3d::from(IVec3::ZERO .. IVec3::splat(16)).collect();
 
         for (entire, _, _) in split {
             assert!(space.contains(&entire));
@@ -778,8 +778,8 @@ mod splitten_tests {
 
     #[test]
     fn split_contains_space() {
-        let entire: Vec<_> = ChunkSplitten::new(Int3::all(16), Int3::all(2)).map(|(e, _, _)| e).collect();
-        let space = Range3d::from(Int3::zero() .. Int3::all(16));
+        let entire: Vec<_> = ChunkSplitten::new(IVec3::splat(16), IVec3::splat(2)).map(|(e, _, _)| e).collect();
+        let space = Range3d::from(IVec3::ZERO .. IVec3::splat(16));
 
         for pos in space {
             assert!(entire.contains(&pos));
@@ -788,15 +788,15 @@ mod splitten_tests {
 
     #[test]
     fn length() {
-        let all: Vec<_> = ChunkSplitten::new(Int3::all(32), Int3::all(4)).collect();
-        let space: Vec<_> = Range3d::from(Int3::zero() .. Int3::all(32)).collect();
+        let all: Vec<_> = ChunkSplitten::new(IVec3::splat(32), IVec3::splat(4)).collect();
+        let space: Vec<_> = Range3d::from(IVec3::ZERO .. IVec3::splat(32)).collect();
 
         assert_eq!(all.len(), space.len());
     }
 
     #[test]
     fn print() {
-        let split = ChunkSplitten::new(Int3::all(6), Int3::all(2));
+        let split = ChunkSplitten::new(IVec3::splat(6), IVec3::splat(2));
 
         for (entire, inner, _) in split {
             eprintln!("{:?} in {:?}", inner, entire);
@@ -805,7 +805,7 @@ mod splitten_tests {
 
     #[test]
     fn uniqueness() {
-        let split = ChunkSplitten::new(Int3::all(4), Int3::all(2));
+        let split = ChunkSplitten::new(IVec3::splat(4), IVec3::splat(2));
         let mut set = std::collections::HashSet::new();
 
         for (entire, inner, _) in split {

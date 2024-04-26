@@ -111,7 +111,7 @@ pub fn make_high_resolution(chunk: &Chunk, adj: ChunkAdj, flags: MeshFlags) -> M
     }
 
     let info = chunk.info.load(Relaxed);
-    let pos_iter: Box<dyn Iterator<Item = Int3>> = match info.get_fill_type() {
+    let pos_iter: Box<dyn Iterator<Item = IVec3>> = match info.get_fill_type() {
         FillType::Unspecified =>
             Box::new(Chunk::local_pos_iter()),
 
@@ -132,7 +132,7 @@ pub fn make_high_resolution(chunk: &Chunk, adj: ChunkAdj, flags: MeshFlags) -> M
         })
         .filter(|voxel| !voxel.is_air())
         .flat_map(|voxel| {
-            let side_iter = Range3d::adj_iter(Int3::ZERO)
+            let side_iter = Range3d::adj_iter(IVec3::ZERO)
                 .filter(|&offset| {
                     let adj_chunk = adj.by_offset(offset);
 
@@ -173,7 +173,7 @@ pub fn make_high_resolution(chunk: &Chunk, adj: ChunkAdj, flags: MeshFlags) -> M
             let mesh_builder = CubeDetailed::new(voxel.data);
 
             for offset in side_iter {
-                mesh_builder.by_offset(offset, voxel.pos.into(), &mut vertices);
+                mesh_builder.by_offset(offset, voxel.pos.as_vec3(), &mut vertices);
             }
 
             vertices
@@ -213,12 +213,12 @@ pub fn make_low_resolution(chunk: &Chunk, adj: ChunkAdj, lod: Lod, flags: MeshFl
 
             let center_pos = macros::formula!(
                 pos + 0.5 * chunk_size - 0.5 * voxel_size, where
-                pos = vec3::from(global_pos),
-                chunk_size = vec3::all(sub_chunk_size as f32) * Voxel::SIZE,
-                voxel_size = 0.5 * vec3::all(Voxel::SIZE),
+                pos = global_pos.as_vec3(),
+                chunk_size = Vec3::splat(sub_chunk_size as f32) * Voxel::SIZE,
+                voxel_size = 0.5 * Vec3::splat(Voxel::SIZE),
             );
-                        
-            let is_blocking_voxel = |pos: Int3, offset: Int3| match chunk.get_voxel_global(pos) {
+
+            let is_blocking_voxel = |pos: IVec3, offset: IVec3| match chunk.get_voxel_global(pos) {
                 ChunkOption::OutsideChunk => {
                     match adj.by_offset(offset) {
                         // There is no chunk so voxel isn't blocked
@@ -243,17 +243,17 @@ pub fn make_low_resolution(chunk: &Chunk, adj: ChunkAdj, lod: Lod, flags: MeshFl
                 },
             };
 
-            let is_blocked_subchunk = |offset: Int3| -> bool {
+            let is_blocked_subchunk = |offset: IVec3| -> bool {
                 let start_pos = global_pos + offset * sub_chunk_size;
-                let end_pos   = global_pos + (offset + Int3::ONE) * sub_chunk_size;
+                let end_pos   = global_pos + (offset + IVec3::ONE) * sub_chunk_size;
 
-                let is_on_surface = match offset.as_tuple() {
-                    (-1, 0, 0) if 0 == local_pos.x => true,
-                    (0, -1, 0) if 0 == local_pos.y => true,
-                    (0, 0, -1) if 0 == local_pos.z => true,
-                    (1, 0, 0) if Chunk::SIZE as i32 == local_pos.x + sub_chunk_size => true,
-                    (0, 1, 0) if Chunk::SIZE as i32 == local_pos.y + sub_chunk_size => true,
-                    (0, 0, 1) if Chunk::SIZE as i32 == local_pos.z + sub_chunk_size => true,
+                let is_on_surface = match offset.to_array() {
+                    [-1, 0, 0] if 0 == local_pos.x => true,
+                    [0, -1, 0] if 0 == local_pos.y => true,
+                    [0, 0, -1] if 0 == local_pos.z => true,
+                    [1, 0, 0] if Chunk::SIZE as i32 == local_pos.x + sub_chunk_size => true,
+                    [0, 1, 0] if Chunk::SIZE as i32 == local_pos.y + sub_chunk_size => true,
+                    [0, 0, 1] if Chunk::SIZE as i32 == local_pos.z + sub_chunk_size => true,
                     _ => false,
                 };
                 
@@ -274,7 +274,7 @@ pub fn make_low_resolution(chunk: &Chunk, adj: ChunkAdj, lod: Lod, flags: MeshFl
             const N_CUBE_VERTICES: usize = 36;
             let mut vertices = Vec::with_capacity(N_CUBE_VERTICES);
 
-            for offset in Range3d::adj_iter(Int3::ZERO).filter(|&o| !is_blocked_subchunk(o)) {
+            for offset in Range3d::adj_iter(IVec3::ZERO).filter(|&o| !is_blocked_subchunk(o)) {
                 mesh_builder.by_offset(offset, center_pos, voxel_color, &mut vertices);
             }
 

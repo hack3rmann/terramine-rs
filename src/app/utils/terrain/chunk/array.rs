@@ -86,7 +86,7 @@ impl ChunkArray {
     /// Constructs new [`ChunkArray`].
     pub fn new() -> Self {
         Self::from(ChunkArrayBox {
-            sizes: USize3::ZERO,
+            sizes: U16Vec3::ZERO,
             owned: AtomicBool::new(true),
             borrow_map: vec![],
             chunks: vec![],
@@ -94,11 +94,13 @@ impl ChunkArray {
     }
 
     /// Constructs new [`ChunkArray`] with empty chunks
-    pub fn new_empty(sizes: USize3) -> Self {
+    pub fn new_empty(sizes: U16Vec3) -> Self {
+        let volume = sizes.as_u64vec3().element_product() as usize;
+
         Self::from(ChunkArrayBox {
             sizes,
             owned: AtomicBool::new(true),
-            borrow_map: vec![ChunkBorrowInfo::new(); sizes.volume()],
+            borrow_map: vec![ChunkBorrowInfo::new(); volume],
             chunks: ChunkArray::chunk_pos_range(sizes)
                 .map(Chunk::new_empty)
                 .collect()
@@ -110,72 +112,75 @@ impl ChunkArray {
     }
 
     /// Computes start and end poses from chunk array sizes.
-    pub fn pos_bounds(sizes: USize3) -> (Int3, Int3) {
+    pub fn pos_bounds(sizes: U16Vec3) -> (IVec3, IVec3) {
         (
-            Self::volume_index_to_chunk_pos(sizes, USize3::ZERO),
+            Self::volume_index_to_chunk_pos(sizes, U16Vec3::ZERO),
             Self::volume_index_to_chunk_pos(sizes, sizes),
         )
     }
 
     /// Gives iterator over chunk coordinates.
-    pub fn chunk_pos_range(sizes: USize3) -> Range3d {
+    pub fn chunk_pos_range(sizes: U16Vec3) -> Range3d {
         let (start, end) = Self::pos_bounds(sizes);
         Range3d::from(start..end)
     }
 
     /// Convertes global voxel position to 3d-index of a chunk in the array.
     pub fn global_voxel_pos_to_volume_index(
-        voxel_pos: Int3, chunk_array_sizes: USize3
-    ) -> Option<USize3> {
+        voxel_pos: IVec3, chunk_array_sizes: U16Vec3,
+    ) -> Option<U16Vec3> {
         let chunk_pos = Chunk::global_to_local(voxel_pos);
         let local_voxel_pos = Chunk::global_to_local_pos(chunk_pos, voxel_pos);
 
         let chunk_coord_idx
             = Self::local_pos_to_volume_index(chunk_array_sizes, chunk_pos)?;
 
-        let voxel_offset_by_chunk: USize3
-            = Chunk::local_to_global(chunk_coord_idx.into()).into();
+        let voxel_offset_by_chunk
+            = Chunk::local_to_global(chunk_coord_idx.as_ivec3());
 
-        Some(voxel_offset_by_chunk + USize3::from(local_voxel_pos))
+        Some(voxel_offset_by_chunk.as_u16vec3() + local_voxel_pos.as_u16vec3())
     }
 
     /// Convertes 3d-index of a chunk in the array to chunk pos.
-    pub fn volume_index_to_chunk_pos(sizes: USize3, coord_idx: USize3) -> Int3 {
-        Int3::from(coord_idx) - Int3::from(sizes) / 2
+    pub fn volume_index_to_chunk_pos(sizes: U16Vec3, coord_idx: U16Vec3) -> IVec3 {
+        coord_idx.as_ivec3() - sizes.as_ivec3() / 2
     }
 
     /// Convertes chunk pos to 3d index.
-    pub fn local_pos_to_volume_index(sizes: USize3, pos: Int3)
-        -> Option<USize3>
+    pub fn local_pos_to_volume_index(sizes: U16Vec3, pos: IVec3)
+        -> Option<U16Vec3>
     {
-        let sizes = Int3::from(sizes);
+        let sizes = IVec3::from(sizes);
         let shifted = pos + sizes / 2;
 
         (
             0 <= shifted.x && shifted.x < sizes.x &&
             0 <= shifted.y && shifted.y < sizes.y &&
             0 <= shifted.z && shifted.z < sizes.z
-        ).then_some(shifted.into())
+        ).then_some(shifted.as_u16vec3())
     }
 
     /// Convertes 3d index to an array index.
-    pub fn volume_index_to_linear(sizes: USize3, coord_idx: USize3) -> usize {
-        sdex::get_index(&coord_idx.as_array(), &sizes.as_array())
+    pub fn volume_index_to_linear(sizes: U16Vec3, coord_idx: U16Vec3) -> u64 {
+        sdex::get_index(
+            &coord_idx.to_array().map(|x| x as usize),
+            &sizes.to_array().map(|x| x as usize),
+        ) as u64
     }
 
     /// Convertes array index to 3d index.
-    pub fn linear_index_to_volume(idx: usize, sizes: USize3) -> USize3 {
-        iterator::linear_index_to_volume(idx, sizes)
+    pub fn linear_index_to_volume(idx: u64, sizes: U16Vec3) -> U16Vec3 {
+        iterator::linear_index_to_volume(idx, sizes.as_u64vec3()).as_u16vec3()
     }
 
     /// Converts array index to chunk pos.
-    pub fn index_to_pos(idx: usize, sizes: USize3) -> Int3 {
+    pub fn index_to_pos(idx: u64, sizes: U16Vec3) -> IVec3 {
         let coord_idx = Self::linear_index_to_volume(idx, sizes);
         Self::volume_index_to_chunk_pos(sizes, coord_idx)
     }
 
     /// Convertes chunk position to its linear index
-    pub fn chunk_pos_to_linear_index(sizes: USize3, pos: Int3) -> Option<usize> {
+    pub fn chunk_pos_to_linear_index(sizes: U16Vec3, pos: IVec3) -> Option<u64> {
         let coord_idx = Self::local_pos_to_volume_index(sizes, pos)?;
         Some(Self::volume_index_to_linear(sizes, coord_idx))
     }
@@ -341,7 +346,7 @@ impl DerefMut for ChunkMut {
 
 #[derive(Debug)]
 pub struct ChunkArrayBox {
-    pub(crate) sizes: USize3,
+    pub(crate) sizes: U16Vec3,
     pub(crate) owned: AtomicBool,
     pub(crate) borrow_map: Vec<ChunkBorrowInfo>,
     pub(crate) chunks: Vec<Chunk>,
@@ -418,20 +423,20 @@ impl ChunkArrayBox {
     }
 
     /// Borrows a chunk from chunk array
-    pub fn chunk(&self, pos: Int3) -> Option<ChunkRef> {
+    pub fn chunk(&self, pos: IVec3) -> Option<ChunkRef> {
         let index = ChunkArray::chunk_pos_to_linear_index(self.sizes, pos)?;
 
-        self.borrow_map[index].borrow().then(move || unsafe {
-            ChunkRef::new(NonNull::from(self), index)
+        self.borrow_map[index as usize].borrow().then(move || unsafe {
+            ChunkRef::new(NonNull::from(self), index as usize)
         })
     }
 
     /// Uniquely borrows a chunk from chunk array
-    pub fn chunk_mut(&self, pos: Int3) -> Option<ChunkMut> {
+    pub fn chunk_mut(&self, pos: IVec3) -> Option<ChunkMut> {
         let index = ChunkArray::chunk_pos_to_linear_index(self.sizes, pos)?;
 
-        self.borrow_map[index].borrow_mut().then(move || unsafe {
-            ChunkMut::new(NonNull::from(self), index)
+        self.borrow_map[index as usize].borrow_mut().then(move || unsafe {
+            ChunkMut::new(NonNull::from(self), index as usize)
         })
     }
 
@@ -443,7 +448,7 @@ impl ChunkArrayBox {
         }
     }
 
-    pub fn set_voxel(&self, pos: Int3, new_id: VoxelId) -> AnyResult<()> {
+    pub fn set_voxel(&self, pos: IVec3, new_id: VoxelId) -> AnyResult<()> {
         let mut chunk = self.chunk_mut(pos)
             .with_context(|| format!("failed to get chunk by voxel position {pos} uniquely"))?;
 
@@ -453,7 +458,7 @@ impl ChunkArrayBox {
         Ok(())
     }
 
-    pub fn voxel(&self, pos: Int3) -> AnyResult<Voxel> {
+    pub fn voxel(&self, pos: IVec3) -> AnyResult<Voxel> {
         use crate::terrain::chunk::ChunkOption::*;
 
         let chunk = self.chunk(pos)
@@ -466,17 +471,17 @@ impl ChunkArrayBox {
         }
     }
 
-    pub fn chunk_adj(&self, pos: Int3) -> ChunkAdj {
+    pub fn chunk_adj(&self, pos: IVec3) -> ChunkAdj {
         Range3d::adj_iter(pos)
             .map(|pos| self.chunk(pos))
             .collect()
     }
 
-    pub fn chunk_with_adj(&self, pos: Int3) -> (Option<ChunkRef>, ChunkAdj) {
+    pub fn chunk_with_adj(&self, pos: IVec3) -> (Option<ChunkRef>, ChunkAdj) {
         (self.chunk(pos), self.chunk_adj(pos))
     }
 
-    pub fn size(&self) -> USize3 {
+    pub fn size(&self) -> U16Vec3 {
         self.sizes
     }
 
@@ -493,7 +498,7 @@ impl ChunkArrayBox {
 impl Default for ChunkArrayBox {
     fn default() -> Self {
         Self {
-            sizes: USize3::ZERO,
+            sizes: U16Vec3::ZERO,
             owned: AtomicBool::new(true),
             borrow_map: vec![],
             chunks: vec![],
@@ -828,16 +833,16 @@ mod tests {
 
     #[test]
     fn array_allocations() {
-        let array = ChunkArray::new_empty(USize3::new(2, 2, 2));
-        let chunk_ref = array.chunk(Int3::ZERO).unwrap();
+        let array = ChunkArray::new_empty(U16Vec3::new(2, 2, 2));
+        let chunk_ref = array.chunk(IVec3::ZERO).unwrap();
         let mut array = array;
         let chunk_ref2 = chunk_ref.clone();
 
         assert_eq!(
             2,
             array.borrow_map[ChunkArray::chunk_pos_to_linear_index(
-                array.sizes, Int3::ZERO
-            ).unwrap()].shared_count()
+                array.sizes, IVec3::ZERO
+            ).unwrap() as usize].shared_count()
         );
 
         drop(array);

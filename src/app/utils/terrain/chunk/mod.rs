@@ -1,4 +1,3 @@
-pub mod chunk_array_old;
 pub mod tasks;
 pub mod commands;
 pub mod mesh;
@@ -8,7 +7,6 @@ use {
     crate::{
         prelude::*,
         geometry::frustum::Frustum,
-        iterator::Sides,
     },
     super::voxel::{
         self,
@@ -27,7 +25,7 @@ use {
 pub mod prelude {
     pub use super::{
         Chunk, SetLodError, ChunkRenderError, ChunkInfo, Lod,
-        ChunkOption, FillType, chunk_array_old::ChunkArray,
+        ChunkOption, FillType,
     };
 }
 
@@ -35,7 +33,7 @@ pub mod prelude {
 
 #[derive(Debug)]
 pub struct Chunk {
-    pub pos: Atomic<Int3>,
+    pub pos: Atomic<IVec3>,
     // TODO: try use `Arc<[Atomic<Id>]> instead.
     pub voxel_ids: Vec<Atomic<VoxelId>>,
     pub info: Atomic<ChunkInfoPacked>,
@@ -60,7 +58,7 @@ impl Chunk {
     pub const SIZE: usize = cfg::terrain::CHUNK_SIZE;
 
     /// [Chunk] sizes in voxels.
-    pub const SIZES: USize3 = USize3::all(Self::SIZE);
+    pub const SIZES: U16Vec3 = U16Vec3::splat(Self::SIZE as u16);
 
     /// [Chunk] volume in voxels.
     pub const VOLUME: usize = Self::SIZE.pow(3);
@@ -80,7 +78,7 @@ impl Chunk {
     }
 
     /// Gives iterator over low-detail voxels with their coords.
-    pub fn low_voxel_iter(&self, lod: Lod) -> impl ExactSizeIterator<Item = (VoxelColor, Int3)> + '_ {
+    pub fn low_voxel_iter(&self, lod: Lod) -> impl ExactSizeIterator<Item = (VoxelColor, IVec3)> + '_ {
         let sub_chunk_size = 2_i32.pow(lod);
 
         Chunk::chunked_pos_iter(sub_chunk_size as usize)
@@ -136,17 +134,17 @@ impl Chunk {
     #[allow(unused)]
     fn optimize_chunk_adj_for_partitioning(mut chunk_adj: ChunkAdj, partition_coord: USize3) -> ChunkAdj {
         chunk_adj.set(
-            veci!(1 - partition_coord.x as i32 * 2, 0, 0),
+            IVec3::new(1 - partition_coord.x as i32 * 2, 0, 0),
             None,
         ).expect("failed to set side");
 
         chunk_adj.set(
-            veci!(0, 1 - partition_coord.y as i32 * 2, 0),
+            IVec3::new(0, 1 - partition_coord.y as i32 * 2, 0),
             None,
         ).expect("failed to set side");
 
         chunk_adj.set(
-            veci!(0, 0, 1 - partition_coord.z as i32 * 2),
+            IVec3::new(0, 0, 1 - partition_coord.z as i32 * 2),
             None,
         ).expect("failed to set side");
 
@@ -154,7 +152,7 @@ impl Chunk {
     }
 
     pub fn make_partition_vertices(&self, voxel: Voxel, adj: &ChunkAdj) -> SmallVec<[HiResVertex; 36]> {
-        let offset_iter = Range3d::adj_iter(Int3::ZERO)
+        let offset_iter = Range3d::adj_iter(IVec3::ZERO)
             .filter(|&offset| {
                 let adj = adj.by_offset(offset);
                 match self.get_voxel_global(voxel.pos + offset) {
@@ -192,7 +190,7 @@ impl Chunk {
 
         let mesh_builder = CubeDetailed::new(voxel.data);
         for offset in offset_iter {
-            mesh_builder.by_offset(offset, voxel.pos.into(), &mut vertices);
+            mesh_builder.by_offset(offset, voxel.pos.as_vec3(), &mut vertices);
         }
 
         vertices
@@ -226,7 +224,7 @@ impl Chunk {
     }
 
     /// Givex voxel from global position.
-    pub fn get_voxel_global(&self, global_pos: Int3) -> ChunkOption<Voxel> {
+    pub fn get_voxel_global(&self, global_pos: IVec3) -> ChunkOption<Voxel> {
         let local_pos = Chunk::global_to_local_pos(self.pos.load(Relaxed), global_pos);
 
         if local_pos.x < 0 || local_pos.x >= Chunk::SIZE as i32 ||
@@ -246,7 +244,7 @@ impl Chunk {
     /// # Panic
     /// 
     /// Panics if [chunk][Chunk] is not already had been generated or `local_pos` is not local.
-    pub fn get_voxel_local(&self, local_pos: Int3) -> Option<Voxel> {
+    pub fn get_voxel_local(&self, local_pos: IVec3) -> Option<Voxel> {
         ensure_or!(self.is_generated(), return None);
         
         let idx = Chunk::voxel_pos_to_idx(local_pos)?;
@@ -261,12 +259,15 @@ impl Chunk {
     /// Tests that chunk is visible by camera.
     pub fn is_in_frustum(&self, frustum: &Frustum) -> bool {
         let global_chunk_pos = Chunk::local_to_global(self.pos.load(Relaxed));
-        let global_chunk_pos = vec3::from(global_chunk_pos) * Voxel::SIZE;
+        let global_chunk_pos = global_chunk_pos.as_vec3() * Voxel::SIZE;
 
-        let lo = global_chunk_pos - 0.5 * vec3::all(Voxel::SIZE);
-        let hi = lo + vec3::all(Chunk::GLOBAL_SIZE);
+        let lo = global_chunk_pos - 0.5 * Vec3::splat(Voxel::SIZE);
+        let hi = lo + Vec3::splat(Chunk::GLOBAL_SIZE);
 
-        frustum.intersects(&Aabb::from_float3(lo, hi))
+        frustum.intersects(&Aabb::from_float3(
+            vec3::from(lo.to_array()),
+            vec3::from(hi.to_array()),
+        ))
     }
 
     /// Checks if [`Chunk`] is not already generated.
@@ -295,7 +296,7 @@ impl Chunk {
     }
 
     /// Generates voxel id array.
-    pub fn generate_voxels(chunk_pos: Int3, _chunk_array_sizes: USize3) -> Vec<VoxelId> {
+    pub fn generate_voxels(chunk_pos: IVec3, _chunk_array_sizes: U16Vec3) -> Vec<VoxelId> {
         let mut result = Vec::with_capacity(Self::VOLUME);
 
         for pos in Self::global_pos_iter(chunk_pos) {
@@ -318,17 +319,17 @@ impl Chunk {
     }
 
     /// Generates a chunk.
-    pub fn new(chunk_pos: Int3, chunk_array_sizes: USize3) -> Self {
+    pub fn new(chunk_pos: IVec3, chunk_array_sizes: U16Vec3) -> Self {
         Self::from_voxels(Self::generate_voxels(chunk_pos, chunk_array_sizes), chunk_pos)
     }
 
     /// Constructs empty chunk.
-    pub fn new_empty(chunk_pos: Int3) -> Self {
+    pub fn new_empty(chunk_pos: IVec3) -> Self {
         Self::from_voxels(vec![], chunk_pos)
     }
 
     /// Constructs new [chunk][Chunk] filled with the same voxel
-    pub fn new_same_filled(chunk_pos: Int3, fill_id: VoxelId) -> Self {
+    pub fn new_same_filled(chunk_pos: IVec3, fill_id: VoxelId) -> Self {
         Self {
             voxel_ids: vec![Atomic::new(fill_id)],
             info: const_default(),
@@ -341,7 +342,7 @@ impl Chunk {
     /// # Panic
     /// 
     /// Panics if `voxel_ids.len()` is not equal to `Chunk::VOLUME` or `0`.
-    pub fn from_voxels(voxel_ids: Vec<VoxelId>, chunk_pos: Int3) -> Self {
+    pub fn from_voxels(voxel_ids: Vec<VoxelId>, chunk_pos: IVec3) -> Self {
         Self::from_voxels_and_fill(voxel_ids, FillType::Unspecified, chunk_pos)
     }
 
@@ -350,7 +351,7 @@ impl Chunk {
     /// # Panic
     /// 
     /// Panics if `voxel_ids.len()` is not matches the [`fill_type`][FillType].
-    pub fn from_voxels_and_fill(voxel_ids: Vec<VoxelId>, fill_type: FillType, chunk_pos: Int3) -> Self {
+    pub fn from_voxels_and_fill(voxel_ids: Vec<VoxelId>, fill_type: FillType, chunk_pos: IVec3) -> Self {
         let len = voxel_ids.len();
 
         match fill_type {
@@ -427,7 +428,7 @@ impl Chunk {
     /// # Error
     /// 
     /// Returns `Err` if `new_id` is not valid or `pos` is not in this [`Chunk`].
-    pub fn set_voxel(&mut self, pos: Int3, new_id: VoxelId) -> Result<VoxelId, EditError> {
+    pub fn set_voxel(&mut self, pos: IVec3, new_id: VoxelId) -> Result<VoxelId, EditError> {
         ensure!(voxel::is_id_valid(new_id), EditError::InvalidId(new_id));
 
         let local_pos = Self::global_to_local_pos_checked(self.pos.load(Relaxed), pos)?;
@@ -444,13 +445,13 @@ impl Chunk {
     }
 
     /// Sets voxel's ids in range `pos_from..pos_to` to index [`new_id`][Id].
-    pub fn fill_voxels(&mut self, pos_from: Int3, pos_to: Int3, new_id: VoxelId) -> Result<bool, EditError> {
+    pub fn fill_voxels(&mut self, pos_from: IVec3, pos_to: IVec3, new_id: VoxelId) -> Result<bool, EditError> {
         ensure!(voxel::is_id_valid(new_id), EditError::InvalidId(new_id));
 
         let pos = self.pos.load(Relaxed);
         let local_pos_from = Self::global_to_local_pos_checked(pos, pos_from)?;
 
-        Self::global_to_local_pos_checked(pos, pos_to - Int3::ONE)?;
+        Self::global_to_local_pos_checked(pos, pos_to - IVec3::ONE)?;
         let local_pos_to = Self::global_to_local_pos(pos, pos_to);
 
         self.unoptimize();
@@ -479,11 +480,11 @@ impl Chunk {
 
     /// Gives iterator over all id-vectors in chunk (or relative to chunk voxel positions).
     pub fn local_pos_iter() -> Range3d {
-        Range3d::from(Int3::ZERO..Self::SIZES.into())
+        Range3d::from(IVec3::ZERO..Self::SIZES.into())
     }
 
     /// Gives iterator over all id-vectors in chunk (or relative to chunk voxel positions).
-    pub fn global_pos_iter(chunk_pos: Int3) -> impl ExactSizeIterator<Item = Int3> {
+    pub fn global_pos_iter(chunk_pos: IVec3) -> impl ExactSizeIterator<Item = IVec3> {
         Self::local_pos_iter()
             .map(move |pos| Self::local_to_global_pos(chunk_pos, pos))
     }
@@ -492,7 +493,7 @@ impl Chunk {
     pub fn chunked_pos_iter(sub_chunk_size: usize) -> impl ExactSizeIterator<Item = Range3d> {
         Range3d::split_chunks(
             Self::SIZES.into(),
-            Int3::all(sub_chunk_size as i32),
+            IVec3::splat(sub_chunk_size as i32),
         )
     }
 
@@ -548,22 +549,22 @@ impl Chunk {
     }
 
     /// Converts chunk position to world position.
-    pub fn local_to_global(chunk_pos: Int3) -> Int3 {
+    pub fn local_to_global(chunk_pos: IVec3) -> IVec3 {
         chunk_pos * Self::SIZE as i32
     }
 
     /// Converts all in-chunk world positions to that chunk position.
-    pub fn global_to_local(world_pos: Int3) -> Int3 {
-        world_pos.div_euclid(Int3::from(Self::SIZES))
+    pub fn global_to_local(world_pos: IVec3) -> IVec3 {
+        world_pos.div_euclid(IVec3::from(Self::SIZES))
     }
 
     /// Computes global position from relative to chunk position.
-    pub fn local_to_global_pos(chunk_pos: Int3, relative_voxel_pos: Int3) -> Int3 {
+    pub fn local_to_global_pos(chunk_pos: IVec3, relative_voxel_pos: IVec3) -> IVec3 {
         Self::local_to_global(chunk_pos) + relative_voxel_pos
     }
 
     /// Computes local (relative to chunk) position from global position.
-    pub fn global_to_local_pos(chunk_pos: Int3, global_voxel_pos: Int3) -> Int3 {
+    pub fn global_to_local_pos(chunk_pos: IVec3, global_voxel_pos: IVec3) -> IVec3 {
         global_voxel_pos - Self::local_to_global(chunk_pos)
     }
 
@@ -572,7 +573,7 @@ impl Chunk {
     /// # Error
     /// 
     /// Returns [`Err`] if local position is out of [chunk][Chunk] bounds.
-    pub fn global_to_local_pos_checked(chunk_pos: Int3, global_voxel_pos: Int3) -> Result<Int3, EditError> {
+    pub fn global_to_local_pos_checked(chunk_pos: IVec3, global_voxel_pos: IVec3) -> Result<IVec3, EditError> {
         let local_pos = Self::global_to_local_pos(chunk_pos, global_voxel_pos);
 
         let is_out_of_bounds =
@@ -589,19 +590,19 @@ impl Chunk {
     /// 
     /// # Error
     /// 
-    /// Returns [`None`] if `pos` < [`Int3::ZERO`][Int3] or `pos` >= [`Chunk::SIZES`][Chunk].
-    pub fn voxel_pos_to_idx(pos: Int3) -> Option<usize> {
+    /// Returns [`None`] if `pos` < [`IVec3::ZERO`][IVec3] or `pos` >= [`Chunk::SIZES`][Chunk].
+    pub fn voxel_pos_to_idx(pos: IVec3) -> Option<usize> {
         ensure_or!(pos.x >= 0 && pos.y >= 0 && pos.z >= 0, return None);
 
-        let idx = sdex::get_index(&USize3::from(pos).as_array(), &[Self::SIZE; 3]);
+        let idx = sdex::get_index(&pos.to_array().map(|x| x as usize), &[Self::SIZE; 3]);
 
         (idx < Self::VOLUME).then_some(idx)
     }
 
     /// Gives index in voxel array by it's 3D-index (or relative to chunk position)
     /// without idx-safe ckeck.
-    pub fn voxel_pos_to_idx_unchecked(pos: Int3) -> usize {
-        sdex::get_index(&USize3::from(pos).as_array(), &[Self::SIZE; 3])
+    pub fn voxel_pos_to_idx_unchecked(pos: IVec3) -> usize {
+        sdex::get_index(&pos.to_array().map(|x| x as usize), &[Self::SIZE; 3])
     }
 
     // FIXME: write mesh analog
@@ -890,12 +891,12 @@ pub type Lod = u32;
 #[derive(Debug, Error)]
 pub enum EditError {
     #[error("failed to convert voxel position to array index {0}")]
-    PosIdConversion(Int3),
+    PosIdConversion(IVec3),
 
     #[error("position is out of chunk bounds")]
     PosOutOfBounds {
-        pos: Int3,
-        chunk_pos: Int3,
+        pos: IVec3,
+        chunk_pos: IVec3,
     },
 
     #[error("index out of bounds: index is {idx} but len is {len}")]

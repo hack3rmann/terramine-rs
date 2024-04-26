@@ -15,14 +15,14 @@ use {
 #[display("{data.name} with id = {data.id} in {pos}")]
 pub struct Voxel {
     pub data: &'static VoxelData,
-    pub pos: Int3,
+    pub pos: IVec3,
 }
 
 impl Voxel {
     pub const SIZE: f32 = cfg::terrain::VOXEL_SIZE;
 
     /// Voxel constructor.
-    pub const fn new(position: Int3, data: &'static VoxelData) -> Self {
+    pub const fn new(position: IVec3, data: &'static VoxelData) -> Self {
         Voxel { data, pos: position }
     }
 
@@ -80,7 +80,7 @@ mod tests {
 
     #[test]
     fn reinterpret_voxel1() {
-        let before = Voxel::new(Int3::new(123, 4212, 11), STONE_VOXEL_DATA);
+        let before = Voxel::new(IVec3::new(123, 4212, 11), STONE_VOXEL_DATA);
         let after = Voxel::from_bytes(&before.as_bytes()).unwrap();
 
         assert_eq!(before, after);
@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn reinterpret_voxel2() {
-        let before = Voxel::new(Int3::new(-213, 4212, 11), LOG_VOXEL_DATA);
+        let before = Voxel::new(IVec3::new(-213, 4212, 11), LOG_VOXEL_DATA);
         let after = Voxel::from_bytes(&before.as_bytes()).unwrap();
 
         assert_eq!(before, after);
@@ -128,26 +128,26 @@ pub mod shape {
             self
         }
 
-        pub fn by_offset<const N: usize>(&self, offset: Int3, position: vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
+        pub fn by_offset<const N: usize>(&self, offset: IVec3, position: Vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
             let position = 2.0 * self.half_size * position;
-            match offset.as_tuple() {
-                ( 1,  0,  0) => self.back(position, vertices),
-                (-1,  0,  0) => self.front(position, vertices),
-                ( 0,  1,  0) => self.top(position, vertices),
-                ( 0, -1,  0) => self.bottom(position, vertices),
-                ( 0,  0,  1) => self.right(position, vertices),
-                ( 0,  0, -1) => self.left(position, vertices),
+            match offset.to_array() {
+                [ 1,  0,  0] => self.back(position, vertices),
+                [-1,  0,  0] => self.front(position, vertices),
+                [ 0,  1,  0] => self.top(position, vertices),
+                [ 0, -1,  0] => self.bottom(position, vertices),
+                [ 0,  0,  1] => self.right(position, vertices),
+                [ 0,  0, -1] => self.left(position, vertices),
                 _ => panic!("There's no offset {:?}", offset),
             }
         }
 
         /// Cube front face vertex array.
-        pub fn front<const N: usize>(&self, position: vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
+        pub fn front<const N: usize>(&self, position: Vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
             /* UVs for front face */
             let uv = UV::new(self.data.textures.front);
             
             /* Shortcuts */
-            let (x, y, z) = position.as_tuple();
+            let [x, y, z] = position.to_array();
             let face_idx = FRONT_IDX as u32;
             let hs = self.half_size;
 
@@ -160,12 +160,12 @@ pub mod shape {
         }
 
         /// Cube back face vertex array.
-        pub fn back<const N: usize>(&self, position: vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
+        pub fn back<const N: usize>(&self, position: Vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
             /* UVs for back face */
             let uv = UV::new(self.data.textures.back);
             
             /* Shortcuts */
-            let (x, y, z) = position.as_tuple();
+            let [x, y, z] = position.to_array();
             let face_idx = BACK_IDX as u32;
             let hs = self.half_size;
 
@@ -178,12 +178,12 @@ pub mod shape {
         }
 
         /// Cube top face vertex array.
-        pub fn top<const N: usize>(&self, position: vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
+        pub fn top<const N: usize>(&self, position: Vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
             /* UVs for top face */
             let uv = UV::new(self.data.textures.top);
             
             /* Shortcuts */
-            let (x, y, z) = position.as_tuple();
+            let [x, y, z] = position.to_array();
             let face_idx = TOP_IDX as u32;
             let hs = self.half_size;
 
@@ -196,12 +196,12 @@ pub mod shape {
         }
 
         /// Cube bottom face vertex array.
-        pub fn bottom<const N: usize>(&self, position: vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
+        pub fn bottom<const N: usize>(&self, position: Vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
             /* UVs for bottom face */
             let uv = UV::new(self.data.textures.bottom);
             
             /* Shortcuts */
-            let (x, y, z) = position.as_tuple();
+            let [x, y, z] = position.to_array();
             let face_idx = BOTTOM_IDX as u32;
             let hs = self.half_size;
 
@@ -214,12 +214,12 @@ pub mod shape {
         }
 
         /// Cube left face vertex array.
-        pub fn left<const N: usize>(&self, position: vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
+        pub fn left<const N: usize>(&self, position: Vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
             /* UVs for left face */
             let uv = UV::new(self.data.textures.left);
             
             /* Shortcuts */
-            let (x, y, z) = position.as_tuple();
+            let [x, y, z] = position.to_array();
             let face_idx = LEFT_IDX as u32;
             let hs = self.half_size;
 
@@ -232,12 +232,12 @@ pub mod shape {
         }
 
         /// Cube right face vertex array.
-        pub fn right<const N: usize>(&self, position: vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
+        pub fn right<const N: usize>(&self, position: Vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
             /* UVs for right face */
             let uv = UV::new(self.data.textures.right);
             
             /* Shortcuts */
-            let (x, y, z) = position.as_tuple();
+            let [x, y, z] = position.to_array();
             let face_idx = RIGHT_IDX as u32;
             let hs = self.half_size;
 
@@ -251,7 +251,7 @@ pub mod shape {
 
         /// Cube all sides.
         #[allow(dead_code)]
-        pub fn all<const N: usize>(&self, position: vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
+        pub fn all<const N: usize>(&self, position: Vec3, vertices: &mut SmallVec<[HiResVertex; N]>) {
             self.left(position, vertices);
             self.right(position, vertices);
             self.front(position, vertices);
@@ -266,22 +266,22 @@ pub mod shape {
             Self { half_size: 0.5 * size }
         }
 
-        pub fn by_offset(&self, offset: Int3, position: vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
-            match offset.as_tuple() {
-                ( 1,  0,  0) => self.back(position, color, vertices),
-                (-1,  0,  0) => self.front(position, color, vertices),
-                ( 0,  1,  0) => self.top(position, color, vertices),
-                ( 0, -1,  0) => self.bottom(position, color, vertices),
-                ( 0,  0,  1) => self.right(position, color, vertices),
-                ( 0,  0, -1) => self.left(position, color, vertices),
+        pub fn by_offset(&self, offset: IVec3, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+            match offset.to_array() {
+                [ 1,  0,  0] => self.back(position, color, vertices),
+                [-1,  0,  0] => self.front(position, color, vertices),
+                [ 0,  1,  0] => self.top(position, color, vertices),
+                [ 0, -1,  0] => self.bottom(position, color, vertices),
+                [ 0,  0,  1] => self.right(position, color, vertices),
+                [ 0,  0, -1] => self.left(position, color, vertices),
                 _ => panic!("There's no offset {:?}", offset),
             }
         }
 
         /// Cube front face vertex array.
-        pub fn front(&self, position: vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+        pub fn front(&self, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
             /* Shortcuts */
-            let (x, y, z) = position.as_tuple();
+            let [x, y, z] = position.to_array();
             let face_idx = FRONT_IDX as u32;
             let hs = self.half_size;
 
@@ -294,9 +294,9 @@ pub mod shape {
         }
 
         /// Cube back face vertex array.
-        pub fn back(&self, position: vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+        pub fn back(&self, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
             /* Shortcuts */
-            let (x, y, z) = position.as_tuple();
+            let [x, y, z] = position.to_array();
             let face_idx = BACK_IDX as u32;
             let hs = self.half_size;
 
@@ -309,9 +309,9 @@ pub mod shape {
         }
 
         /// Cube top face vertex array.
-        pub fn top(&self, position: vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+        pub fn top(&self, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
             /* Shortcuts */
-            let (x, y, z) = position.as_tuple();
+            let [x, y, z] = position.to_array();
             let face_idx = TOP_IDX as u32;
             let hs = self.half_size;
 
@@ -324,9 +324,9 @@ pub mod shape {
         }
 
         /// Cube bottom face vertex array.
-        pub fn bottom(&self, position: vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+        pub fn bottom(&self, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
             /* Shortcuts */
-            let (x, y, z) = position.as_tuple();
+            let [x, y, z] = position.to_array();
             let face_idx = BOTTOM_IDX as u32;
             let hs = self.half_size;
 
@@ -339,9 +339,9 @@ pub mod shape {
         }
 
         /// Cube left face vertex array.
-        pub fn left(&self, position: vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+        pub fn left(&self, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
             /* Shortcuts */
-            let (x, y, z) = position.as_tuple();
+            let [x, y, z] = position.to_array();
             let face_idx = LEFT_IDX as u32;
             let hs = self.half_size;
 
@@ -354,9 +354,9 @@ pub mod shape {
         }
 
         /// Cube right face vertex array.
-        pub fn right(&self, position: vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+        pub fn right(&self, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
             /* Shortcuts */
-            let (x, y, z) = position.as_tuple();
+            let [x, y, z] = position.to_array();
             let face_idx = RIGHT_IDX as u32;
             let hs = self.half_size;
 
@@ -370,7 +370,7 @@ pub mod shape {
 
         /// Cube all sides.
         #[allow(dead_code)]
-        pub fn all(&self, position: vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
+        pub fn all(&self, position: Vec3, color: Color, vertices: &mut Vec<LowResVertex>) {
             self.left(position, color, vertices);
             self.right(position, color, vertices);
             self.front(position, color, vertices);
