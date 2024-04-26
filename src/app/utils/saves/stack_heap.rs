@@ -64,14 +64,14 @@ impl StackHeap {
         let stack = OpenOptions::new()
             .write(true)
             .read(true)
-            .create(true)
+            .truncate(true)
             .open(path.join(name).with_extension(STACK_FILE_EXTENSION))
             .await?;
 
         let heap = OpenOptions::new()
             .write(true)
             .read(true)
-            .create(true)
+            .truncate(true)
             .open(path.join(name).with_extension(HEAP_FILE_EXTENSION))
             .await?;
         

@@ -68,7 +68,7 @@ impl FromBytes for Voxel {
     }
 }
 
-impl const StaticSize for Voxel {
+impl StaticSize for Voxel {
     fn static_size() -> usize { 16 }
 }
 

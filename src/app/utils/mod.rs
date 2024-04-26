@@ -49,13 +49,12 @@ pub const fn const_default<T: ConstDefault>() -> T {
 
 
 
-#[const_trait]
 pub trait ToPhisicalSize<P: Pixel> {
     fn to_physical_size(&self) -> PhysicalSize<P>;
 }
 assert_obj_safe!(ToPhisicalSize<u32>);
 
-impl const ToPhisicalSize<u32> for UInt2 {
+impl ToPhisicalSize<u32> for UInt2 {
     fn to_physical_size(&self) -> PhysicalSize<u32> {
         PhysicalSize::new(self.x, self.y)
     }
@@ -63,13 +62,12 @@ impl const ToPhisicalSize<u32> for UInt2 {
 
 
 
-#[const_trait]
 pub trait ToPhisicalPosition<P: Pixel> {
     fn to_physical_position(&self) -> PhysicalPosition<P>;
 }
 assert_obj_safe!(ToPhisicalPosition<u32>);
 
-impl const ToPhisicalPosition<u32> for UInt2 {
+impl ToPhisicalPosition<u32> for UInt2 {
     fn to_physical_position(&self) -> PhysicalPosition<u32> {
         PhysicalPosition::new(self.x, self.y)
     }
@@ -77,12 +75,11 @@ impl const ToPhisicalPosition<u32> for UInt2 {
 
 
 
-#[const_trait]
 pub trait ToVec2 {
     fn to_vec2(&self) -> UInt2;
 }
 
-impl const ToVec2 for PhysicalSize<u32> {
+impl ToVec2 for PhysicalSize<u32> {
     fn to_vec2(&self) -> UInt2 {
         UInt2::new(self.width, self.height)
     }
@@ -90,20 +87,21 @@ impl const ToVec2 for PhysicalSize<u32> {
 
 
 
-#[const_trait]
 pub trait Volume<T> {
     fn volume(&self) -> T;
 }
 assert_obj_safe!(Volume<vec3>);
 
-macro impl_volume($($VecType:ty : $ElemType:ty),* $(,)?) {
-    $(
-        impl const Volume<$ElemType> for $VecType {
-            fn volume(&self) -> $ElemType {
-                self.x * self.y * self.z
+macro_rules! impl_volume {
+    ($($VecType:ty : $ElemType:ty),* $(,)?) => {
+        $(
+            impl Volume<$ElemType> for $VecType {
+                fn volume(&self) -> $ElemType {
+                    self.x * self.y * self.z
+                }
             }
-        }
-    )*
+        )*
+    };
 }
 
 impl_volume! {
@@ -113,16 +111,28 @@ impl_volume! {
 
 
 
-pub macro module_constructor($($content:tt)*) {
-    #[ctor::ctor]
-    fn __module_constructor_function() {
-        $($content)*
-    }
+#[macro_export]
+macro_rules! module_constructor {
+    ($($content:tt)*) => {
+        #[ctor::ctor]
+        fn __module_constructor_function() {
+            $($content)*
+        }
+    };
 }
 
-pub macro module_destructor($($content:tt)*) {
-    #[ctor::dtor]
-    fn __module_destructor_function() {
-        $($content)*
-    }
+pub use module_constructor;
+
+
+
+#[macro_export]
+macro_rules! module_destructor {
+    ($($content:tt)*) => {
+        #[ctor::dtor]
+        fn __module_destructor_function() {
+            $($content)*
+        }
+    };
 }
+
+pub use module_destructor;

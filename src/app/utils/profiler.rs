@@ -1,3 +1,4 @@
+#![macro_use]
 #![allow(dead_code)]
 
 use {
@@ -198,16 +199,16 @@ pub fn build_window(profiler_result: Vec<Data<'_>>, ui: &mut egui::Ui) {
 
 
 
-pub macro scope {
+#[macro_export]
+macro_rules! scope {
     ($name:expr) => {
         use $crate::profiler::{MeasureId, start_capture};
         const SCOPE_ID: MeasureId = ::const_random::const_random!(u64) as MeasureId;
         let _measure = start_capture($name, SCOPE_ID);
-    },
-
+    };
     () => {
         $crate::profiler::scope!(
             const_format::formatcp!("scope #{}", ::const_random::const_random!(u64))
         );
-    },
+    };
 }

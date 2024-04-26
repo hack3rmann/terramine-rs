@@ -16,39 +16,55 @@ impl<IntoStr: Into<StaticStr>> From<IntoStr> for StrError {
     }
 }
 
-pub macro fmt_error($(fmt:tt)*) {
-    crate::failure::StrError::from(format!($($fmt)*))
+#[macro_export]
+macro_rules! fmt_error {
+    ($(fmt:tt)*) => { $crate::failure::StrError::from(format!($($fmt)*)) };
 }
 
+pub use fmt_error;
 
 
-pub macro ensure_or($cond:expr, $diverging_expr:expr $(,)?) {
-    if !$cond { $diverging_expr }
+
+#[macro_export]
+macro_rules! ensure_or {
+    ($cond:expr, $diverging_expr:expr $(,)?) => { if !$cond { $diverging_expr } };
 }
 
-pub macro ensure($cond:expr, $err:expr $(,)?) {
-    ensure_or!($cond, return Err($err.into()))
+#[macro_export]
+macro_rules! ensure {
+    ($cond:expr, $err:expr $(,)?) => { ensure_or!($cond, return Err($err.into())) };
 }
 
-pub macro ensure_fmt($cond:expr, $($fmt:tt)*) {
-    crate::failure::ensure!(
-        $cond,
-        crate::failure::fmt_error!($($fmt)*)
-    )
+#[macro_export]
+macro_rules! ensure_fmt {
+    ($cond:expr, $($fmt:tt)*) => {
+        $crate::failure::ensure!(
+            $cond,
+            $crate::failure::fmt_error!($($fmt)*)
+        )
+    };
 }
 
-pub macro ensure_eq($lhs:expr, $rhs:expr, $err:expr) {
-    ensure!($lhs == $rhs, $err);
+#[macro_export]
+macro_rules! ensure_eq {
+    ($lhs:expr, $rhs:expr, $err:expr) => { ensure!($lhs == $rhs, $err); };
 }
 
-pub macro ensure_ne($lhs:expr, $rhs:expr, $err:expr) {
-    ensure!($lhs != $rhs, $err);
+#[macro_export]
+macro_rules! ensure_ne {
+    ($lhs:expr, $rhs:expr, $err:expr) => { ensure!($lhs != $rhs, $err); };
 }
 
-pub macro bail($err:expr) {
-    return Err($err.into())
+#[macro_export]
+macro_rules! bail {
+    ($err:expr) => { return Err($err.into()) };
 }
 
-pub macro bail_str($($args:tt)*) {
-    return Err($crate::failure::StrError::from(format!($($args)*)).into())
+#[macro_export]
+macro_rules! bail_str {
+    ($($args:tt)*) => {
+        return Err($crate::failure::StrError::from(format!($($args)*)).into())
+    };
 }
+
+pub use {ensure_or, ensure, ensure_fmt, ensure_eq, ensure_ne, bail, bail_str};

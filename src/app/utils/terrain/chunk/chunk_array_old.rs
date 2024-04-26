@@ -194,7 +194,7 @@ impl ChunkArray {
     ) -> io::Result<()> {
         let save_name = save_name.into();
 
-        logger::scope!(from = "chunk-array", "saving to {save_name} in {save_path}");
+        logger::log_scope!(from = "chunk-array", "saving to {save_name} in {save_path}");
 
         let is_all_generated = chunks.iter()
             .all(|chunk| chunk.is_generated());
@@ -225,7 +225,7 @@ impl ChunkArray {
     }
 
     pub async fn read_from_file(save_name: &str, save_path: &str) -> io::Result<(USize3, Vec<Chunk>)> {
-        logger::scope!(from = "chunk-array", "reading chunks from {save_name} in {save_path}");
+        logger::log_scope!(from = "chunk-array", "reading chunks from {save_name} in {save_path}");
 
         let loading = loading::start_new("Reading chunks");
 
@@ -369,7 +369,9 @@ impl ChunkArray {
             .ok_or(EditError::PosIdConversion(pos))?;
 
         let old_id = unsafe {
-            Arc::get_mut_unchecked(&mut chunk)
+            (Arc::as_ptr(&chunk) as *mut Chunk)
+                .as_mut()
+                .unwrap_unchecked()
                 .set_voxel(pos, new_id)?
         };
 
@@ -419,7 +421,9 @@ impl ChunkArray {
 
             let mut chunk = self.chunk_by_idx(world, idx);
             let chunk_changed = unsafe {
-                Arc::get_mut_unchecked(&mut chunk)
+                (Arc::as_ptr(&chunk) as *mut Chunk)
+                    .as_mut()
+                    .unwrap_unchecked()
                     .fill_voxels(pos_from, pos_to, new_id)?
             };
 
@@ -652,7 +656,12 @@ impl ChunkArray {
                         // * Safety:
                         // * Safe, because there's no chunk readers due to tasks drop above
                         unsafe {
-                            let _ = mem::replace(Arc::get_mut_unchecked(&mut chunk), new_chunk);
+                            let _ = mem::replace(
+                                (Arc::as_ptr(&chunk) as *mut Chunk)
+                                    .as_mut()
+                                    .unwrap_unchecked(),
+                                new_chunk,
+                            );
                         }
                     }
                 } else if this.tasks.can_start_mesh() {
@@ -793,7 +802,9 @@ impl ChunkArray {
             // * Safe, because there's no chunk readers due to tasks drop above.
             unsafe {
                 let _ = mem::replace(
-                    Arc::get_mut_unchecked(&mut chunk),
+                    (Arc::as_ptr(&chunk) as *mut Chunk)
+                        .as_mut()
+                        .unwrap_unchecked(),
                     Chunk::from_voxels(voxels, pos),
                 );
             }

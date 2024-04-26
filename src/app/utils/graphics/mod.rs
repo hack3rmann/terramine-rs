@@ -232,7 +232,7 @@ impl Graphics {
 
     /// Creates new [`Graphics`] that holds some renderer stuff.
     pub async fn new() -> AnyResult<Self> {
-        logger::scope!(from = "graphics", "new()");
+        logger::log_scope!(from = "graphics", "new()");
 
         let window = Window::new(cfg::window::default::SIZES)
             .context("failed to initialize a window")?;

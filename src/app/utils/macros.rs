@@ -87,11 +87,17 @@ macro_rules! sum_errors {
 /// pub static IS_WEATHER_GOOD: AtomicBool = AtomicBool::new(true);
 /// pub static WEATHER: Atomic<Weather> = Atomic::new(Weather::Sunny);
 /// ```
-pub macro atomic_static($($vis:vis static $NAME:ident: $Type:ty = $init:expr;)*) {
-    $(
-        $vis static $NAME: crate::macros::Atomic!($Type) = <crate::macros::Atomic!($Type)>::new($init);
-    )*
+#[macro_export]
+macro_rules! atomic_static {
+    ($($vis:vis static $NAME:ident: $Type:ty = $init:expr;)*) => {
+        $(
+            $vis static $NAME: $crate::macros::Atomic!($Type)
+                = <$crate::macros::Atomic!($Type)>::new($init);
+        )*
+    };
 }
+
+pub use atomic_static;
 
 /// Makes an atomic type out of any [`Copy`] type.
 /// 
@@ -116,87 +122,112 @@ pub macro atomic_static($($vis:vis static $NAME:ident: $Type:ty = $init:expr;)*)
 /// 
 /// type AtomicAnimal = Atomic!(Animal);
 /// ```
-pub macro Atomic {
-    (i8) => { ::std::sync::atomic::AtomicI8 },
-    (u8) => { ::std::sync::atomic::AtomicU8 },
-    (i16) => { ::std::sync::atomic::AtomicI16 },
-    (u16) => { ::std::sync::atomic::AtomicU16 },
-    (i32) => { ::std::sync::atomic::AtomicI32 },
-    (u32) => { ::std::sync::atomic::AtomicU32 },
-    (i64) => { ::std::sync::atomic::AtomicI64 },
-    (i128) => { ::portable_atomic::AtomicI128 },
-    (u128) => { ::portable_atomic::AtomicU128 },
-    (isize) => { ::std::sync::atomic::AtomicIsize },
-    (usize) => { ::std::sync::atomic::AtomicUsize },
-    (f32) => { ::portable_atomic::AtomicF32 },
-    (f64) => { ::portable_atomic::AtomicF64 },
-    (bool) => { ::std::sync::atomic::AtomicBool },
-    ($Type:ty) => { ::atomic::Atomic<$Type> },
+#[macro_export]
+macro_rules! Atomic {
+    (i8) => { ::std::sync::atomic::AtomicI8 };
+    (u8) => { ::std::sync::atomic::AtomicU8 };
+    (i16) => { ::std::sync::atomic::AtomicI16 };
+    (u16) => { ::std::sync::atomic::AtomicU16 };
+    (i32) => { ::std::sync::atomic::AtomicI32 };
+    (u32) => { ::std::sync::atomic::AtomicU32 };
+    (i64) => { ::std::sync::atomic::AtomicI64 };
+    (i128) => { ::portable_atomic::AtomicI128 };
+    (u128) => { ::portable_atomic::AtomicU128 };
+    (isize) => { ::std::sync::atomic::AtomicIsize };
+    (usize) => { ::std::sync::atomic::AtomicUsize };
+    (f32) => { ::portable_atomic::AtomicF32 };
+    (f64) => { ::portable_atomic::AtomicF64 };
+    (bool) => { ::std::sync::atomic::AtomicBool };
+    ($Type:ty) => { ::atomic::Atomic<$Type> };
 }
 
-pub macro load($ordering:ident: $($name:ident),*) {
-    ($(
-        $name.load(::std::sync::atomic::Ordering::$ordering),
-    )*)
+pub use Atomic;
+
+#[macro_export]
+macro_rules! load {
+    ($ordering:ident: $($name:ident),*) => {
+        ($(
+            $name.load(::std::sync::atomic::Ordering::$ordering),
+        )*)
+    };
 }
 
-pub macro store($ordering:ident: $($name:ident = $value:expr),*) {
-    ($(
-        $name.store($value, ::std::sync::atomic::Ordering::$ordering),
-    )*)
+pub use load;
+
+#[macro_export]
+macro_rules! store {
+    ($ordering:ident: $($name:ident = $value:expr),*) => {
+        ($(
+            $name.store($value, ::std::sync::atomic::Ordering::$ordering),
+        )*)
+    };
 }
+
+pub use store;
 
 /// Makes a 2-D vector out of type.
-pub macro Vec2 {
-    (i8) => { ::math_linear::prelude::Byte2 },
-    (u8) => { ::math_linear::prelude::UByte2 },
-    (i16) => { ::math_linear::prelude::Short2 },
-    (u16) => { ::math_linear::prelude::UShort2 },
-    (i32) => { ::math_linear::prelude::Int2 },
-    (u32) => { ::math_linear::prelude::UInt2 },
-    (i64) => { ::math_linear::prelude::Long2 },
-    (u64) => { ::math_linear::prelude::ULong2 },
-    (i128) => { ::math_linear::prelude::Large2 },
-    (u128) => { ::math_linear::prelude::ULarge2 },
-    (f32) => { ::math_linear::prelude::Float2 },
-    (f64) => { ::math_linear::prelude::Double2 },
-    (isize) => { ::math_linear::prelude::ISize2 },
-    (usize) => { ::math_linear::prelude::USize2 },
-    ($other:ty) => { compile_error!("only primitive types are supported") },
+#[macro_export]
+macro_rules! Vec2 {
+    (i8) => { ::math_linear::prelude::Byte2 };
+    (u8) => { ::math_linear::prelude::UByte2 };
+    (i16) => { ::math_linear::prelude::Short2 };
+    (u16) => { ::math_linear::prelude::UShort2 };
+    (i32) => { ::math_linear::prelude::Int2 };
+    (u32) => { ::math_linear::prelude::UInt2 };
+    (i64) => { ::math_linear::prelude::Long2 };
+    (u64) => { ::math_linear::prelude::ULong2 };
+    (i128) => { ::math_linear::prelude::Large2 };
+    (u128) => { ::math_linear::prelude::ULarge2 };
+    (f32) => { ::math_linear::prelude::Float2 };
+    (f64) => { ::math_linear::prelude::Double2 };
+    (isize) => { ::math_linear::prelude::ISize2 };
+    (usize) => { ::math_linear::prelude::USize2 };
+    ($other:ty) => { compile_error!("only primitive types are supported") };
 }
+
+pub use Vec2;
 
 /// Makes a 3-D vector out of type.
-pub macro Vec3 {
-    (i8) => { ::math_linear::prelude::Byte3 },
-    (u8) => { ::math_linear::prelude::UByte3 },
-    (i16) => { ::math_linear::prelude::Short3 },
-    (u16) => { ::math_linear::prelude::UShort3 },
-    (i32) => { ::math_linear::prelude::Int3 },
-    (u32) => { ::math_linear::prelude::UInt3 },
-    (i64) => { ::math_linear::prelude::Long3 },
-    (u64) => { ::math_linear::prelude::ULong3 },
-    (i128) => { ::math_linear::prelude::Large3 },
-    (u128) => { ::math_linear::prelude::ULarge3 },
-    (f32) => { ::math_linear::prelude::Float3 },
-    (f64) => { ::math_linear::prelude::Double3 },
-    (isize) => { ::math_linear::prelude::ISize3 },
-    (usize) => { ::math_linear::prelude::USize3 },
-    ($other:ty) => { compile_error("only primitive types are supported") },
+#[macro_export]
+macro_rules! Vec3 {
+    (i8) => { ::math_linear::prelude::Byte3 };
+    (u8) => { ::math_linear::prelude::UByte3 };
+    (i16) => { ::math_linear::prelude::Short3 };
+    (u16) => { ::math_linear::prelude::UShort3 };
+    (i32) => { ::math_linear::prelude::Int3 };
+    (u32) => { ::math_linear::prelude::UInt3 };
+    (i64) => { ::math_linear::prelude::Long3 };
+    (u64) => { ::math_linear::prelude::ULong3 };
+    (i128) => { ::math_linear::prelude::Large3 };
+    (u128) => { ::math_linear::prelude::ULarge3 };
+    (f32) => { ::math_linear::prelude::Float3 };
+    (f64) => { ::math_linear::prelude::Double3 };
+    (isize) => { ::math_linear::prelude::ISize3 };
+    (usize) => { ::math_linear::prelude::USize3 };
+    ($other:ty) => { compile_error("only primitive types are supported") };
 }
 
-/// BUilds a query on world
-pub macro query($world:expr, $(qvalue:ty),+ $(,)?) {
-    world.query::<($(qvalue,)+)>();
+pub use Vec3;
+
+/// Builds a query on world
+#[macro_export]
+macro_rules! query {
+    ($world:expr, $(qvalue:ty),+ $(,)?) => { world.query::<($(qvalue,)+)>() };
 }
 
+pub use query;
 
 
-pub macro formula($formula:expr, where $($variable:ident = $value:expr),* $(,)?) {
-    {
+
+#[macro_export]
+macro_rules! formula {
+    ($formula:expr, where $($variable:ident = $value:expr),* $(,)?) => {{
         $(
             let $variable = $value;
         )+
 
         $formula
-    }
+    }};
 }
+
+pub use formula;

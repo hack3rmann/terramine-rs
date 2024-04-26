@@ -36,7 +36,7 @@ impl App {
 
     /// Constructs new [`App`].
     pub async fn new() -> AnyResult<Self> {
-        logger::scope!(from = "app", "new()");
+        logger::log_scope!(from = "app", "new()");
 
         let mut app = Self {
             world: World::new(),
@@ -59,7 +59,7 @@ impl App {
     /// Setups an [`App`] after creation.
     #[profile]
     pub async fn setup(&mut self) -> AnyResult<()> {
-        logger::scope!(from = "app", "setup()");
+        logger::log_scope!(from = "app", "setup()");
 
         self.world.insert_resource(Name::new("Resources"));
 

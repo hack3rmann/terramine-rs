@@ -6,22 +6,26 @@ pub trait ConstDefault {
     const DEFAULT: Self;
 }
 
-macro impl_nums_const_default($($Int:ty),* $(,)?) {
-    $(
-        impl ConstDefault for $Int {
-            const DEFAULT: Self = 0 as Self;
-        }
-    )*
+macro_rules! impl_nums_const_default {
+    ($($Int:ty),* $(,)?) => {
+        $(
+            impl ConstDefault for $Int {
+                const DEFAULT: Self = 0 as Self;
+            }
+        )*
+    };
 }
 
 impl_nums_const_default! { i8, u8, i16, u16, i32, u32, f32, f64, i64, u64, isize, usize }
 
-macro impl_vecs_const_default($($Vec:ty),* $(,)?) {
-    $(
-        impl ConstDefault for $Vec {
-            const DEFAULT: Self = Self::ZERO;
-        }
-    )*
+macro_rules! impl_vecs_const_default {
+    ($($Vec:ty),* $(,)?) => {
+        $(
+            impl ConstDefault for $Vec {
+                const DEFAULT: Self = Self::ZERO;
+            }
+        )*
+    };
 }
 
 impl_vecs_const_default! {
@@ -93,13 +97,15 @@ impl<T> ConstDefault for VecDeque<T> {
     const DEFAULT: Self = Self::new();
 }
 
-macro impl_atomics($($AtomicName:ident($TypeName:ident)),* $(,)?) {
-    $(
-        impl ConstDefault for $AtomicName {
-            #[allow(clippy::declare_interior_mutable_const)]
-            const DEFAULT: Self = Self::new(<$TypeName>::DEFAULT);
-        }
-    )*
+macro_rules! impl_atomics {
+    ($($AtomicName:ident($TypeName:ident)),* $(,)?) => {
+        $(
+            impl ConstDefault for $AtomicName {
+                #[allow(clippy::declare_interior_mutable_const)]
+                const DEFAULT: Self = Self::new(<$TypeName>::DEFAULT);
+            }
+        )*
+    };
 }
 
 impl_atomics! {

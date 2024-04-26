@@ -11,15 +11,16 @@ use crate::prelude::*;
 /// Composes input list of `IntoIterator`s with `Item = u8`
 /// into one large iterator by sequetially calling `.chain()`,
 /// producing new `Iterator` with `Item = u8`.
-pub macro compose {
+#[macro_export]
+macro_rules! compose {
     () => {
         Vec::<u8>::new()
             .into_iter()
-    },
+    };
 
     ($once:expr $(,)?) => {
         $once.into_iter()
-    },
+    };
 
     ($first:expr, $($next:expr),+ $(,)?) => {
         $first
@@ -27,15 +28,20 @@ pub macro compose {
             $(
                 .chain($next)
             )+
-    },
+    };
 }
 
-pub macro read($bytes:expr, $(let $var_name:ident $(:$VarType:ty)?),* $(,)?) {
-    let mut reader = ByteReader::new($bytes);
-    $(
-        let $var_name $(:$VarType)? = reader.read()?;
-    )*
+#[macro_export]
+macro_rules! read {
+    ($bytes:expr, $(let $var_name:ident $(:$VarType:ty)?),* $(,)?) => {
+        let mut reader = ByteReader::new($bytes);
+        $(
+            let $var_name $(:$VarType)? = reader.read()?;
+        )*
+    };
 }
+
+pub use { compose, read };
 
 
 
@@ -53,40 +59,35 @@ impl<T:
     DynamicSize
 > Reinterpret for T { }
 
-#[const_trait]
 pub trait AsBytes {
     fn as_bytes(&self) -> Vec<u8>;
 }
 
-#[const_trait]
 pub trait FromBytes: Sized {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError>;
 }
 
-#[const_trait]
 pub trait StaticSize: Sized {
     fn static_size() -> usize {
         mem::size_of::<Self>()
     }
 }
 
-#[const_trait]
 pub trait StaticSizeHint {
     fn static_size_hint() -> Option<usize>;
 }
 
-impl<T: ~const StaticSize> const StaticSizeHint for T {
+impl<T: StaticSize> StaticSizeHint for T {
     fn static_size_hint() -> Option<usize> {
         Some(Self::static_size())
     }
 }
 
-#[const_trait]
 pub trait DynamicSize {
     fn dynamic_size(&self) -> usize;
 }
 
-impl<T: ~const StaticSize> const DynamicSize for T {
+impl<T: StaticSize> DynamicSize for T {
     fn dynamic_size(&self) -> usize {
         Self::static_size()
     }
@@ -138,27 +139,29 @@ impl<'s> ByteReader<'s> {
 
 
 
-macro impl_nums($($Type:ty),* $(,)?) {
-    $(
-        impl AsBytes for $Type {
-            fn as_bytes(&self) -> Vec<u8> {
-                self.to_ne_bytes().into()
+macro_rules! impl_nums {
+    ($($Type:ty),* $(,)?) => {
+        $(
+            impl AsBytes for $Type {
+                fn as_bytes(&self) -> Vec<u8> {
+                    self.to_ne_bytes().into()
+                }
             }
-        }
 
-        impl FromBytes for $Type {
-            fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-                use std::array::TryFromSliceError;
+            impl FromBytes for $Type {
+                fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+                    use std::array::TryFromSliceError;
 
-                let size = mem::size_of::<Self>();
-                Ok(Self::from_ne_bytes(source[..size].try_into().map_err(|err: TryFromSliceError|
-                    ReinterpretError::Conversion(err.to_string())
-                )?))
+                    let size = mem::size_of::<Self>();
+                    Ok(Self::from_ne_bytes(source[..size].try_into().map_err(|err: TryFromSliceError|
+                        ReinterpretError::Conversion(err.to_string())
+                    )?))
+                }
             }
-        }
 
-        impl const StaticSize for $Type { }
-    )*
+            impl StaticSize for $Type { }
+        )*
+    };
 }
 
 impl_nums! { u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, f32, f64 }
@@ -180,7 +183,7 @@ impl FromBytes for usize {
     }
 }
 
-impl const StaticSize for usize {
+impl StaticSize for usize {
     fn static_size() -> usize {
         u64::static_size()
     }
@@ -205,7 +208,7 @@ impl FromBytes for isize {
     }
 }
 
-impl const StaticSize for isize {
+impl StaticSize for isize {
     fn static_size() -> usize {
         i64::static_size()
     }
@@ -229,7 +232,7 @@ impl FromBytes for char {
     }
 }
 
-impl const StaticSize for char {
+impl StaticSize for char {
     fn static_size() -> usize {
         u32::static_size()
     }
@@ -258,7 +261,7 @@ impl FromBytes for bool {
     }
 }
 
-impl const StaticSize for bool {
+impl StaticSize for bool {
     fn static_size() -> usize {
         u8::static_size()
     }
@@ -414,34 +417,36 @@ impl<T: DynamicSize> DynamicSize for Option<T> {
 
 use math_linear::prelude::*;
 
-macro reinterpret_3d_vectors($($VecName:ident = ($x:ident, $y:ident, $z:ident): $Type:ty);* $(;)?) {
-    $(
-        impl AsBytes for $VecName {
-            fn as_bytes(&self) -> Vec<u8> {
-                compose! {
-                    self.$x.as_bytes(),
-                    self.$y.as_bytes(),
-                    self.$z.as_bytes(),
-                }.collect()
+macro_rules! reinterpret_3d_vectors {
+    ($($VecName:ident = ($x:ident, $y:ident, $z:ident): $Type:ty);* $(;)?) => {
+        $(
+            impl AsBytes for $VecName {
+                fn as_bytes(&self) -> Vec<u8> {
+                    compose! {
+                        self.$x.as_bytes(),
+                        self.$y.as_bytes(),
+                        self.$z.as_bytes(),
+                    }.collect()
+                }
             }
-        }
 
-        impl FromBytes for $VecName {
-            fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
-                let mut reader = ByteReader::new(source);
+            impl FromBytes for $VecName {
+                fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
+                    let mut reader = ByteReader::new(source);
 
-                Ok(Self::new(
-                    reader.read()?,
-                    reader.read()?,
-                    reader.read()?,
-                ))
+                    Ok(Self::new(
+                        reader.read()?,
+                        reader.read()?,
+                        reader.read()?,
+                    ))
+                }
             }
-        }
 
-        impl StaticSize for $VecName {
-            fn static_size() -> usize { 3 * <$Type>::static_size() }
-        }
-    )*
+            impl StaticSize for $VecName {
+                fn static_size() -> usize { 3 * <$Type>::static_size() }
+            }
+        )*
+    };
 }
 
 reinterpret_3d_vectors! {
@@ -489,7 +494,7 @@ impl FromBytes for Float4 {
     }
 }
 
-impl const StaticSize for Float4 {
+impl StaticSize for Float4 {
     fn static_size() -> usize { 16 }
 }
 

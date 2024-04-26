@@ -103,7 +103,6 @@ impl AsMatrix for Scaling {
 
 
 
-#[const_trait]
 pub trait AsMatrix {
     fn as_matrix(&self) -> mat4;
 }

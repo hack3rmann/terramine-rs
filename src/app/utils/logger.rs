@@ -63,7 +63,7 @@ pub fn update() {
     recv_all();
 }
 
-pub fn log(msg_type: MsgType, from: impl Into<StaticStr>, content: impl Into<StaticStr>) {
+pub fn log_impl(msg_type: MsgType, from: impl Into<StaticStr>, content: impl Into<StaticStr>) {
     let (from, content) = (from.into(), content.into());
 
     let message = Message { msg_type, from, content};
@@ -75,7 +75,7 @@ pub fn log(msg_type: MsgType, from: impl Into<StaticStr>, content: impl Into<Sta
         .expect("failed to send message");
 }
 
-pub fn scope(from: impl Into<StaticStr>, work: impl Into<StaticStr>) -> LogGuard {
+pub fn scope_impl(from: impl Into<StaticStr>, work: impl Into<StaticStr>) -> LogGuard {
     LogGuard::new(from, work)
 }
 
@@ -106,43 +106,52 @@ impl Drop for LogGuard {
 
 
 
-pub macro log($msg_type:ident, from = $from:expr, $($content:tt)*) {
-    {
-        use $crate::app::utils::logger::{log, MsgType::$msg_type};
-        log($msg_type, $from, std::fmt::format(format_args!($($content)*)));
-    }
+#[macro_export]
+macro_rules! log {
+    ($msg_type:ident, from = $from:expr, $($content:tt)*) => {{
+        use $crate::app::utils::logger::{log_impl, MsgType::$msg_type};
+        log_impl($msg_type, $from, std::fmt::format(format_args!($($content)*)));
+    }};
 }
 
-pub macro info {
+#[macro_export]
+macro_rules! info {
     (from = $from:expr, $($fmt:tt)*) => {
         $crate::logger::log!(Info, from = $from, $($fmt)*);
-    },
+    };
 
-    ($($fmt:tt)*) => { $crate::logger::info!(from = "*unknown*", $($fmt)*); },
+    ($($fmt:tt)*) => { $crate::logger::info!(from = "*unknown*", $($fmt)*); };
 }
 
-pub macro error {
+#[macro_export]
+macro_rules! error {
     (from = $from:expr, $($fmt:tt)*) => {
         $crate::logger::log!(Error, from = $from, $($fmt)*)
-    },
+    };
 
-    ($($fmt:tt)*) => { $crate::logger::error!(from = "*unknown*", $($fmt)*); },
+    ($($fmt:tt)*) => { $crate::logger::error!(from = "*unknown*", $($fmt)*); };
 }
 
-pub macro log_dbg($expr:expr) {
-    {
+#[macro_export]
+macro_rules! log_dbg {
+    ($expr:expr) => {{
         use $crate::app::utils::logger::log;
         let result = $expr;
         info!(from = "dbg", "{expr} = {result:?}", expr = stringify!($expr));
         result
-    }
+    }};
 }
 
-pub macro scope(from = $from:expr, $($content:tt)*) {
-    let _logger_scope_guard = $crate::app::utils::logger::scope(
-        $from, std::fmt::format(format_args!($($content)*))
-    );
+#[macro_export]
+macro_rules! log_scope {
+    (from = $from:expr, $($content:tt)*) => {
+        let _logger_scope_guard = $crate::app::utils::logger::scope_impl(
+            $from, std::fmt::format(format_args!($($content)*))
+        );
+    };
 }
+
+pub use {log, info, error, log_dbg, log_scope};
 
 
 

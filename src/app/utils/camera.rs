@@ -268,7 +268,7 @@ impl CameraComponent {
 
 impl ConstDefault for CameraComponent {
     const DEFAULT: Self = Self {
-        fov: Angle::from_degrees(cfg::camera::default::FOV_IN_DEGREES),
+        fov: Angle(cfg::camera::default::FOV_IN_DEGREES / 180.0 * std::f32::consts::PI),
         aspect_ratio: cfg::window::default::ASPECT_RATIO,
         near_plane: cfg::camera::default::NEAR_PLANE,
         far_plane: cfg::camera::default::FAR_PLANE,
