@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use crate::{graphics::*, prelude::*};
 
 

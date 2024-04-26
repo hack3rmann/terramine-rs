@@ -139,7 +139,7 @@ impl App {
                 target.exit();
             },
 
-            Event::NewEvents(_) => {
+            Event::AboutToWait => {
                 if keyboard::just_pressed(cfg::key_bindings::APP_EXIT) {
                     target.exit();
                     return Ok(());

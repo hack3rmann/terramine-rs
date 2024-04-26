@@ -199,11 +199,11 @@ impl RenderStage {
 /// Graphics handler.
 #[derive(Debug)]
 pub struct Graphics {
-    /// A [window][Window] handle.
-    pub window: Window,
-
     /// Wraps [queue][Queue], [device][Device], [adapter][Adapter] and render [surface][Surface].
     pub context: RenderContext<'static>,
+    
+    /// A [window][Window] handle.
+    pub window: Window,
 
     /// Holds rendering information during rendering proccess.
     pub render_stage: RenderStage,
@@ -237,21 +237,17 @@ impl Graphics {
         let window = Window::new(cfg::window::default::SIZES)
             .context("failed to initialize a window")?;
 
+        let (context, config) = Self::make_render_context(&window).await;
 
-
-        // -----------< WGPU initialization >-----------
-
-        let (context, config) = unsafe { Self::make_render_context(&window) }.await;
-
-        // * # Safety
-        // * 
-        // * `Graphics` owns both the `window` and the `surface` so it's
-        // * live as long as wgpu's `Surface`.        
+        // # Safety
+        // 
+        // `Graphics` owns both the `window` and the `surface` so it's
+        // live as long as wgpu's `Surface`.        
         let context: RenderContext<'static> = unsafe { std::mem::transmute(context) };
 
-        // * # Safety
-        // * 
-        // * We've got unique access to `SURFACE_CFG` so it is safe.
+        // # Safety
+        // 
+        // We have unique access to `SURFACE_CFG` so it is safe.
         unsafe { SURFACE_CFG.write().upload(config) };
 
         let egui = Egui::new(
@@ -259,8 +255,6 @@ impl Graphics {
             window.inner_size().to_vec2(),
             window.scale_factor(),
         );
-        
-
         
         Ok(Self {
             egui,
@@ -314,6 +308,7 @@ impl Graphics {
             )
             .await
             .expect("failed to create device");
+
         let device = Arc::new(device);
         let queue = Arc::new(queue);
 
@@ -646,7 +641,7 @@ impl Egui {
         full_output: egui::FullOutput,
         scale_factor: f32,
     ) -> Result<(), egui_wgpu_backend::BackendError> {
-        let paint_jobs = self.context().tessellate(full_output.shapes, 1.0);
+        let paint_jobs = self.context().tessellate(full_output.shapes, full_output.pixels_per_point);
 
         let (width, height) = {
             let cfg = SURFACE_CFG.read();
@@ -659,20 +654,11 @@ impl Egui {
             scale_factor,
         };
 
-        self.render_pass.add_textures(
-            device, queue, &full_output.textures_delta,
-        )?;
-
-        self.render_pass.update_buffers(
-            device, queue, &paint_jobs, &screen_descriptor,
-        );
+        self.render_pass.add_textures(device, queue, &full_output.textures_delta)?;
+        self.render_pass.update_buffers(device, queue, &paint_jobs, &screen_descriptor);
 
         self.render_pass.execute(
-            encoder,
-            surface_view,
-            &paint_jobs,
-            &screen_descriptor,
-            None
+            encoder, surface_view, &paint_jobs, &screen_descriptor, None,
         )?;
 
         Ok(())
