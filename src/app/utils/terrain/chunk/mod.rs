@@ -6,7 +6,7 @@ pub mod array;
 use {
     crate::{
         prelude::*,
-        geometry::frustum::Frustum,
+        geometry::{Frustum, Aabb},
     },
     super::voxel::{
         self,
@@ -264,10 +264,7 @@ impl Chunk {
         let lo = global_chunk_pos - 0.5 * Vec3::splat(Voxel::SIZE);
         let hi = lo + Vec3::splat(Chunk::GLOBAL_SIZE);
 
-        frustum.intersects(&Aabb::from_float3(
-            vec3::from(lo.to_array()),
-            vec3::from(hi.to_array()),
-        ))
+        frustum.intersects(&Aabb::new(lo, hi))
     }
 
     /// Checks if [`Chunk`] is not already generated.

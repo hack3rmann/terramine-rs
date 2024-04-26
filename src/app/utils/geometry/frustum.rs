@@ -1,11 +1,8 @@
-use {
-    crate::{
-        prelude::*,
-        camera::CameraComponent,
-        transform::Transform,
-        geometry::{Intersects, Contains},
-    },
-    math_linear::math::ray::space_3d::Line,
+use crate::{
+    prelude::*,
+    camera::CameraComponent,
+    transform::Transform,
+    geometry::{Intersects, Contains, line::Line3d, plane::Plane3d, aabb::Aabb},
 };
 
 
@@ -13,14 +10,13 @@ use {
 /// Represents the camera frustum
 #[derive(Clone, Debug)]
 pub struct Frustum {
-    pub near: Plane,
-    pub far: Plane,
-    pub left: Plane,
-    pub right: Plane,
-    pub top: Plane,
-    pub bottom: Plane,
-
-    pub courner_rays: [Line; 4]
+    pub near: Plane3d,
+    pub far: Plane3d,
+    pub left: Plane3d,
+    pub right: Plane3d,
+    pub top: Plane3d,
+    pub bottom: Plane3d,
+    pub corner_rays: [Line3d; 4]
 }
 assert_impl_all!(Frustum: Send, Sync);
 
@@ -38,19 +34,19 @@ impl Frustum {
         
         let front_far = front_dir * cam.far_plane;
 
-        // Planes.
-        let near_plane   = Plane::new(pos + front_dir * cam.near_plane, front_dir);
-        let far_plane    = Plane::new(pos + front_far, -front_dir);
-        let right_plane  = Plane::new(pos, up_dir.cross(front_far + right_dir * half_horizontal_side));
-        let left_plane   = Plane::new(pos, (front_far - right_dir * half_horizontal_side).cross(up_dir));
-        let top_plane    = Plane::new(pos, right_dir.cross(front_far - up_dir * half_vertical_side));
-        let bottom_plane = Plane::new(pos, (front_far + up_dir * half_vertical_side).cross(right_dir));
+        // Plane3ds.
+        let near_plane   = Plane3d::new(pos + front_dir * cam.near_plane, front_dir);
+        let far_plane    = Plane3d::new(pos + front_far, -front_dir);
+        let right_plane  = Plane3d::new(pos, up_dir.cross(front_far + right_dir * half_horizontal_side).normalize());
+        let left_plane   = Plane3d::new(pos, (front_far - right_dir * half_horizontal_side).cross(up_dir).normalize());
+        let top_plane    = Plane3d::new(pos, right_dir.cross(front_far - up_dir * half_vertical_side).normalize());
+        let bottom_plane = Plane3d::new(pos, (front_far + up_dir * half_vertical_side).cross(right_dir).normalize());
 
         let courner_rays = [
-            Line::from_2_points(pos, pos + (front_far + right_dir * half_horizontal_side + up_dir * half_vertical_side)),
-            Line::from_2_points(pos, pos + (front_far - right_dir * half_horizontal_side + up_dir * half_vertical_side)),
-            Line::from_2_points(pos, pos + (front_far + right_dir * half_horizontal_side - up_dir * half_vertical_side)),
-            Line::from_2_points(pos, pos + (front_far - right_dir * half_horizontal_side - up_dir * half_vertical_side)),
+            Line3d::from_2_points(pos, pos + (front_far + right_dir * half_horizontal_side + up_dir * half_vertical_side)),
+            Line3d::from_2_points(pos, pos + (front_far - right_dir * half_horizontal_side + up_dir * half_vertical_side)),
+            Line3d::from_2_points(pos, pos + (front_far + right_dir * half_horizontal_side - up_dir * half_vertical_side)),
+            Line3d::from_2_points(pos, pos + (front_far - right_dir * half_horizontal_side - up_dir * half_vertical_side)),
         ];
 
         Self {
@@ -60,14 +56,14 @@ impl Frustum {
             right: right_plane,
             top: top_plane,
             bottom: bottom_plane,
-            courner_rays,
+            corner_rays: courner_rays,
         }
     }
 
     /// [AABB][Aabb]-[frustum][Frustum] intersection check.
     pub fn intersects_aabb(&self, aabb: &Aabb) -> bool {
         // If camera in AABB then intersection found.
-        ensure_or!(!aabb.contains(&self.courner_rays[0].origin), return true);
+        ensure_or!(!aabb.contains(&self.corner_rays[0].origin), return true);
 
         // If AABB centre is in frustum then intersection found.
         ensure_or!(!self.contains(&aabb.center()), return true);
@@ -84,14 +80,14 @@ impl Frustum {
         ensure_or!(!aabb_vertices.iter().any(|vertex| self.contains(vertex)), return true);
 
         // If any corner ray intersects AABB then intersection found.
-        ensure_or!(!self.courner_rays.iter().any(|ray| aabb.intersects(ray)), return true);
+        ensure_or!(!self.corner_rays.iter().any(|ray| aabb.intersects(ray)), return true);
 
         // All intersection tests failed.
         false
     }
 
     /// Checks if given point is in frustum or on it's boundary.
-    pub fn contains_point(&self, vec: vec3) -> bool {
+    pub fn contains_point(&self, vec: Vec3) -> bool {
         self.near.signed_distance(vec) > -f32::EPSILON
             && self.far.signed_distance(vec) > -f32::EPSILON
             && self.left.signed_distance(vec) > -f32::EPSILON
@@ -100,7 +96,7 @@ impl Frustum {
             && self.bottom.signed_distance(vec) > -f32::EPSILON
     }
 
-    pub const fn planes(&self) -> [Plane; 6] {
+    pub const fn planes(&self) -> [Plane3d; 6] {
         [self.near, self.far, self.left, self.right, self.top, self.bottom]
     }
 }

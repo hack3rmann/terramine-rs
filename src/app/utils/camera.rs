@@ -196,10 +196,10 @@ pub struct CameraComponent {
 
 impl CameraComponent {
     /// Returns projection matrix.
-    pub fn get_proj(&self) -> mat4 {
-        mat4::perspective_fov_lh(
+    pub fn get_proj(&self) -> Mat4 {
+        Mat4::perspective_lh(
             self.fov.get_radians(),
-            self.aspect_ratio,
+            1.0 / self.aspect_ratio,
             self.near_plane,
             self.far_plane,
         )
@@ -210,25 +210,25 @@ impl CameraComponent {
 
         let (front, right) = (transform.rotation.front(), transform.rotation.right());
 
-        let mut new_speed = vec3::ZERO;
+        let mut new_speed = Vec3::ZERO;
 
         if let CameraActivity::Enabled { captures_mouse: true } = self.activity {
-            if keyboard::is_pressed(Key::KeyW)      { new_speed += vecf!(front.x, 0, front.z).normalized() }
-            if keyboard::is_pressed(Key::KeyS)      { new_speed -= vecf!(front.x, 0, front.z).normalized() }
-            if keyboard::is_pressed(Key::KeyD)      { new_speed += right.normalized() }
-            if keyboard::is_pressed(Key::KeyA)      { new_speed -= right.normalized() }
-            if keyboard::is_pressed(Key::Space)     { new_speed += vecf!(0, 1, 0) }
-            if keyboard::is_pressed(Key::ShiftLeft) { new_speed -= vecf!(0, 1, 0) }
+            if keyboard::is_pressed(Key::KeyW)      { new_speed += Vec3::new(front.x, 0.0, front.z).normalize() }
+            if keyboard::is_pressed(Key::KeyS)      { new_speed -= Vec3::new(front.x, 0.0, front.z).normalize() }
+            if keyboard::is_pressed(Key::KeyD)      { new_speed += right.normalize() }
+            if keyboard::is_pressed(Key::KeyA)      { new_speed -= right.normalize() }
+            if keyboard::is_pressed(Key::Space)     { new_speed += Vec3::new(0.0, 1.0, 0.0) }
+            if keyboard::is_pressed(Key::ShiftLeft) { new_speed -= Vec3::new(0.0, 1.0, 0.0) }
         }
 
-        new_speed = new_speed.with_len(self.speed_factor);
+        new_speed = new_speed.normalize_or_zero() * self.speed_factor;
 
-        *speed = if new_speed != vec3::ZERO {
+        *speed = if new_speed != Vec3::ZERO {
             **speed / 2.0 + new_speed / 2.0
-        } else if speed.len() > 0.1 {
+        } else if speed.length() > 0.1 {
             **speed * self.speed_falloff.powf(dt_secs + 1.0)
         } else {
-            vec3::ZERO
+            Vec3::ZERO
         }.into();
 
         speed.affect_translation(dt, &mut transform.translation);
@@ -240,7 +240,7 @@ impl CameraComponent {
                 cfg::camera::MOUSE_SENSETIVITY * dt_secs
             } else { 1.0 };
 
-            let angles = accel_multiple * vec3::new(mouse_delta.y, 0.0, mouse_delta.x);
+            let angles = accel_multiple * Vec3::new(mouse_delta.y, 0.0, mouse_delta.x);
 
             // TODO: bound rotation by (-pi..pi)
             transform.rotation.rotate(dt_secs * self.mouse_sensetivity * angles);
@@ -365,10 +365,11 @@ pub fn update(world: &World) -> AnyResult<()> {
 
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, Pod, Zeroable)]
+#[derive(Debug, Clone, Copy)]
+#[derive(Pod, Zeroable)]
 pub struct CameraUniform {
-    pub proj: mat4,
-    pub view: mat4,
+    pub proj: Mat4,
+    pub view: Mat4,
 }
 assert_impl_all!(CameraUniform: Send, Sync);
 

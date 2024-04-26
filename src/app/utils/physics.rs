@@ -4,9 +4,9 @@ use crate::{prelude::*, transform::{Translation, Transform}};
 
 #[derive(Clone, Debug, ConstDefault)]
 pub struct KinematicState {
-    pub position: vec3,
-    pub velocity: vec3,
-    pub acceleration: vec3,
+    pub position: Vec3,
+    pub velocity: Vec3,
+    pub acceleration: Vec3,
 }
 assert_impl_all!(KinematicState: Send, Sync);
 
@@ -22,7 +22,7 @@ pub struct PhysicalComponent {
     /// In this model, **acceleration** is the function
     /// of **position**, **velocity** and previous **acceleration**.
     #[default(Arc::new(|_, _, a| a))]
-    pub acceleration_function: Arc<dyn Fn(vec3, vec3, vec3) -> vec3 + Send + Sync>,
+    pub acceleration_function: Arc<dyn Fn(Vec3, Vec3, Vec3) -> Vec3 + Send + Sync>,
 }
 assert_impl_all!(PhysicalComponent: Send, Sync, Component);
 
@@ -49,32 +49,32 @@ impl PhysicalComponent {
         self.kin_state.position += self.kin_state.velocity * dt + 0.5 * self.kin_state.acceleration * dt * dt;
     }
 
-    pub fn force(&self) -> vec3 {
+    pub fn force(&self) -> Vec3 {
         self.kin_state.acceleration * self.mass
     }
 
-    pub fn apply_force(&mut self, force: vec3) {
+    pub fn apply_force(&mut self, force: Vec3) {
         self.accelerate(force / self.mass);
     }
 
-    pub fn accelerate(&mut self, accel: vec3) {
+    pub fn accelerate(&mut self, accel: Vec3) {
         self.kin_state.acceleration += accel;
     }
 
-    pub fn momentum(&self) -> vec3 {
+    pub fn momentum(&self) -> Vec3 {
         self.kin_state.velocity * self.mass
     }
 
-    pub fn apply_momentum(&mut self, momentum: vec3) {
+    pub fn apply_momentum(&mut self, momentum: Vec3) {
         self.add_velocity(momentum / self.mass)
     }
 
-    pub fn add_velocity(&mut self, velocity: vec3) {
+    pub fn add_velocity(&mut self, velocity: Vec3) {
         self.kin_state.velocity += velocity;
     }
 
     pub fn kinetic_energy(&self) -> f32 {
-        0.5 * self.mass * self.kin_state.velocity.sqr()
+        0.5 * self.mass * self.kin_state.velocity.length_squared()
     }
 
     pub fn update_all(world: &World) -> AnyResult<()> {

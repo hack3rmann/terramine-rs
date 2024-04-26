@@ -13,21 +13,19 @@ assert_impl_all!(Transform: Send, Sync);
 
 impl Transform {
     /// Returns view matrix.
-    pub fn get_view(&self) -> mat4 {
+    pub fn get_view(&self) -> Mat4 {
         let rotation = self.rotation.as_matrix();
-        let front = rotation * vec3::from(cfg::terrain::FRONT_NORMAL);
-        let up = rotation * vec3::from(cfg::terrain::TOP_NORMAL);
+        let front = rotation * cfg::terrain::FRONT_NORMAL;
+        let up = rotation * cfg::terrain::TOP_NORMAL;
         let pos = *self.translation;
 
-        mat4::look_at_lh(pos, pos + front, up)
+        Mat4::look_at_lh(pos, pos + front, up)
     }
-}
 
-impl AsMatrix for Transform {
-    fn as_matrix(&self) -> mat4 {
-        self.translation.as_matrix()
-            * self.rotation.as_matrix()
-            * self.scaling.as_matrix()
+    pub fn as_matrix(&self) -> Mat4 {
+        Mat4::from_mat3a(self.translation.as_matrix().matrix3)
+            * Mat4::from_mat3(self.rotation.as_matrix())
+            * Mat4::from_mat3(self.scaling.as_matrix())
     }
 }
 
@@ -36,13 +34,13 @@ impl AsMatrix for Transform {
 #[derive(Debug, Clone, Copy, PartialEq, ConstDefault, Deref, Display, From, Into)]
 #[display("x: {position.x:.3}, y: {position.y:.3}, z: {position.z:.3}")]
 pub struct Translation {
-    pub position: vec3,
+    pub position: Vec3,
 }
 assert_impl_all!(Translation: Send, Sync);
 
-impl AsMatrix for Translation {
-    fn as_matrix(&self) -> mat4 {
-        mat4::translation(self.position)
+impl Translation {
+    pub fn as_matrix(self) -> Affine3A {
+        Affine3A::from_translation(self.position)
     }
 }
 
@@ -52,32 +50,30 @@ impl AsMatrix for Translation {
 #[display("roll: {angles.x:.3}, pitch: {angles.y:.3}, yaw: {angles.z:.3}")]
 pub struct Rotation {
     /// Rotation in `vec3 { x: roll, y: pitch, z: yaw }`.
-    pub angles: vec3,
+    pub angles: Vec3,
 }
 assert_impl_all!(Rotation: Send, Sync);
 
 impl Rotation {
-    pub fn rotate(&mut self, delta: vec3) {
+    pub fn rotate(&mut self, delta: Vec3) {
         self.angles += delta
     }
 
-    pub fn right(&self) -> vec3 {
-        self.as_matrix() * vec3::from(cfg::terrain::RIGHT_NORMAL)
+    pub fn right(&self) -> Vec3 {
+        self.as_matrix() * cfg::terrain::RIGHT_NORMAL
     }
 
-    pub fn up(&self) -> vec3 {
-        self.as_matrix() * vec3::from(cfg::terrain::TOP_NORMAL)
+    pub fn up(&self) -> Vec3 {
+        self.as_matrix() * cfg::terrain::TOP_NORMAL
     }
 
-    pub fn front(&self) -> vec3 {
-        self.as_matrix() * vec3::from(cfg::terrain::FRONT_NORMAL)
+    pub fn front(&self) -> Vec3 {
+        self.as_matrix() * cfg::terrain::FRONT_NORMAL
     }
-}
 
-impl AsMatrix for Rotation {
-    fn as_matrix(&self) -> mat4 {
-        let (roll, pitch, yaw) = self.angles.as_tuple();
-        mat4::rotation_rpy(roll, pitch, yaw)
+    pub fn as_matrix(&self) -> Mat3 {
+        let [roll, pitch, yaw] = self.angles.to_array();
+        Mat3::from_euler(EulerRot::XYZ, pitch, yaw, roll)
     }
 }
 
@@ -87,38 +83,35 @@ impl AsMatrix for Rotation {
 #[display("x: {amount.x:.3}, y: {amount.y:.3}, z: {amount.z:.3}")]
 #[default(Self::DEFAULT)]
 pub struct Scaling {
-    pub amount: vec3,
+    pub amount: Vec3,
 }
 assert_impl_all!(Scaling: Send, Sync);
 
-impl ConstDefault for Scaling {
-    const DEFAULT: Self = Self { amount: vec3::ONE };
-}
-
-impl AsMatrix for Scaling {
-    fn as_matrix(&self) -> mat4 {
-        mat4::scaling(self.amount)
+impl Scaling {
+    pub fn as_matrix(&self) -> Mat3 {
+        Mat3::from_diagonal(self.amount)
     }
 }
 
-
-
-pub trait AsMatrix {
-    fn as_matrix(&self) -> mat4;
+impl ConstDefault for Scaling {
+    const DEFAULT: Self = Self { amount: Vec3::ONE };
 }
-assert_obj_safe!(AsMatrix);
 
 
 
 #[derive(Clone, Copy, Deref, ConstDefault, PartialEq, Debug, From)]
 pub struct Speed {
-    pub inner: vec3,
+    pub inner: Vec3,
 }
 assert_impl_all!(Speed: Send, Sync);
 
-impl GetOffset for Speed {
-    fn get_offset(&self, dt: TimeStep) -> vec3 {
+impl Speed {
+    pub fn get_offset(&self, dt: TimeStep) -> Vec3 {
         dt.as_secs_f32() * self.inner
+    }
+
+    pub fn affect_translation(&self, dt: TimeStep, translation: &mut Translation) {
+        translation.position += self.get_offset(dt)
     }
 }
 
@@ -126,25 +119,14 @@ impl GetOffset for Speed {
 
 #[derive(Clone, Copy, Deref, ConstDefault, PartialEq, Debug, From)]
 pub struct Acceleration {
-    pub inner: vec3,
+    pub inner: Vec3,
 }
 assert_impl_all!(Acceleration: Send, Sync);
 
-impl GetOffset for Acceleration {
-    fn get_offset(&self, dt: TimeStep) -> vec3 {
+impl Acceleration {
+    pub fn get_offset(&self, dt: TimeStep) -> Vec3 {
         // FIXME: wrong delta
         let dt = dt.as_secs_f32();
         0.5 * dt * dt * self.inner
     }
 }
-
-
-
-pub trait GetOffset {
-    fn get_offset(&self, dt: TimeStep) -> vec3;
-
-    fn affect_translation(&self, dt: TimeStep, translation: &mut Translation) {
-        translation.position += self.get_offset(dt);
-    }
-}
-assert_obj_safe!(GetOffset);

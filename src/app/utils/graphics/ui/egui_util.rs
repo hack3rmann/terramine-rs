@@ -189,7 +189,7 @@ impl<'src, 'str, T> DragValue3<'src, 'str, T> {
     }
 }
 
-impl egui::Widget for DragValue3<'_, '_, vec3> {
+impl egui::Widget for DragValue3<'_, '_, Vec3> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         ui.horizontal(|ui| {
             ui.label(self.label)

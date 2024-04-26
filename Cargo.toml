@@ -72,6 +72,7 @@ egui_winit_platform = "0.21.0"
 emath = "0.26.2"
 bitflags = "2.4.1"
 glam = { version = "0.27.0", features = ["bytemuck", "serde"] }
+serde = { version = "1.0.198", features = ["derive"] }
 
 
 

@@ -45,24 +45,26 @@ pub mod topology {
 }
 
 pub mod terrain {
+    use glam::Vec3;
+
     /// Chunk side length in voxels.
     /// Must be a power of 2 due to be halfed in process of lowering details.
     pub const CHUNK_SIZE: usize = 64;
     pub const VOXEL_SIZE: f32   = 1.0;
 
-    pub const BACK_NORMAL:   (f32, f32, f32) = ( 1.0,  0.0,  0.0 );
-    pub const FRONT_NORMAL:  (f32, f32, f32) = (-1.0,  0.0,  0.0 );
-    pub const TOP_NORMAL:    (f32, f32, f32) = ( 0.0,  1.0,  0.0 );
-    pub const BOTTOM_NORMAL: (f32, f32, f32) = ( 0.0, -1.0,  0.0 );
-    pub const RIGHT_NORMAL:  (f32, f32, f32) = ( 0.0,  0.0,  1.0 );
-    pub const LEFT_NORMAL:   (f32, f32, f32) = ( 0.0,  0.0, -1.0 );
+    pub const BACK_NORMAL:      Vec3 = Vec3::new( 1.0,  0.0,  0.0 );
+    pub const FRONT_NORMAL:     Vec3 = Vec3::new(-1.0,  0.0,  0.0 );
+    pub const TOP_NORMAL:       Vec3 = Vec3::new( 0.0,  1.0,  0.0 );
+    pub const BOTTOM_NORMAL:    Vec3 = Vec3::new( 0.0, -1.0,  0.0 );
+    pub const RIGHT_NORMAL:     Vec3 = Vec3::new( 0.0,  0.0,  1.0 );
+    pub const LEFT_NORMAL:      Vec3 = Vec3::new( 0.0,  0.0, -1.0 );
 
-    pub const BACK_TANGENT:   (f32, f32, f32) = ( 0.0,  1.0,  0.0 );
-    pub const FRONT_TANGENT:  (f32, f32, f32) = BACK_TANGENT;
-    pub const TOP_TANGENT:    (f32, f32, f32) = (-1.0,  0.0,  0.0 );
-    pub const BOTTOM_TANGENT: (f32, f32, f32) = TOP_TANGENT;
-    pub const RIGHT_TANGENT:  (f32, f32, f32) = BACK_TANGENT;
-    pub const LEFT_TANGENT:   (f32, f32, f32) = BACK_TANGENT;
+    pub const BACK_TANGENT:   Vec3 = Vec3::new( 0.0,  1.0,  0.0 );
+    pub const FRONT_TANGENT:  Vec3 = BACK_TANGENT;
+    pub const TOP_TANGENT:    Vec3 = Vec3::new(-1.0,  0.0,  0.0 );
+    pub const BOTTOM_TANGENT: Vec3 = TOP_TANGENT;
+    pub const RIGHT_TANGENT:  Vec3 = BACK_TANGENT;
+    pub const LEFT_TANGENT:   Vec3 = BACK_TANGENT;
 
     pub const BACK_IDX:   usize = 0;
     pub const FRONT_IDX:  usize = 1;

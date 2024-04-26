@@ -1,15 +1,18 @@
 pub mod frustum;
+pub mod line;
+pub mod plane;
+pub mod aabb;
 
-use {
-    crate::prelude::*,
-    frustum::Frustum,
-    math_linear::math::{ray::space_3d::Line, bounding_volumes::aabb::Aabb},
-};
+pub use line::Line3d;
+pub use aabb::Aabb;
+pub use frustum::Frustum;
+use static_assertions::assert_obj_safe;
+use glam::*;
 
 
 
-pub trait Intersects<With> {
-    fn intersects(&self, with: &With) -> bool;
+pub trait Intersects<T> {
+    fn intersects(&self, with: &T) -> bool;
 }
 assert_obj_safe!(Intersects<i32>);
 
@@ -25,13 +28,13 @@ impl Intersects<Aabb> for Frustum {
     }
 }
 
-impl Intersects<Line> for Aabb {
-    fn intersects(&self, with: &Line) -> bool {
+impl Intersects<Line3d> for Aabb {
+    fn intersects(&self, with: &Line3d) -> bool {
         self.intersects_ray(with)
     }
 }
 
-impl Intersects<Aabb> for Line {
+impl Intersects<Aabb> for Line3d {
     fn intersects(&self, with: &Aabb) -> bool {
         with.intersects(self)
     }
@@ -42,22 +45,19 @@ impl Intersects<Aabb> for Line {
 pub trait Contains<T> {
     fn contains(&self, obj: &T) -> bool;
 }
-assert_obj_safe!(Contains<vec3>);
+assert_obj_safe!(Contains<Vec3>);
 
-impl Contains<vec3> for Frustum {
+impl Contains<Vec3> for Frustum {
     /// # Note
     /// 
     /// It's `const fn`.
-    fn contains(&self, obj: &vec3) -> bool {
+    fn contains(&self, obj: &Vec3) -> bool {
         self.contains_point(*obj)
     }
 }
 
-impl Contains<vec3> for Aabb {
-    /// # Note
-    /// 
-    /// It's `const fn`.
-    fn contains(&self, obj: &vec3) -> bool {
+impl Contains<Vec3> for Aabb {
+    fn contains(&self, obj: &Vec3) -> bool {
         self.contains_point(*obj)
     }
 }
