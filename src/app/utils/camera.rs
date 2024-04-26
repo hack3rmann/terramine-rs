@@ -254,7 +254,7 @@ impl CameraComponent {
     }
 
     pub fn on_window_resize(&mut self, size: UInt2) {
-        self.aspect_ratio = cfg::window::aspect_ratio(size.x as f32, size.y as f32);
+        self.aspect_ratio = size.y as f32 / size.x as f32;
     }
 
     pub fn disable(&mut self) {

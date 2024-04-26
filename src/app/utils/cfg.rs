@@ -30,17 +30,13 @@ pub mod camera {
 }
 
 pub mod window {
-    pub const fn aspect_ratio(width: f32, height: f32) -> f32 {
-        height / width
-    }
-
     pub mod default {
         use math_linear::prelude::*;
-        
+
         pub const WIDTH:  usize = 1024;
         pub const HEIGHT: usize = 768;
         pub const SIZES: USize2 = vecs!(WIDTH, HEIGHT);
-        pub const ASPECT_RATIO: f32 = super::aspect_ratio(WIDTH as f32, HEIGHT as f32);
+        pub const ASPECT_RATIO: f32 = HEIGHT as f32 / WIDTH as f32;
     }
 }
 

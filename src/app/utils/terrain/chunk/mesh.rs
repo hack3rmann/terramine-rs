@@ -260,7 +260,7 @@ pub fn make_low_resolution(chunk: &Chunk, adj: ChunkAdj, lod: Lod, flags: MeshFl
                 let mut iter = Range3d::from(start_pos..end_pos);
                 let pred = |pos| is_blocking_voxel(pos, offset);
 
-                if let Some(_) = adj.by_offset(offset) && is_on_surface {
+                if adj.by_offset(offset).is_some() && is_on_surface {
                     iter.all(pred)
                 } else {
                     iter.any(pred)

@@ -1252,14 +1252,13 @@ impl ChunkArrayTasks {
     /// Tries to finish chunk generation task.
     /// Returns [`Some`] with [chunk][Chunk] if it's ready.
     pub async fn try_finish_gen(&mut self, pos: Int3) -> Option<Chunk> {
-        if let Some(task) = self.voxels_gen.get_mut(&pos)
-            && let Some(voxel_ids) = task.try_take_result().await
-        {
-            self.voxels_gen.remove(&pos);
-            return Some(Chunk::from_voxels(voxel_ids, pos))
-        }
+        let voxel_ids = self.voxels_gen
+            .get_mut(&pos)?
+            .try_take_result().await?;
 
-        None
+        self.voxels_gen.remove(&pos);
+
+        Some(Chunk::from_voxels(voxel_ids, pos))
     }
 
     /// Tries to finish mesh generation task and then applies it to `mesh`.

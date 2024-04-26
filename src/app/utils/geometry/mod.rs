@@ -8,18 +8,10 @@ use {
 
 
 
-#[const_trait]
 pub trait Intersects<With> {
     fn intersects(&self, with: &With) -> bool;
 }
 assert_obj_safe!(Intersects<i32>);
-
-/// [`Intersects`] is commutative.
-impl<T: ~const Intersects<S>, S> const Intersects<T> for S {
-    default fn intersects(&self, with: &T) -> bool {
-        with.intersects(self)
-    }
-}
 
 impl Intersects<Frustum> for Aabb {
     fn intersects(&self, with: &Frustum) -> bool {
@@ -27,24 +19,32 @@ impl Intersects<Frustum> for Aabb {
     }
 }
 
-impl const Intersects<Line> for Aabb {
-    /// # Note
-    /// 
-    /// It's `const fn`.
+impl Intersects<Aabb> for Frustum {
+    fn intersects(&self, with: &Aabb) -> bool {
+        with.intersects(self)
+    }
+}
+
+impl Intersects<Line> for Aabb {
     fn intersects(&self, with: &Line) -> bool {
         self.intersects_ray(with)
     }
 }
 
+impl Intersects<Aabb> for Line {
+    fn intersects(&self, with: &Aabb) -> bool {
+        with.intersects(self)
+    }
+}
 
 
-#[const_trait]
+
 pub trait Contains<T> {
     fn contains(&self, obj: &T) -> bool;
 }
 assert_obj_safe!(Contains<vec3>);
 
-impl const Contains<vec3> for Frustum {
+impl Contains<vec3> for Frustum {
     /// # Note
     /// 
     /// It's `const fn`.
@@ -53,7 +53,7 @@ impl const Contains<vec3> for Frustum {
     }
 }
 
-impl const Contains<vec3> for Aabb {
+impl Contains<vec3> for Aabb {
     /// # Note
     /// 
     /// It's `const fn`.

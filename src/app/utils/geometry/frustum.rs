@@ -91,7 +91,7 @@ impl Frustum {
     }
 
     /// Checks if given point is in frustum or on it's boundary.
-    pub const fn contains_point(&self, vec: vec3) -> bool {
+    pub fn contains_point(&self, vec: vec3) -> bool {
         self.near.signed_distance(vec) > -f32::EPSILON
             && self.far.signed_distance(vec) > -f32::EPSILON
             && self.left.signed_distance(vec) > -f32::EPSILON

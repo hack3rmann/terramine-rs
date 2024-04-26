@@ -44,7 +44,7 @@ impl UV {
     }
 
     /// Useful if texture is inverted
-    pub const fn inversed(mut self) -> Self {
+    pub fn inversed(mut self) -> Self {
         self.lo.y = 1.0 - self.lo.y;
         self.hi.y = 1.0 - self.hi.y;
         self

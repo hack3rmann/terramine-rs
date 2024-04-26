@@ -126,13 +126,3 @@ pub macro module_destructor($($content:tt)*) {
         $($content)*
     }
 }
-
-
-
-pub const fn min(lhs: f32, rhs: f32) -> f32 {
-    if lhs <= rhs { lhs } else { rhs }
-}
-
-pub const fn max(lhs: f32, rhs: f32) -> f32 {
-    if lhs >= rhs { lhs } else { rhs }
-}

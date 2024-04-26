@@ -50,7 +50,7 @@ impl<T> Nullable<T> {
     /// # Safety
     /// 
     /// - [`Nullable`] value is not `null`.
-    pub const unsafe fn get_unchecked(&self) -> &T {
+    pub unsafe fn get_unchecked(&self) -> &T {
         self.inner.as_ref().unwrap_unchecked()
     }
 

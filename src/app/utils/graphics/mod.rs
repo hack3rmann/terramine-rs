@@ -425,7 +425,7 @@ impl Graphics {
     pub fn finish_render(&mut self) -> AnyResult<()> {
         let (surface_texture, encoder) = self.render_stage.finish()
             .context(
-                "`finish_render` should be called only once
+                "`finish_render` should be called only once \
                 and `begin_render` should be called before"
             )?;
 

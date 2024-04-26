@@ -118,12 +118,12 @@ pub mod shape {
 
     impl<'c> CubeDetailed<'c> {
         /// Constructs new cube maker with filled voxel data.
-        pub const fn new(data: &'c VoxelData) -> Self {
+        pub fn new(data: &'c VoxelData) -> Self {
             Self { data, half_size: Voxel::SIZE * 0.5 }
         }
 
         /// Edit default size.
-        pub const fn size(mut self, new_size: f32) -> Self {
+        pub fn size(mut self, new_size: f32) -> Self {
             self.half_size = new_size * 0.5;
             self
         }
@@ -262,7 +262,7 @@ pub mod shape {
     }
 
     impl CubeLowered {
-        pub const fn new(size: f32) -> Self {
+        pub fn new(size: f32) -> Self {
             Self { half_size: 0.5 * size }
         }
 
