@@ -113,6 +113,8 @@ pub trait AsBindGroup {
         None
     }
 
+    fn cache_key() -> &'static str;
+
     fn as_bind_group(
         &self, device: &Device, layout: &BindGroupLayout,
     ) -> Result<PreparedBindGroup<Self::Data>, AsBindGroupError> {
@@ -178,22 +180,25 @@ impl BindsCache {
         Self::default()
     }
 
-    pub fn add(&mut self, ty: impl Into<StaticStr>, bind: impl Any + Send + Sync) {
-        self.binds.insert(ty.into(), Box::new(bind));
+    pub fn add<B>(&mut self, bind: PreparedBindGroup<B>)
+    where
+        B: AsBindGroup + Send + Sync + 'static,
+    {
+        self.binds.insert(B::cache_key().into(), Box::new(bind));
     }
 
-    pub fn get<'s, B>(&'s self, ty: &str) -> Option<&'s B>
+    pub fn get<B>(&self) -> Option<&PreparedBindGroup<B::Data>>
     where
-        B: Any + Sync + Send,
+        B: AsBindGroup + 'static,
     {
-        self.binds.get(ty).and_then(|value| value.downcast_ref())
+        self.binds.get(B::cache_key()).and_then(|value| value.downcast_ref())
     }
 
-    pub fn get_mut<'s, B>(&'s mut self, ty: &str) -> Option<&'s mut B>
+    pub fn get_mut<B>(&mut self) -> Option<&mut PreparedBindGroup<B::Data>>
     where
-        B: Any + Send + Sync,
+        B: AsBindGroup + 'static,
     {
-        self.binds.get_mut(ty).and_then(|value| value.downcast_mut())
+        self.binds.get_mut(B::cache_key()).and_then(|value| value.downcast_mut())
     }
 }
 
@@ -221,6 +226,10 @@ mod tests {
 
         fn label() -> Option<&'static str> {
             Some("bindable_vector")
+        }
+
+        fn cache_key() -> &'static str {
+            "bindableVector"
         }
 
         fn update(

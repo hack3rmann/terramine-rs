@@ -141,12 +141,12 @@ pub mod key_bindings {
 
     pub const DEBUG_VISUALS_SWITCH:           Key = Key::F3;
     pub const APP_EXIT:                       Key = Key::Escape;
-    pub const MOUSE_CAPTURE:                  Key = Key::T;
-    pub const ENABLE_DRAG_AND_RESIZE_WINDOWS: Key = Key::I;
-    pub const ENABLE_PROFILER_WINDOW:         Key = Key::E;
-    pub const SWITCH_RENDER_SHADOWS:          Key = Key::U;
-    pub const RELOAD_RESOURCES:               Key = Key::H;
-    pub const SPAWN_CAMERA:                   Key = Key::C;
+    pub const MOUSE_CAPTURE:                  Key = Key::KeyT;
+    pub const ENABLE_DRAG_AND_RESIZE_WINDOWS: Key = Key::KeyI;
+    pub const ENABLE_PROFILER_WINDOW:         Key = Key::KeyE;
+    pub const SWITCH_RENDER_SHADOWS:          Key = Key::KeyU;
+    pub const RELOAD_RESOURCES:               Key = Key::KeyH;
+    pub const SPAWN_CAMERA:                   Key = Key::KeyC;
 }
 
 pub mod timer {

@@ -139,12 +139,12 @@ impl Camera {
         let mut new_speed = vec3::all(0.0);
 
         /* Movement controls */
-        if keyboard::is_pressed(Key::W)      { new_speed += vecf!(self.front.x, 0, self.front.z).normalized() }
-        if keyboard::is_pressed(Key::S)      { new_speed -= vecf!(self.front.x, 0, self.front.z).normalized() }
-        if keyboard::is_pressed(Key::A)      { new_speed += self.right.normalized() }
-        if keyboard::is_pressed(Key::D)      { new_speed -= self.right.normalized() }
-        if keyboard::is_pressed(Key::Space)  { new_speed += vecf!(0, 1, 0) }
-        if keyboard::is_pressed(Key::LShift) { new_speed -= vecf!(0, 1, 0) }
+        if keyboard::is_pressed(Key::KeyW)      { new_speed += vecf!(self.front.x, 0, self.front.z).normalized() }
+        if keyboard::is_pressed(Key::KeyS)      { new_speed -= vecf!(self.front.x, 0, self.front.z).normalized() }
+        if keyboard::is_pressed(Key::KeyA)      { new_speed += self.right.normalized() }
+        if keyboard::is_pressed(Key::KeyD)      { new_speed -= self.right.normalized() }
+        if keyboard::is_pressed(Key::Space)     { new_speed += vecf!(0, 1, 0) }
+        if keyboard::is_pressed(Key::ShiftLeft) { new_speed -= vecf!(0, 1, 0) }
 
         /* Calculate new speed */
         new_speed = new_speed.normalized() * self.speed_factor;
@@ -163,7 +163,7 @@ impl Camera {
         self.move_absolute(self.speed * dt);
 
         /* Reset */
-        if keyboard::just_pressed(Key::P) {
+        if keyboard::just_pressed(Key::KeyP) {
             self.set_position(0.0, 0.0, 2.0);
             self.reset_rotation();
         }

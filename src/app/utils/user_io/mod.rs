@@ -9,12 +9,12 @@ pub mod mouse;
 
 use {
     crate::{prelude::*, window::Window},
-    winit::event::{ElementState, Event, WindowEvent},
+    winit::{event::{ElementState, Event, KeyEvent, WindowEvent}, keyboard::PhysicalKey},
 };
 
 
 
-pub use winit::event::VirtualKeyCode as Key;
+pub use winit::keyboard::KeyCode as Key;
 
 
 
@@ -71,12 +71,11 @@ pub fn handle_event(event: &Event<()>, window: &Window) {
 
     if let Event::WindowEvent { event, .. } = event {
         match event {
-            // Close event
-            WindowEvent::KeyboardInput { input, .. } => if let Some(key) = input.virtual_keycode {
-                match input.state {
-                    ElementState::Pressed => keyboard::press(key),
-                    ElementState::Released => keyboard::release(key),
-                }
+            WindowEvent::KeyboardInput { event: KeyEvent {
+                physical_key: PhysicalKey::Code(key), state, ..
+            }, .. } => match state {
+                ElementState::Pressed => keyboard::press(*key),
+                ElementState::Released => keyboard::release(*key),
             },
 
             // Mouse buttons match

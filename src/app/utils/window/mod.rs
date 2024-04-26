@@ -5,14 +5,9 @@
 pub mod message_box;
 
 use {
-    crate::prelude::*,
-    winit::{
-        window::{WindowBuilder, Window as WinitWindow, Icon},
-        event_loop::EventLoop,
-        dpi::PhysicalSize,
-        error::OsError,
-    },
-    math_linear::prelude::*,
+    crate::prelude::*, math_linear::prelude::*, winit::{
+        dpi::PhysicalSize, error::{EventLoopError, OsError}, event_loop::EventLoop, window::{Icon, Window as WinitWindow, WindowBuilder}
+    }
 };
 
 /// Wrapper around `winit`'s window.
@@ -29,8 +24,8 @@ unsafe impl Sync for Window { }
 
 impl Window {
     /// Constructs window.
-    pub fn new(sizes: USize2) -> Result<Self, OsError> {
-        let event_loop = EventLoop::default();
+    pub fn new(sizes: USize2) -> Result<Self, WindowCreationError> {
+        let event_loop = EventLoop::new()?;
 
         let window = WindowBuilder::new()
             .with_title("Terramine")
@@ -75,4 +70,13 @@ impl Window {
         Icon::from_rgba(data, 32, 32)
             .expect("failed to load icon")
     }
+}
+
+#[derive(Debug, Error)]
+pub enum WindowCreationError {
+    #[error(transparent)]
+    Os(#[from] OsError),
+
+    #[error(transparent)]
+    EventLoop(#[from] EventLoopError),
 }

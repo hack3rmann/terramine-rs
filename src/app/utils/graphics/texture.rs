@@ -1,15 +1,13 @@
-use {
-    crate::{
-        prelude::*,
-        graphics::{Device, Queue, Image},
-    },
+use crate::{
+    prelude::*,
+    graphics::{Device, Queue, Image},
 };
 
 
 pub use wgpu::{
     TextureDescriptor, TextureViewDescriptor, ImageCopyTexture, ImageDataLayout, Origin2d, Origin3d,
     TextureAspect, TextureSampleType, TextureViewDimension, SamplerBindingType, TextureDimension,
-    SamplerDescriptor, FilterMode, TextureUsages,
+    SamplerDescriptor, FilterMode, TextureUsages, SurfaceTexture,
 };
 
 
@@ -108,27 +106,6 @@ impl From<wgpu::TextureView> for TextureView {
 
 impl Deref for TextureView {
     type Target = wgpu::TextureView;
-    fn deref(&self) -> &Self::Target {
-        self.inner.as_ref()
-    }
-}
-
-
-
-#[derive(Clone, Debug)]
-pub struct SurfaceTexture {
-    pub inner: Arc<wgpu::SurfaceTexture>,
-}
-assert_impl_all!(SurfaceTexture: Send, Sync);
-
-impl From<wgpu::SurfaceTexture> for SurfaceTexture {
-    fn from(value: wgpu::SurfaceTexture) -> Self {
-        Self { inner: Arc::new(value) }
-    }
-}
-
-impl Deref for SurfaceTexture {
-    type Target = wgpu::SurfaceTexture;
     fn deref(&self) -> &Self::Target {
         self.inner.as_ref()
     }

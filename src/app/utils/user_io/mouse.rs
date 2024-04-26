@@ -31,6 +31,8 @@ impl TryFrom<WinitMouseButton> for MouseButton {
             Left => Self::Left,
             Right => Self::Right,
             Middle => Self::Middle,
+            // FIXME: handle new mouse buttons
+            Forward | Back => unimplemented!(),
             Other(id) => bail_str!("failed to parse common mouse, unknown button id: {id}"),
         })
     }
@@ -122,6 +124,8 @@ impl From<WinitMouseButton> for ExtendedMouseButton {
             Left => Self::Left,
             Right => Self::Right,
             Middle => Self::Middle,
+            // FIXME: handle new mouse buttons
+            Forward | Back => unimplemented!(),
             Other(id) => Self::Other(id),
         }
     }

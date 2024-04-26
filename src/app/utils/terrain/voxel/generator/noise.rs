@@ -18,7 +18,7 @@ impl Noise2d {
             fbm
         };
         
-        let generator = PlaneMapBuilder::<_, 2>::new(&fbm)
+        let generator = PlaneMapBuilder::<_, 3>::new(&fbm)
             .set_size(sizes.x, sizes.y)
             .set_x_bounds(0.0, sizes.x as f64)
             .set_y_bounds(0.0, sizes.y as f64)

@@ -176,11 +176,38 @@ impl AssetLoader {
         Self::default()
     }
 
-    pub fn get<A: Any>(&mut self, path: impl AsRef<Path>) -> Option<Box<A>> {
+    pub fn extract<A: Any>(&mut self, path: impl AsRef<Path>) -> Option<Box<A>> {
         match self.loaded.remove(path.as_ref()) {
             Some(owned) => owned.get_value::<A>().ok(),
             None => None,
         }
+    }
+
+    pub fn get<A: Any>(&self, path: impl AsRef<Path>) -> Option<&A> {
+        self.loaded.get(path.as_ref())
+            .and_then(OwnedAsset::get)
+    }
+
+    pub fn get_mut<A: Any>(&mut self, path: impl AsRef<Path>) -> Option<&mut A> {
+        self.loaded.get_mut(path.as_ref())
+            .and_then(OwnedAsset::get_mut)
+    }
+
+    pub fn get_or_start<A: Any + Send + Sync>(
+        &mut self, path: impl AsRef<Path>, parse: impl Into<Parse<A>>,
+    ) -> Option<&mut A> {
+        let path = path.as_ref();
+
+        if self.is_loading(path) {
+            return None;
+        }
+
+        if !self.is_loaded(path) {
+            self.start_loading(path, parse);
+            return None;
+        }
+
+        self.get_mut::<A>(path)
     }
 
     pub fn start_loading<A: Any + Send + Sync>(
@@ -197,6 +224,16 @@ impl AssetLoader {
 
     pub fn is_loading(&self, path: impl AsRef<Path>) -> bool {
         self.unloaded.contains_key(path.as_ref())
+    }
+
+    pub fn is_loaded(&self, path: impl AsRef<Path>) -> bool {
+        self.loaded.contains_key(path.as_ref())
+    }
+
+    pub fn contains(&self, path: impl AsRef<Path>) -> bool {
+        let path = path.as_ref();
+
+        self.is_loading(path) || self.is_loaded(path)
     }
 
     pub async fn try_finish_all(&mut self) {

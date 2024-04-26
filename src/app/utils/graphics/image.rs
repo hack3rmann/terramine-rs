@@ -25,6 +25,11 @@ pub struct Image {
 assert_impl_all!(Image: Send, Sync);
 
 impl Image {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, LoadImageError> {
+        let image = image::load_from_memory(bytes)?.to_rgba8();
+        Ok(Self::from(image))
+    }
+
     pub fn dimensions(&self) -> UInt2 {
         self.inner.dimensions().into()
     }
@@ -42,9 +47,8 @@ impl FromFile for Image {
         let dir = Path::new(cfg::texture::DIRECTORY);
 
         let bytes = fs::read(dir.join(file_name)).await?;
-        let image = image::load_from_memory(&bytes)?.to_rgba8();
 
-        Ok(Self::from(image))
+        Self::from_bytes(&bytes)
     }
 }
 
@@ -57,13 +61,11 @@ macros::sum_errors! {
 
 
 #[derive(Debug, Clone)]
-pub struct GpuImageDescriptor<'s> {
-    pub device: &'s Device,
-    pub queue: &'s Queue,
+pub struct GpuImageDescriptor<'s, S> {
     pub image: &'s Image,
-    pub label: Option<StaticStr>,
+    pub label: Option<S>,
 }
-assert_impl_all!(GpuImageDescriptor: Send, Sync);
+assert_impl_all!(GpuImageDescriptor<&'static str>: Send, Sync);
 
 
 
@@ -72,22 +74,25 @@ pub struct GpuImage {
     pub texture: Texture,
     pub sampler: Sampler,
     pub view: TextureView,
-    pub format: TextureFormat,
     pub label: Option<StaticStr>,
 }
 
 impl GpuImage {
-    pub fn new(desc: GpuImageDescriptor) -> Self {
+    pub fn new<S: Into<StaticStr>>(
+        device: &Device, queue: &Queue, desc: GpuImageDescriptor<'_, S>,
+    ) -> Self {
         use crate::graphics::texture::*;
 
         let format = TextureFormat::Rgba8UnormSrgb;
 
+        let label = desc.label.map(Into::into);
+
         let texture = Texture::new(
-            desc.device,
-            desc.queue,
+            device,
+            queue,
             desc.image,
             &TextureDescriptor {
-                label: desc.label.as_deref(),
+                label: label.as_deref(),
                 size: desc.image.extent_size(),
                 mip_level_count: 1,
                 sample_count: 1,
@@ -98,19 +103,24 @@ impl GpuImage {
             },
         );
 
-        texture.write(desc.queue, desc.image);
+        texture.write(queue, desc.image);
 
         let view = texture.create_view(&default());
 
+        // FIXME: move sampler settings out of here
         let sampler = Sampler::new(
-            desc.device,
+            device,
             &SamplerDescriptor {
-                label: desc.label.as_deref(),
+                label: label.as_deref(),
                 min_filter: FilterMode::Linear,
                 ..default()
             },
         );
 
-        Self { texture, sampler, view, format, label: desc.label }
+        Self { texture, sampler, view, label }
+    }
+    
+    pub fn format(&self) -> TextureFormat {
+        self.texture.format()
     }
 }

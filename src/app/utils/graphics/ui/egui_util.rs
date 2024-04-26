@@ -311,8 +311,6 @@ pub fn run_inspector(world: &World, ui: &mut egui::Ui) {
                     ui.label("Finished");
 
                     for (path, asset) in loader.loaded.iter() {
-                        ui.label(format!("{asset:?}"));
-
                         ui.collapsing(path.as_os_str().to_string_lossy(), |ui| {
                             if let Some(string) = asset.get::<String>() {
                                 ui.label(egui::RichText::new(string).monospace());

@@ -213,12 +213,12 @@ impl CameraComponent {
         let mut new_speed = vec3::ZERO;
 
         if let CameraActivity::Enabled { captures_mouse: true } = self.activity {
-            if keyboard::is_pressed(Key::W)      { new_speed += vecf!(front.x, 0, front.z).normalized() }
-            if keyboard::is_pressed(Key::S)      { new_speed -= vecf!(front.x, 0, front.z).normalized() }
-            if keyboard::is_pressed(Key::D)      { new_speed += right.normalized() }
-            if keyboard::is_pressed(Key::A)      { new_speed -= right.normalized() }
-            if keyboard::is_pressed(Key::Space)  { new_speed += vecf!(0, 1, 0) }
-            if keyboard::is_pressed(Key::LShift) { new_speed -= vecf!(0, 1, 0) }
+            if keyboard::is_pressed(Key::KeyW)      { new_speed += vecf!(front.x, 0, front.z).normalized() }
+            if keyboard::is_pressed(Key::KeyS)      { new_speed -= vecf!(front.x, 0, front.z).normalized() }
+            if keyboard::is_pressed(Key::KeyD)      { new_speed += right.normalized() }
+            if keyboard::is_pressed(Key::KeyA)      { new_speed -= right.normalized() }
+            if keyboard::is_pressed(Key::Space)     { new_speed += vecf!(0, 1, 0) }
+            if keyboard::is_pressed(Key::ShiftLeft) { new_speed -= vecf!(0, 1, 0) }
         }
 
         new_speed = new_speed.with_len(self.speed_factor);
@@ -246,7 +246,7 @@ impl CameraComponent {
             transform.rotation.rotate(dt_secs * self.mouse_sensetivity * angles);
         }
 
-        if keyboard::just_pressed(Key::P) {
+        if keyboard::just_pressed(Key::KeyP) {
             *transform = default();
         }
 
@@ -345,18 +345,16 @@ pub fn update(world: &World) -> AnyResult<()> {
         uniform.view = transform.get_view();
 
         if let Ok(mut cache) = world.resource::<&mut BindsCache>() {
-            type CameraBind = PreparedBindGroup<<CameraUniform as AsBindGroup>::Data>;
-
             let graphics = world.resource::<&Graphics>()?;
 
-            if let Some(camera) = cache.get_mut::<CameraBind>("camera") {
+            if let Some(camera) = cache.get_mut::<CameraUniform>() {
                 uniform.update(graphics.device(), graphics.queue(), camera);
             } else {
                 let entries = CameraUniform::bind_group_layout_entries(graphics.device());
                 let layout = CameraUniform::bind_group_layout(graphics.device(), &entries);
                 let group = uniform.as_bind_group(graphics.device(), &layout)?;
 
-                cache.add("camera", group);
+                cache.add(group);
             }
         }
     }
@@ -391,6 +389,10 @@ impl AsBindGroup for CameraUniform {
 
     fn label() -> Option<&'static str> {
         Some("camera_uniform")
+    }
+
+    fn cache_key() -> &'static str {
+        "camera"
     }
 
     fn update(

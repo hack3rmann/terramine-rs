@@ -3,7 +3,7 @@
 #![feature(
     get_mut_unchecked, exhaustive_patterns, associated_type_defaults, never_type, const_trait_impl,
     specialization, const_fn_floating_point_arithmetic, const_option_ext, let_chains, inline_const,
-    decl_macro, inline_const_pat, trait_upcasting,
+    decl_macro, inline_const_pat,
 )]
 
 #[allow(unused_imports)]
@@ -17,6 +17,6 @@ pub use app::utils::*;
 
 
 
-fn main() -> anyhow::Result<!> {
+fn main() -> anyhow::Result<()> {
     app::App::drive()
 }

@@ -18,6 +18,7 @@ impl<'s> ClearPass<'s> {
         target_views: impl IntoIterator<Item = &'s TextureView>,
         target_depth: Option<&'s TextureView>,
         clear_color: wgpu::Color,
+        clear_depth: Option<f32>,
     ) -> Self {
         use wgpu::{RenderPassColorAttachment, Operations, LoadOp, RenderPassDescriptor};
 
@@ -40,7 +41,7 @@ impl<'s> ClearPass<'s> {
                     wgpu::RenderPassDepthStencilAttachment {
                         view,
                         depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(1.0),
+                            load: wgpu::LoadOp::Clear(clear_depth.unwrap_or(1.0)),
                             store: wgpu::StoreOp::Store,
                         }),
                         stencil_ops: None,
@@ -62,8 +63,11 @@ impl<'s> ClearPass<'s> {
         target_views: impl IntoIterator<Item = &'s TextureView>,
         target_depth: Option<&'s TextureView>,
         clear_color: wgpu::Color,
+        clear_depth: Option<f32>,
     ) {
-        let _pass = Self::new(encoder, target_views, target_depth, clear_color);
+        let _pass = Self::new(
+            encoder, target_views, target_depth, clear_color, clear_depth,
+        );
     }
 }
 

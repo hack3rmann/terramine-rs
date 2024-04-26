@@ -10,7 +10,7 @@ use {
     },
     winit::{
         event::{Event, WindowEvent},
-        event_loop::{ControlFlow, EventLoopWindowTarget},
+        event_loop::EventLoopWindowTarget,
         window::WindowId,
     },
 };
@@ -30,7 +30,7 @@ impl App {
     /// 
     /// If executable finishes with success it will stop inside this function. It implies that this
     /// function returns only [`Err`] if something gone wrong and never returns in success case.
-    pub fn drive() -> AnyResult<!> {
+    pub fn drive() -> AnyResult<()> {
         RUNTIME.block_on(Self::new())?.run()
     }
 
@@ -57,6 +57,7 @@ impl App {
     }
 
     /// Setups an [`App`] after creation.
+    #[profile]
     pub async fn setup(&mut self) -> AnyResult<()> {
         logger::scope!(from = "app", "setup()");
 
@@ -68,17 +69,10 @@ impl App {
         self.world.init_resource::<Timer>();
         self.world.init_resource::<AssetLoader>();
 
-        {
-            use crate::{graphics::{RenderGraph, RunRenderNode}, terrain::chunk::array::render};
-
-            let mut render_graph = RenderGraph::new();
-
-            let render: RunRenderNode = render::render;
-
-            render_graph.add(render);
-
-            self.world.insert_resource(render_graph);
-        }
+        self.world.resource::<&mut graphics::RenderGraph>()?
+            .add(graphics::RenderNode::new(
+                crate::terrain::chunk::array::render::render, "chunk-array",
+            ));
 
         {
             use crate::terrain::chunk::{array::ChunkArray, mesh};
@@ -95,15 +89,15 @@ impl App {
     }
 
     /// Runs an [app][App]. Runs [`winit`]'s `event_loop`.
-    pub fn run(mut self) -> ! {
+    pub fn run(mut self) -> AnyResult<()> {
         let event_loop = self.world.resource::<&mut Graphics>()
             .expect("failed to get graphics")
             .window
             .take_event_loop();
 
-        event_loop.run(move |event, elw_target, control_flow| {
+        event_loop.run(move |event, elw_target| {
             let result = RUNTIME.block_on(
-                self.run_frame_loop(event, elw_target, control_flow)
+                self.run_frame_loop(event, elw_target)
             );
 
             if let Err(error) = result {
@@ -113,21 +107,16 @@ impl App {
                     panic!("panicked on {error}");
                 }
             }
-        })
-    }
+        })?;
 
-    /// Exits [app][App]. Runs any destructor or deinitializer functions.
-    pub async fn exit(&mut self, control_flow: &mut ControlFlow) {
-        control_flow.set_exit();
+        Ok(())
     }
 
     /// Event loop run function.
     pub async fn run_frame_loop(
-        &mut self, event: Event<'_, ()>,
-        _elw_target: &EventLoopWindowTarget<()>, control_flow: &mut ControlFlow,
+        &mut self, event: Event<()>,
+        target: &EventLoopWindowTarget<()>,
     ) -> AnyResult<()> {
-        *control_flow = ControlFlow::Poll;
-
         if !self.startup_is_done {
             self.run_startup_systems().await?;
             self.startup_is_done = true;
@@ -147,12 +136,12 @@ impl App {
             Event::WindowEvent { event: WindowEvent::CloseRequested, window_id }
                 if window_id == cur_window_id =>
             {
-                self.exit(control_flow).await;
+                target.exit();
             },
 
-            Event::MainEventsCleared => {
+            Event::NewEvents(_) => {
                 if keyboard::just_pressed(cfg::key_bindings::APP_EXIT) {
-                    self.exit(control_flow).await;
+                    target.exit();
                     return Ok(());
                 }
 
@@ -164,7 +153,7 @@ impl App {
                 graphics.window.request_redraw();
             },
 
-            Event::RedrawRequested(window_id) => {
+            Event::WindowEvent { event: WindowEvent::RedrawRequested, window_id } => {
                 self.do_frame(window_id).await?;
 
                 let best_time = Duration::from_secs_f32(1.0 / 120.0);
@@ -182,16 +171,16 @@ impl App {
     }
 
     async fn run_startup_systems(&mut self) -> AnyResult<()> {
-        use crate::terrain::chunk::array::render;
-        
-        render::setup_pipeline(&mut self.world).await?;
-
         Ok(())
     }
 
     /// Updates `ecs`'s systems. Note that non of resources can be borrowed at this point.
+    #[profile]
     async fn update_systems(&mut self) -> AnyResult<()> {
-        use crate::physics::PhysicalComponent;
+        use crate::{physics::PhysicalComponent, terrain::chunk::array::render};
+
+        // ignoring error, because it can probably setup next frame
+        _ = render::try_setup_pipeline(&mut self.world);
 
         camera::update(&self.world)?;
         Graphics::update(&mut self.world)?;

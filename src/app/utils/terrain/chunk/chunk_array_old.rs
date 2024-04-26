@@ -968,7 +968,7 @@ impl ChunkArray {
         // FIXME: add camera input
         // this.proccess_camera_input(world, cam).await;
         
-        if keyboard::just_pressed_combo(&[Key::LControl, Key::S]) {
+        if keyboard::just_pressed_combo(&[Key::ControlLeft, Key::KeyS]) {
             let chunks = this.chunks(world).collect_vec();
             let handle = tokio::spawn(
                 Self::save_to_file(this.sizes, chunks, "world", "world")
@@ -981,7 +981,7 @@ impl ChunkArray {
             handle.await??;
         }
 
-        if keyboard::just_pressed_combo(&[Key::LControl, Key::O]) {
+        if keyboard::just_pressed_combo(&[Key::ControlLeft, Key::KeyO]) {
             this.tasks.reading = Nullable::new(
                 tokio::spawn(Self::read_from_file("world", "world"))
             );

@@ -7,18 +7,13 @@ edition = '2021'
 
 [dependencies]
 # Graphics
-wgpu = '0.18.0'
-encase = '0.6.1'
+wgpu = '0.19.3'
+encase = '0.7.0'
 
 # Platform
-winit = '0.28.7'
-image = '0.24.3'
+winit = '0.29.15'
+image = '0.25.1'
 winapi = '0.3.9'
-
-# Gui
-# imgui = '0.11.0'
-# imgui-winit-support = '0.11.0'
-# imgui-wgpu = '0.24.0'
 
 # Runtime
 tokio = { version = '1.27.0', features = ['full'] }
@@ -37,7 +32,7 @@ ctor = '0.2.0'
 thiserror = '1.0.40'
 derive-deref-rs = '0.1.1'
 lazy_static = '1.4.0'
-parse-display = '0.8.0'
+parse-display = '0.9.0'
 user-error = '1.2.8'
 type-uuid = '0.1.2'
 smart-default = '0.7.1'
@@ -48,7 +43,7 @@ const_format = '0.2.31'
 
 # Math
 directx_math = '0.2.2'
-noise = '0.8.2'
+noise = '0.9.0'
 
 # Utils
 anyhow = '1.0.71'
@@ -60,7 +55,7 @@ itertools = '0.12.0'
 ordered-float = '4.1.1'
 rand = '0.8.5'
 static_assertions = '1.1.0'
-env_logger = '0.10.0'
+env_logger = '0.10.2'
 log = '0.4.17'
 bytemuck = { version = '1.13.1', features = ['derive'] }
 
@@ -70,12 +65,11 @@ terramine_macros = { version = '*', path = '../terramine_macros' }
 terramine_profiler_macros = { path = '../terramine_profiler_macros' }
 math_linear = { version = '0.1.0', path = '../math_linear', features = ['byte_muck', 'nightly'] }
 
-# egui-wgpu = "0.23.0"
-egui = '0.23.0'
-egui_dock = '0.8.2'
-egui_wgpu_backend = '0.27.0'
-egui_winit_platform = '0.20.0'
-emath = '0.23.0'
+egui = '0.26.2'
+egui_dock = '0.11.4'
+egui_wgpu_backend = '0.28.0'
+egui_winit_platform = '0.21.0'
+emath = '0.26.2'
 bitflags = "2.4.1"
 
 

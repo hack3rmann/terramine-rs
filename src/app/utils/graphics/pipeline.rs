@@ -31,7 +31,7 @@ pub struct RenderPipeline {
 assert_impl_all!(RenderPipeline: Send, Sync);
 
 impl RenderPipeline {
-    pub fn new(device: &Device, desc: RenderPipelineDescriptor) -> Self {
+    pub fn new(device: &Device, desc: RenderPipelineDescriptor<'_>) -> Self {
         let pipeline = device.create_render_pipeline(
             &wgpu::RenderPipelineDescriptor {
                 label: desc.label.as_deref(),

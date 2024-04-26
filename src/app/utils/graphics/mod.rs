@@ -17,6 +17,8 @@ pub mod image;
 pub mod asset;
 pub mod material;
 pub mod render_graph;
+pub mod postproc;
+pub mod gbuffer;
 
 use crate::prelude::*;
 
@@ -50,6 +52,7 @@ impl Plugin for GraphicsPlugin {
     async fn init(self, world: &mut World) -> AnyResult<()> {
         world.init_resource::<PipelineCache>();
         world.init_resource::<BindsCache>();
+        world.init_resource::<RenderGraph>();
         world.insert_resource(CommonUniform::zeroed());
 
         let graphics = Graphics::new()
@@ -65,15 +68,15 @@ impl Plugin for GraphicsPlugin {
 
 
 #[derive(Debug)]
-pub struct RenderContext {
+pub struct RenderContext<'window> {
     pub device: Arc<Device>,
     pub queue: Arc<Queue>,
     pub adapter: Adapter,
-    pub surface: Surface,
+    pub surface: Surface<'window>,
 }
 assert_impl_all!(RenderContext: Send, Sync);
 
-impl RenderContext {
+impl RenderContext<'_> {
     pub fn device(&self) -> &Device {
         &self.device
     }
@@ -89,14 +92,107 @@ pub static SURFACE_CFG: RwLock<GlobalAsset<SurfaceConfiguration>> = const_defaul
 
 
 
-#[derive(Debug, Constructor)]
+#[derive(Debug)]
 pub struct RenderStage {
-    pub view: TextureView,
-    pub depth: TextureView,
-    pub encoder: CommandEncoder,
-    pub output: SurfaceTexture,
+    pub depth: GpuImage,
+    pub encoder: Option<CommandEncoder>,
+    pub surface_view: Option<TextureView>,
+    pub surface_texture: Option<SurfaceTexture>,
 }
 assert_impl_all!(RenderStage: Send, Sync);
+
+impl RenderStage {
+    pub fn new(device: &Device) -> Self {
+        let depth = Self::make_depth_image(device, {
+            let cfg = SURFACE_CFG.read();
+            UInt2::new(cfg.width, cfg.height)
+        });
+
+        Self {
+            depth,
+            surface_view: None,
+            encoder: None,
+            surface_texture: None,
+        }
+    }
+
+    pub fn surface_view(&self) -> &TextureView {
+        self.surface_view.as_ref()
+            .expect("failed to get surface view")
+    }
+
+    pub fn encoder_mut(&mut self) -> &mut CommandEncoder {
+        self.encoder.as_mut()
+            .expect("failed to get encoder")
+    }
+
+    pub fn get_all(&mut self) -> (&TextureView, &TextureView, &mut CommandEncoder) {
+        (
+            self.surface_view.as_ref()
+                .expect("failed to get surface view"),
+            &self.depth.view,
+            self.encoder.as_mut()
+                .expect("failed to get command encoder"),
+        )
+    }
+
+    pub fn encoder_and_view(&mut self) -> (&TextureView, &mut CommandEncoder) {
+        let (surface_view, _, encoder) = self.get_all();
+        (surface_view, encoder)
+    }
+
+    pub fn begin(
+        &mut self, surface_texture: SurfaceTexture, encoder: CommandEncoder,
+    ) {
+        self.surface_view = Some(surface_texture.texture.create_view(&default()).into());
+        self.surface_texture = Some(surface_texture);
+        self.encoder = Some(encoder);
+    }
+
+    pub fn finish(&mut self) -> Option<(SurfaceTexture, CommandEncoder)> {
+        self.surface_view = None;
+
+        Some((
+            self.surface_texture.take()?,
+            self.encoder.take()?,
+        ))
+    }
+
+    fn on_window_resize(&mut self, device: &Device, new_size: UInt2) {
+        self.depth = Self::make_depth_image(device, new_size);
+    }
+
+    fn make_depth_image(device: &Device, size: UInt2) -> GpuImage {
+        let size = wgpu::Extent3d {
+            width: size.x,
+            height: size.y,
+            depth_or_array_layers: 1,
+        };
+
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("depth_texture"),
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+
+        let view = texture.create_view(&default());
+
+        let sampler = Sampler::new(device, &default());
+
+        GpuImage {
+            texture: texture.into(),
+            sampler,
+            view: view.into(),
+            label: Some("depth".into()),
+        }
+    }
+}
 
 
 
@@ -107,10 +203,10 @@ pub struct Graphics {
     pub window: Window,
 
     /// Wraps [queue][Queue], [device][Device], [adapter][Adapter] and render [surface][Surface].
-    pub context: RenderContext,
+    pub context: RenderContext<'static>,
 
     /// Holds rendering information during rendering proccess.
-    pub render_stage: Option<RenderStage>,
+    pub render_stage: RenderStage,
 
     /// `egui` handle.
     pub egui: Egui,
@@ -145,11 +241,13 @@ impl Graphics {
 
         // -----------< WGPU initialization >-----------
 
+        let (context, config) = unsafe { Self::make_render_context(&window) }.await;
+
         // * # Safety
         // * 
         // * `Graphics` owns both the `window` and the `surface` so it's
-        // * live as long as wgpu's `Surface`.
-        let (context, config) = unsafe { Self::make_render_context(&window) }.await;
+        // * live as long as wgpu's `Surface`.        
+        let context: RenderContext<'static> = unsafe { std::mem::transmute(context) };
 
         // * # Safety
         // * 
@@ -161,14 +259,14 @@ impl Graphics {
             window.inner_size().to_vec2(),
             window.scale_factor(),
         );
-
         
+
         
         Ok(Self {
             egui,
             window,
+            render_stage: RenderStage::new(&context.device),
             context,
-            render_stage: None,
         })
     }
 
@@ -179,7 +277,7 @@ impl Graphics {
     /// - `window` must be a valid object to create a surface upon.
     /// - `window` must remain valid until after
     /// the returned [`RenderContext`] is dropped.
-    async unsafe fn make_render_context(window: &Window)
+    async fn make_render_context(window: &Window)
         -> (RenderContext, SurfaceConfiguration)
     {
         let wgpu_instance = Instance::new(
@@ -194,7 +292,7 @@ impl Graphics {
         );
 
         let surface = wgpu_instance.create_surface(&window.inner)
-            .expect("context should be not WebGL2");
+            .expect("context should not be WebGL2");
 
         let adapter = wgpu_instance
             .request_adapter(&RequestAdapterOptions {
@@ -209,8 +307,8 @@ impl Graphics {
             .request_device(
                 &DeviceDescriptor {
                     label: None,
-                    features: Features::empty(),
-                    limits: default(),
+                    required_features: Features::empty(),
+                    required_limits: default(),
                 },
                 None,
             )
@@ -233,6 +331,8 @@ impl Graphics {
             height: window.inner_size().height,
             present_mode: swapchain_capabilities.present_modes[0],
             alpha_mode: swapchain_capabilities.alpha_modes[0],
+            // FIXME: figure out what is this
+            desired_maximum_frame_latency: 0,
             view_formats: vec![],
         };
 
@@ -264,11 +364,7 @@ impl Graphics {
     pub fn render_egui(&mut self, world: &World)
         -> Result<(), egui_wgpu_backend::BackendError>
     {
-        let render_stage = self.render_stage.as_mut()
-            .expect(
-                "`render_sadbox` should be called after
-                `begin_render` and before `finish_render`"
-            );
+        let (surface_view, encoder) = self.render_stage.encoder_and_view();
 
         self.egui.begin_frame();
 
@@ -279,7 +375,8 @@ impl Graphics {
         self.egui.render(
             &self.context.device,
             &self.context.queue,
-            render_stage,
+            encoder,
+            surface_view,
             full_output,
             self.window.scale_factor() as f32
         )?;
@@ -291,14 +388,14 @@ impl Graphics {
         self.begin_render()?;
 
         if let Ok(graph) = world.resource::<&RenderGraph>() {
-            let render_stage = self.render_stage.as_mut()
-                .context("failed to find render stage handle")?;
-
-            let encoder = &mut render_stage.encoder;
-            let view = render_stage.view.clone();
-            let depth = &render_stage.depth;
+            let (view, depth, encoder) = self.render_stage.get_all();
             
-            graph.run(world, encoder, &[view], Some(depth))?;
+            graph.run(world, encoder, &[view.clone()], Some(depth));
+        } else {
+            logger::error!(
+                from = "graphics",
+                "failed to draw: render graph not found",
+            );
         }
 
         self.render_egui(world)?;
@@ -310,50 +407,20 @@ impl Graphics {
 
     /// Begins a render proccess.
     pub fn begin_render(&mut self) -> Result<(), SurfaceError> {
-        // FIXME: create depth view once
-        let depth = {
-            let surface_cfg = SURFACE_CFG.read();
-
-            let size = wgpu::Extent3d {
-                width: surface_cfg.width,
-                height: surface_cfg.height,
-                depth_or_array_layers: 1,
-            };
-
-            let desc = wgpu::TextureDescriptor {
-                label: Some("depth_texture"),
-                size,
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: wgpu::TextureFormat::Depth32Float,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                    | wgpu::TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
-            };
-
-            let texture = self.context.device.create_texture(&desc);
-
-            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
-
-            TextureView::from(view)
-        };
-
         let output = self.context.surface.get_current_texture()?;
 
-        let view = TextureView::from(
-            output.texture.create_view(&default())
-        );
+        let encoder = self.context.device.create_command_encoder(&default());
 
-        let mut encoder
-            = self.context.device.create_command_encoder(&default());
+        self.render_stage.begin(output, encoder);
+
+        let (surface_view, depth, encoder) = self.render_stage.get_all();
 
         ClearPass::clear(
-            &mut encoder, [&view], Some(&depth), cfg::shader::CLEAR_COLOR
-        );
-
-        self.render_stage = Some(
-            RenderStage::new(view, depth, encoder, output.into())
+            encoder,
+            [surface_view],
+            Some(depth),
+            cfg::shader::CLEAR_COLOR,
+            Some(1.0),
         );
 
         Ok(())
@@ -361,17 +428,15 @@ impl Graphics {
 
     /// Ends rendering proccess.
     pub fn finish_render(&mut self) -> AnyResult<()> {
-        let render_stage = self.render_stage.take()
+        let (surface_texture, encoder) = self.render_stage.finish()
             .context(
                 "`finish_render` should be called only once
                 and `begin_render` should be called before"
             )?;
 
-        self.context.queue.submit([render_stage.encoder.finish()]);
+        self.context.queue.submit([encoder.finish()]);
 
-        Arc::into_inner(render_stage.output.inner)
-            .expect("Render stage's output should be owned by `Graphics`")
-            .present();
+        surface_texture.present();
 
         Ok(())
     }
@@ -383,6 +448,8 @@ impl Graphics {
             (config.width, config.height) = (new_size.x, new_size.y);
             self.context.surface.configure(&self.context.device, &config);
         }
+
+        self.render_stage.on_window_resize(&self.context.device, new_size);
     }
 
     pub fn handle_event(world: &World, event: &Event<()>) -> AnyResult<()> {
@@ -392,9 +459,9 @@ impl Graphics {
 
         graphics.egui.platform.handle_event(event);
 
-        if let Event::WindowEvent { event: WindowEvent::Resized(new_size), .. }
-            = event
-        {
+        if let Event::WindowEvent {
+            event: WindowEvent::Resized(new_size), ..
+        } = event {
             let new_size = new_size.to_vec2();
 
             graphics.on_window_resize(new_size);
@@ -422,23 +489,22 @@ impl Graphics {
 
             common_uniform.time = timer.time().as_secs_f32();
 
-            if let Ok(mut cache) = world.resource::<&mut BindsCache>() {
-                type CommonBindGroup = PreparedBindGroup<<CommonUniform as AsBindGroup>::Data>;
+            let mut cache = world.resource::<&mut BindsCache>()
+                .expect("failed to found binds cache");
 
-                if let Some(common) = cache.get_mut::<CommonBindGroup>("common") {
-                    AsBindGroup::update(
-                        common_uniform.deref(),
-                        graphics.device(),
-                        graphics.queue(),
-                        common,
-                    );
-                } else {
-                    let entries = CommonUniform::bind_group_layout_entries(graphics.device());
-                    let layout = CommonUniform::bind_group_layout(graphics.device(), &entries);
-                    let bind_group = common_uniform.as_bind_group(graphics.device(), &layout)?;
+            if let Some(common) = cache.get_mut::<CommonUniform>() {
+                AsBindGroup::update(
+                    common_uniform.deref(),
+                    graphics.device(),
+                    graphics.queue(),
+                    common,
+                );
+            } else {
+                let entries = CommonUniform::bind_group_layout_entries(graphics.device());
+                let layout = CommonUniform::bind_group_layout(graphics.device(), &entries);
+                let bind_group = common_uniform.as_bind_group(graphics.device(), &layout)?;
 
-                    cache.add("common", bind_group);
-                }
+                cache.add(bind_group);
             }
         }
 
@@ -466,6 +532,10 @@ impl AsBindGroup for CommonUniform {
 
     fn label() -> Option<&'static str> {
         Some("common_uniform")
+    }
+
+    fn cache_key() -> &'static str {
+        "common"
     }
 
     fn update(
@@ -571,11 +641,12 @@ impl Egui {
         &mut self,
         device: &Device,
         queue: &Queue,
-        render_stage: &mut RenderStage,
+        encoder: &mut CommandEncoder,
+        surface_view: &TextureView,
         full_output: egui::FullOutput,
         scale_factor: f32,
     ) -> Result<(), egui_wgpu_backend::BackendError> {
-        let paint_jobs = self.context().tessellate(full_output.shapes);
+        let paint_jobs = self.context().tessellate(full_output.shapes, 1.0);
 
         let (width, height) = {
             let cfg = SURFACE_CFG.read();
@@ -597,8 +668,8 @@ impl Egui {
         );
 
         self.render_pass.execute(
-            &mut render_stage.encoder,
-            &render_stage.view,
+            encoder,
+            surface_view,
             &paint_jobs,
             &screen_descriptor,
             None
