@@ -15,7 +15,7 @@ pub use {
         str_view::{StrView, StaticStr, SharedStr},
         wrapper::*,
         macros,
-        failure::{ensure_or, ensure, ensure_eq, ensure_ne, bail, bail_str, fmt_error, ensure_fmt, StrError},
+        failure::{ensure, ensure_eq, ensure_ne},
         const_default::ConstDefault,
         iterator::Range3d,
         geometry::{Intersects, Contains},

@@ -154,7 +154,8 @@ impl Chunk {
     pub fn make_partition_vertices(&self, voxel: Voxel, adj: &ChunkAdj) -> SmallVec<[HiResVertex; 36]> {
         let offset_iter = Range3d::adj_iter(IVec3::ZERO)
             .filter(|&offset| {
-                let adj = adj.by_offset(offset);
+                let adj = adj.by_offset(offset).unwrap();
+
                 match self.get_voxel_global(voxel.pos + offset) {
                     ChunkOption::Voxel(voxel) => voxel.is_air(),
 
@@ -215,7 +216,9 @@ impl Chunk {
     /// Gives [voxel id][Id] by it's index in array.
     /// Returns [`Some`] with [id][Id] or [`None`] if `idx` is invalid.
     pub fn get_id(&self, idx: usize) -> Option<VoxelId> {
-        ensure_or!(idx < Chunk::VOLUME, return None);
+        if idx >= Chunk::VOLUME {
+            return None;
+        }
 
         Some(match self.info.load(Relaxed).get_fill_type() {
             FillType::AllSame(id) => id,
@@ -245,8 +248,10 @@ impl Chunk {
     /// 
     /// Panics if [chunk][Chunk] is not already had been generated or `local_pos` is not local.
     pub fn get_voxel_local(&self, local_pos: IVec3) -> Option<Voxel> {
-        ensure_or!(self.is_generated(), return None);
-        
+        if !self.is_generated() {
+            return None;
+        }
+
         let idx = Chunk::voxel_pos_to_idx(local_pos)?;
 
         let id = self.get_id(idx)
@@ -389,7 +394,9 @@ impl Chunk {
     /// 
     /// Returns [`Err`] if `idx` is out of bounds.
     pub fn set_id(&mut self, idx: usize, new_id: VoxelId) -> Result<VoxelId, EditError> {
-        ensure!(idx < Self::VOLUME, EditError::IdxOutOfBounds { idx, len: Self::VOLUME });
+        if idx >= Self::VOLUME {
+            return Err(EditError::IdxOutOfBounds { idx, len: Self::VOLUME });
+        }
 
         let old_id = match self.info.load(Relaxed).get_fill_type() {
             FillType::Unspecified => {
@@ -460,7 +467,7 @@ impl Chunk {
             let idx = Self::voxel_pos_to_idx_unchecked(local_pos);
             
             let old_id = self.get_id(idx).expect("idx should be valid");
-            ensure_or!(old_id != new_id, continue);
+            if old_id == new_id { continue }
 
             is_changed = true;
 
@@ -504,7 +511,7 @@ impl Chunk {
     pub fn optimize(&mut self) {
         self.unoptimize();
 
-        ensure_or!(self.is_generated(), return);
+        if !self.is_generated() { return }
         
         let mut info = ChunkInfo {
             active_lod: self.info.load(Acquire).get_active_lod(),
@@ -589,7 +596,9 @@ impl Chunk {
     /// 
     /// Returns [`None`] if `pos` < [`IVec3::ZERO`][IVec3] or `pos` >= [`Chunk::SIZES`][Chunk].
     pub fn voxel_pos_to_idx(pos: IVec3) -> Option<usize> {
-        ensure_or!(pos.x >= 0 && pos.y >= 0 && pos.z >= 0, return None);
+        if pos.x < 0 || pos.y < 0 || pos.z < 0 {
+            return None;
+        }
 
         let idx = iterator::get_index(&pos.to_array().map(|x| x as usize), &[Self::SIZE; 3]);
 

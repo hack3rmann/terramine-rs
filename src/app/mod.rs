@@ -245,7 +245,10 @@ impl App {
         // Skip a frame if the window is not main.
         {
             let graphics = self.world.resource::<&Graphics>()?;
-            ensure_or!(window_id == graphics.window.id(), return Ok(()));
+
+            if window_id != graphics.window.id() {
+                return Ok(());
+            }
         }
 
         self.update(window_id).await?;

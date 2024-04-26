@@ -51,10 +51,14 @@ impl Frustum {
     /// [AABB][Aabb]-frustum intersection check.
     pub fn is_aabb_in_frustum(&self, aabb: Aabb) -> bool {
         // If camera in AABB then intersection found.
-        ensure_or!(!aabb.contains_point(self.courner_rays[0].origin), return true);
+        if aabb.contains_point(self.courner_rays[0].origin) {
+            return true;
+        }
 
         // If AABB centre is in frustum then intersection found.
-        ensure_or!(!self.contains(aabb.center()), return true);
+        if self.contains(aabb.center()) {
+            return true;
+        }
 
         let aabb_vertices = aabb.as_vertex_array();
 
@@ -62,13 +66,19 @@ impl Frustum {
             .all(|vertex| self.near.signed_distance(vertex) < -f32::EPSILON);
 
         // If all vertices are behind the frustum there's no intersection.
-        ensure_or!(!is_all_vertices_behind, return false);
+        if is_all_vertices_behind {
+            return true;
+        }
 
         // If any AABB vertex is in frustum then intersection found.
-        ensure_or!(!aabb_vertices.iter().any(|&vertex| self.contains(vertex)), return true);
+        if aabb_vertices.iter().any(|&vertex| self.contains(vertex)) {
+            return true;
+        }
 
         // If any corner ray intersects AABB then intersection found.
-        ensure_or!(!self.courner_rays.iter().any(|ray| aabb.intersects_ray(ray)), return true);
+        if self.courner_rays.iter().any(|ray| aabb.intersects_ray(ray)) {
+            return true;
+        }
 
         // All intersection tests failed.
         false

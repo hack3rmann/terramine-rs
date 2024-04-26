@@ -134,7 +134,7 @@ pub fn make_high_resolution(chunk: &Chunk, adj: ChunkAdj, flags: MeshFlags) -> M
         .flat_map(|voxel| {
             let side_iter = Range3d::adj_iter(IVec3::ZERO)
                 .filter(|&offset| {
-                    let adj_chunk = adj.by_offset(offset);
+                    let adj_chunk = adj.by_offset(offset).unwrap();
 
                     match chunk.get_voxel_global(voxel.pos + offset) {
                         ChunkOption::Voxel(voxel) => voxel.is_air(),
@@ -195,10 +195,9 @@ pub fn make_low_resolution(chunk: &Chunk, adj: ChunkAdj, lod: Lod, flags: MeshFl
     
     let is_filled_and_blocked = chunk.is_filled() && Chunk::is_adj_filled(&adj);
 
-    ensure_or!(
-        !chunk.is_empty() && !is_filled_and_blocked,
+    if chunk.is_empty() || is_filled_and_blocked {
         return SimpleMesh::new_empty::<LowResVertex>(default(), default(), flags).into()
-    );
+    }
 
     // TODO: optimize for same-filled chunks
     let sub_chunk_size = 1 << lod;
@@ -220,7 +219,7 @@ pub fn make_low_resolution(chunk: &Chunk, adj: ChunkAdj, lod: Lod, flags: MeshFl
 
             let is_blocking_voxel = |pos: IVec3, offset: IVec3| match chunk.get_voxel_global(pos) {
                 ChunkOption::OutsideChunk => {
-                    match adj.by_offset(offset) {
+                    match adj.by_offset(offset).unwrap() {
                         // There is no chunk so voxel isn't blocked
                         None => false,
                         
@@ -260,7 +259,7 @@ pub fn make_low_resolution(chunk: &Chunk, adj: ChunkAdj, lod: Lod, flags: MeshFl
                 let mut iter = Range3d::from(start_pos..end_pos);
                 let pred = |pos| is_blocking_voxel(pos, offset);
 
-                if adj.by_offset(offset).is_some() && is_on_surface {
+                if adj.by_offset(offset).unwrap().is_some() && is_on_surface {
                     iter.all(pred)
                 } else {
                     iter.any(pred)

@@ -1,10 +1,7 @@
 use {
-    crate::{
-        prelude::*,
-        iterator::Sides,
-        terrain::{voxel::{voxel_data::VoxelId, Voxel}, chunk::Chunk},
-    },
-    std::ptr::NonNull,
+    self::graphics::AsBindGroupError, crate::{
+        iterator::Sides, prelude::*, terrain::{chunk::Chunk, voxel::{voxel_data::VoxelId, Voxel}}
+    }, std::ptr::NonNull
 };
 
 
@@ -458,16 +455,16 @@ impl ChunkArrayBox {
         Ok(())
     }
 
-    pub fn voxel(&self, pos: IVec3) -> AnyResult<Voxel> {
+    pub fn voxel(&self, pos: IVec3) -> Result<Voxel, ChunkFetchError> {
         use crate::terrain::chunk::ChunkOption::*;
 
         let chunk = self.chunk(pos)
-            .with_context(|| format!("failed to get chunk by voxel position {pos} uniquely"))?;
+            .ok_or(ChunkFetchError::NonUniqueBorrow { pos })?;
 
         match chunk.get_voxel_global(pos) {
             OutsideChunk => unreachable!("voxel at position {pos} is already in that chunk"),
             Voxel(voxel) => Ok(voxel),
-            Failed => Err(StrError::from("caught on failed chunk"))?,
+            Failed => Err(ChunkFetchError::FailedChunk),
         }
     }
 
@@ -504,6 +501,17 @@ impl Default for ChunkArrayBox {
             chunks: vec![],
         }
     }
+}
+
+
+
+#[derive(Debug, Error)]
+pub enum ChunkFetchError {
+    #[error("failed to get chunk by voxel position {pos} uniquely")]
+    NonUniqueBorrow { pos: IVec3 },
+
+    #[error("caught on failed chunk")]
+    FailedChunk,
 }
 
 
@@ -652,7 +660,7 @@ pub mod render {
     pub fn try_make_pipeline(
         device: Arc<Device>, queue: Arc<Queue>,
         cache: &mut BindsCache, loader: &mut AssetLoader,
-    ) -> AnyResult<RenderPipeline> {
+    ) -> Result<RenderPipeline, PipelineSetupError> {
         use { graphics::*, crate::terrain::chunk::mesh::HiResVertex };
 
         const TEXTURE_ATLAS_PATH: &str = "src/image/texture_atlas.png";
@@ -685,14 +693,14 @@ pub mod render {
         }
 
         if !loader.is_loaded(SHADER_PATH) || !loader.is_loaded(TEXTURE_ATLAS_PATH) {
-            return Err(StrError::from("assets are not yet loaded").into());
+            return Err(PipelineSetupError::UnloadedAssets);
         }
 
         let shader = loader.get::<Shader>(SHADER_PATH)
-            .context("failed to get shader asset")?;
+            .ok_or(PipelineSetupError::ShaderAssetFetch)?;
 
         let textures = loader.get::<ChunkArrayTextures>(TEXTURE_ATLAS_PATH)
-            .context("failed to get texture atlas asset")?;
+            .ok_or(PipelineSetupError::TextureAtlasAsset)?;
 
         let common_layout = {
             let entries = CommonUniform::bind_group_layout_entries(&device);
@@ -817,6 +825,24 @@ pub mod render {
 
         Ok(())
     }
+}
+
+
+
+
+#[derive(Debug, Error)]
+pub enum PipelineSetupError {
+    #[error("assets are not loaded yet")]
+    UnloadedAssets,
+
+    #[error("failed to get shader asset")]
+    ShaderAssetFetch,
+
+    #[error("failed to get texture atlas asset")]
+    TextureAtlasAsset,
+
+    #[error(transparent)]
+    AsBindGroup(#[from] AsBindGroupError),
 }
 
 

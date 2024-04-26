@@ -23,7 +23,7 @@ impl Default for MouseButton {
 }
 
 impl TryFrom<WinitMouseButton> for MouseButton {
-    type Error = AnyError;
+    type Error = ButtonConversionError;
 
     fn try_from(value: WinitMouseButton) -> Result<Self, Self::Error> {
         use WinitMouseButton::*;
@@ -33,13 +33,13 @@ impl TryFrom<WinitMouseButton> for MouseButton {
             Middle => Self::Middle,
             // FIXME: handle new mouse buttons
             Forward | Back => unimplemented!(),
-            Other(id) => bail_str!("failed to parse common mouse, unknown button id: {id}"),
+            Other(id) => return Err(ButtonConversionError::UnknownId { id }),
         })
     }
 }
 
 impl TryFrom<ExtendedMouseButton> for MouseButton {
-    type Error = AnyError;
+    type Error = ButtonConversionError;
 
     fn try_from(value: ExtendedMouseButton) -> Result<Self, Self::Error> {
         use ExtendedMouseButton::*;
@@ -47,7 +47,7 @@ impl TryFrom<ExtendedMouseButton> for MouseButton {
             Left => Self::Left,
             Right => Self::Right,
             Middle => Self::Middle,
-            Other(id) => bail_str!("failed to parse common mouse, unknown button id: {id}"),
+            Other(id) => return Err(ButtonConversionError::UnknownId { id }),
         })
     }
 }
@@ -60,6 +60,14 @@ impl From<MouseButton> for WinitMouseButton {
             MouseButton::Right => Self::Right,
         }
     }
+}
+
+
+
+#[derive(Debug, Error)]
+pub enum ButtonConversionError {
+    #[error("failed to convert mouse button: unknown id: {id}")]
+    UnknownId { id: u16 },
 }
 
 

@@ -470,7 +470,7 @@ impl<T> Sides<T> {
         self.inner.clone()
     }
 
-    pub fn set(&mut self, offset: IVec3, item: T) -> AnyResult<()> {
+    pub fn set(&mut self, offset: IVec3, item: T) -> Result<(), OffsetError> {
         match offset.to_array() {
             [ 1,  0,  0] => self.inner[0] = item,
             [-1,  0,  0] => self.inner[1] = item,
@@ -478,22 +478,25 @@ impl<T> Sides<T> {
             [ 0, -1,  0] => self.inner[3] = item,
             [ 0,  0,  1] => self.inner[4] = item,
             [ 0,  0, -1] => self.inner[5] = item,
-            _ => bail_str!("Offset should be small (adjacent) but {offset:?}"),
+            _ => return Err(OffsetError::Invalid { offset }),
         }
 
         Ok(())
     }
 
-    pub fn by_offset(&self, offset: IVec3) -> T where T: Clone {
-        match offset.to_array() {
+    pub fn by_offset(&self, offset: IVec3) -> Result<T, OffsetError>
+    where
+        T: Clone,
+    {
+        Ok(match offset.to_array() {
             [ 1,  0,  0] => self.back(),
             [-1,  0,  0] => self.front(),
             [ 0,  1,  0] => self.top(),
             [ 0, -1,  0] => self.bottom(),
             [ 0,  0,  1] => self.right(),
             [ 0,  0, -1] => self.left(),
-            _ => panic!("Offset should be small (adjacent) but {offset:?}"),
-        }
+            _ => return Err(OffsetError::Invalid { offset }),
+        })
     }
 
     pub fn back_mut(&mut self)   -> &mut T { &mut self.inner[0] }
@@ -523,6 +526,16 @@ impl<T> Sides<T> {
         Sides { inner: sides }
     }
 }
+
+
+
+#[derive(Debug, Error)]
+pub enum OffsetError {
+    #[error("Invalid 'sides' offset {offset}")]
+    Invalid { offset: IVec3 },
+}
+
+
 
 impl<T> std::ops::Index<usize> for Sides<T> {
     type Output = T;

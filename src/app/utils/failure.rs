@@ -32,7 +32,9 @@ macro_rules! ensure_or {
 
 #[macro_export]
 macro_rules! ensure {
-    ($cond:expr, $err:expr $(,)?) => { ensure_or!($cond, return Err($err.into())) };
+    ($cond:expr, $err:expr $(,)?) => {
+        $crate::failure::ensure_or!($cond, return Err($err.into()))
+    };
 }
 
 #[macro_export]
@@ -67,4 +69,4 @@ macro_rules! bail_str {
     };
 }
 
-pub use {ensure_or, ensure, ensure_fmt, ensure_eq, ensure_ne, bail, bail_str};
+pub use { ensure_or, ensure, ensure_eq, ensure_ne };

@@ -26,7 +26,10 @@ pub fn release(key: Key) {
 }
 
 pub fn is_pressed(key: Key) -> bool {
-    ensure_or!(!IS_CAPTURED.load(Relaxed), return false);
+    if IS_CAPTURED.load(Relaxed) {
+        return false;
+    }
+
     INPUTS[key as usize].load(Acquire).is_pressed()
 }
 
@@ -37,12 +40,17 @@ pub fn just_pressed(key: Key) -> bool {
 }
 
 pub fn is_pressed_combo<'k>(keys: impl IntoIterator<Item = &'k Key>) -> bool {
-    ensure_or!(!IS_CAPTURED.load(Relaxed), return false);
+    if IS_CAPTURED.load(Relaxed) {
+        return false;
+    }
+
     keys.into_iter().all(|&key| INPUTS[key as usize].load(Acquire).is_pressed())
 }
 
 pub fn just_pressed_combo<'k>(keys: impl IntoIterator<Item = &'k Key>) -> bool {
-    ensure_or!(!IS_CAPTURED.load(Relaxed), return false);
+    if IS_CAPTURED.load(Relaxed) {
+        return false;
+    }
 
     let mut released_keys = RELEASED_KEYS.write();
 
