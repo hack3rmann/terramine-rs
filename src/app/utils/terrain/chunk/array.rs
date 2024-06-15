@@ -70,11 +70,11 @@ impl Clone for ChunkBorrowInfo {
 
 
 
-assert_impl_all!(ChunkArray: Send, Sync, Component);
 #[derive(Debug)]
 pub struct ChunkArray {
     pub(crate) ptr: NonNull<ChunkArrayBox>,
 }
+assert_impl_all!(ChunkArray: Send, Sync, Component);
 
 unsafe impl Send for ChunkArray { }
 unsafe impl Sync for ChunkArray { }

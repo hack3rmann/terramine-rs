@@ -102,7 +102,7 @@ impl App {
 
             if let Err(error) = result {
                 logger::error!(from = "app", "failed to run event loop: {error:#?}");
-                
+
                 if cfg::app::PANIC_ON_ERROR {
                     panic!("panicked on {error}");
                 }
@@ -146,7 +146,7 @@ impl App {
                 }
 
                 if keyboard::just_pressed(cfg::key_bindings::SPAWN_CAMERA) {
-                    self.world.spawn(camera::make_new_camera_bundle());
+                    self.world.spawn(make_new_camera_bundle());
                 }
 
                 let graphics = self.world.resource::<&Graphics>()?;
@@ -174,12 +174,12 @@ impl App {
         Ok(())
     }
 
-    /// Updates `ecs`'s systems. Note that non of resources can be borrowed at this point.
+    /// Updates `ecs`'s systems. Note that none of resources can be borrowed at this point.
     #[profile]
     async fn update_systems(&mut self) -> AnyResult<()> {
         use crate::{physics::PhysicalComponent, terrain::chunk::array::render};
 
-        // ignoring error, because it can probably setup next frame
+        // ignoring error, because it can probably set up next frame
         _ = render::try_setup_pipeline(&mut self.world);
 
         camera::update(&self.world)?;
@@ -269,13 +269,13 @@ pub mod update {
     pub static UPDATE_FUNCTIONS: Mutex<UpdateFunctionVec<64>> = const_default();
 
     /// Adds update function to update list.
-    /// That functon will be executed before each frame.
+    /// That function will be executed before each frame.
     pub fn push_function(function: fn()) {
         UPDATE_FUNCTIONS.lock().push(function);
     }
 
-    /// Adds update function to update list without aquireing [`Mutex`]'s lock.
-    /// That functon will be executed before each frame.
+    /// Adds update function to update list without acquiring [`Mutex`]'s lock.
+    /// That function will be executed before each frame.
     /// 
     /// # Safety
     /// 

@@ -22,7 +22,6 @@ pub use {
         graphics::ui::egui_util,
     },
     smallvec::{SmallVec, smallvec},
-    array_init::array_init,
     thiserror::Error,
     derive_deref_rs::Deref,
     parse_display::{Display, FromStr},

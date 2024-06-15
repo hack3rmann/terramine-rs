@@ -34,7 +34,6 @@ derive-deref-rs = "0.1.1"
 lazy_static = "1.4.0"
 parse-display = "0.9.0"
 user-error = "1.2.8"
-type-uuid = "0.1.2"
 smart-default = "0.7.1"
 async-trait = "0.1.68"
 derive_more = "0.99.17"
@@ -42,14 +41,12 @@ const-random = "0.1.15"
 const_format = "0.2.31"
 
 # Math
-directx_math = "0.2.2"
 noise = "0.9.0"
 
 # Utils
 anyhow = "1.0.71"
 huffman-compress = "0.6.1"
 bit-vec = "0.6.3"
-array-init = "2.1.0"
 smallvec = { version = "1.10.0", features = ["const_generics", "const_new"] }
 itertools = "0.12.0"
 ordered-float = "4.1.1"

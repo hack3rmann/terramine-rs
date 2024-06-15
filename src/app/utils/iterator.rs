@@ -440,7 +440,7 @@ impl<T> std::iter::FromIterator<T> for Sides<T> {
     fn from_iter<Iter: IntoIterator<Item = T>>(iter: Iter) -> Self {
         let mut iter = iter.into_iter();
 
-        let arr = array_init(|_|
+        let arr = std::array::from_fn(|_|
             iter.next()
                 .expect("iterator should have exactly 6 elements")
         );
@@ -459,7 +459,7 @@ impl<T> Sides<T> {
     }
 
     pub fn all(side: T) -> Self where T: Clone {
-        Self::new(array_init(|_| side.clone()))
+        Self::new(std::array::from_fn(|_| side.clone()))
     }
 
     pub const fn independent(back: T, front: T, top: T, bottom: T, right: T, left: T) -> Self {

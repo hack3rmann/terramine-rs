@@ -5,8 +5,8 @@ use {
 
 crate::module_constructor! {
     std::panic::set_hook(Box::new(|panic_info| {
-        eprintln!("Panic occured: {panic_info}");
-        error_message("Panic occured", panic_info)
+        eprintln!("Panicked: {panic_info}");
+        error_message("Program panicked", panic_info)
             .expect("failed to make error message");
     }))
 }

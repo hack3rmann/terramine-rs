@@ -111,7 +111,7 @@ impl<T> DerefMut for Nullable<T> {
 
 
 /// A pre-hashed value of a specific type. Pre-hashing enables memoization of hashes that are expensive to compute.
-/// It also enables faster [`PartialEq`] comparisons by short circuiting on hash equality.
+/// It also enables faster [`PartialEq`] comparisons by short-circuiting on hash equality.
 /// See [`PassHash`] and [`PassHasher`] for a "pass through" [`BuildHasher`] and [`Hasher`] implementation
 /// designed to work with [`Hashed`]
 /// See [`PreHashMap`] for a hashmap pre-configured to use [`Hashed`] keys.

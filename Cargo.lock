@@ -123,12 +123,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "array-init"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d62b7694a562cdf5a74227903507c56ab2cc8bdd1f781ed5cb4cf9c9f810bfc"
-
-[[package]]
 name = "arrayref"
 version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2650,7 +2644,6 @@ name = "terramine"
 version = "0.0.2"
 dependencies = [
  "anyhow",
- "array-init",
  "async-trait",
  "atomic",
  "bit-vec",
@@ -2663,7 +2656,6 @@ dependencies = [
  "ctor",
  "derive-deref-rs",
  "derive_more",
- "directx_math",
  "egui",
  "egui_dock",
  "egui_wgpu_backend",
@@ -2698,7 +2690,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
- "type-uuid",
  "user-error",
  "wgpu",
  "winapi",
@@ -2925,26 +2916,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17f77d76d837a7830fe1d4f12b7b4ba4192c1888001c7164257e4bc6d21d96b4"
 
 [[package]]
-name = "type-uuid"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15043bca41f43205c9b0055d365a405d81b8e4a8ff99c36b263cf79ad1f4c051"
-dependencies = [
- "type-uuid-derive",
-]
-
-[[package]]
-name = "type-uuid-derive"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e090ee857961c746ecf7fb596022493ffaad54d189061df49f7a0cf17796dc1"
-dependencies = [
- "quote",
- "syn 1.0.109",
- "uuid",
-]
-
-[[package]]
 name = "unicode-ident"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2973,12 +2944,6 @@ name = "user-error"
 version = "1.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07a91d0648d862a02d641c82292791accfe66d36df75d8149ebc9768f2e36863"
-
-[[package]]
-name = "uuid"
-version = "0.8.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc5cf98d8186244414c848017f0e2676b3fcb46807f6668a97dfe67359a3c4b7"
 
 [[package]]
 name = "v_frame"
