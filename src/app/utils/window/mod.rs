@@ -45,7 +45,8 @@ impl Window {
         // Bytes vector from bmp file
         // File formatted in BGRA
         // TODO: reformat file to RGBA format so we can avoid byteswapping at the program start
-        let raw_data = include_bytes!("../../../image/terramine_icon_32p.bmp");
+        // FIXME: ico to bitmap converter
+        let raw_data = include_bytes!("../../../image/icon.ico");
         let mut raw_data = *raw_data;
 
         // Bytemap pointer load from 4 bytes of file

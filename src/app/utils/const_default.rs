@@ -73,26 +73,32 @@ impl<T, const N: usize> ConstDefault for SmallVec<[T; N]> {
 }
 
 impl<T: ConstDefault> ConstDefault for Cell<T> {
+    #[allow(clippy::declare_interior_mutable_const)]
     const DEFAULT: Self = Self::new(T::DEFAULT);
 }
 
 impl<T: ConstDefault> ConstDefault for RefCell<T> {
+    #[allow(clippy::declare_interior_mutable_const)]
     const DEFAULT: Self = Self::new(T::DEFAULT);
 }
 
 impl<T: ConstDefault> ConstDefault for std::sync::Mutex<T> {
+    #[allow(clippy::declare_interior_mutable_const)]
     const DEFAULT: Self = Self::new(T::DEFAULT);
 }
 
 impl<T: ConstDefault> ConstDefault for std::sync::RwLock<T> {
+    #[allow(clippy::declare_interior_mutable_const)]
     const DEFAULT: Self = Self::new(T::DEFAULT);
 }
 
 impl<T: ConstDefault> ConstDefault for parking_lot::Mutex<T> {
+    #[allow(clippy::declare_interior_mutable_const)]
     const DEFAULT: Self = Self::new(T::DEFAULT);
 }
 
 impl<T: ConstDefault> ConstDefault for parking_lot::RwLock<T> {
+    #[allow(clippy::declare_interior_mutable_const)]
     const DEFAULT: Self = Self::new(T::DEFAULT);
 }
 
@@ -122,6 +128,7 @@ impl<T> ConstDefault for AtomicPtr<T> {
 }
 
 impl<T: ConstDefault> ConstDefault for Atomic<T> {
+    #[allow(clippy::declare_interior_mutable_const)]
     const DEFAULT: Self = Self::new(T::DEFAULT);
 }
 

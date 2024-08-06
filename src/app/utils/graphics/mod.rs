@@ -272,7 +272,7 @@ impl Graphics {
     ///
     /// - `window` must be a valid object to create a surface upon.
     /// - `window` must remain valid until after
-    /// the returned [`RenderContext`] is dropped.
+    ///   the returned [`RenderContext`] is dropped.
     async fn make_render_context(window: &Window)
         -> (RenderContext, SurfaceConfiguration)
     {

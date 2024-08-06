@@ -685,7 +685,10 @@ impl Clone for Chunk {
             pos: Atomic::new(self.pos.load(Relaxed)),
             voxel_ids: unsafe {
                 Self::transmute_ids_to_atomic(
-                    mem::transmute::<_, &Vec<VoxelId>>(&self.voxel_ids).clone()
+                    mem::transmute::<
+                        &std::vec::Vec<atomic::Atomic<u16>>,
+                        &Vec<VoxelId>,
+                    >(&self.voxel_ids).clone()
                 )
             },
             info: Atomic::new(self.info.load(Relaxed)),

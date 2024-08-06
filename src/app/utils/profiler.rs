@@ -121,8 +121,7 @@ pub fn upload_measure(measure: &Measure) {
 pub fn start_capture(target_name: impl Into<String>, id: MeasureId) -> Measure {
     let is_already_captured = PROFILER.lock()
         .profiles
-        .get(&id)
-        .is_some();
+        .contains_key(&id);
     
     if !is_already_captured {
         add_profile(Profile::new(target_name), id)

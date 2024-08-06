@@ -42,6 +42,7 @@ impl<T> GlobalAsset<T> {
 }
 
 impl<T> ConstDefault for GlobalAsset<T> {
+    #[allow(clippy::declare_interior_mutable_const)]
     const DEFAULT: Self = Self::unloaded();
 }
 
