@@ -154,79 +154,6 @@ macro_rules! log_scope {
 pub use {log, info, error, log_dbg, log_scope};
 
 
-
-pub mod python {
-    use {
-        super::*,
-        cpython::{PyDict, Python, py_fn, PyResult, PyObject},
-        crate::app::utils::terrain::chunk::commands::{Command, command},
-    };
-
-    lazy_static! {
-        pub static ref LOCALS: PyDict = {
-            let gil = Python::acquire_gil();
-            let py = gil.python();
-
-            let voxel_set = py_fn!(py, voxel_set(x: i32, y: i32, z: i32, new_id: u16) -> PyResult<i32> {
-                command(Command::SetVoxel { pos: IVec3::new(x, y, z), new_id });
-                Ok(0)
-            });
-
-            let voxel_fill = py_fn!(py, voxel_fill(
-                sx: i32, sy: i32, sz: i32,
-                ex: i32, ey: i32, ez: i32, new_id: u16
-            ) -> PyResult<i32> {
-                command(Command::FillVoxels { pos_from: IVec3::new(sx, sy, sz), pos_to: IVec3::new(ex, ey, ez), new_id });
-                Ok(0)
-            });
-
-            let drop_all_meshes = py_fn!(py, drop_all_meshes() -> PyResult<i32> {
-                command(Command::DropAllMeshes);
-                Ok(0)
-            });
-
-            let log = py_fn!(py, log(value: PyObject) -> PyResult<i32> {
-                logger::info!(from = "python-interpreter", "{}", value);
-                Ok(0)
-            });
-
-            let locals = PyDict::new(py);
-
-            locals.set_item(py, "voxel_set", voxel_set)
-                .unwrap_or_else(|err|
-                    log!(Error, from = "logger", "failed to set 'voxel_set' item: {err:?}")
-                );
-
-            locals.set_item(py, "voxel_fill", voxel_fill)
-                .unwrap_or_else(|err|
-                    log!(Error, from = "logger", "failed to set 'voxel_fill' item: {err:?}")
-                );
-                
-            locals.set_item(py, "drop_all_meshes", drop_all_meshes)
-                .unwrap_or_else(|err|
-                    log!(Error, from = "logger", "failed to set 'drop_all_meshes' item: {err:?}")
-                );
-
-            locals.set_item(py, "log", log)
-                .unwrap_or_else(|err|
-                    log!(Error, from = "logger", "failed to log a message: {err:?}")
-                );
-
-            locals
-        };
-    }
-
-    pub fn run(code: &str) {
-        let gil = Python::acquire_gil();
-        let py = gil.python();
-
-        py.run(code, None, Some(&LOCALS))
-            .unwrap_or_else(|err| logger::error!(from = "logger", "{err:?}"));
-    }
-}
-
-
-
 pub fn build_window(ui: &mut egui::Ui) {
     static INPUT_HISTORY: Mutex<Vec<String>> = const_default();
     let mut input_history = INPUT_HISTORY.lock();
@@ -248,9 +175,7 @@ pub fn build_window(ui: &mut egui::Ui) {
 
     if text_edit_response.lost_focus() {
         if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
-            let code = input.replace("^;", "\n");
-
-            python::run(&code);
+            error!(from = "logger", "command interpreter is detached");
 
             LAST_SEARCH_INDEX.store(0, Release);
         }
