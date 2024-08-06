@@ -242,9 +242,9 @@ impl<E: Copy + GetSaveKey> Save<E> {
 
     /// Assignes new values to enum-named array.
     #[allow(dead_code)]
-    pub async fn assign_array<'t, T: 't, F>(&mut self, enumerator: E, elem: F)
+    pub async fn assign_array<'t, T, F>(&mut self, enumerator: E, elem: F)
     where
-        T: AsBytes + StaticSize,
+        T: AsBytes + StaticSize + 't,
         F: FnMut(usize) -> &'t T,
     {
         /* Load offset */
