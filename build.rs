@@ -15,7 +15,7 @@ mod platform {
         use winres::WindowsResource;
 
         WindowsResource::new()
-            .set_icon("src/image/icon.ico")
+            .set_icon("assets/images/icon.ico")
             .compile()?;
 
         Ok(())

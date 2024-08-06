@@ -663,7 +663,7 @@ pub mod render {
     ) -> Result<RenderPipeline, PipelineSetupError> {
         use { graphics::*, crate::terrain::chunk::mesh::HiResVertex };
 
-        const TEXTURE_ATLAS_PATH: &str = "src/image/texture_atlas.png";
+        const TEXTURE_ATLAS_PATH: &str = "assets/images/texture_atlas.png";
         const SHADER_PATH: &str = "src/shaders/chunks_full.wgsl";
 
         let parse_textures = {
