@@ -1,0 +1,12 @@
+[package]
+name = "math_linear"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+directx_math = "0.2.2"
+doc-comment = "0.3.3"
+bytemuck = { version = "1.13.1", features = ["derive"], optional = true }
+
+[features]
+byte_muck = ["bytemuck"]

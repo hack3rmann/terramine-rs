@@ -1,0 +1,12 @@
+[package]
+name = "profiler_macros"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+syn = { version = "2.0.85", features = ["full", "fold"] }
+quote = "1.0.37"
+rand = "0.8.5"
+
+[lib]
+proc-macro = true
