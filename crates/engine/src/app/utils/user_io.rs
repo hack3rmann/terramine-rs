@@ -5,16 +5,16 @@
 use {
     crate::prelude::*,
     std::sync::{RwLock, Mutex},
-    glium::glutin::{
-        event::{
-            ElementState,
-            MouseButton,
-            Event,
-            WindowEvent
-        },
-        window::CursorGrabMode,
-        dpi::PhysicalPosition,
-    },
+    // glium::glutin::{
+    //     event::{
+    //         ElementState,
+    //         MouseButton,
+    //         Event,
+    //         WindowEvent
+    //     },
+    //     window::CursorGrabMode,
+    //     dpi::PhysicalPosition,
+    // },
 };
 
 #[cfg(windows)]
@@ -23,7 +23,7 @@ use winapi::{
     shared::windef::POINT,
 };
 
-pub use glium::glutin::event::VirtualKeyCode as Key;
+// pub use glium::glutin::event::VirtualKeyCode as Key;
 
 pub mod keyboard {
     #![allow(dead_code)]

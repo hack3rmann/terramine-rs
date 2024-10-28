@@ -32,6 +32,7 @@ pub mod window {
         pub const WIDTH:  usize = 1024;
         pub const HEIGHT: usize = 768;
         pub const SIZES: USize2 = vecs!(WIDTH, HEIGHT);
+        pub const ICON_BYTES: &[u8] = include_bytes!("../../../../../assets/image/terramine_icon_32p.bmp");
     }
 }
 
@@ -108,7 +109,7 @@ pub mod texture {
 }
 
 pub mod shader {
-    pub const DIRECTORY: &str = "src/shaders/";
+    pub const DIRECTORY: &str = "assets/shaders/";
     pub const VERTEX_FILE_EXTENTION:   &str = "vert";
     pub const FRAGMENT_FILE_EXTENTION: &str = "frag";
     pub const CLEAR_DEPTH:   f32 = 1.0;
@@ -129,17 +130,18 @@ pub mod shader {
     }
 }
 
-pub mod key_bindings {
-    use crate::app::utils::user_io::Key;
+// FIXME(hack3rmann): user_io
+// pub mod key_bindings {
+//     use crate::app::utils::user_io::Key;
 
-    pub const DEBUG_VISUALS_SWITCH:           Key = Key::F3;
-    pub const APP_EXIT:                       Key = Key::Escape;
-    pub const MOUSE_CAPTURE:                  Key = Key::T;
-    pub const ENABLE_DRAG_AND_RESIZE_WINDOWS: Key = Key::I;
-    pub const ENABLE_PROFILER_WINDOW:         Key = Key::E;
-    pub const SWITCH_RENDER_SHADOWS:          Key = Key::U;
-    pub const RELOAD_RESOURCES:               Key = Key::H;
-}
+//     pub const DEBUG_VISUALS_SWITCH:           Key = Key::F3;
+//     pub const APP_EXIT:                       Key = Key::Escape;
+//     pub const MOUSE_CAPTURE:                  Key = Key::T;
+//     pub const ENABLE_DRAG_AND_RESIZE_WINDOWS: Key = Key::I;
+//     pub const ENABLE_PROFILER_WINDOW:         Key = Key::E;
+//     pub const SWITCH_RENDER_SHADOWS:          Key = Key::U;
+//     pub const RELOAD_RESOURCES:               Key = Key::H;
+// }
 
 pub mod timer {
     pub const N_FAMES_TO_MEASURE: usize = 16;

@@ -38,11 +38,11 @@ impl Shader {
         let _work_guard = logger::work("shader loader", format!("{vertex_name}, {fragment_name}."));
 
         let vertex_src = fs::read_to_string(
-            format!("{DIRECTORY}{}.{VERTEX_FILE_EXTENTION}", vertex_name)
+            format!("{DIRECTORY}{vertex_name}.{VERTEX_FILE_EXTENTION}")
         ).map_err(|err| ShaderError::FileRead { io_err: err, shader_name: vertex_name.into() })?;
 
         let fragment_src = fs::read_to_string(
-            format!("{DIRECTORY}{}.{FRAGMENT_FILE_EXTENTION}", fragment_name)
+            format!("{DIRECTORY}{fragment_name}.{FRAGMENT_FILE_EXTENTION}")
         ).map_err(|err| ShaderError::FileRead { io_err: err, shader_name: fragment_name.into() })?;
 
         Self::from_source(vertex_src, fragment_src, display)

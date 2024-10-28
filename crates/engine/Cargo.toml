@@ -6,19 +6,21 @@ edition.workspace = true
 [dependencies]
 profiler_macros.workspace = true
 math_linear.workspace = true
-glium = "0.32.1"
-image = "0.24.3"
+
+# Graphics
+glium = "0.35.0"
+winit = "0.30.5"
+imgui = "0.12.0"
+imgui-glium-renderer = "0.13.0"
+imgui-winit-support = "0.13.0"
+
 directx_math = "0.2.2"
-imgui = "0.10.0"
-imgui-glium-renderer = "0.10.0"
-imgui-winit-support = "0.10.0"
-winapi = "0.3.9"
+image = "0.24.3"
 crossbeam = "0.8.1"
 tokio = { version = "1.27.0", features = ["full"] }
 tokio-stream = "0.1.12"
 thiserror = "1.0.40"
 rayon = "1.7.0"
-winit = "0.28.3"
 derive-deref-rs = "0.1.1"
 lazy_static = "1.4.0"
 portable-atomic = { version = "1.2.0", features = ["float"] }
@@ -37,6 +39,9 @@ atomic = "0.5.1"
 ordered-float = "3.6.0"
 rand = "0.8.5"
 spin = { version = "0.9.8", features = ["mutex", "spin_mutex", "ticket_mutex", "rwlock", "once", "lazy", "barrier", "lock_api"] }
+
+[target."cfg(windows)".dependencies]
+winapi = "0.3.9"
 
 [target."cfg(windows)".build-dependencies]
 winres = "0.1.12"

@@ -8,18 +8,17 @@ pub mod texture;
 pub mod ui;
 
 use {
-    super::window::Window,
     crate::app::utils::{cfg, logger},
     derive_deref_rs::Deref,
-    glium::{
-        glutin::{
-            dpi,
-            event::{Event, WindowEvent},
-            event_loop::EventLoop,
-        },
-        index::BufferCreationError as IndexCreationError,
-        vertex::BufferCreationError as VertexCreationError,
-    },
+    // glium::{
+    //     glutin::{
+    //         dpi,
+    //         event::{Event, WindowEvent},
+    //         event_loop::EventLoop,
+    //     },
+    //     index::BufferCreationError as IndexCreationError,
+    //     vertex::BufferCreationError as VertexCreationError,
+    // },
     imgui_glium_renderer::{Renderer as ImguiRenderer, RendererError as ImguiRendererError},
     math_linear::prelude::*,
     shader::{Shader, ShaderError},
@@ -27,6 +26,15 @@ use {
     surface::{Surface, SurfaceError},
     thiserror::Error,
 };
+
+use glium::backend::glutin::{Display, SimpleWindowBuilder};
+use glium::vertex::BufferCreationError as VertexCreationError;
+use glium::index::BufferCreationError as IndexCreationError;
+use glium::glutin::surface::WindowSurface;
+use glium::winit::event_loop::EventLoop;
+use glium::winit::event::{Event, WindowEvent};
+use glium::winit::dpi::PhysicalSize;
+use glium::winit::window::Window;
 
 #[derive(Clone, Copy, Debug)]
 pub struct QuadVertex {
@@ -46,7 +54,8 @@ pub struct QuadDrawResources {
 /// Struct that handles graphics.
 pub struct Graphics {
     /* Gluim main struct */
-    pub display: Pin<Box<glium::Display>>,
+    pub display: Pin<Box<Display<WindowSurface>>>,
+    pub window: Window,
 
     /* OpenGL pipeline stuff */
     pub event_loop: Option<EventLoop<()>>,
@@ -67,34 +76,37 @@ impl Graphics {
         let _log_guard = logger::work("graphics", "initialization");
 
         /* Glutin event loop */
-        let event_loop = EventLoop::new();
+        let event_loop = winit::event_loop::EventLoop::builder().build().unwrap();
 
         const DEFAULT_SIZES: USize2 = cfg::window::default::SIZES;
 
         /* Window creation */
-        let window = Window::from(&event_loop, DEFAULT_SIZES).take_window();
+        let (window, display) = SimpleWindowBuilder::new()
+            .with_title("Terramine")
+            .with_inner_size(DEFAULT_SIZES.x as u32, DEFAULT_SIZES.y as u32)
+            .build(&event_loop);
 
         /* Create ImGui context ant set settings file name. */
         let mut imgui_context = imgui::Context::create();
         imgui_context.set_ini_filename(Some(PathBuf::from(r"src/imgui_settings.ini")));
 
         /* Bound ImGui to winit. */
-        let mut winit_platform = imgui_winit_support::WinitPlatform::init(&mut imgui_context);
+        let mut winit_platform = imgui_winit_support::WinitPlatform::new(&mut imgui_context);
         winit_platform.attach_window(
             imgui_context.io_mut(),
-            window.window(),
+            &window,
             imgui_winit_support::HiDpiMode::Rounded,
         );
 
         /* Bad start size fix */
         let dummy_event: Event<()> = Event::WindowEvent {
-            window_id: window.window().id(),
-            event: WindowEvent::Resized(dpi::PhysicalSize::new(
+            window_id: window.id(),
+            event: WindowEvent::Resized(PhysicalSize::new(
                 DEFAULT_SIZES.x as u32,
                 DEFAULT_SIZES.y as u32,
             )),
         };
-        winit_platform.handle_event(imgui_context.io_mut(), window.window(), &dummy_event);
+        winit_platform.handle_event(imgui_context.io_mut(), &window, &dummy_event);
 
         /* Style configuration. */
         imgui_context
@@ -104,10 +116,10 @@ impl Graphics {
         imgui_context.style_mut().window_rounding = 16.0;
 
         /* Glium setup. */
-        let display = Box::pin(glium::Display::from_gl_window(window)?);
+        let display = Box::pin(display);
 
         /* ImGui glium renderer setup. */
-        let imgui_renderer = ImguiRenderer::init(&mut imgui_context, display.as_ref().get_ref())?;
+        let imgui_renderer = ImguiRenderer::new(&mut imgui_context, display.as_ref().get_ref())?;
 
         let quad_draw_resources = {
             let vertices = glium::VertexBuffer::new(
@@ -157,6 +169,7 @@ impl Graphics {
 
         Ok(Self {
             display,
+            window,
             imguic: imgui_context,
             imguir: ImguiRendererWrapper(imgui_renderer),
             imguip: winit_platform,
@@ -290,4 +303,3 @@ macro_rules! draw {
         (result1, result2, result3)
     }};
 }
-

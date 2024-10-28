@@ -1,6 +1,7 @@
 pub mod window;
 pub mod graphics;
-pub mod user_io;
+// FIXME(hack3rmann): user_io
+// pub mod user_io;
 pub mod terrain;
 pub mod time;
 pub mod profiler;
