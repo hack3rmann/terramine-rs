@@ -19,8 +19,7 @@ use {
 
 use glium::winit::error::EventLoopError;
 use glium::winit::event::{Event, StartCause, WindowEvent};
-use glium::winit::event_loop::{ActiveEventLoop, ControlFlow};
-use glium::winit::window::WindowId;
+use glium::winit::event_loop::ActiveEventLoop;
 
 /// Struct that handles everything.
 pub struct App {
@@ -117,9 +116,7 @@ impl App {
             &self.graphics.window,
             &event,
         );
-        // FIXME(hack3rmann): user_io
-        // user_io::handle_event(&event, &self.graphics.window);
-        self.main_events_cleared(active_loop).await;
+        user_io::handle_event(&event, &self.graphics.window);
 
         match event {
             /* Window events */
@@ -134,9 +131,7 @@ impl App {
                     let (width, height) = (new_size.width, new_size.height);
                     self.camera.aspect_ratio = height as f32 / width as f32;
 
-                    for light in self.lights.iter_mut() {
-                        light.cam.aspect_ratio = 1.0;
-                    }
+                    eprintln!("NEW_SIZE={new_size:?}");
 
                     self.graphics
                         .on_window_resize(UInt2::new(width, height))
@@ -148,6 +143,11 @@ impl App {
                 _ => (),
             },
 
+            Event::AboutToWait => {
+                self.main_events_cleared(active_loop).await;
+                self.graphics.window.request_redraw();
+            }
+
             Event::NewEvents(start_cause) => self.new_events(start_cause).await,
 
             _ => (),
@@ -157,55 +157,53 @@ impl App {
     }
 
     /// Main events cleared.
-    async fn main_events_cleared(&mut self, _active_loop: &ActiveEventLoop) {
-        // FIXME(hack3rmann): user_io
-        // // ImGui can capture keyboard, if needed.
-        // keyboard::set_input_capture(self.graphics.imguic.io().want_text_input);
+    async fn main_events_cleared(&mut self, active_loop: &ActiveEventLoop) {
+        // ImGui can capture keyboard, if needed.
+        keyboard::set_input_capture(self.graphics.imguic.io().want_text_input);
 
-        // // Close window if `escape` pressed
-        // if keyboard::just_pressed(cfg::key_bindings::APP_EXIT) {
-        //     active_loop.exit();
-        //     self.chunk_arr.drop_tasks();
-        //     return;
-        // }
+        // Close window if `escape` pressed
+        if keyboard::just_pressed(cfg::key_bindings::APP_EXIT) {
+            active_loop.exit();
+            self.chunk_arr.drop_tasks();
+            return;
+        }
 
-        // if keyboard::just_pressed(Key::Y) {
-        //     self.chunk_arr.drop_tasks();
-        // }
+        if keyboard::just_pressed(Key::KeyY) {
+            self.chunk_arr.drop_tasks();
+        }
 
-        // // Control camera by user input
-        // if keyboard::just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
-        //     // FIXME(hack3rmann): user io unix
-        //     // if self.camera.grabbes_cursor {
-        //     //     mouse::release_cursor(self.graphics.display.gl_window().window());
-        //     // } else {
-        //     //     mouse::grab_cursor(self.graphics.display.gl_window().window());
-        //     // }
+        // Control camera by user input
+        if keyboard::just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
+            if self.camera.grabbes_cursor {
+                mouse::release_cursor(&self.graphics.window);
+            } else {
+                mouse::grab_cursor(&self.graphics.window);
+            }
 
-        //     self.camera.grabbes_cursor = !self.camera.grabbes_cursor;
-        // }
+            self.camera.grabbes_cursor = !self.camera.grabbes_cursor;
+        }
 
-        // if keyboard::just_pressed(cfg::key_bindings::SWITCH_RENDER_SHADOWS) {
-        //     self.render_shadows = !self.render_shadows;
-        // }
+        if keyboard::just_pressed(cfg::key_bindings::SWITCH_RENDER_SHADOWS) {
+            self.render_shadows = !self.render_shadows;
+        }
 
-        // if keyboard::just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
-        //     self.chunk_draw_bundle = ChunkDrawBundle::new(self.graphics.display.as_ref().get_ref());
+        if keyboard::just_pressed(cfg::key_bindings::RELOAD_RESOURCES) {
+            self.chunk_draw_bundle = ChunkDrawBundle::new(self.graphics.display.as_ref().get_ref());
 
-        //     self.graphics
-        //         .refresh_postprocessing_shaders()
-        //         .log_error("app", "failed to reload postprocessing shaders");
+            self.graphics
+                .refresh_postprocessing_shaders()
+                .log_error("app", "failed to reload postprocessing shaders");
 
-        //     match Texture::from_path(
-        //         "src/image/normal_atlas.png",
-        //         self.graphics.display.as_ref().get_ref(),
-        //     ) {
-        //         Ok(normals) => self.normal_atlas = normals,
-        //         Err(err) => {
-        //             logger::log!(Error, from = "app", "failed to reload normal atlas: {err}")
-        //         }
-        //     }
-        // }
+            match Texture::from_path(
+                "src/image/normal_atlas.png",
+                self.graphics.display.as_ref().get_ref(),
+            ) {
+                Ok(normals) => self.normal_atlas = normals,
+                Err(err) => {
+                    logger::log!(Error, from = "app", "failed to reload normal atlas: {err}")
+                }
+            }
+        }
 
         // Update save/load tasks of `ChunkArray`
         self.chunk_arr
@@ -222,7 +220,7 @@ impl App {
         self.graphics
             .imguip
             .prepare_frame(self.graphics.imguic.io_mut(), window)
-            .expect("failed to prepare frame");
+            .expect("imgui failed to prepare frame");
 
         // Moves to `RedrawRequested` stage
         window.request_redraw();
@@ -241,11 +239,6 @@ impl App {
             // Profiler window
             profiler::update_and_build_window(ui, &self.draw_timer);
 
-            // Render UI
-            self.graphics
-                .imguip
-                .prepare_render(ui, &self.graphics.window);
-
             // Chunk array control window
             self.chunk_arr.spawn_control_window(ui);
 
@@ -258,6 +251,11 @@ impl App {
             for light in self.lights.iter_mut().take(1) {
                 light.spawn_control_window(ui);
             }
+
+            // Render UI
+            self.graphics
+                .imguip
+                .prepare_render(ui, &self.graphics.window);
 
             self.graphics.imguic.render()
         };
@@ -330,11 +328,10 @@ impl App {
         for light in self.lights.iter_mut() {
             light.update(self.camera.pos);
         }
-        // FIXME(hack3rmann): user_io
-        // // Debug visuals switcher.
-        // if keyboard::just_pressed(cfg::key_bindings::DEBUG_VISUALS_SWITCH) {
-        //     debug_visuals::switch_enable();
-        // }
+        // Debug visuals switcher.
+        if keyboard::just_pressed(cfg::key_bindings::DEBUG_VISUALS_SWITCH) {
+            debug_visuals::switch_enable();
+        }
 
         // Loading recieve.
         loading::recv_all().log_error("app", "failed to receive all loadings");
@@ -342,9 +339,7 @@ impl App {
         // Log messages receive.
         logger::recv_all();
 
-        // FIXME(hack3rmann): user_io
-        // // Update keyboard inputs.
-        // keyboard::update_input();
-        // mouse::update(&self.graphics.window).log_error("app", "failed to update mouse input");
+        // Update keyboard inputs.
+        keyboard::update_input();
     }
 }

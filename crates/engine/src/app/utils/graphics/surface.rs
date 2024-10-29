@@ -7,6 +7,7 @@ use {
     },
     math_linear::prelude::*,
     thiserror::Error,
+    crate::prelude::profile,
 };
 
 #[derive(Debug)]
@@ -75,7 +76,7 @@ pub struct Surface<'s> {
     pub shadow_buffer: SimpleFrameBuffer<'s>,
 }
 
-impl<'s> Surface<'s> {
+impl Surface<'_> {
     pub fn new(facade: &dyn Facade, window_size: UInt2) -> Result<Self, SurfaceError> {
         let textures = Box::pin(DeferredTextures::new(facade, window_size)?);
 

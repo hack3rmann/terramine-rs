@@ -13,8 +13,8 @@ pub fn profiler_target(_args: TokenStream, item: TokenStream) -> TokenStream {
 
     quote! {
         #vis #sig {
-            static __id: MeasureId = #id;
-            let __measure = profiler::start_capture(stringify!(#sig), __id);
+            static __ID: crate::prelude::profiler::MeasureId = #id;
+            let __measure = crate::prelude::profiler::start_capture(stringify!(#sig), __ID);
             #block
         }
     }.into()

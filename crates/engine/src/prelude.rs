@@ -4,8 +4,7 @@ pub use {
         logger::{self, LogError},
         reinterpreter::*,
         cfg,
-        // FIXME(hack3rmann) user_io
-        // user_io::{keyboard, mouse, Key, self},
+        user_io::{keyboard, mouse, Key, self},
         terrain::{chunk::iterator::SpaceIter, voxel::voxel_data::data as voxels},
         concurrency::loading,
         runtime::RUNTIME,

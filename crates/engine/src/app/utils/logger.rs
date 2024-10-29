@@ -109,9 +109,7 @@ pub use crate::{log, log_dbg, work};
 
 pub fn spawn_window(ui: &imgui::Ui) {
     use {
-        crate::app::utils::{
-            graphics::ui::imgui_constructor::make_window,
-        },
+        crate::app::utils::graphics::ui::imgui_constructor::make_window,
         // FIXME(hack3rmann): remove cpython from project
         // cpython::{Python, PyResult, py_fn, PyDict},
     };
@@ -198,7 +196,10 @@ pub fn spawn_window(ui: &imgui::Ui) {
                     MsgType::Info  => INFO_COLOR,
                 };
 
-                ui.text_colored(color, &format!("[LOG]: {msg}"));
+                let text = format!("[LOG]: {msg}");
+
+                ui.text_colored(color, &text);
+                eprintln!("{text}");
             }
         });
 }

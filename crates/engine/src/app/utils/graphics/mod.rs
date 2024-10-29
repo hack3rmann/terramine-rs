@@ -10,15 +10,6 @@ pub mod ui;
 use {
     crate::app::utils::{cfg, logger},
     derive_deref_rs::Deref,
-    // glium::{
-    //     glutin::{
-    //         dpi,
-    //         event::{Event, WindowEvent},
-    //         event_loop::EventLoop,
-    //     },
-    //     index::BufferCreationError as IndexCreationError,
-    //     vertex::BufferCreationError as VertexCreationError,
-    // },
     imgui_glium_renderer::{Renderer as ImguiRenderer, RendererError as ImguiRendererError},
     math_linear::prelude::*,
     shader::{Shader, ShaderError},
@@ -28,12 +19,10 @@ use {
 };
 
 use glium::backend::glutin::{Display, SimpleWindowBuilder};
-use glium::vertex::BufferCreationError as VertexCreationError;
-use glium::index::BufferCreationError as IndexCreationError;
 use glium::glutin::surface::WindowSurface;
+use glium::index::BufferCreationError as IndexCreationError;
+use glium::vertex::BufferCreationError as VertexCreationError;
 use glium::winit::event_loop::EventLoop;
-use glium::winit::event::{Event, WindowEvent};
-use glium::winit::dpi::PhysicalSize;
 use glium::winit::window::Window;
 
 #[derive(Clone, Copy, Debug)]
@@ -78,42 +67,32 @@ impl Graphics {
         /* Glutin event loop */
         let event_loop = winit::event_loop::EventLoop::builder().build().unwrap();
 
-        const DEFAULT_SIZES: USize2 = cfg::window::default::SIZES;
+        use cfg::window::default::SIZES;
 
         /* Window creation */
         let (window, display) = SimpleWindowBuilder::new()
             .with_title("Terramine")
-            .with_inner_size(DEFAULT_SIZES.x as u32, DEFAULT_SIZES.y as u32)
+            .with_inner_size(SIZES.x as u32, SIZES.y as u32)
             .build(&event_loop);
 
         /* Create ImGui context ant set settings file name. */
         let mut imgui_context = imgui::Context::create();
-        imgui_context.set_ini_filename(Some(PathBuf::from(r"src/imgui_settings.ini")));
+        imgui_context.set_ini_filename(Some(PathBuf::from(r"assets/imgui_settings.ini")));
 
         /* Bound ImGui to winit. */
         let mut winit_platform = imgui_winit_support::WinitPlatform::new(&mut imgui_context);
         winit_platform.attach_window(
             imgui_context.io_mut(),
             &window,
-            imgui_winit_support::HiDpiMode::Rounded,
+            imgui_winit_support::HiDpiMode::Default,
         );
-
-        /* Bad start size fix */
-        let dummy_event: Event<()> = Event::WindowEvent {
-            window_id: window.id(),
-            event: WindowEvent::Resized(PhysicalSize::new(
-                DEFAULT_SIZES.x as u32,
-                DEFAULT_SIZES.y as u32,
-            )),
-        };
-        winit_platform.handle_event(imgui_context.io_mut(), &window, &dummy_event);
 
         /* Style configuration. */
         imgui_context
             .fonts()
             .add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
         imgui_context.io_mut().font_global_scale = (1.0 / winit_platform.hidpi_factor()) as f32;
-        imgui_context.style_mut().window_rounding = 16.0;
+        imgui_context.style_mut().window_rounding = 8.0;
 
         /* Glium setup. */
         let display = Box::pin(display);
@@ -165,7 +144,7 @@ impl Graphics {
             }
         };
 
-        let surface = Surface::new(display.as_ref().get_ref(), UInt2::from(DEFAULT_SIZES))?;
+        let surface = Surface::new(display.as_ref().get_ref(), UInt2::from(SIZES))?;
 
         Ok(Self {
             display,
@@ -190,6 +169,7 @@ impl Graphics {
     }
 
     pub fn on_window_resize(&mut self, new_size: UInt2) -> Result<(), SurfaceError> {
+        self.display.resize((new_size.x, new_size.y));
         self.surface
             .on_window_resize(self.display.as_ref().get_ref(), new_size)
     }

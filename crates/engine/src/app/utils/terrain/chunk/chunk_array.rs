@@ -109,7 +109,9 @@ impl ChunkArray {
     }
 
     /// Constructs [`ChunkArray`] with empty chunks.
+    ///
     /// # Panic
+    ///
     /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
     pub fn new_empty_chunks(sizes: USize3) -> Result<Self, UserFacingError> {
         Self::validate_sizes(sizes)?;
@@ -1093,38 +1095,35 @@ impl ChunkArray {
         let first_voxel = self.trace_ray(Line::new(cam.pos, cam.front), Self::MAX_TRACE_STEPS)
             .find(|voxel| !voxel.is_air());
 
-        // FIXME(hack3rmann): user_io
-        // match first_voxel {
-        //     Some(voxel) if mouse::just_left_pressed() && cam.grabbes_cursor =>
-        //         command(Command::SetVoxel { pos: voxel.pos, new_id: AIR_VOXEL_DATA.id }),
+        match first_voxel {
+            Some(voxel) if mouse::just_left_pressed() && cam.grabbes_cursor =>
+                command(Command::SetVoxel { pos: voxel.pos, new_id: AIR_VOXEL_DATA.id }),
 
-        //     _ => (),
-        // }
+            _ => (),
+        }
     }
 
     pub async fn update(&mut self, facade: &dyn Facade, cam: &Camera) -> Result<(), UpdateError> {
         self.proccess_camera_input(cam).await;
         self.process_commands(facade).await;
 
-        // FIXME(hack3rmann): user_io
-        // if keyboard::just_pressed_combo([Key::LControl, Key::S]) {
-        //     let chunks: Vec<_> = self.chunks.iter().map(Arc::clone).collect();
-        //     let handle = tokio::spawn(
-        //         ChunkArray::save_to_file(self.sizes, chunks, "world", "world")
-        //     );
-        //     self.saving_handle = Some(handle);
-        // }
+        if keyboard::just_pressed_combo([Key::ControlLeft, Key::KeyS]) {
+            let chunks: Vec<_> = self.chunks.iter().map(Arc::clone).collect();
+            let handle = tokio::spawn(
+                ChunkArray::save_to_file(self.sizes, chunks, "world", "world")
+            );
+            self.saving_handle = Some(handle);
+        }
 
         if self.saving_handle.is_some() && self.saving_handle.as_ref().unwrap().is_finished() {
             let handle = self.saving_handle.take().unwrap();
             handle.await??;
         }
 
-        // FIXME(hack3rmann): user_io
-        // if keyboard::just_pressed_combo([Key::LControl, Key::O]) {
-        //     let handle = tokio::spawn(ChunkArray::read_from_file("world", "world"));
-        //     self.reading_handle = Some(handle);
-        // }
+        if keyboard::just_pressed_combo([Key::ControlLeft, Key::KeyO]) {
+            let handle = tokio::spawn(ChunkArray::read_from_file("world", "world"));
+            self.reading_handle = Some(handle);
+        }
 
         if self.reading_handle.is_some() && self.reading_handle.as_ref().unwrap().is_finished() {
             let handle = self.reading_handle.take().unwrap();

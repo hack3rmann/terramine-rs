@@ -19,7 +19,7 @@ pub mod camera {
         pub const NEAR_PLANE:     f32 = 0.5;
         pub const FAR_PLANE:      f32 = 10_000.0;
 
-        pub const SPEED:	      f32 = 10.0;
+        pub const SPEED:	        f32 = 10.0;
         pub const SPEED_FALLOFF:  f32 = 0.88;
         pub const FOV_IN_DEGREES: f32 = 60.0;
     }
@@ -29,8 +29,9 @@ pub mod window {
     pub mod default {
         use math_linear::prelude::*;
         
-        pub const WIDTH:  usize = 1024;
-        pub const HEIGHT: usize = 768;
+        pub const WIDTH:  usize = 2500;
+        pub const HEIGHT: usize = 1623;
+        pub const ASPECT_RATIO: f32 = HEIGHT as f32 / WIDTH as f32;
         pub const SIZES: USize2 = vecs!(WIDTH, HEIGHT);
         pub const ICON_BYTES: &[u8] = include_bytes!("../../../../../assets/image/terramine_icon_32p.bmp");
     }
@@ -130,18 +131,17 @@ pub mod shader {
     }
 }
 
-// FIXME(hack3rmann): user_io
-// pub mod key_bindings {
-//     use crate::app::utils::user_io::Key;
+pub mod key_bindings {
+    use crate::app::utils::user_io::Key;
 
-//     pub const DEBUG_VISUALS_SWITCH:           Key = Key::F3;
-//     pub const APP_EXIT:                       Key = Key::Escape;
-//     pub const MOUSE_CAPTURE:                  Key = Key::T;
-//     pub const ENABLE_DRAG_AND_RESIZE_WINDOWS: Key = Key::I;
-//     pub const ENABLE_PROFILER_WINDOW:         Key = Key::E;
-//     pub const SWITCH_RENDER_SHADOWS:          Key = Key::U;
-//     pub const RELOAD_RESOURCES:               Key = Key::H;
-// }
+    pub const DEBUG_VISUALS_SWITCH:           Key = Key::F3;
+    pub const APP_EXIT:                       Key = Key::Escape;
+    pub const MOUSE_CAPTURE:                  Key = Key::KeyT;
+    pub const ENABLE_DRAG_AND_RESIZE_WINDOWS: Key = Key::KeyI;
+    pub const ENABLE_PROFILER_WINDOW:         Key = Key::KeyE;
+    pub const SWITCH_RENDER_SHADOWS:          Key = Key::KeyU;
+    pub const RELOAD_RESOURCES:               Key = Key::KeyR;
+}
 
 pub mod timer {
     pub const N_FAMES_TO_MEASURE: usize = 16;
