@@ -1,99 +1,19 @@
-[package]
-name = "terramine"
+[workspace]
+resolver = "2"
+members = [
+    "crates/terramine",
+    "crates/math_linear",
+    "crates/profiler_macros",
+    "crates/terramine_ecs",
+    "crates/terramine_macros"
+]
+
+[workspace.package]
 version = "0.0.2"
 edition = "2021"
 
-
-
-[dependencies]
-# Graphics
-wgpu = "0.19.3"
-encase = "0.7.0"
-
-# Platform
-winit = "0.29.15"
-image = "0.25.1"
-winapi = "0.3.9"
-
-# Runtime
-tokio = { version = "1.27.0", features = ["full"] }
-tokio-stream = "0.1.12"
-pollster = "0.3.0"
-futures = "0.3.28"
-crossbeam = "0.8.1"
-rayon = "1.7.0"
-portable-atomic = { version = "1.2.0", features = ["float"] }
-atomic = "0.6.0"
-parking_lot = "0.12.1"
-ctor = "0.2.0"
-
-# Macro utils
-thiserror = "1.0.40"
-derive-deref-rs = "0.1.1"
-lazy_static = "1.4.0"
-parse-display = "0.10.0"
-user-error = "1.2.8"
-smart-default = "0.7.1"
-async-trait = "0.1.68"
-derive_more = { version = "1.0.0", features = ["full"] }
-const-random = "0.1.15"
-const_format = "0.2.31"
-
-# Math
-noise = "0.9.0"
-
-# Utils
-anyhow = "1.0.71"
-huffman-compress = "0.6.1"
-bit-vec = "0.8.0"
-smallvec = { version = "1.10.0", features = ["const_generics", "const_new"] }
-itertools = "0.13.0"
-ordered-float = "4.1.1"
-rand = "0.8.5"
-static_assertions = "1.1.0"
-env_logger = "0.11.5"
-log = "0.4.17"
-bytemuck = { version = "1.13.1", features = ["derive"] }
-
-# Terramine modules
-terramine_ecs = { path = "../terramine_ecs", version = "0.1.0" }
-terramine_macros = { version = "*", path = "../terramine_macros" }
-terramine_profiler_macros = { path = "../terramine_profiler_macros" }
-math_linear = { version = "0.1.0", path = "../math_linear", features = ["byte_muck"] }
-
-egui = "0.26.2"
-egui_dock = "0.11.4"
-egui_wgpu_backend = "0.28.0"
-egui_winit_platform = "0.21.0"
-emath = "0.26.2"
-bitflags = "2.4.1"
-glam = { version = "0.28.0", features = ["bytemuck", "serde"] }
-serde = { version = "1.0.198", features = ["derive"] }
-ico = "0.3.0"
-
-
-
-[dependencies.spin]
-
-version = "0.9.8"
-features = [
-    "mutex",
-    "spin_mutex",
-    "ticket_mutex",
-    "rwlock",
-    "once",
-    "lazy",
-    "barrier",
-    "lock_api"
-]
-
-
-
-[target."cfg(windows)".build-dependencies]
-
-winres = "0.1.12"
-
-
-
-[features]
-release = []
+[workspace.dependencies]
+math_linear = { path = "crates/math_linear", featues = ["byte_muck"] }
+profiler_macros = { path = "crates/profiler_macros" }
+terramine_ecs = { path = "crates/terramine_ecs" }
+terramine_macros = { path = "crates/terramine_macros" }

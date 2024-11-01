@@ -25,5 +25,5 @@ mod platform {
 
 #[cfg(not(windows))]
 mod platform {
-    pub fn set_icon() -> io::Result<()> {}
+    pub fn set_icon() -> std::io::Result<()> { Ok(()) }
 }
