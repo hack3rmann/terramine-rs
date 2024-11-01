@@ -106,7 +106,7 @@ pub mod terrain {
 }
 
 pub mod texture {
-    pub const DIRECTORY: &str = "src/image/";
+    pub const DIRECTORY: &str = "assets/image/";
 
     pub mod atlas {
         pub const ITEM_SIZE_IN_PIXELS:    usize = 8;
@@ -120,7 +120,7 @@ pub mod shader {
     pub const CLEAR_DEPTH:   f32 = 1.0;
     pub const CLEAR_STENCIL: i32 = 0;
     
-    pub const DIRECTORY: &str = "src/shaders/";
+    pub const DIRECTORY: &str = "assets/shaders/";
     
     pub const VERTEX_FILE_EXTENTION:   &str = "vert";
     pub const FRAGMENT_FILE_EXTENTION: &str = "frag";

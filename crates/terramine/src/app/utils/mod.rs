@@ -1,38 +1,38 @@
-pub mod window;
+pub mod asset_loader;
+pub mod assets;
+pub mod camera;
+pub mod cfg;
+pub mod components;
+pub mod concurrency;
+pub mod const_default;
+pub mod failure;
+pub mod format;
+pub mod geometry;
 pub mod graphics;
-pub mod user_io;
-pub mod terrain;
-pub mod time;
+pub mod iterator;
+pub mod logger;
+pub mod macros;
+pub mod physics;
 pub mod profiler;
 pub mod reinterpreter;
-pub mod saves;
-pub mod concurrency;
 pub mod runtime;
-pub mod werror;
-pub mod cfg;
-pub mod logger;
-pub mod assets;
-pub mod transform;
-pub mod camera;
+pub mod saves;
 pub mod str_view;
-pub mod wrapper;
-pub mod macros;
-pub mod failure;
-pub mod const_default;
-pub mod physics;
-pub mod geometry;
-pub mod iterator;
-pub mod components;
-pub mod format;
-pub mod asset_loader;
 pub mod system;
+pub mod terrain;
+pub mod time;
+pub mod transform;
+pub mod user_io;
+#[cfg(windows)]
+pub mod werror;
+pub mod window;
+pub mod wrapper;
 
-
-
-use { crate::prelude::*, winit::dpi::{Pixel, PhysicalSize, PhysicalPosition} };
 use math_linear::prelude::*;
-
-
+use {
+    crate::prelude::*,
+    winit::dpi::{PhysicalPosition, PhysicalSize, Pixel},
+};
 
 /// Returns the "default value" for a type.
 /// Default values are often some kind of initial value,
@@ -48,8 +48,6 @@ pub const fn const_default<T: ConstDefault>() -> T {
     T::DEFAULT
 }
 
-
-
 pub trait ToPhisicalSize<P: Pixel> {
     fn to_physical_size(&self) -> PhysicalSize<P>;
 }
@@ -60,8 +58,6 @@ impl ToPhisicalSize<u32> for UVec2 {
         PhysicalSize::new(self.x, self.y)
     }
 }
-
-
 
 pub trait ToPhisicalPosition<P: Pixel> {
     fn to_physical_position(&self) -> PhysicalPosition<P>;
@@ -74,8 +70,6 @@ impl ToPhisicalPosition<u32> for UVec2 {
     }
 }
 
-
-
 pub trait ToVec2 {
     fn to_vec2(&self) -> UVec2;
 }
@@ -85,8 +79,6 @@ impl ToVec2 for PhysicalSize<u32> {
         UVec2::new(self.width, self.height)
     }
 }
-
-
 
 pub trait Volume<T> {
     fn volume(&self) -> T;
@@ -110,8 +102,6 @@ impl_volume! {
     ULong3: u64, Large3: i128, ULarge3: u128, ISize3: isize, USize3: usize, vec3: f32, Double3: f64,
 }
 
-
-
 #[macro_export]
 macro_rules! module_constructor {
     ($($content:tt)*) => {
@@ -124,8 +114,6 @@ macro_rules! module_constructor {
 
 pub use module_constructor;
 
-
-
 #[macro_export]
 macro_rules! module_destructor {
     ($($content:tt)*) => {
@@ -137,3 +125,4 @@ macro_rules! module_destructor {
 }
 
 pub use module_destructor;
+

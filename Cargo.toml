@@ -13,7 +13,7 @@ version = "0.0.2"
 edition = "2021"
 
 [workspace.dependencies]
-math_linear = { path = "crates/math_linear", featues = ["byte_muck"] }
+math_linear = { path = "crates/math_linear" }
 profiler_macros = { path = "crates/profiler_macros" }
 terramine_ecs = { path = "crates/terramine_ecs" }
 terramine_macros = { path = "crates/terramine_macros" }

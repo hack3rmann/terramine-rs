@@ -663,8 +663,9 @@ pub mod render {
     ) -> Result<RenderPipeline, PipelineSetupError> {
         use { graphics::*, crate::terrain::chunk::mesh::HiResVertex };
 
+        // FIXME(hack3rmann): use cfg's path for this
         const TEXTURE_ATLAS_PATH: &str = "assets/images/texture_atlas.png";
-        const SHADER_PATH: &str = "src/shaders/chunks_full.wgsl";
+        const SHADER_PATH: &str = "assets/shaders/chunks_full.wgsl";
 
         let parse_textures = {
             let device = device.clone();

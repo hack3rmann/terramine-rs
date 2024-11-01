@@ -1,31 +1,15 @@
 #![macro_use]
 #![allow(dead_code)]
 
-use {
-    crate::prelude::*,
-    std::time::Instant,
-    parking_lot::Mutex,
-};
+use {crate::prelude::*, parking_lot::Mutex, std::time::Instant};
 
-
-
-pub use terramine_profiler_macros::profiler_target as profile;
-
-
+pub use profiler_macros::profiler_target as profile;
 
 pub mod prelude {
-    pub use super::{
-        profile,
-        super::profiler,
-        MeasureId,
-    };
+    pub use super::{super::profiler, profile, MeasureId};
 }
 
-
-
 pub type MeasureId = u64;
-
-
 
 #[derive(Debug, Clone, Copy)]
 pub struct Data<'s> {
@@ -35,8 +19,6 @@ pub struct Data<'s> {
     time: f64,
     max_time: f64,
 }
-
-
 
 /// Represents profiler target.
 #[derive(Debug)]
@@ -52,12 +34,10 @@ impl Profile {
         Self {
             target_name: target_name.into(),
             measures: vec![],
-            max_time: 0.0
+            max_time: 0.0,
         }
     }
 }
-
-
 
 /// Represents a time measure with drop-stop.
 #[derive(Debug)]
@@ -69,7 +49,11 @@ pub struct Measure {
 
 impl Measure {
     pub fn new(id: MeasureId) -> Self {
-        Self { value: 0.0, now: Instant::now(), id }
+        Self {
+            value: 0.0,
+            now: Instant::now(),
+            id,
+        }
     }
 }
 
@@ -80,15 +64,11 @@ impl Drop for Measure {
     }
 }
 
-
-
 /// Handles all profiles.
 #[derive(Debug)]
 pub struct Profiler {
     pub profiles: HashMap<MeasureId, Profile>,
 }
-
-
 
 macros::atomic_static! {
     static IS_PROFILER_ENABLED: bool = false;
@@ -102,14 +82,13 @@ lazy_static! {
 
 /// Adds profile
 pub fn add_profile(profile: Profile, id: MeasureId) {
-    PROFILER.lock()
-        .profiles
-        .insert(id, profile);
+    PROFILER.lock().profiles.insert(id, profile);
 }
 
 /// Uploads measure
 pub fn upload_measure(measure: &Measure) {
-    PROFILER.lock()
+    PROFILER
+        .lock()
         .profiles
         .get_mut(&measure.id)
         .unwrap_or_else(|| panic!("measure {measure:?} should be in measure map"))
@@ -119,10 +98,8 @@ pub fn upload_measure(measure: &Measure) {
 
 /// Starting capturing to to profile under given `id`.
 pub fn start_capture(target_name: impl Into<String>, id: MeasureId) -> Measure {
-    let is_already_captured = PROFILER.lock()
-        .profiles
-        .contains_key(&id);
-    
+    let is_already_captured = PROFILER.lock().profiles.contains_key(&id);
+
     if !is_already_captured {
         add_profile(Profile::new(target_name), id)
     }
@@ -142,13 +119,14 @@ pub fn update_and_build_window(dt: TimeStep, ui: &mut egui::Ui) {
     });
 
     let mut lock = PROFILER.lock();
-    let data = lock.profiles
+    let data = lock
+        .profiles
         .iter_mut()
         .map(|(_, profile)| {
-            let time_summary: f64 = profile.measures.iter()
-                .copied()
-                .sum();
-            let cur_max = profile.measures.iter()
+            let time_summary: f64 = profile.measures.iter().copied().sum();
+            let cur_max = profile
+                .measures
+                .iter()
                 .copied()
                 .reduce(f64::max)
                 .unwrap_or(0.0);
@@ -163,7 +141,7 @@ pub fn update_and_build_window(dt: TimeStep, ui: &mut egui::Ui) {
             }
         })
         .collect();
-    
+
     build_window(data, ui);
     drop(lock);
 
@@ -196,18 +174,17 @@ pub fn build_window(profiler_result: Vec<Data<'_>>, ui: &mut egui::Ui) {
     }
 }
 
-
-
 #[macro_export]
 macro_rules! scope {
     ($name:expr) => {
-        use $crate::profiler::{MeasureId, start_capture};
+        use $crate::profiler::{start_capture, MeasureId};
         const SCOPE_ID: MeasureId = ::const_random::const_random!(u64) as MeasureId;
         let _measure = start_capture($name, SCOPE_ID);
     };
     () => {
-        $crate::profiler::scope!(
-            const_format::formatcp!("scope #{}", ::const_random::const_random!(u64))
-        );
+        $crate::profiler::scope!(const_format::formatcp!(
+            "scope #{}",
+            ::const_random::const_random!(u64)
+        ));
     };
 }

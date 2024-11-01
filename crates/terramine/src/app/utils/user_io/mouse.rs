@@ -1,10 +1,8 @@
 use {
-    crate::{prelude::*, window::Window},
     super::KeyState,
+    crate::{prelude::*, window::Window},
     winit::event::MouseButton as WinitMouseButton,
 };
-
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MouseButton {
@@ -19,7 +17,9 @@ impl ConstDefault for MouseButton {
 }
 
 impl Default for MouseButton {
-    fn default() -> Self { const_default() }
+    fn default() -> Self {
+        const_default()
+    }
 }
 
 impl TryFrom<WinitMouseButton> for MouseButton {
@@ -62,15 +62,11 @@ impl From<MouseButton> for WinitMouseButton {
     }
 }
 
-
-
 #[derive(Debug, Error)]
 pub enum ButtonConversionError {
     #[error("failed to convert mouse button: unknown id: {id}")]
     UnknownId { id: u16 },
 }
-
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, IsVariant)]
 pub enum ExtendedMouseButton {
@@ -84,9 +80,9 @@ assert_impl_all!(ExtendedMouseButton: Send, Sync);
 impl ExtendedMouseButton {
     /// Converts [`ExtendedMouseButton`] to just [`MouseButton`]
     /// by removing [`ExtendedMouseButton::Other`] variant.
-    /// 
+    ///
     /// # Safety
-    /// 
+    ///
     /// - `self` is not [`ExtendedMouseButton::Other`].
     pub unsafe fn to_mouse_button_unchecked(self) -> MouseButton {
         debug_assert!(!self.is_other());
@@ -101,13 +97,13 @@ impl ExtendedMouseButton {
 
     /// Converts [`ExtendedMouseButton`] to just [`ExtendedMouseButton::Other`]'s
     /// id by removing other variants.
-    /// 
+    ///
     /// # Safety
-    /// 
+    ///
     /// - `self` is [`ExtendedMouseButton::Other`].
     pub unsafe fn to_other_unchecked(self) -> u16 {
         debug_assert!(self.is_other());
-        
+
         match self {
             Self::Other(id) => id,
             _ => hint::unreachable_unchecked(),
@@ -139,8 +135,6 @@ impl From<WinitMouseButton> for ExtendedMouseButton {
     }
 }
 
-
-
 lazy_static! {
     pub(super) static ref SPECIAL_INPUTS: RwLock<HashSet<u16>> = default();
     pub(super) static ref RELEASED_KEYS: RwLock<HashSet<ExtendedMouseButton>> = default();
@@ -157,13 +151,33 @@ macros::atomic_static! {
     pub(crate) static IS_CAPTURED: bool = false;
 }
 
-pub fn get_x() -> f32 { X.load(Relaxed) }
-pub fn get_y() -> f32 { Y.load(Relaxed) }
-pub fn get_pos() -> Vec2 { Vec2::new(get_x(), get_y()) }
+pub fn get_x() -> f32 {
+    X.load(Relaxed)
+}
+pub fn get_y() -> f32 {
+    Y.load(Relaxed)
+}
+pub fn get_pos() -> Vec2 {
+    Vec2::new(get_x(), get_y())
+}
 
-pub fn get_dx() -> f32 { DX.load(Relaxed) }
-pub fn get_dy() -> f32 { DY.load(Relaxed) }
-pub fn get_delta() -> Vec2 { Vec2::new(get_dx(), get_dy()) }
+pub fn get_dx() -> f32 {
+    DX.load(Relaxed)
+}
+pub fn get_dy() -> f32 {
+    DY.load(Relaxed)
+}
+pub fn get_delta() -> Vec2 {
+    Vec2::new(get_dx(), get_dy())
+}
+
+pub fn move_cursor(pos: Vec2) {
+    let prev_pos = self::get_pos();
+    let delta = self::get_delta() + pos - prev_pos;
+
+    macros::store!(Release: DX = delta.x, DY = delta.y);
+    macros::store!(Release: X = pos.x, Y = pos.y);
+}
 
 pub fn press(button: ExtendedMouseButton) {
     if !button.is_other() {
@@ -201,13 +215,17 @@ pub fn is_pressed(button: ExtendedMouseButton) -> bool {
 
 pub fn just_pressed(button: ExtendedMouseButton) -> bool {
     let is_pressed = is_pressed(button);
-    if is_pressed { RELEASED_KEYS.write().insert(button); }
+    if is_pressed {
+        RELEASED_KEYS.write().insert(button);
+    }
     is_pressed
 }
 
 pub fn just_pressed_common(button: MouseButton) -> bool {
     let is_pressed = is_pressed_common(button);
-    if is_pressed { RELEASED_KEYS.write().insert(button.into()); }
+    if is_pressed {
+        RELEASED_KEYS.write().insert(button.into());
+    }
     is_pressed
 }
 
@@ -247,10 +265,10 @@ pub fn update_cursor_position(window: &Window) -> Result<(), MouseError> {
 
     // If mouse is captured then not change mouse position and put cursor on center.
     if IS_CAPTURED.load(Relaxed) {
-        window.set_cursor_position(
-            half_size.to_physical_position()
-        ).expect("failed to set cursor position");
-        
+        window
+            .set_cursor_position(half_size.to_physical_position())
+            .expect("failed to set cursor position");
+
         macros::store!(Release: X = half_size.x as f32, Y = half_size.y as f32);
     }
 
@@ -258,34 +276,46 @@ pub fn update_cursor_position(window: &Window) -> Result<(), MouseError> {
 }
 
 /// Updates the mouse systems.
-pub fn update(window: &Window) -> Result<(), MouseError> {
-    for key in RELEASED_KEYS.write().drain() { release(key); }
-    update_cursor_position(window)
+pub fn update() {
+    for key in RELEASED_KEYS.write().drain() {
+        release(key);
+    }
+    macros::store!(Release: DX = 0.0, DY = 0.0);
 }
 
 /// Gives cursor position in screen cordinates.
+#[cfg(windows)]
 pub fn get_cursor_screen_pos() -> Result<IVec2, MouseError> {
-    use winapi::{
-        um::winuser::GetCursorPos as win_get_cursor_pos,
-        shared::windef::POINT as Point,
-    };
+    use winapi::{shared::windef::POINT as Point, um::winuser::GetCursorPos as win_get_cursor_pos};
 
     // Point cordinates struct
     let mut pt: Point = unsafe { mem::zeroed() };
-    
+
     // Checks if WinAPI `GetCursorPos()` success then return cursor position else error.
     match unsafe { win_get_cursor_pos(&mut pt) } {
         0 => Err(MouseError::GetCursorPos),
-        _ => Ok(IVec2::new(pt.x, pt.y))
+        _ => Ok(IVec2::new(pt.x, pt.y)),
     }
 }
 
+#[cfg(not(windows))]
+pub fn get_cursor_screen_pos() -> Result<IVec2, MouseError> {
+    // FIXME(hack3rmann): mouse movement on Wayland
+    Ok(IVec2::new(0, 0))
+}
+
 /// Gives cursor position in window cordinates.
+#[cfg(windows)]
 pub fn get_cursor_pos(window: &Window) -> Result<Vec2, MouseError> {
     let [x, y] = get_cursor_screen_pos()?.to_array();
-    let window_pos = window.inner_position()?;
+    let window_pos = window.inner_position().unwrap_or_default();
 
     Ok(IVec2::new(x - window_pos.x, y - window_pos.y).as_vec2())
+}
+
+#[cfg(not(windows))]
+pub fn get_cursor_pos(_window: &Window) -> Result<Vec2, MouseError> {
+    Ok(get_pos())
 }
 
 pub fn is_captured() -> bool {
@@ -300,10 +330,11 @@ pub fn capture(window: &Window) {
         return;
     }
 
-    window.set_cursor_grab(CursorGrabMode::Confined)
-        .or_else(|_| window.set_cursor_grab(CursorGrabMode::Locked))
-        .expect("failed to grab the cursor");
-    window.set_cursor_visible(false);
+    // FIXME(hack3rmann): figure out how to make camera controls
+    // window.set_cursor_grab(CursorGrabMode::Locked)
+    //     .or_else(|_| window.set_cursor_grab(CursorGrabMode::Confined))
+    //     .expect("failed to grab the cursor");
+    // window.set_cursor_visible(false);
 
     IS_CAPTURED.store(true, Release);
 }
@@ -316,7 +347,8 @@ pub fn uncapture(window: &Window) {
         return;
     }
 
-    window.set_cursor_grab(CursorGrabMode::None)
+    window
+        .set_cursor_grab(CursorGrabMode::None)
         .expect("failed to release the cursor");
     window.set_cursor_visible(true);
 
@@ -331,8 +363,6 @@ pub fn set_capture(window: &Window, do_capture: bool) {
         uncapture(window);
     }
 }
-
-
 
 #[derive(Debug, Error)]
 pub enum MouseError {

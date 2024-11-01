@@ -1,32 +1,27 @@
-//! 
+//!
 //! IO handler
-//! 
+//!
 
 pub mod keyboard;
 pub mod mouse;
 
-
-
 use {
     crate::{prelude::*, window::Window},
-    winit::{event::{ElementState, Event, KeyEvent, WindowEvent}, keyboard::PhysicalKey},
+    winit::{
+        event::{ElementState, Event, KeyEvent, WindowEvent},
+        keyboard::PhysicalKey,
+    },
 };
-
-
 
 pub use winit::keyboard::KeyCode as Key;
 
-
-
 module_constructor! {
     // * Safety
-    // * 
+    // *
     // * Safe, because it's going on in module
     // * constructor, so no one access the update list.
     unsafe { app::update::push_function_lock_free(keyboard::update) };
 }
-
-
 
 #[repr(u8)]
 #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, IsVariant, NoUninit)]
@@ -40,7 +35,9 @@ impl ConstDefault for KeyState {
 }
 
 impl Default for KeyState {
-    fn default() -> Self { const_default() }
+    fn default() -> Self {
+        const_default()
+    }
 }
 
 impl From<winit::event::ElementState> for KeyState {
@@ -62,8 +59,6 @@ impl From<KeyState> for winit::event::ElementState {
     }
 }
 
-
-
 pub fn handle_event(event: &Event<()>, window: &Window) {
     macros::atomic_static! {
         static CURSOR_RECAPTURED: bool = false;
@@ -71,9 +66,15 @@ pub fn handle_event(event: &Event<()>, window: &Window) {
 
     if let Event::WindowEvent { event, .. } = event {
         match event {
-            WindowEvent::KeyboardInput { event: KeyEvent {
-                physical_key: PhysicalKey::Code(key), state, ..
-            }, .. } => match state {
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(key),
+                        state,
+                        ..
+                    },
+                ..
+            } => match state {
                 ElementState::Pressed => keyboard::press(*key),
                 ElementState::Released => keyboard::release(*key),
             },
@@ -85,19 +86,21 @@ pub fn handle_event(event: &Event<()>, window: &Window) {
                 ElementState::Released => mouse::release((*button).into()),
             },
 
+            WindowEvent::CursorMoved { position, .. } => {
+                mouse::move_cursor(Vec2::new(position.x as f32, position.y as f32));
+            }
+
             // Cursor entered the window event
-            WindowEvent::CursorEntered { .. } =>
-                mouse::IS_ON_WINDOW.store(true, Relaxed),
+            WindowEvent::CursorEntered { .. } => mouse::IS_ON_WINDOW.store(true, Relaxed),
 
             // Cursor left the window
-            WindowEvent::CursorLeft { .. } =>
-                mouse::IS_ON_WINDOW.store(false, Relaxed),
+            WindowEvent::CursorLeft { .. } => mouse::IS_ON_WINDOW.store(false, Relaxed),
 
             WindowEvent::Focused(focused) => {
                 let mut is_recaptured = CURSOR_RECAPTURED.load(Acquire);
-                
+
                 let is_captured = mouse::is_captured();
-                
+
                 // If window has unfocused then release cursor
                 if *focused && is_recaptured && !is_captured {
                     mouse::capture(window);
@@ -113,3 +116,4 @@ pub fn handle_event(event: &Event<()>, window: &Window) {
         }
     }
 }
+

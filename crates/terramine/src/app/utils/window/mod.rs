@@ -1,3 +1,4 @@
+#[cfg(windows)]
 pub mod message_box;
 
 use {

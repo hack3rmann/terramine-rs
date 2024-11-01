@@ -200,9 +200,6 @@ impl App {
         {
             self.world.resource::<&mut Timer>()?.update();
             let graphics = self.world.resource::<&Graphics>()?;
-            
-            mouse::update(&graphics.window)
-                .log_error("app", "failed to update mouse input");
 
             if keyboard::just_pressed(cfg::key_bindings::MOUSE_CAPTURE) {
                 let MainCamera(camera) = self.world.copy_resource::<MainCamera>()?;
@@ -254,6 +251,7 @@ impl App {
         self.update(window_id).await?;
         self.prepare_frame(window_id).await?;
         self.draw_frame(window_id).await?;
+        mouse::update();
 
         Ok(())
     }
