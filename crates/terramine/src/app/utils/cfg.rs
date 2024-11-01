@@ -14,8 +14,9 @@ pub mod camera {
     pub const LIGHT_NEAR_PLANE: f32 = 1.0;
     pub const LIGHT_FAR_PLANE:  f32 = 200.0;
     pub const IS_CAMERA_LOOK_ACCELERATION_ENABLED: bool = true;
-    pub const MOUSE_SENSETIVITY: f32 = 18000.0 / N_SIMULATIONS_STEPS as f32;
+    pub const MOUSE_SENSETIVITY: f32 = 2.0;
     pub const N_SIMULATIONS_STEPS: usize = 20;
+    pub const HIDE_CAPTURED_CURSOR: bool = true;
 
     pub mod default {
         /// These constants are shared with shader file. See `postprocessing.frag`.

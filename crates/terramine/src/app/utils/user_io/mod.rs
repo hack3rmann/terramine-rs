@@ -64,6 +64,8 @@ pub fn handle_event(event: &Event<()>, window: &Window) {
         static CURSOR_RECAPTURED: bool = false;
     }
 
+    mouse::handle_event(event, window);
+
     if let Event::WindowEvent { event, .. } = event {
         match event {
             WindowEvent::KeyboardInput {
@@ -85,10 +87,6 @@ pub fn handle_event(event: &Event<()>, window: &Window) {
                 ElementState::Pressed => mouse::press((*button).into()),
                 ElementState::Released => mouse::release((*button).into()),
             },
-
-            WindowEvent::CursorMoved { position, .. } => {
-                mouse::move_cursor(Vec2::new(position.x as f32, position.y as f32));
-            }
 
             // Cursor entered the window event
             WindowEvent::CursorEntered { .. } => mouse::IS_ON_WINDOW.store(true, Relaxed),

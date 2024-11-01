@@ -251,7 +251,13 @@ impl App {
         self.update(window_id).await?;
         self.prepare_frame(window_id).await?;
         self.draw_frame(window_id).await?;
-        mouse::update();
+
+        {
+            let graphics = self.world.resource::<&Graphics>()?;
+
+            mouse::update(&graphics.window)
+                .context("failed to update mouse")?;
+        }
 
         Ok(())
     }

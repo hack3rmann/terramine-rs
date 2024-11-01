@@ -243,7 +243,7 @@ impl CameraComponent {
             let angles = accel_multiple * Vec3::new(mouse_delta.y, 0.0, mouse_delta.x);
 
             // TODO: bound rotation by (-pi..pi)
-            transform.rotation.rotate(dt_secs * self.mouse_sensetivity * angles);
+            transform.rotation.rotate(self.mouse_sensetivity * angles);
         }
 
         if keyboard::just_pressed(Key::KeyP) {

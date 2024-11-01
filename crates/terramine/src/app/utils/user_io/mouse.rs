@@ -1,7 +1,12 @@
 use {
     super::KeyState,
     crate::{prelude::*, window::Window},
-    winit::event::MouseButton as WinitMouseButton,
+    winit::{
+        dpi::PhysicalPosition,
+        error::ExternalError,
+        event::{Event, MouseButton as WinitMouseButton, WindowEvent},
+        window::CursorGrabMode,
+    },
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -142,6 +147,33 @@ lazy_static! {
 
 pub static INPUTS: [Atomic<KeyState>; 3] = const_default();
 
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Default, Copy, Eq, PartialOrd, Ord, Hash, Pod, Zeroable)]
+pub struct GrabMode(u8);
+
+impl GrabMode {
+    const NONE: Self = Self(CursorGrabMode::None as u8);
+    const CONFINED: Self = Self(CursorGrabMode::Confined as u8);
+    const LOCKED: Self = Self(CursorGrabMode::Locked as u8);
+}
+
+impl From<CursorGrabMode> for GrabMode {
+    fn from(value: CursorGrabMode) -> Self {
+        Self(value as u8)
+    }
+}
+
+impl From<GrabMode> for CursorGrabMode {
+    fn from(value: GrabMode) -> Self {
+        match value {
+            GrabMode::NONE => CursorGrabMode::None,
+            GrabMode::CONFINED => CursorGrabMode::Confined,
+            GrabMode::LOCKED => CursorGrabMode::Locked,
+            _ => unreachable!(),
+        }
+    }
+}
+
 macros::atomic_static! {
     pub(super) static DX: f32 = 0.0;
     pub(super) static DY: f32 = 0.0;
@@ -149,6 +181,7 @@ macros::atomic_static! {
     pub(super) static Y: f32 = 0.0;
     pub(super) static IS_ON_WINDOW: bool = false;
     pub(crate) static IS_CAPTURED: bool = false;
+    pub(crate) static GRAB_MODE: GrabMode = GrabMode::NONE;
 }
 
 pub fn get_x() -> f32 {
@@ -164,19 +197,57 @@ pub fn get_pos() -> Vec2 {
 pub fn get_dx() -> f32 {
     DX.load(Relaxed)
 }
+
 pub fn get_dy() -> f32 {
     DY.load(Relaxed)
 }
+
 pub fn get_delta() -> Vec2 {
     Vec2::new(get_dx(), get_dy())
 }
 
-pub fn move_cursor(pos: Vec2) {
-    let prev_pos = self::get_pos();
-    let delta = self::get_delta() + pos - prev_pos;
+pub fn handle_event(event: &Event<()>, _window: &Window) {
+    if let Event::WindowEvent {
+        event: WindowEvent::CursorMoved { position, .. },
+        ..
+    } = event
+    {
+        let cur_pos = Vec2::new(position.x as f32, position.y as f32);
+        let prev_pos = self::get_pos();
+        let delta = self::get_delta() + cur_pos - prev_pos;
 
-    macros::store!(Release: DX = delta.x, DY = delta.y);
-    macros::store!(Release: X = pos.x, Y = pos.y);
+        macros::store!(Release: X = cur_pos.x, Y = cur_pos.y);
+        macros::store!(Release: DX = delta.x, DY = delta.y);
+    }
+}
+
+/// Updates the mouse systems.
+pub fn update(window: &Window) -> Result<(), ExternalError> {
+    for key in RELEASED_KEYS.write().drain() {
+        release(key);
+    }
+
+    let window_size = window.inner_size();
+
+    macros::store!(Release: DX = 0.0, DY = 0.0);
+
+    if self::is_captured() {
+        let prev_mode = GRAB_MODE.load(Acquire);
+
+        macros::store!(Release:
+            X = 0.5 * window_size.width as f32,
+            Y = 0.5 * window_size.height as f32
+        );
+
+        set_grab_mode(window, CursorGrabMode::Locked)?;
+        window.set_cursor_position(PhysicalPosition::new(
+            window_size.width / 2,
+            window_size.height / 2,
+        ))?;
+        set_grab_mode(window, prev_mode.into())?;
+    }
+
+    Ok(())
 }
 
 pub fn press(button: ExtendedMouseButton) {
@@ -275,14 +346,6 @@ pub fn update_cursor_position(window: &Window) -> Result<(), MouseError> {
     Ok(())
 }
 
-/// Updates the mouse systems.
-pub fn update() {
-    for key in RELEASED_KEYS.write().drain() {
-        release(key);
-    }
-    macros::store!(Release: DX = 0.0, DY = 0.0);
-}
-
 /// Gives cursor position in screen cordinates.
 #[cfg(windows)]
 pub fn get_cursor_screen_pos() -> Result<IVec2, MouseError> {
@@ -322,35 +385,37 @@ pub fn is_captured() -> bool {
     IS_CAPTURED.load(Acquire)
 }
 
+pub fn set_grab_mode(window: &Window, mode: CursorGrabMode) -> Result<(), ExternalError> {
+    GRAB_MODE.store(mode.into(), Release);
+    window.set_cursor_grab(mode)
+}
+
 /// Grabs the cursor for camera control.
 pub fn capture(window: &Window) {
-    use winit::window::CursorGrabMode;
-
     if IS_CAPTURED.load(Acquire) {
         return;
     }
 
-    // FIXME(hack3rmann): figure out how to make camera controls
-    // window.set_cursor_grab(CursorGrabMode::Locked)
-    //     .or_else(|_| window.set_cursor_grab(CursorGrabMode::Confined))
-    //     .expect("failed to grab the cursor");
-    // window.set_cursor_visible(false);
+    set_grab_mode(window, CursorGrabMode::Confined).unwrap();
+
+    if cfg::camera::HIDE_CAPTURED_CURSOR {
+        window.set_cursor_visible(false);
+    }
 
     IS_CAPTURED.store(true, Release);
 }
 
 /// Releases cursor for standart input.
 pub fn uncapture(window: &Window) {
-    use winit::window::CursorGrabMode;
-
     if !IS_CAPTURED.load(Acquire) {
         return;
     }
 
-    window
-        .set_cursor_grab(CursorGrabMode::None)
-        .expect("failed to release the cursor");
-    window.set_cursor_visible(true);
+    set_grab_mode(window, CursorGrabMode::None).unwrap();
+
+    if cfg::camera::HIDE_CAPTURED_CURSOR {
+        window.set_cursor_visible(true);
+    }
 
     IS_CAPTURED.store(false, Release);
 }
