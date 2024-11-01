@@ -84,7 +84,7 @@ pub mod keyboard {
         is_pressed && !is_captured
     }
 
-    pub fn update_input() {
+    pub fn update() {
         let mut input = INPUTS.write().unwrap();
 
         let mut released_keys = RELEASED_KEYS.lock().unwrap();
@@ -174,8 +174,28 @@ pub mod mouse {
         just_pressed(MouseButton::Middle)
     }
 
+    pub fn handle_event(event: &Event<()>, _window: &Window) {
+        if let Event::WindowEvent {
+            event: WindowEvent::CursorMoved { position, .. },
+            ..
+        } = event
+        {
+            let prev_x = X.load(Acquire);
+            let prev_y = Y.load(Acquire);
+            let prev_dx = DX.load(Acquire);
+            let prev_dy = DY.load(Acquire);
+            let dx = prev_dx + position.x as f32 - prev_x;
+            let dy = prev_dy + position.y as f32 - prev_y;
+
+            X.store(position.x as f32, Release);
+            Y.store(position.y as f32, Release);
+            DX.store(dx, Release);
+            DY.store(dy, Release);
+        }
+    }
+
     /// Update mouse delta.
-    pub fn update(window: &Window, x: f32, y: f32) -> Result<(), MouseError> {
+    pub fn update(window: &Window) -> Result<(), MouseError> {
         {
             let mut released_keys = RELEASED_KEYS.lock().unwrap();
 
@@ -188,67 +208,34 @@ pub mod mouse {
             released_keys.clear();
         }
 
-        /* Get cursor position from WinAPI */
-        let prev_x = X.load(Acquire);
-        let prev_y = Y.load(Acquire);
+        let window_size = window.inner_size();
 
-        /* Update struct */
-        X.store(x, Release);
-        Y.store(y, Release);
-        DX.store(x - prev_x, Release);
-        DY.store(y - prev_y, Release);
-
-        /* Get window size */
-        let wsize = window.inner_size();
+        DX.store(0.0, Release);
+        DY.store(0.0, Release);
 
         /* If cursor grabbed then not change mouse position and put cursor on center */
         if IS_GRABBED.load(Relaxed) {
-            window
-                .set_cursor_position(PhysicalPosition::new(wsize.width / 2, wsize.height / 2))
-                .expect("failed to set cursor position");
+            X.store(0.5 * window_size.width as f32, Release);
+            Y.store(0.5 * window_size.height as f32, Release);
 
-            X.store((wsize.width / 2) as f32, Release);
-            Y.store((wsize.height / 2) as f32, Release);
+            window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
+
+            window
+                .set_cursor_position(PhysicalPosition::new(
+                    window_size.width / 2,
+                    window_size.height / 2,
+                ))
+                .log_error("user-io", "failed to set cursor");
+
+            window.set_cursor_grab(CursorGrabMode::None).unwrap();
         }
 
         Ok(())
     }
 
-    // FIXME(hack3rmann): support unix
-    /// Gives cursor position in screen cordinates.
-    #[cfg(windows)]
-    pub fn get_cursor_screen_pos() -> Result<Int2, MouseError> {
-        // Point cordinates struct
-        let mut pt = POINT { x: 0, y: 0 };
-
-        // Checks if WinAPI `GetCursorPos()` success then return cursor position else error
-        let result = unsafe { GetCursorPos(&mut pt) };
-        if result != 0 {
-            Ok(veci!(pt.x, pt.y))
-        } else {
-            // `GetCursorPos()` returned `false` for some reason
-            Err(MouseError::GetCursorPos(result))
-        }
-    }
-
-    pub fn get_cursor_screen_pos() -> Result<Int2, MouseError> {
-        Ok(veci!(0, 0))
-    }
-
-    /// Gives cursor position in window cordinates.
-    pub fn get_cursor_pos(window: &Window) -> Result<vec2, MouseError> {
-        let (x, y) = vec2::from(get_cursor_screen_pos()?).as_tuple();
-        let window_pos = window.inner_position()?;
-
-        Ok(vecf!(x - window_pos.x as f32, y - window_pos.y as f32))
-    }
-
     /// Grabs the cursor for camera control.
     pub fn grab_cursor(window: &Window) {
-        window
-            .set_cursor_grab(CursorGrabMode::Locked)
-            .or_else(|_| window.set_cursor_grab(CursorGrabMode::Confined))
-            .expect("failed to set cursor grab");
+        window.set_cursor_grab(CursorGrabMode::Confined).unwrap();
         window.set_cursor_visible(false);
 
         IS_GRABBED.store(true, Relaxed);
@@ -256,9 +243,7 @@ pub mod mouse {
 
     /// Releases cursor for standart input.
     pub fn release_cursor(window: &Window) {
-        window
-            .set_cursor_grab(CursorGrabMode::None)
-            .expect("failed to release cursor");
+        window.set_cursor_grab(CursorGrabMode::None).unwrap();
         window.set_cursor_visible(true);
 
         IS_GRABBED.store(false, Relaxed);
@@ -277,6 +262,8 @@ pub mod mouse {
 pub fn handle_event(event: &Event<()>, window: &Window) {
     static CURSOR_REGRABBED: Mutex<bool> = Mutex::new(false);
 
+    mouse::handle_event(event, window);
+
     if let Event::WindowEvent { event, .. } = event {
         match event {
             /* Close event */
@@ -293,11 +280,6 @@ pub fn handle_event(event: &Event<()>, window: &Window) {
 
                 ElementState::Released => mouse::release(*button),
             },
-
-            WindowEvent::CursorMoved { position, .. } => {
-                mouse::update(window, position.x as f32, position.y as f32)
-                    .log_error("user-io", "failed to update mouse input");
-            }
 
             /* Cursor entered the window event. */
             WindowEvent::CursorEntered { .. } => mouse::IS_ON_WINDOW.store(true, Relaxed),

@@ -317,4 +317,3 @@ impl Default for Camera {
         cam
     }
 }
-

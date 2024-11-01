@@ -172,6 +172,13 @@ void main() {
         1.0
     );
 
+    out_color = vec4(
+        pow(out_color.r, 0.4545),
+        pow(out_color.g, 0.4545),
+        pow(out_color.b, 0.4545),
+        1.0
+    );
+
     if (is_cross()) {
         out_color = (1.0 - out_color) * 0.5;
         out_color.a = 1.0;

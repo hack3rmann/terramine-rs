@@ -131,8 +131,6 @@ impl App {
                     let (width, height) = (new_size.width, new_size.height);
                     self.camera.aspect_ratio = height as f32 / width as f32;
 
-                    eprintln!("NEW_SIZE={new_size:?}");
-
                     self.graphics
                         .on_window_resize(UInt2::new(width, height))
                         .expect("failed to update graphics with new window size");
@@ -339,7 +337,7 @@ impl App {
         // Log messages receive.
         logger::recv_all();
 
-        // Update keyboard inputs.
-        keyboard::update_input();
+        keyboard::update();
+        mouse::update(&self.graphics.window).unwrap();
     }
 }
