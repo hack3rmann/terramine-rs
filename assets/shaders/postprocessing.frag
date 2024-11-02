@@ -76,9 +76,11 @@ float get_shadow_small(vec4 frag_pos, float current_depth) {
     proj_coords = proj_coords * 0.5 + 0.5;
 
     if (proj_coords.x < 0.0 || 1.0 < proj_coords.x ||
-        proj_coords.y < 0.0 || 1.0 < proj_coords.y ||
-        proj_coords.z < 0.0 || 1.0 < proj_coords.z)
-    { return 1.0; }
+            proj_coords.y < 0.0 || 1.0 < proj_coords.y ||
+            proj_coords.z < 0.0 || 1.0 < proj_coords.z)
+    {
+        return 1.0;
+    }
 
     float closest_depth = texture(light_depth_texture, proj_coords.xy).r;
     closest_depth = linearize_depth(closest_depth, z_near, z_far);
@@ -88,8 +90,7 @@ float get_shadow_small(vec4 frag_pos, float current_depth) {
     out_color = vec4(vec3(closest_depth), 1.0);
 
     return is_shadow
-        ? shadow_brightness
-        : 1.0 + shadow_glitch_brightness_shift;
+    ? shadow_brightness : 1.0 + shadow_glitch_brightness_shift;
 }
 
 float get_shadow(vec4 frag_pos, float current_depth) {
@@ -122,7 +123,7 @@ bool is_cross() {
     pos = round(pos);
 
     return abs(pos.x) <= crosshair_sizes.x && abs(pos.y) <= crosshair_sizes.y ||
-           abs(pos.x) <= crosshair_sizes.y && abs(pos.y) <= crosshair_sizes.x;
+        abs(pos.x) <= crosshair_sizes.y && abs(pos.y) <= crosshair_sizes.x;
 }
 
 void main() {
@@ -135,7 +136,7 @@ void main() {
     if (render_shadows)
         light_depth = get_light_depth();
 
-    if (normal == vec3(0.0) || depth > z_far * 0.5) {
+    if (depth > z_far * 0.5) {
         out_color = default_color;
         if (is_cross()) {
             out_color = (1.0 - out_color) * 0.5;
@@ -144,40 +145,46 @@ void main() {
         return;
     }
 
-    vec3 to_light_dir = -light_dir0;
-    float brightness = max(0.05, dot(normal, to_light_dir));
+    if (normal != vec3(0.0)) {
+        vec3 to_light_dir = -light_dir0;
+        float brightness = max(0.05, dot(normal, to_light_dir));
 
-    vec3 to_cam = normalize(cam_pos - position);
-    vec3 reflected_to_cam = reflect(to_cam, normal);
+        vec3 to_cam = normalize(cam_pos - position);
+        vec3 reflected_to_cam = reflect(to_cam, normal);
 
-    float specular_power = 12.0;
-    float specular_multiplier = 0.01;
-    float specular = pow(max(dot(reflected_to_cam, -to_light_dir), 0.0), specular_power) * specular_multiplier;
+        float specular_power = 12.0;
+        float specular_multiplier = 0.01;
+        float specular = pow(max(dot(reflected_to_cam, -to_light_dir), 0.0), specular_power) * specular_multiplier;
 
-    float fresnel_power = 20.0;
-    float fresnel_multiplier = 0.002;
-    float fresnel = pow(1.0 - max(dot(to_cam, normal), 0.0), fresnel_power) * fresnel_multiplier;
+        float fresnel_power = 20.0;
+        float fresnel_multiplier = 0.002;
+        float fresnel = pow(1.0 - max(dot(to_cam, normal), 0.0), fresnel_power) * fresnel_multiplier;
 
-    float shadow = 0.25;
-    if (render_shadows)
-        shadow = get_shadow(vec4(position, 1.0), depth);
+        float shadow = 0.25;
+        if (render_shadows)
+            shadow = get_shadow(vec4(position, 1.0), depth);
 
-    out_color = vec4(albedo * brightness + fresnel + specular, 1.0) * shadow * 4.0;
+        out_color = vec4(albedo * brightness + fresnel + specular, 1.0) * shadow * 4.0;
+    }
+
+    if (normal == vec3(0.0)) {
+        out_color = vec4(albedo, 1.0);
+    }
 
     /* Simple gamma-correction */
     out_color = vec4(
-        pow(out_color.r, 0.4545),
-        pow(out_color.g, 0.4545),
-        pow(out_color.b, 0.4545),
-        1.0
-    );
+            pow(out_color.r, 0.4545),
+            pow(out_color.g, 0.4545),
+            pow(out_color.b, 0.4545),
+            1.0
+        );
 
     out_color = vec4(
-        pow(out_color.r, 0.4545),
-        pow(out_color.g, 0.4545),
-        pow(out_color.b, 0.4545),
-        1.0
-    );
+            pow(out_color.r, 0.4545),
+            pow(out_color.g, 0.4545),
+            pow(out_color.b, 0.4545),
+            1.0
+        );
 
     if (is_cross()) {
         out_color = (1.0 - out_color) * 0.5;
