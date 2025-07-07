@@ -97,7 +97,7 @@ impl App {
     /// Runs app. Runs glium's `event_loop`.
     pub fn run(mut self) -> Result<(), EventLoopError> {
         let event_loop = self.graphics.take_event_loop();
-        // FIXME(hack3rmann): deprecated api
+        #[allow(deprecated)]
         event_loop.run(move |event, active| {
             RUNTIME
                 .block_on(self.run_frame_loop(event, active))

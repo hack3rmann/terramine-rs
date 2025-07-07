@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 /// Can handle both angle types: `radians` and `degrees`
 #[derive(Clone, Copy, Default, Debug, PartialEq, PartialOrd)]
 pub struct Angle(pub f32);
@@ -11,11 +13,11 @@ impl Angle {
         Self::from_radians(Self::to_radians(deg))
     }
 
-    pub fn set_radians(&mut self, radians: f32) {
+    pub const fn set_radians(&mut self, radians: f32) {
         self.0 = radians;
     }
 
-    pub fn set_degrees(&mut self, degrees: f32) {
+    pub const fn set_degrees(&mut self, degrees: f32) {
         self.set_radians(degrees.to_radians())
     }
 
@@ -28,11 +30,10 @@ impl Angle {
     }
 
     pub const fn to_radians(val: f32) -> f32 {
-        val * (std::f32::consts::PI / 180.0)
+        val * PI / 180.0
     }
 
     pub const fn to_degrees(val: f32) -> f32 {
-        const PIS_IN_180: f32 = 57.2957795130823208767981548141051703_f32;
-        val * PIS_IN_180
+        val * 57.295_78_f32
     }
 }

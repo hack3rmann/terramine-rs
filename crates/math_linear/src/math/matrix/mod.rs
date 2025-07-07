@@ -9,6 +9,7 @@ pub struct FloatMatrix4x4 {
 
 impl FloatMatrix4x4 {
     /// Constructs matrix from 16 floats.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         a11: f32,
         a12: f32,
