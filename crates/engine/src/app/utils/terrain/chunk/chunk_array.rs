@@ -74,7 +74,9 @@ impl ChunkArray {
     const MAX_TRACE_STEPS: usize = 1024;
 
     /// Generates new chunks.
+    ///
     /// # Panic
+    ///
     /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
     pub fn new(sizes: USize3) -> Result<Self, UserFacingError> {
         Self::validate_sizes(sizes)?;
@@ -89,7 +91,9 @@ impl ChunkArray {
     }
 
     /// Constructs [`ChunkArray`] with passed in chunks.
+    ///
     /// # Panic
+    ///
     /// Panics if `sizes` is not valid. See `ChunkArray::validate_sizes()`.
     pub fn from_chunks(sizes: USize3, chunks: Vec<Arc<Chunk>>) -> Result<Self, UserFacingError> {
         Self::validate_sizes(sizes)?;
@@ -142,7 +146,9 @@ impl ChunkArray {
     }
 
     /// Checks that sizes is valid.
+    ///
     /// # Panic
+    ///
     /// Panics if `sizes.x * sizes.y * sizes.z` > `MAX_CHUNKS`.
     pub fn validate_sizes(sizes: USize3) -> Result<(), UserFacingError> {
         let volume = Self::volume(sizes);
@@ -331,9 +337,15 @@ impl ChunkArray {
         let chunk_idx =
             Self::pos_to_idx(self.sizes, chunk_pos).ok_or(EditError::PosIdConversion(pos))?;
 
+        let chunk = unsafe {
+            Arc::as_ptr(&self.chunks[chunk_idx])
+                .cast_mut()
+                .as_mut()
+                .unwrap_unchecked()
+        };
+
         // We know that `chunk_idx` is valid so we can get-by-index.
-        let old_id =
-            unsafe { Arc::get_mut_unchecked(&mut self.chunks[chunk_idx]).set_voxel(pos, new_id)? };
+        let old_id = chunk.set_voxel(pos, new_id)?;
 
         Ok(old_id)
     }
@@ -386,10 +398,14 @@ impl ChunkArray {
                 Ord::min(pos_to.z, end_voxel_pos.z),
             );
 
-            let chunk_changed = unsafe {
-                Arc::get_mut_unchecked(&mut self.chunks[idx])
-                    .fill_voxels(pos_from, pos_to, new_id)?
+            let chunk = unsafe {
+                Arc::as_ptr(&self.chunks[idx])
+                    .cast_mut()
+                    .as_mut()
+                    .unwrap_unchecked()
             };
+
+            let chunk_changed = chunk.fill_voxels(pos_from, pos_to, new_id)?;
 
             if chunk_changed {
                 is_changed = true;
@@ -663,7 +679,7 @@ impl ChunkArray {
 
         let targets = self.get_targets_sorted(cam.pos);
 
-        for (mut chunk, chunk_adj, mesh, lod) in targets {
+        for (chunk, chunk_adj, mesh, lod) in targets {
             let chunk_pos = chunk.pos.load(Relaxed);
 
             if !chunk.is_generated() {
@@ -680,9 +696,14 @@ impl ChunkArray {
 
                         // * Safety:
                         // * Safe, because there's no chunk readers due to tasks drop above
-                        unsafe {
-                            let _ = mem::replace(Arc::get_mut_unchecked(&mut chunk), new_chunk);
-                        }
+                        let chunk = unsafe {
+                            Arc::as_ptr(&chunk)
+                                .cast_mut()
+                                .as_mut()
+                                .unwrap_unchecked()
+                        };
+
+                        *chunk = new_chunk;
                     }
                 } else if self.can_start_tasks() {
                     Self::start_task_gen_voxels(&mut self.voxels_gen_tasks, chunk_pos, sizes);
@@ -840,18 +861,20 @@ impl ChunkArray {
         for (pos, voxels) in Task::try_take_results(iter).await {
             self.voxels_gen_tasks.remove(&pos);
 
-            let mut chunk = self.get_chunk_by_pos(pos).expect("pos should be valid");
+            let chunk = self.get_chunk_by_pos(pos).expect("pos should be valid");
 
             Self::drop_reader_tasks(&mut self.full_tasks, &mut self.low_tasks, pos);
 
             // * Safety:
             // * Safe, because there's no chunk readers due to tasks drop above.
-            unsafe {
-                let _ = mem::replace(
-                    Arc::get_mut_unchecked(&mut chunk),
-                    Chunk::from_voxels(voxels, pos),
-                );
-            }
+            let chunk = unsafe {
+                Arc::as_ptr(&chunk)
+                    .cast_mut()
+                    .as_mut()
+                    .unwrap_unchecked()
+            };
+
+            *chunk = Chunk::from_voxels(voxels, pos);
         }
     }
 

@@ -15,9 +15,13 @@ use {
 };
 
 pub mod data {
-    use super::*;
+    use glium::backend::Facade;
 
-    static mut SHADER: Option<ShaderWrapper> = None;
+    use super::*;
+    use std::mem::MaybeUninit;
+
+    static IS_INIT: AtomicBool = AtomicBool::new(false);
+    static mut SHADER: MaybeUninit<ShaderWrapper> = MaybeUninit::uninit();
 
     lazy_static! {
         static ref DRAW_PARAMS: DrawParametersWrapper<'static> =
@@ -34,41 +38,43 @@ pub mod data {
             });
     }
 
-    pub fn get<'s>(facade: &dyn glium::backend::Facade) -> DebugVisualsStatics<'s, ChunkArray> {
+    pub fn get<'s>(facade: &dyn Facade) -> DebugVisualsStatics<'s, ChunkArray> {
         cond_init(facade);
-        get_unchecked()
+        unsafe { get_unchecked() }
     }
 
-    pub fn get_unchecked<'s>() -> DebugVisualsStatics<'s, ChunkArray> {
-        unsafe {
-            let err_msg = "debug visuals statics should been initialized";
+    /// # Safety
+    ///
+    /// Shader should be initialized
+    unsafe fn get_unchecked<'s>() -> DebugVisualsStatics<'s, ChunkArray> {
+        let shader = unsafe {
+            (&raw const SHADER)
+                .cast::<Shader>()
+                .as_ref()
+                .unwrap_unchecked()
+        };
 
-            let ShaderWrapper(shader) = SHADER.as_ref().expect(err_msg);
-
-            let DrawParametersWrapper(ref draw_params) = *DRAW_PARAMS;
-
-            DebugVisualsStatics {
-                shader,
-                draw_params,
-                _phantom: PhantomData,
-            }
+        DebugVisualsStatics {
+            shader,
+            draw_params: &DRAW_PARAMS.0,
+            _phantom: PhantomData,
         }
     }
 
-    pub fn cond_init(facade: &dyn glium::backend::Facade) {
-        unsafe {
-            /* Check if uninitialized */
-            if SHADER.is_none() {
-                let shader = Shader::new("debug_lines", "debug_lines", facade)
-                    .expect("failed to make shader");
-                SHADER.replace(ShaderWrapper(shader));
-            }
+    fn cond_init(facade: &dyn Facade) {
+        if !IS_INIT.fetch_or(true, Ordering::SeqCst) {
+            let shader = Shader::new("debug_lines", "debug_lines", facade)
+                .expect("failed to make shader");
+
+            let value = MaybeUninit::new(ShaderWrapper(shader));
+
+            unsafe { (&raw mut SHADER).write(value) };
         }
     }
 
     pub async fn construct_mesh(
         chunk_arr: &ChunkArray,
-        facade: &dyn glium::backend::Facade,
+        facade: &dyn Facade,
     ) -> UnindexedMesh<Vertex> {
         let mut vertices = SmallVec::<[_; 24]>::new();
 

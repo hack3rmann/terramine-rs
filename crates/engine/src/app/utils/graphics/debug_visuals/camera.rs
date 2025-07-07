@@ -14,8 +14,11 @@ use {
 
 pub mod data {
     use super::*;
+    use glium::backend::Facade;
+    use std::mem::MaybeUninit;
 
-    static mut SHADER: Option<ShaderWrapper> = None;
+    static IS_INIT: AtomicBool = AtomicBool::new(false);
+    static mut SHADER: MaybeUninit<ShaderWrapper> = MaybeUninit::uninit();
 
     lazy_static! {
         static ref DRAW_PARAMS: DrawParametersWrapper<'static> =
@@ -32,36 +35,39 @@ pub mod data {
             });
     }
 
-    pub fn get<'s>(facade: &dyn glium::backend::Facade) -> DebugVisualsStatics<'s, Camera> {
+    pub fn get<'s>(facade: &dyn Facade) -> DebugVisualsStatics<'s, Camera> {
         cond_init(facade);
-        get_unchecked()
+        unsafe { get_unchecked() }
     }
 
-    pub fn get_unchecked<'s>() -> DebugVisualsStatics<'s, Camera> {
-        unsafe {
-            DebugVisualsStatics {
-                shader: &SHADER.as_ref().expect("shader should be initialized").0,
-                draw_params: &DRAW_PARAMS.0,
-                _phantom: PhantomData,
-            }
+    /// # Safety
+    ///
+    /// Shader should be initialized
+    unsafe fn get_unchecked<'s>() -> DebugVisualsStatics<'s, Camera> {
+        DebugVisualsStatics {
+            shader: unsafe {
+                (&raw const SHADER)
+                    .cast::<Shader>()
+                    .as_ref()
+                    .unwrap_unchecked()
+            },
+            draw_params: &DRAW_PARAMS.0,
+            _phantom: PhantomData,
         }
     }
 
-    pub fn cond_init(facade: &dyn glium::backend::Facade) {
-        unsafe {
-            /* Check if uninitialized */
-            if SHADER.is_none() {
-                let shader = Shader::new("debug_lines", "debug_lines", facade)
-                    .expect("failed to make shader");
-                SHADER.replace(ShaderWrapper(shader));
-            }
+    fn cond_init(facade: &dyn Facade) {
+        if !IS_INIT.fetch_or(true, Ordering::SeqCst) {
+            let shader =
+                Shader::new("debug_lines", "debug_lines", facade).expect("failed to make shader");
+
+            let value = MaybeUninit::new(ShaderWrapper(shader));
+
+            unsafe { (&raw mut SHADER).write(value) }
         }
     }
 
-    pub fn construct_mesh(
-        camera: &mut Camera,
-        facade: &dyn glium::backend::Facade,
-    ) -> UnindexedMesh<Vertex> {
+    pub fn construct_mesh(camera: &mut Camera, facade: &dyn Facade) -> UnindexedMesh<Vertex> {
         let color = [0.5; 4];
         let rays = camera.get_frustum().courner_rays;
         const LEN: f32 = cfg::camera::FRUSTUM_EDGE_LINE_LENGTH;

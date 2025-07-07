@@ -1,11 +1,4 @@
 #![cfg_attr(feature = "release", windows_subsystem = "windows")]
-#![feature(
-    get_mut_unchecked,
-    exhaustive_patterns,
-    associated_type_defaults,
-    never_type
-)]
-#![warn(static_mut_refs)]
 
 #[allow(unused_imports)]
 #[macro_use(vecf, veci, vecu, vecs)]
