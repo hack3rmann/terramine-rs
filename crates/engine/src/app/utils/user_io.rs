@@ -209,25 +209,19 @@ pub mod mouse {
         }
 
         let window_size = window.inner_size();
+        let _centre = PhysicalPosition::new(window_size.width / 2, window_size.height / 2);
 
         DX.store(0.0, Release);
         DY.store(0.0, Release);
 
         /* If cursor grabbed then not change mouse position and put cursor on center */
         if IS_GRABBED.load(Relaxed) {
-            X.store(0.5 * window_size.width as f32, Release);
-            Y.store(0.5 * window_size.height as f32, Release);
+            // X.store(0.5 * window_size.width as f32, Release);
+            // Y.store(0.5 * window_size.height as f32, Release);
 
-            window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
-
-            window
-                .set_cursor_position(PhysicalPosition::new(
-                    window_size.width / 2,
-                    window_size.height / 2,
-                ))
-                .log_error("user-io", "failed to set cursor");
-
-            window.set_cursor_grab(CursorGrabMode::None).unwrap();
+            // window.set_cursor_grab(CursorGrabMode::Locked).unwrap();
+            // window.set_cursor_position(centre).unwrap();
+            // window.set_cursor_grab(CursorGrabMode::Confined).unwrap();
         }
 
         Ok(())
@@ -236,7 +230,7 @@ pub mod mouse {
     /// Grabs the cursor for camera control.
     pub fn grab_cursor(window: &Window) {
         window.set_cursor_grab(CursorGrabMode::Confined).unwrap();
-        window.set_cursor_visible(false);
+        window.set_cursor_visible(true);
 
         IS_GRABBED.store(true, Relaxed);
     }
