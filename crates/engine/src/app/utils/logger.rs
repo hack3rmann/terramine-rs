@@ -2,10 +2,7 @@
 #![allow(clippy::manual_strip, clippy::too_many_arguments)]
 
 use {
-    crate::{
-        prelude::*,
-        concurrency::channel::Channel,
-    },
+    crate::{concurrency::channel::Channel, prelude::*},
     std::sync::Mutex,
 };
 
@@ -34,10 +31,12 @@ pub enum MsgType {
 }
 
 pub fn recv_all() {
-    let mut channel = CHANNEL.lock()
+    let mut channel = CHANNEL
+        .lock()
         .expect("channel mutex should be not poisoned");
 
-    let mut messages = LOG_MESSAGES.lock()
+    let mut messages = LOG_MESSAGES
+        .lock()
         .expect("messages mutex should be not poisoned");
 
     while let Ok(msg) = channel.receiver.try_recv() {
@@ -46,10 +45,15 @@ pub fn recv_all() {
 }
 
 pub fn log(msg_type: MsgType, from: impl Into<CowStr>, content: impl Into<CowStr>) {
-    CHANNEL.lock()
+    CHANNEL
+        .lock()
         .expect("channel mutex should be not poisoned")
         .sender
-        .send(Message { msg_type, from: from.into(), content: content.into() })
+        .send(Message {
+            msg_type,
+            from: from.into(),
+            content: content.into(),
+        })
         .expect("failed to send message");
 }
 
@@ -92,7 +96,12 @@ macro_rules! log_dbg {
     ($expr:expr) => {{
         use $crate::app::utils::logger::log;
         let result = $expr;
-        log!(Info, from = "dbg", "{expr} = {result:?}", expr = stringify!($expr));
+        log!(
+            Info,
+            from = "dbg",
+            "{expr} = {result:?}",
+            expr = stringify!($expr)
+        );
         result
     }};
 }
@@ -108,17 +117,13 @@ macro_rules! work {
 pub use crate::{log, log_dbg, work};
 
 pub fn spawn_window(ui: &imgui::Ui) {
-    use {
-        crate::app::utils::graphics::ui::imgui_constructor::make_window,
-        // FIXME(hack3rmann): remove cpython from project
-        // cpython::{Python, PyResult, py_fn, PyDict},
-    };
+    use crate::app::utils::graphics::ui::imgui_constructor::make_window;
 
     const ERROR_COLOR: [f32; 4] = [0.8, 0.1, 0.05, 1.0];
-    const INFO_COLOR:  [f32; 4] = [1.0, 1.0, 1.0,  1.0];
+    const INFO_COLOR: [f32; 4] = [1.0, 1.0, 1.0, 1.0];
 
     const PADDING: f32 = 10.0;
-    const HEIGHT:  f32 = 300.0;
+    const HEIGHT: f32 = 300.0;
 
     let [width, height] = ui.io().display_size;
 
@@ -131,25 +136,24 @@ pub fn spawn_window(ui: &imgui::Ui) {
         .position_pivot([0.0, 1.0])
         .size([width - 2.0 * PADDING, HEIGHT], imgui::Condition::Always)
         .build(|| {
-            use crate::app::utils::terrain::chunk::commands::{Command, command};
-
-            let messages = LOG_MESSAGES.lock()
+            let messages = LOG_MESSAGES
+                .lock()
                 .expect("messages lock should be not poisoned");
 
             static INPUT: Mutex<String> = Mutex::new(String::new());
-            let mut input = INPUT.lock()
-                .unwrap();
+            let mut input = INPUT.lock().unwrap();
 
-            let is_enter_pressed = ui.input_text("Console", &mut input)
+            let _is_enter_pressed = ui
+                .input_text("Console", &mut input)
                 .enter_returns_true(true)
                 .build();
 
-            let buf = input.replace("^;", "\n");
+            let _buf = input.replace("^;", "\n");
 
             // FIXME(hack3rmann): remove cpython from project
             // let gil = Python::acquire_gil();
             // let py = gil.python();
-        
+
             // let voxel_set = py_fn!(py, voxel_set(x: i32, y: i32, z: i32, new_id: u16) -> PyResult<i32> {
             //     command(Command::SetVoxel { pos: veci!(x, y, z), new_id });
             //     Ok(0)
@@ -179,7 +183,7 @@ pub fn spawn_window(ui: &imgui::Ui) {
             //     .unwrap_or_else(|err|
             //         log!(Error, from = "logger", "failed to set 'voxel_fill' item: {err:?}")
             //     );
-            //     
+            //
             // locals.set_item(py, "drop_all_meshes", drop_all_meshes)
             //     .unwrap_or_else(|err|
             //         log!(Error, from = "logger", "failed to set 'drop_all_meshes' item: {err:?}")
@@ -193,7 +197,7 @@ pub fn spawn_window(ui: &imgui::Ui) {
             for msg in messages.iter().rev() {
                 let color = match msg.msg_type {
                     MsgType::Error => ERROR_COLOR,
-                    MsgType::Info  => INFO_COLOR,
+                    MsgType::Info => INFO_COLOR,
                 };
 
                 let text = format!("[LOG]: {msg}");
@@ -205,13 +209,23 @@ pub fn spawn_window(ui: &imgui::Ui) {
 }
 
 pub trait LogError<T> {
-    fn log_error(self, from: impl Into<CowStr>, msg: impl Into<CowStr>) -> T where T: Default;
+    fn log_error(self, from: impl Into<CowStr>, msg: impl Into<CowStr>) -> T
+    where
+        T: Default;
     fn log_error_or(self, from: impl Into<CowStr>, msg: impl Into<CowStr>, default: T) -> T;
-    fn log_error_or_else(self, from: impl Into<CowStr>, msg: impl Into<CowStr>, f: impl FnOnce() -> T) -> T;
+    fn log_error_or_else(
+        self,
+        from: impl Into<CowStr>,
+        msg: impl Into<CowStr>,
+        f: impl FnOnce() -> T,
+    ) -> T;
 }
 
 impl<T, E: std::error::Error> LogError<T> for Result<T, E> {
-    fn log_error(self, from: impl Into<CowStr>, msg: impl Into<CowStr>) -> T where T: Default {
+    fn log_error(self, from: impl Into<CowStr>, msg: impl Into<CowStr>) -> T
+    where
+        T: Default,
+    {
         match self {
             Ok(item) => item,
             Err(err) => {
@@ -233,7 +247,12 @@ impl<T, E: std::error::Error> LogError<T> for Result<T, E> {
         }
     }
 
-    fn log_error_or_else(self, from: impl Into<CowStr>, msg: impl Into<CowStr>, f: impl FnOnce() -> T) -> T {
+    fn log_error_or_else(
+        self,
+        from: impl Into<CowStr>,
+        msg: impl Into<CowStr>,
+        f: impl FnOnce() -> T,
+    ) -> T {
         match self {
             Ok(item) => item,
             Err(err) => {

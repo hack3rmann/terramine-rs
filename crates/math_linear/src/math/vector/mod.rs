@@ -1,7 +1,6 @@
-#![macro_use]
-
-pub mod macros;
 pub mod algorithm;
+#[macro_use]
+pub mod macros;
 
 use directx_math::*;
 
@@ -309,7 +308,6 @@ impl Float2 {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -327,7 +325,7 @@ mod tests {
         let v1 = Int2::new(2, 0);
         let v2 = USize2::new(2, 3);
         let area = 2 * 3;
-        assert_eq!(v1.cross(v2.into()),  area);
+        assert_eq!(v1.cross(v2.into()), area);
         assert_eq!(Int2::from(v2).cross(v1), -area);
     }
 
@@ -342,55 +340,63 @@ mod tests {
 #[cfg(test)]
 mod impl_generator {
     #[derive(Clone, Copy, Debug)]
-    struct VecType3D(&'static str, &'static str, &'static str, &'static str, &'static str);
+    struct VecType3D(
+        &'static str,
+        &'static str,
+        &'static str,
+        &'static str,
+        &'static str,
+    );
 
     #[derive(Clone, Copy, Debug)]
     struct VecType2D(&'static str, &'static str, &'static str, &'static str);
-    
+
     const TYPES_3D: [VecType3D; 16] = [
-        VecType3D("Byte3",   "x", "y", "z", "i8"),
-        VecType3D("UByte3",  "x", "y", "z", "u8"),
-        VecType3D("Short3",  "x", "y", "z", "i16"),
+        VecType3D("Byte3", "x", "y", "z", "i8"),
+        VecType3D("UByte3", "x", "y", "z", "u8"),
+        VecType3D("Short3", "x", "y", "z", "i16"),
         VecType3D("UShort3", "x", "y", "z", "u16"),
-        VecType3D("Int3",    "x", "y", "z", "i32"),
-        VecType3D("UInt3",   "x", "y", "z", "u32"),
-        VecType3D("Long3",   "x", "y", "z", "i64"),
-        VecType3D("ULong3",  "x", "y", "z", "u64"),
-        VecType3D("Large3",  "x", "y", "z", "i128"),
+        VecType3D("Int3", "x", "y", "z", "i32"),
+        VecType3D("UInt3", "x", "y", "z", "u32"),
+        VecType3D("Long3", "x", "y", "z", "i64"),
+        VecType3D("ULong3", "x", "y", "z", "u64"),
+        VecType3D("Large3", "x", "y", "z", "i128"),
         VecType3D("ULarge3", "x", "y", "z", "u128"),
-        VecType3D("ISize3",  "x", "y", "z", "isize"),
-        VecType3D("USize3",  "x", "y", "z", "usize"),
-        VecType3D("Float3",  "x", "y", "z", "f32"),
+        VecType3D("ISize3", "x", "y", "z", "isize"),
+        VecType3D("USize3", "x", "y", "z", "usize"),
+        VecType3D("Float3", "x", "y", "z", "f32"),
         VecType3D("Double3", "x", "y", "z", "f64"),
-        VecType3D("Color",   "r", "g", "b", "f32"),
+        VecType3D("Color", "r", "g", "b", "f32"),
         VecType3D("Color64", "r", "g", "b", "f64"),
     ];
-    
+
     const TYPES_2D: [VecType2D; 14] = [
-        VecType2D("Byte2",   "x", "y", "i8"),
-        VecType2D("UByte2",  "x", "y", "u8"),
-        VecType2D("Short2",  "x", "y", "i16"),
+        VecType2D("Byte2", "x", "y", "i8"),
+        VecType2D("UByte2", "x", "y", "u8"),
+        VecType2D("Short2", "x", "y", "i16"),
         VecType2D("UShort2", "x", "y", "u16"),
-        VecType2D("Int2",    "x", "y", "i32"),
-        VecType2D("UInt2",   "x", "y", "u32"),
-        VecType2D("Long2",   "x", "y", "i64"),
-        VecType2D("ULong2",  "x", "y", "u64"),
-        VecType2D("Large2",  "x", "y", "i128"),
+        VecType2D("Int2", "x", "y", "i32"),
+        VecType2D("UInt2", "x", "y", "u32"),
+        VecType2D("Long2", "x", "y", "i64"),
+        VecType2D("ULong2", "x", "y", "u64"),
+        VecType2D("Large2", "x", "y", "i128"),
         VecType2D("ULarge2", "x", "y", "u128"),
-        VecType2D("ISize2",  "x", "y", "isize"),
-        VecType2D("USize2",  "x", "y", "usize"),
-        VecType2D("Float2",  "x", "y", "f32"),
+        VecType2D("ISize2", "x", "y", "isize"),
+        VecType2D("USize2", "x", "y", "usize"),
+        VecType2D("Float2", "x", "y", "f32"),
         VecType2D("Double2", "x", "y", "f64"),
     ];
 
     fn make_3_component_impl_string() -> String {
-        TYPES_3D.iter()
+        TYPES_3D
+            .iter()
             .map(|VecType3D(name, x, y, z, ty)| format!("pub {name} = ({x}, {y}, {z}): {ty};"))
             .fold(Default::default(), |lhs, rhs| lhs + "\n" + &rhs)
     }
 
     fn make_2_component_impl_string() -> String {
-        TYPES_2D.iter()
+        TYPES_2D
+            .iter()
             .map(|VecType2D(name, x, y, ty)| format!("pub {name} = ({x}, {y}): {ty};"))
             .fold(Default::default(), |lhs, rhs| lhs + "\n" + &rhs)
     }
@@ -399,15 +405,14 @@ mod impl_generator {
         const N_FROMS: usize = TYPES_3D.len() * (TYPES_3D.len() - 1) / 2;
         let mut froms = Vec::with_capacity(N_FROMS);
 
-        for i in 0..TYPES_3D.len() {
-        for j in i + 1 .. TYPES_3D.len() {
-            let (VecType3D(name1, x1, y1, z1, type1), VecType3D(name2, x2, y2, z2, type2)) = (TYPES_3D[i], TYPES_3D[j]);
-            froms.push(format!(
-                "{name1} {{ {x1}, {y1}, {z1}: {type1} }} <-> {name2} {{ {x2}, {y2}, {z2}: {type2} }};"
-            ));
-        }}
+        for (i, VecType3D(name1, x1, y1, z1, type1)) in TYPES_3D.into_iter().enumerate() {
+            for &VecType3D(name2, x2, y2, z2, type2) in &TYPES_3D[i + 1..] {
+                froms.push(format!("{name1} {{ {x1}, {y1}, {z1}: {type1} }} <-> {name2} {{ {x2}, {y2}, {z2}: {type2} }};"));
+            }
+        }
 
-        froms.into_iter()
+        froms
+            .into_iter()
             .fold(Default::default(), |lhs, rhs| lhs + "\n" + &rhs)
     }
 
@@ -415,15 +420,16 @@ mod impl_generator {
         const N_FROMS: usize = TYPES_2D.len() * (TYPES_2D.len() - 1) / 2;
         let mut froms = Vec::with_capacity(N_FROMS);
 
-        for i in 0..TYPES_2D.len() {
-        for j in i + 1 .. TYPES_2D.len() {
-            let (VecType2D(name1, x1, y1, type1), VecType2D(name2, x2, y2, type2)) = (TYPES_2D[i], TYPES_2D[j]);
-            froms.push(format!(
-                "{name1} {{ {x1}, {y1}: {type1} }} <-> {name2} {{ {x2}, {y2}: {type2} }};"
-            ));
-        }}
+        for (i, VecType2D(name1, x1, y1, type1)) in TYPES_2D.into_iter().enumerate() {
+            for &VecType2D(name2, x2, y2, type2) in &TYPES_2D[i + 1..] {
+                froms.push(format!(
+                    "{name1} {{ {x1}, {y1}: {type1} }} <-> {name2} {{ {x2}, {y2}: {type2} }};"
+                ));
+            }
+        }
 
-        froms.into_iter()
+        froms
+            .into_iter()
             .fold(Default::default(), |lhs, rhs| lhs + "\n" + &rhs)
     }
 
@@ -434,12 +440,14 @@ mod impl_generator {
         let mut result = Vec::with_capacity(N_CHOOSES);
 
         for &c1 in NAMES.iter() {
-        for &c2 in NAMES.iter() {
-        for &c3 in NAMES.iter() {
-            result.push([c1, c2, c3]);
-        }}}
+            for &c2 in NAMES.iter() {
+                for &c3 in NAMES.iter() {
+                    result.push([c1, c2, c3]);
+                }
+            }
+        }
 
-        return result
+        result
     }
 
     fn make_xyz_2d_chooses_string() -> Vec<[char; 2]> {
@@ -449,33 +457,31 @@ mod impl_generator {
         let mut result = Vec::with_capacity(N_CHOOSES);
 
         for &c1 in NAMES.iter() {
-        for &c2 in NAMES.iter() {
-            result.push([c1, c2]);
-        }}
+            for &c2 in NAMES.iter() {
+                result.push([c1, c2]);
+            }
+        }
 
-        return result
+        result
     }
 
     fn make_3d_swizzles_string() -> String {
-        let iter1 = make_xyz_chooses_string()
-            .into_iter()
-            .map(|[x, y, z]|
-                format!(
-                    "$vis fn {name}(self) -> Self {{ Self::new(self.${x}, self.${y}, self.${z}) }}",
-                    name = String::from_iter([x, y, z]),
-                )
-            );
+        let iter1 = make_xyz_chooses_string().into_iter().map(|[x, y, z]| {
+            format!(
+                "$vis fn {name}(self) -> Self {{ Self::new(self.${x}, self.${y}, self.${z}) }}",
+                name = String::from_iter([x, y, z]),
+            )
+        });
 
-        let iter2 = make_xyz_2d_chooses_string()
-            .into_iter()
-            .map(|[x, y]|
-                format!(
-                    "$vis fn {name}(self) -> $Lower {{ $Lower::new(self.${x}, self.${y}) }}",
-                    name = String::from_iter([x, y]),
-                )
-            );
+        let iter2 = make_xyz_2d_chooses_string().into_iter().map(|[x, y]| {
+            format!(
+                "$vis fn {name}(self) -> $Lower {{ $Lower::new(self.${x}, self.${y}) }}",
+                name = String::from_iter([x, y]),
+            )
+        });
 
-        iter1.chain(iter2)
+        iter1
+            .chain(iter2)
             .fold(String::default(), |lhs, rhs| lhs + "\n" + &rhs)
     }
 
@@ -486,7 +492,7 @@ mod impl_generator {
 
     #[test]
     fn print_froms_3d() {
-        println!("{}",  make_3_component_froms());
+        println!("{}", make_3_component_froms());
     }
 
     #[test]
@@ -496,7 +502,7 @@ mod impl_generator {
 
     #[test]
     fn print_froms_2d() {
-        println!("{}",  make_2_component_froms());
+        println!("{}", make_2_component_froms());
     }
 
     #[test]
@@ -505,9 +511,9 @@ mod impl_generator {
     }
 }
 
-impl Into<FXMVECTOR> for Float3 {
-    fn into(self) -> FXMVECTOR {
-        directx_math::XMVectorSet(self.x, self.y, self.z, 1.0)
+impl From<Float3> for FXMVECTOR {
+    fn from(value: Float3) -> Self {
+        directx_math::XMVectorSet(value.x, value.y, value.z, 1.0)
     }
 }
 
@@ -516,24 +522,42 @@ impl Into<FXMVECTOR> for Float3 {
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "byte_muck", derive(bytemuck::Pod, bytemuck::Zeroable))]
 pub struct Float4 {
-    pub i_vec: XMVECTOR
+    pub i_vec: XMVECTOR,
 }
 
 #[allow(dead_code)]
 impl Float4 {
     pub fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
-        Self { i_vec: XMVectorSet(x, y, z, w) }
+        Self {
+            i_vec: XMVectorSet(x, y, z, w),
+        }
     }
 
-    pub fn x(&self) -> f32 { XMVectorGetX(self.i_vec) }
-    pub fn y(&self) -> f32 { XMVectorGetY(self.i_vec) }
-    pub fn z(&self) -> f32 { XMVectorGetZ(self.i_vec) }
-    pub fn w(&self) -> f32 { XMVectorGetW(self.i_vec) }
+    pub fn x(&self) -> f32 {
+        XMVectorGetX(self.i_vec)
+    }
+    pub fn y(&self) -> f32 {
+        XMVectorGetY(self.i_vec)
+    }
+    pub fn z(&self) -> f32 {
+        XMVectorGetZ(self.i_vec)
+    }
+    pub fn w(&self) -> f32 {
+        XMVectorGetW(self.i_vec)
+    }
 
-    pub fn set_x(&mut self, x: f32) { self.i_vec = XMVectorSetX(self.i_vec, x) }
-    pub fn set_y(&mut self, y: f32) { self.i_vec = XMVectorSetY(self.i_vec, y) }
-    pub fn set_z(&mut self, z: f32) { self.i_vec = XMVectorSetZ(self.i_vec, z) }
-    pub fn set_w(&mut self, w: f32) { self.i_vec = XMVectorSetW(self.i_vec, w) }
+    pub fn set_x(&mut self, x: f32) {
+        self.i_vec = XMVectorSetX(self.i_vec, x)
+    }
+    pub fn set_y(&mut self, y: f32) {
+        self.i_vec = XMVectorSetY(self.i_vec, y)
+    }
+    pub fn set_z(&mut self, z: f32) {
+        self.i_vec = XMVectorSetZ(self.i_vec, z)
+    }
+    pub fn set_w(&mut self, w: f32) {
+        self.i_vec = XMVectorSetW(self.i_vec, w)
+    }
 
     /// Constructs vector from one number.
     pub fn all(xyzw: f32) -> Self {
@@ -559,11 +583,11 @@ impl Float4 {
     pub fn xyz0(x: f32, y: f32, z: f32) -> Self {
         Self::new(x, y, z, 0.0)
     }
-    
+
     /// Normalyzes the vector.
     pub fn normalyzed(self) -> Self {
         Float4 {
-            i_vec: XMVector3Normalize(self.i_vec)
+            i_vec: XMVector3Normalize(self.i_vec),
         }
     }
 
@@ -575,13 +599,18 @@ impl Float4 {
     /// Gives cross product of two vectors
     pub fn cross(self, other: Float4) -> Self {
         Float4 {
-            i_vec: XMVector3Cross(self.i_vec, other.i_vec)
+            i_vec: XMVector3Cross(self.i_vec, other.i_vec),
         }
     }
 
     /// Gives component-vise absolute value vector.
     pub fn abs(self) -> Self {
-        Self::new(self.x().abs(), self.y().abs(), self.z().abs(), self.w().abs())
+        Self::new(
+            self.x().abs(),
+            self.y().abs(),
+            self.z().abs(),
+            self.w().abs(),
+        )
     }
 
     /// Gives length value of vector
@@ -626,16 +655,10 @@ impl From<Float3> for Float4 {
 
 impl PartialEq for Float4 {
     fn eq(&self, other: &Self) -> bool {
-        self.x() == other.x() &&
-        self.y() == other.y() &&
-        self.z() == other.z() &&
-        self.w() == other.w()
-    }
-    fn ne(&self, other: &Self) -> bool {
-        self.x() != other.x() ||
-        self.y() != other.y() ||
-        self.z() != other.z() ||
-        self.w() != other.w()
+        self.x() == other.x()
+            && self.y() == other.y()
+            && self.z() == other.z()
+            && self.w() == other.w()
     }
 }
 
@@ -653,7 +676,7 @@ impl std::ops::Sub for Float4 {
             self.x() - other.x(),
             self.y() - other.y(),
             self.z() - other.z(),
-            self.w() - other.w()
+            self.w() - other.w(),
         )
     }
 }
@@ -674,7 +697,7 @@ impl std::ops::Add for Float4 {
             self.x() + other.x(),
             self.y() + other.y(),
             self.z() + other.z(),
-            self.w() + other.w()
+            self.w() + other.w(),
         )
     }
 }
@@ -698,7 +721,12 @@ impl std::ops::Mul<f32> for Float4 {
 impl std::ops::Mul for Float4 {
     type Output = Self;
     fn mul(self, p: Self) -> Self {
-        Self::new(self.x() * p.x(), self.y() * p.y(), self.z() * p.z(), self.w() * p.w())
+        Self::new(
+            self.x() * p.x(),
+            self.y() * p.y(),
+            self.z() * p.z(),
+            self.w() * p.w(),
+        )
     }
 }
 
@@ -730,7 +758,12 @@ impl std::ops::Div<f32> for Float4 {
 impl std::ops::Div for Float4 {
     type Output = Self;
     fn div(self, k: Self) -> Self {
-        Self::new(self.x() / k.x(), self.y() / k.y(), self.z() / k.z(), self.w() / k.w())
+        Self::new(
+            self.x() / k.x(),
+            self.y() / k.y(),
+            self.z() / k.z(),
+            self.w() / k.w(),
+        )
     }
 }
 

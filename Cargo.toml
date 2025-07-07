@@ -8,9 +8,9 @@ members = [
 
 [workspace.package]
 version = "0.0.2"
-edition = "2021"
+edition = "2024"
 
 [workspace.dependencies]
-engine = { path = "crates/engine", version = "=0.0.2" }
-math_linear = { path = "crates/math_linear", version = "=0.0.2", features = ["byte_muck"] }
-profiler_macros = { path = "crates/profiler_macros", version = "=0.0.2" }
+engine = { path = "crates/engine" }
+math_linear = { path = "crates/math_linear", features = ["byte_muck"] }
+profiler_macros = { path = "crates/profiler_macros" }

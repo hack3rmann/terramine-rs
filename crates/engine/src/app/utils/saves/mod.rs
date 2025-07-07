@@ -1,46 +1,31 @@
-use tokio::io::AsyncSeekExt;
-
 pub mod stack_heap;
 
-use {
-    crate::app::utils::{
-        cfg::save::META_FILE_NAME,
-        reinterpreter::{
-            AsBytes,
-            FromBytes,
-            StaticSize
-        },
-    },
-    std::{
-        marker::PhantomData, 
-        collections::HashMap,
-        future::Future,
-    },
-    tokio::{
-        io::{self, SeekFrom, AsyncReadExt, AsyncWriteExt},
-        fs::{File, OpenOptions},
-    },
-    stack_heap::{StackHeap, StackHeapError},
-    thiserror::Error,
+use crate::app::utils::{
+    cfg::save::META_FILE_NAME,
+    reinterpreter::{AsBytes, FromBytes, StaticSize},
+};
+use stack_heap::{StackHeap, StackHeapError};
+use std::{collections::HashMap, future::Future, marker::PhantomData};
+use thiserror::Error;
+use tokio::{
+    fs::{File, OpenOptions},
+    io::{self, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, SeekFrom},
 };
 
 pub type Offset = u64;
-pub type Size   = u64;
+pub type Size = u64;
 pub type Enumerator = u64;
 
 #[derive(Error, Debug)]
 pub enum SaveError {
     #[error("io failed: {0}")]
     Io(#[from] io::Error),
-    
+
     #[error("error from `StackHeap`")]
     StackHeap(#[from] StackHeapError),
 
     #[error("index shpuld be in 0..{size} but {idx}")]
-    IndexOutOfBounds {
-        idx: Offset,
-        size: Size,
-    },
+    IndexOutOfBounds { idx: Offset, size: Size },
 
     #[error("Trying to write same key of some data to another place. Old enumerator value: {0}.")]
     DataOverride(Enumerator),
@@ -73,13 +58,21 @@ impl<E: Copy + Into<Enumerator>> SaveBuilder<E> {
     /// Creates heap-stack folder.
     pub async fn create(self, path: &str) -> io::Result<Save<E>> {
         let file = StackHeap::new(path, &self.name).await?;
-        let offsets_save = File::create(
-            Save::<E>::get_meta_path(path).as_str()
-        ).await?;
+        let offsets_save = File::create(Save::<E>::get_meta_path(path).as_str()).await?;
 
-        let SaveBuilder { name, offsets, _phantom_data } = self;
+        let SaveBuilder {
+            name,
+            offsets,
+            _phantom_data,
+        } = self;
 
-        Ok(Save { name, file, offsets, offsets_save, _phantom_data })
+        Ok(Save {
+            name,
+            file,
+            offsets,
+            offsets_save,
+            _phantom_data,
+        })
     }
 
     /// Opens heap-stack folder. And reads all offsets from save [`META_FILE_NAME`].
@@ -99,8 +92,7 @@ impl<E: Copy + Into<Enumerator>> SaveBuilder<E> {
             offsets_save.seek(SeekFrom::Start(0)).await?;
             offsets_save.read_exact(&mut buffer).await?;
 
-            Size::from_bytes(&buffer)
-                .expect("failed to make offsets out of bytes")
+            Size::from_bytes(&buffer).expect("failed to make offsets out of bytes")
         };
 
         /* Read all offsets to HashMap */
@@ -110,28 +102,37 @@ impl<E: Copy + Into<Enumerator>> SaveBuilder<E> {
             let enumerator = {
                 offsets_save.seek(SeekFrom::Start(offset_size * i)).await?;
                 offsets_save.read_exact(&mut buffer).await?;
-                
-                Enumerator::from_bytes(&buffer)
-                    .expect("failed to make enumerator from bytes")
+
+                Enumerator::from_bytes(&buffer).expect("failed to make enumerator from bytes")
             };
 
             let offset = {
-                offsets_save.seek(SeekFrom::Start(offset_size * (i + 1))).await?;
+                offsets_save
+                    .seek(SeekFrom::Start(offset_size * (i + 1)))
+                    .await?;
                 offsets_save.read_exact(&mut buffer).await?;
 
-                Offset::from_bytes(&buffer)
-                    .expect("failed to make offset from bytes")
+                Offset::from_bytes(&buffer).expect("failed to make offset from bytes")
             };
 
             self.offsets.insert(enumerator, offset);
         }
 
-        let SaveBuilder { name, offsets, _phantom_data } = self;
+        let SaveBuilder {
+            name,
+            offsets,
+            _phantom_data,
+        } = self;
 
-        Ok(Save { name, file, offsets, offsets_save, _phantom_data })
+        Ok(Save {
+            name,
+            file,
+            offsets,
+            offsets_save,
+            _phantom_data,
+        })
     }
 }
-
 
 impl<E: Copy + Into<Enumerator>> Save<E> {
     /// Creates new [`SaveBuilder`] struct.
@@ -152,7 +153,10 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     pub async fn write<T: AsBytes + StaticSize>(mut self, value: &T, enumerator: E) -> Self {
         /* Write value to file stack */
         let bytes = value.as_bytes();
-        let offset = self.file.push(&bytes).await
+        let offset = self
+            .file
+            .push(&bytes)
+            .await
             .expect("failed to push bytes to file");
 
         /* Saving offset of value */
@@ -170,14 +174,16 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         let offset = self.load_offset(enumerator);
 
         /* Assign new data to stack */
-        self.file.write_to_stack(offset, &bytes)
+        self.file
+            .write_to_stack(offset, &bytes)
             .await
             .expect("failed to wtrie to stack");
     }
 
     /// Reads enum-named value from stack file.
     pub async fn read<T: FromBytes + StaticSize>(&mut self, enumerator: E) -> T {
-        self.file.read_from_stack(self.load_offset(enumerator))
+        self.file
+            .read_from_stack(self.load_offset(enumerator))
             .await
             .expect("failed to read from stack")
     }
@@ -190,7 +196,9 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         F: FnMut(usize) -> &'t T,
     {
         /* Write the array length and get offset */
-        let offset = self.file.push(&(length as Size).as_bytes())
+        let offset = self
+            .file
+            .push(&(length as Size).as_bytes())
             .await
             .expect("failed to push length to file");
 
@@ -202,7 +210,8 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         for i in 0..length {
             let bytes = elem(i).as_bytes();
 
-            self.file.push(&bytes)
+            self.file
+                .push(&bytes)
                 .await
                 .expect("failed to push bytes to file");
         }
@@ -212,26 +221,30 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
     /// Assignes new values to enum-named array.
     #[allow(dead_code)]
-    pub async fn assign_array<'t, T: 't, F>(&mut self, enumerator: E, elem: F)
+    pub async fn assign_array<'t, T, F>(&mut self, enumerator: E, elem: F)
     where
-        T: AsBytes + StaticSize,
+        T: AsBytes + StaticSize + 't,
         F: FnMut(usize) -> &'t T,
     {
         /* Load offset */
         let offset = self.load_offset(enumerator);
 
         /* Read length of the data */
-        let length: Size = self.file.read_from_stack(offset)
+        let length: Size = self
+            .file
+            .read_from_stack(offset)
             .await
             .expect("failed to read from stack");
 
         /* Iterate all elements and assign to them offsets */
         let elements = (0..).map(elem);
-        let offsets = (0..).map(|i| offset + i * T::static_size() as Size + Size::static_size() as Size);
-        
+        let offsets =
+            (0..).map(|i| offset + i * T::static_size() as Size + Size::static_size() as Size);
+
         /* Write them to file */
         for (elem, offset) in elements.zip(offsets).take(length as usize) {
-            self.file.write_to_stack(offset, &elem.as_bytes())
+            self.file
+                .write_to_stack(offset, &elem.as_bytes())
                 .await
                 .expect("failed to write to stack");
         }
@@ -239,7 +252,12 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
     /// Assings new value to some element in enum-named array.
     #[allow(dead_code)]
-    pub async fn assign_array_element<T>(&mut self, enumerator: E, elem: T, idx: usize) -> SaveResult<()>
+    pub async fn assign_array_element<T>(
+        &mut self,
+        enumerator: E,
+        elem: T,
+        idx: usize,
+    ) -> SaveResult<()>
     where
         T: AsBytes + StaticSize,
     {
@@ -247,7 +265,9 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         let offset = self.load_offset(enumerator);
 
         /* Read length of an array */
-        let length: Size = self.file.read_from_stack(offset)
+        let length: Size = self
+            .file
+            .read_from_stack(offset)
             .await
             .expect("failed to read from stack");
 
@@ -255,12 +275,12 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         Self::test_index(idx as Offset, length)?;
 
         /* Get offset of an element */
-        let offset = offset
-                   + idx as Offset * T::static_size() as Size
-                   + Size::static_size() as Size;
+        let offset =
+            offset + idx as Offset * T::static_size() as Size + Size::static_size() as Size;
 
         /* Write element */
-        self.file.write_to_stack(offset, &elem.as_bytes())
+        self.file
+            .write_to_stack(offset, &elem.as_bytes())
             .await
             .expect("failed to write to stack");
 
@@ -274,7 +294,9 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         let offset = self.load_offset(enumerator);
 
         /* Read array length */
-        let length: Size = self.file.read_from_stack(offset)
+        let length: Size = self
+            .file
+            .read_from_stack(offset)
             .await
             .expect("failed to read from stack");
 
@@ -290,9 +312,13 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         /* Read all elements to `result` */
         for i in 0..length {
             /* Read to buffer */
-            StackHeap::seek_read(&mut self.file.stack, &mut buffer, offset + i * T::static_size() as Size)
-                .await
-                .expect("failed to seek-read");
+            StackHeap::seek_read(
+                &mut self.file.stack,
+                &mut buffer,
+                offset + i * T::static_size() as Size,
+            )
+            .await
+            .expect("failed to seek-read");
 
             /* Push value to `result` */
             result.push(T::from_bytes(&buffer).expect("failed to make T from bytes"));
@@ -311,7 +337,9 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         let offset = self.load_offset(enumerator);
 
         /* Read length */
-        let length: Size = self.file.read_from_stack(offset)
+        let length: Size = self
+            .file
+            .read_from_stack(offset)
             .await
             .expect("failed to read from stack");
 
@@ -319,14 +347,15 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         Self::test_index(idx as Offset, length)?;
 
         /* Get data offset */
-        let offset = offset + idx as Offset * T::static_size() as Size + Size::static_size() as Size;
+        let offset =
+            offset + idx as Offset * T::static_size() as Size + Size::static_size() as Size;
 
         /* Read element */
-        Ok(
-            self.file.read_from_stack(offset)
-                .await
-                .expect("failed to read from stack")
-        )
+        Ok(self
+            .file
+            .read_from_stack(offset)
+            .await
+            .expect("failed to read from stack"))
     }
 
     /// Allocates data on heap of file with pointer on stack and writes all given bytes.
@@ -334,11 +363,14 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     pub async fn pointer(mut self, bytes: Vec<u8>, enumerator: E) -> Self {
         /* Allocate bytes */
         let offset = {
-            let alloc = self.file.alloc(bytes.len() as Size)
+            let alloc = self
+                .file
+                .alloc(bytes.len() as Size)
                 .await
                 .expect("alloc failed");
 
-            self.file.write_to_heap(alloc, &bytes)
+            self.file
+                .write_to_heap(alloc, &bytes)
                 .await
                 .expect("failed to write to heap");
 
@@ -359,26 +391,37 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         let stack_offset = self.load_offset(enumerator);
 
         /* Allocate new data */
-        let alloc = self.file.realloc(bytes.len() as Size, stack_offset)
+        let alloc = self
+            .file
+            .realloc(bytes.len() as Size, stack_offset)
             .await
             .expect("realloc failed");
 
-        self.file.write_to_heap(alloc, bytes)
+        self.file
+            .write_to_heap(alloc, bytes)
             .await
             .expect("failed to write to heap");
     }
 
     /// Reads data from heap by stack pointer to heap on.
     #[allow(dead_code)]
-    pub async fn read_from_pointer<T, F: FnOnce(&[u8]) -> T>(&mut self, enumerator: E, item: F) -> T {
+    pub async fn read_from_pointer<T, F: FnOnce(&[u8]) -> T>(
+        &mut self,
+        enumerator: E,
+        item: F,
+    ) -> T {
         /* Load offsets */
         let stack_offset = self.load_offset(enumerator);
-        let heap_offset: Offset = self.file.read_from_stack(stack_offset)
+        let heap_offset: Offset = self
+            .file
+            .read_from_stack(stack_offset)
             .await
             .expect("failed to read from stack");
 
         /* Read data */
-        let bytes = self.file.read_from_heap(heap_offset)
+        let bytes = self
+            .file
+            .read_from_heap(heap_offset)
             .await
             .expect("failed to read from heap");
 
@@ -392,7 +435,9 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         Fut: Future<Output = Vec<u8>>,
     {
         /* Push size to stack and store its offset */
-        let stack_offset = self.file.push(&(len as Size).as_bytes())
+        let stack_offset = self
+            .file
+            .push(&(len as Size).as_bytes())
             .await
             .expect("failed to push");
 
@@ -402,11 +447,14 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         /* Write all elements to heap */
         for i in 0..len {
             let data = elem(i).await;
-            let alloc = self.file.alloc(data.len() as Size)
+            let alloc = self
+                .file
+                .alloc(data.len() as Size)
                 .await
                 .expect("alloc failed");
 
-            self.file.write_to_heap(alloc, &data)
+            self.file
+                .write_to_heap(alloc, &data)
                 .await
                 .expect("failed to write to a heap");
         }
@@ -424,7 +472,9 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         let stack_offset = self.load_offset(enumerator);
 
         /* Read length */
-        let length: Size = self.file.read_from_stack(stack_offset)
+        let length: Size = self
+            .file
+            .read_from_stack(stack_offset)
             .await
             .expect("failed to read from stack");
 
@@ -436,11 +486,14 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
         /* Write bytes */
         for (bytes, offset) in elements.zip(offsets).take(length as usize) {
-            let alloc = self.file.realloc(bytes.len() as Size, offset)
+            let alloc = self
+                .file
+                .realloc(bytes.len() as Size, offset)
                 .await
                 .expect("realloc failed");
 
-            self.file.write_to_heap(alloc, &bytes)
+            self.file
+                .write_to_heap(alloc, &bytes)
                 .await
                 .expect("failed to write to a heap");
         }
@@ -448,7 +501,12 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
     /// Assigns new element to the element by index of pointer on stack.
     #[allow(dead_code)]
-    pub async fn assign_pointer_array_element(&mut self, enumerator: E, bytes: Vec<u8>, idx: usize) -> SaveResult<()> {
+    pub async fn assign_pointer_array_element(
+        &mut self,
+        enumerator: E,
+        bytes: Vec<u8>,
+        idx: usize,
+    ) -> SaveResult<()> {
         /* Load offset */
         let offset = self.load_offset(enumerator);
 
@@ -477,8 +535,10 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         /* Load stack data offset */
         let length_offset = self.load_offset(enumerator);
 
-        /* Read array length */ 
-        let length: Size = self.file.read_from_stack(length_offset)
+        /* Read array length */
+        let length: Size = self
+            .file
+            .read_from_stack(length_offset)
             .await
             .expect("failed to read from stack");
 
@@ -489,12 +549,16 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         let offset_size = Size::static_size() as Size;
         for i in 1..=length {
             /* Read offset on heap */
-            let heap_offset: Offset = self.file.read_from_stack(length_offset + i * offset_size)
+            let heap_offset: Offset = self
+                .file
+                .read_from_stack(length_offset + i * offset_size)
                 .await
                 .expect("failed to read from stack");
 
             /* Read data bytes */
-            let bytes = self.file.read_from_heap(heap_offset)
+            let bytes = self
+                .file
+                .read_from_heap(heap_offset)
                 .await
                 .expect("failed to read from heap");
 
@@ -507,15 +571,22 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
     /// Reads a pointer array element at index `idx`.
     #[allow(dead_code)]
-    pub async fn read_pointer_array_element<T, F>(&mut self, enumerator: E, idx: usize, elem: F) -> SaveResult<T>
+    pub async fn read_pointer_array_element<T, F>(
+        &mut self,
+        enumerator: E,
+        idx: usize,
+        elem: F,
+    ) -> SaveResult<T>
     where
-        F: FnOnce(&[u8]) -> T
+        F: FnOnce(&[u8]) -> T,
     {
         /* Load offset */
         let offset = self.load_offset(enumerator);
 
         /* Read length */
-        let length: Size = self.file.read_from_stack(offset)
+        let length: Size = self
+            .file
+            .read_from_stack(offset)
             .await
             .expect("failed to read from stack");
 
@@ -523,14 +594,19 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
         Self::test_index(idx as Offset, length)?;
 
         /* Calculate actual offsets */
-        let offset = offset + Size::static_size() as Size + idx as Offset * Offset::static_size() as Size;
+        let offset =
+            offset + Size::static_size() as Size + idx as Offset * Offset::static_size() as Size;
 
-        let heap_offset = self.file.read_from_stack(offset)
+        let heap_offset = self
+            .file
+            .read_from_stack(offset)
             .await
             .expect("failed to red from stack");
 
         /* Read data bytes */
-        let bytes = self.file.read_from_heap(heap_offset)
+        let bytes = self
+            .file
+            .read_from_heap(heap_offset)
             .await
             .expect("failed to read from heap");
 
@@ -542,21 +618,20 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
     fn store_offset(&mut self, enumerator: E, offset: Offset) -> SaveResult<()> {
         match self.offsets.insert(enumerator.into(), offset) {
             None => Ok(()),
-            Some(old) => Err(SaveError::DataOverride(old))
+            Some(old) => Err(SaveError::DataOverride(old)),
         }
     }
 
     /// Loads offset by enumerator.
     fn load_offset(&self, enumerator: E) -> Offset {
-        *self.offsets
+        *self
+            .offsets
             .get(&enumerator.into())
-            .unwrap_or_else(|| panic!("There is no data enumerated by {}",
-                enumerator.into()))
+            .unwrap_or_else(|| panic!("There is no data enumerated by {}", enumerator.into()))
     }
 
     async fn offsets_async_write(file: &mut File, bytes: &[u8], offset: Offset) -> io::Result<()> {
-        file.seek(SeekFrom::Start(offset))
-            .await?;
+        file.seek(SeekFrom::Start(offset)).await?;
         let _n_bytes = file.write(bytes).await?;
 
         Ok(())
@@ -569,11 +644,7 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
 
         /* Save offsets length to `meta.off` file */
         let n_offsets = self.offsets.len() as Size;
-        Self::offsets_async_write(
-            &mut self.offsets_save,
-            &n_offsets.as_bytes(),
-            0
-        ).await?;
+        Self::offsets_async_write(&mut self.offsets_save, &n_offsets.as_bytes(), 0).await?;
 
         /* Save all offsets to `meta.off` file */
         let offset_size = Offset::static_size() as Size;
@@ -581,14 +652,16 @@ impl<E: Copy + Into<Enumerator>> Save<E> {
             Self::offsets_async_write(
                 &mut self.offsets_save,
                 &enumerator.as_bytes(),
-                offset_size * i
-            ).await?;
+                offset_size * i,
+            )
+            .await?;
 
             Self::offsets_async_write(
                 &mut self.offsets_save,
                 &offset.as_bytes(),
-                offset_size * (i + 1)
-            ).await?;
+                offset_size * (i + 1),
+            )
+            .await?;
         }
 
         /* Sync all changes to file */

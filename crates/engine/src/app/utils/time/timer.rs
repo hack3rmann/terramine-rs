@@ -2,7 +2,7 @@
 
 use {
     crate::cfg::timer::N_FAMES_TO_MEASURE,
-    std::time::{Instant, Duration},
+    std::time::{Duration, Instant},
 };
 
 /// Provides easy time management.
@@ -43,7 +43,7 @@ impl Timer {
         let now = Instant::now();
         self.dt = now.duration_since(self.last_frame).as_secs_f32();
         self.last_frame = now;
-        
+
         self.frame_idx += 1;
         self.frames_sum += self.dt;
 
@@ -55,5 +55,7 @@ impl Timer {
     }
 
     /// Gives duration from last `update()` call
-    pub fn duration(&self) -> Duration { Duration::from_secs_f32(self.dt) }
+    pub fn duration(&self) -> Duration {
+        Duration::from_secs_f32(self.dt)
+    }
 }

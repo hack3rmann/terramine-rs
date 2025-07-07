@@ -1,10 +1,7 @@
 use {
-    crate::app::utils::{
-        terrain::voxel::voxel_data::Id,
-        concurrency::channel::Channel,
-    },
-    math_linear::prelude::*,
+    crate::app::utils::{concurrency::channel::Channel, terrain::voxel::voxel_data::Id},
     lazy_static::lazy_static,
+    math_linear::prelude::*,
     std::sync::Mutex,
 };
 
@@ -29,7 +26,8 @@ pub enum Command {
 }
 
 pub fn command(command: Command) {
-    COMMAND_CHANNEL.lock()
+    COMMAND_CHANNEL
+        .lock()
         .unwrap()
         .sender
         .send(command)

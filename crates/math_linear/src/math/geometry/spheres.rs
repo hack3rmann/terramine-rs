@@ -1,12 +1,6 @@
-use {
-    crate::{
-        prelude::*,
-        math::geometry::{
-            Intersect,
-            space_2d::Line,
-            Containment,
-        },
-    },
+use crate::{
+    math::geometry::{Containment, Intersect, space_2d::Line},
+    prelude::*,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -61,7 +55,7 @@ impl Intersect<Line> for Circle {
                     line.point_along((diff + discr_sqrt) / dir_sqr),
                     line.point_along((diff - discr_sqrt) / dir_sqr),
                 ])
-            },
+            }
         }
     }
 }
@@ -71,8 +65,9 @@ impl Intersect<Circle> for Circle {
         let centre_dist = (self.centre - other.centre).len();
         let line_normal = (self.centre - other.centre) / centre_dist;
         let line = Line {
-            origin: line_normal * (self.radius.powi(2) - other.radius.powi(2)) / (2.0 * centre_dist),
-            direction: line_normal.rotate_clockwise()
+            origin: line_normal * (self.radius.powi(2) - other.radius.powi(2))
+                / (2.0 * centre_dist),
+            direction: line_normal.rotate_clockwise(),
         };
 
         self.intersect(&line)
@@ -92,7 +87,7 @@ mod tests {
     #[test]
     fn test_circle_intersections() {
         let circle1 = Circle::new(vecf!(-3, 0), 5.0);
-        let circle2 = Circle::new(vecf!( 3, 0), 5.0);
+        let circle2 = Circle::new(vecf!(3, 0), 5.0);
 
         assert_eq!(
             circle1.intersect(&circle2).unwrap(),

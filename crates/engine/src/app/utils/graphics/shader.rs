@@ -4,17 +4,13 @@
 
 use {
     crate::app::utils::{
+        cfg::shader::{DIRECTORY, FRAGMENT_FILE_EXTENTION, VERTEX_FILE_EXTENTION},
         logger,
-        cfg::shader::{
-            DIRECTORY,
-            VERTEX_FILE_EXTENTION,
-            FRAGMENT_FILE_EXTENTION
-        },
     },
+    derive_deref_rs::Deref,
+    glium::ProgramCreationError,
     std::{fs, io},
     thiserror::Error,
-    glium::ProgramCreationError,
-    derive_deref_rs::Deref,
 };
 
 /// Shader struct is container for shader source code.
@@ -33,17 +29,24 @@ impl Shader {
     pub fn new(
         vertex_name: &str,
         fragment_name: &str,
-        display: &dyn glium::backend::Facade
+        display: &dyn glium::backend::Facade,
     ) -> Result<Self, ShaderError> {
         let _work_guard = logger::work("shader loader", format!("{vertex_name}, {fragment_name}."));
 
-        let vertex_src = fs::read_to_string(
-            format!("{DIRECTORY}{vertex_name}.{VERTEX_FILE_EXTENTION}")
-        ).map_err(|err| ShaderError::FileRead { io_err: err, shader_name: vertex_name.into() })?;
+        let vertex_src =
+            fs::read_to_string(format!("{DIRECTORY}{vertex_name}.{VERTEX_FILE_EXTENTION}"))
+                .map_err(|err| ShaderError::FileRead {
+                    io_err: err,
+                    shader_name: vertex_name.into(),
+                })?;
 
-        let fragment_src = fs::read_to_string(
-            format!("{DIRECTORY}{fragment_name}.{FRAGMENT_FILE_EXTENTION}")
-        ).map_err(|err| ShaderError::FileRead { io_err: err, shader_name: fragment_name.into() })?;
+        let fragment_src = fs::read_to_string(format!(
+            "{DIRECTORY}{fragment_name}.{FRAGMENT_FILE_EXTENTION}"
+        ))
+        .map_err(|err| ShaderError::FileRead {
+            io_err: err,
+            shader_name: fragment_name.into(),
+        })?;
 
         Self::from_source(vertex_src, fragment_src, display)
     }
@@ -51,16 +54,16 @@ impl Shader {
     pub fn from_source(
         vertex_src: String,
         fragment_src: String,
-        display: &dyn glium::backend::Facade
+        display: &dyn glium::backend::Facade,
     ) -> Result<Self, ShaderError> {
-        let program = glium::Program::from_source(
-            display,
-            vertex_src.as_str(),
-            fragment_src.as_str(),
-            None,
-        )?;
+        let program =
+            glium::Program::from_source(display, vertex_src.as_str(), fragment_src.as_str(), None)?;
 
-        Ok(Shader { vertex_src, fragment_src, program })
+        Ok(Shader {
+            vertex_src,
+            fragment_src,
+            program,
+        })
     }
 }
 

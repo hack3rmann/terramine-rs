@@ -1,2 +1,2 @@
-pub mod loading;
 pub mod channel;
+pub mod loading;

@@ -27,7 +27,7 @@ portable-atomic = { version = "1.2.0", features = ["float"] }
 huffman-compress = "0.6.1"
 bit-vec = "0.6.3"
 array-init = "2.1.0"
-# FIXME(hack3rmann): remove cpython from project
+# FIXME(hack3rmann): remove cpython from the project
 # cpython = { version = "0.7.1", features = ["extension-module"] }
 smallvec = { version = "1.10.0", features = ["const_generics"] }
 parse-display = "0.8.0"

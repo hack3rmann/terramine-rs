@@ -1,13 +1,12 @@
 use {
-    std::pin::Pin,
     glium::{
-        texture::{DepthTexture2d, Texture2d, TextureCreationError},
-        framebuffer::{MultiOutputFrameBuffer, SimpleFrameBuffer, ValidationError},
         backend::Facade,
+        framebuffer::{MultiOutputFrameBuffer, SimpleFrameBuffer, ValidationError},
+        texture::{DepthTexture2d, Texture2d, TextureCreationError},
     },
     math_linear::prelude::*,
+    std::pin::Pin,
     thiserror::Error,
-    crate::prelude::profile,
 };
 
 #[derive(Debug)]
@@ -21,7 +20,7 @@ pub struct DeferredTextures {
 
 impl DeferredTextures {
     pub fn new(facade: &dyn Facade, window_size: UInt2) -> Result<Self, TextureCreationError> {
-        use glium::texture::{UncompressedFloatFormat, DepthFormat, MipmapsOption};
+        use glium::texture::{DepthFormat, MipmapsOption, UncompressedFloatFormat};
 
         const MSAA_LEVEL: u32 = 1;
         const SHADOW_QUALITY_LEVEL: u32 = 4;
@@ -66,7 +65,13 @@ impl DeferredTextures {
             window_size.y * SHADOW_QUALITY_LEVEL,
         )?;
 
-        Ok(Self { depth, albedo, normal, position, light_depth })
+        Ok(Self {
+            depth,
+            albedo,
+            normal,
+            position,
+            light_depth,
+        })
     }
 }
 
@@ -80,11 +85,11 @@ impl Surface<'_> {
     pub fn new(facade: &dyn Facade, window_size: UInt2) -> Result<Self, SurfaceError> {
         let textures = Box::pin(DeferredTextures::new(facade, window_size)?);
 
-        // * Safety:
-        // * Safe, because we own textures and no one can get mutabe access to them.
-        // * On texture refresh we make new buffers with new references.
-        // * Textures lives as long as buffers.
-        let frame_buffer  = unsafe { Self::make_frame_buffer(textures.as_ref(), facade)? };
+        // # Safety:
+        // Safe, because we own textures and no one can get mutabe access to them.
+        // On texture refresh we make new buffers with new references.
+        // Textures lives as long as buffers.
+        let frame_buffer = unsafe { Self::make_frame_buffer(textures.as_ref(), facade)? };
         let shadow_buffer = unsafe { Self::make_shadow_buffer(textures.as_ref(), facade)? };
 
         Ok(Self {
@@ -95,7 +100,7 @@ impl Surface<'_> {
     }
 
     /// # Safety
-    /// 
+    ///
     /// `render_textures` should live as long as frame buffer and can not beeing modified.
     /// If textures are modified then it should be called again.
     pub unsafe fn make_frame_buffer<'b>(
@@ -103,13 +108,13 @@ impl Surface<'_> {
         facade: &dyn Facade,
     ) -> Result<MultiOutputFrameBuffer<'b>, ValidationError> {
         let textures = render_textures.get_ref() as *const DeferredTextures;
-        let textures = textures.as_ref().unwrap_unchecked();
+        let textures = unsafe { textures.as_ref().unwrap_unchecked() };
 
         MultiOutputFrameBuffer::with_depth_buffer(
             facade,
             [
-                ("out_albedo",   &textures.albedo),
-                ("out_normal",   &textures.normal),
+                ("out_albedo", &textures.albedo),
+                ("out_normal", &textures.normal),
                 ("out_position", &textures.position),
             ],
             &textures.depth,
@@ -117,7 +122,7 @@ impl Surface<'_> {
     }
 
     /// # Safety
-    /// 
+    ///
     /// `render_textures` should live as long as frame buffer and can not beeing modified.
     /// If textures are modified then it should be called again.
     pub unsafe fn make_shadow_buffer<'b>(
@@ -125,21 +130,24 @@ impl Surface<'_> {
         facade: &dyn Facade,
     ) -> Result<SimpleFrameBuffer<'b>, ValidationError> {
         let texture = &render_textures.light_depth as *const DepthTexture2d;
-        let texture = texture.as_ref().unwrap_unchecked();
+        let texture = unsafe { texture.as_ref().unwrap_unchecked() };
 
         SimpleFrameBuffer::depth_only(facade, texture)
     }
 
-    pub fn on_window_resize(&mut self, facade: &dyn Facade, new_size: UInt2) -> Result<(), SurfaceError> {
-        self.render_textures.set(
-            DeferredTextures::new(facade, new_size)?
-        );
+    pub fn on_window_resize(
+        &mut self,
+        facade: &dyn Facade,
+        new_size: UInt2,
+    ) -> Result<(), SurfaceError> {
+        self.render_textures
+            .set(DeferredTextures::new(facade, new_size)?);
         let textures = self.render_textures.as_ref();
 
-        // * Safety:
-        // * Safe, because we own textures and no one can get mutabe access to them.
-        // * On texture refresh we make new buffers with new references.
-        // * Textures lives as long as buffers.
+        // # Safety:
+        // Safe, because we own textures and no one can get mutabe access to them.
+        // On texture refresh we make new buffers with new references.
+        // Textures lives as long as buffers.
         unsafe {
             self.frame_buffer = Self::make_frame_buffer(textures, facade)?;
             self.shadow_buffer = Self::make_shadow_buffer(textures, facade)?;
@@ -157,7 +165,6 @@ impl Surface<'_> {
 pub enum SurfaceError {
     #[error("failed to create texture: {0}")]
     TextureCreation(#[from] TextureCreationError),
-
     #[error("failed to validate frame buffer")]
     Validation(#[from] ValidationError),
 }

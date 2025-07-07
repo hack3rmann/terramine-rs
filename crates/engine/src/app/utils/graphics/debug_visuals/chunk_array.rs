@@ -4,13 +4,13 @@ use {
         graphics::mesh::Mesh,
         prelude::*,
         terrain::{
-            chunk::{chunk_array::ChunkArray, Chunk},
+            chunk::{Chunk, chunk_array::ChunkArray},
             voxel::Voxel,
         },
     },
     glium::{
-        index::PrimitiveType, uniforms::Uniforms, BackfaceCullingMode, Depth, DepthTest,
-        VertexBuffer,
+        BackfaceCullingMode, Depth, DepthTest, VertexBuffer, index::PrimitiveType,
+        uniforms::Uniforms,
     },
 };
 
@@ -43,7 +43,7 @@ pub mod data {
         unsafe {
             let err_msg = "debug visuals statics should been initialized";
 
-            let ShaderWrapper(ref shader) = SHADER.as_ref().expect(err_msg);
+            let ShaderWrapper(shader) = SHADER.as_ref().expect(err_msg);
 
             let DrawParametersWrapper(ref draw_params) = *DRAW_PARAMS;
 
@@ -176,4 +176,3 @@ impl<'s> DebugVisualized<'s, ChunkArray> {
         Ok(())
     }
 }
-

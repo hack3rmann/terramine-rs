@@ -155,4 +155,3 @@ impl Frustum {
             + self.bottom.signed_distance(vec)
     }
 }
-

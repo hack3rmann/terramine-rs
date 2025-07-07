@@ -1,6 +1,6 @@
 use proc_macro::*;
-use syn::*;
 use quote::quote;
+use syn::*;
 
 #[proc_macro_attribute]
 pub fn profiler_target(_args: TokenStream, item: TokenStream) -> TokenStream {
@@ -17,5 +17,6 @@ pub fn profiler_target(_args: TokenStream, item: TokenStream) -> TokenStream {
             let __measure = crate::prelude::profiler::start_capture(stringify!(#sig), __ID);
             #block
         }
-    }.into()
+    }
+    .into()
 }

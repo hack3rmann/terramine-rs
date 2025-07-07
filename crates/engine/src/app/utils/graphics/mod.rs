@@ -91,7 +91,8 @@ impl Graphics {
         imgui_context
             .fonts()
             .add_font(&[imgui::FontSource::DefaultFontData { config: None }]);
-        imgui_context.io_mut().font_global_scale = 1.5 * (1.0 / winit_platform.hidpi_factor()) as f32;
+        imgui_context.io_mut().font_global_scale =
+            1.5 * (1.0 / winit_platform.hidpi_factor()) as f32;
         imgui_context.style_mut().window_rounding = 8.0;
 
         /* Glium setup. */

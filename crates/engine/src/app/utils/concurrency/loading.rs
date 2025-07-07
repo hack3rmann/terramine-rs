@@ -1,18 +1,17 @@
 #![allow(dead_code)]
 
 use {
-    std::{
-        collections::HashMap,
-        sync::Mutex,
-    },
-    tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
-    thiserror::Error,
     lazy_static::lazy_static,
+    std::{collections::HashMap, sync::Mutex},
+    thiserror::Error,
+    tokio::sync::mpsc::{self, UnboundedReceiver, UnboundedSender},
 };
 
 #[derive(Error, Debug, Clone, PartialEq)]
 pub enum LoadingError {
-    #[error("failed to refresh {0} loading with value {1:.1}% because that loading isn't already exist!")]
+    #[error(
+        "failed to refresh {0} loading with value {1:.1}% because that loading isn't already exist!"
+    )]
     RefreshFailed(String, f32),
 
     #[error("failed to add loading {0} because it's already added with value {1:.1}%!")]
@@ -38,49 +37,47 @@ impl Default for Loadings {
 
 impl Loadings {
     pub fn new() -> Self {
-        Self { list: HashMap::new() }
+        Self {
+            list: HashMap::new(),
+        }
     }
 
     pub fn add(&mut self, name: String) -> Result<(), LoadingError> {
         match self.list.insert(name.clone(), 0.0) {
             None => Ok(()),
-            Some(dropped_value) => Err(
-                LoadingError::AddFailed(name, dropped_value)
-            ),
+            Some(dropped_value) => Err(LoadingError::AddFailed(name, dropped_value)),
         }
     }
 
     pub fn refresh(&mut self, name: &str, new_val: f32) -> Result<(), LoadingError> {
         match self.list.get_mut(name) {
-            None => Err(
-                LoadingError::RefreshFailed(name.into(), new_val)
-            ),
+            None => Err(LoadingError::RefreshFailed(name.into(), new_val)),
 
             Some(value) => {
                 *value = new_val;
-                Ok(
-                    ()
-                )
-            },
+                Ok(())
+            }
         }
     }
 
     pub fn finish(&mut self, name: &str) -> Result<(), LoadingError> {
         match self.list.remove(name) {
-            None =>
-                Err(LoadingError::LoadingNotExist(name.into())),
+            None => Err(LoadingError::LoadingNotExist(name.into())),
 
-            Some(value) if value != 1.0 =>
-                Err(LoadingError::LoadingNotFinished(name.into(), value)),
+            Some(value) if value != 1.0 => {
+                Err(LoadingError::LoadingNotFinished(name.into(), value))
+            }
 
-            _ => Ok(())
+            _ => Ok(()),
         }
     }
 
     pub fn spawn_info_window(&self, ui: &imgui::Ui) {
         use crate::app::utils::graphics::ui::imgui_constructor::make_window;
 
-        if self.list.is_empty() { return }
+        if self.list.is_empty() {
+            return;
+        }
 
         make_window(ui, "Loadings").build(|| {
             for (name, &value) in self.list.iter() {
@@ -93,16 +90,11 @@ impl Loadings {
 }
 
 pub fn spawn_info_window(ui: &imgui::Ui) {
-    LOADINGS.lock()
-        .unwrap()
-        .loads
-        .spawn_info_window(ui)
+    LOADINGS.lock().unwrap().loads.spawn_info_window(ui)
 }
 
 pub fn recv_all() -> Result<(), LoadingError> {
-    LOADINGS.lock()
-        .unwrap()
-        .recv_all()
+    LOADINGS.lock().unwrap().recv_all()
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -126,15 +118,13 @@ lazy_static! {
 }
 
 pub fn make_sender() -> CommandSender<'static> {
-    LOADINGS.lock()
-        .unwrap()
-        .tx
-        .clone()
+    LOADINGS.lock().unwrap().tx.clone()
 }
 
 pub fn start_new(name: &'static str) -> LoadingGuard {
     let sender = make_sender();
-    sender.send(Command::Add(name.to_owned()))
+    sender
+        .send(Command::Add(name.to_owned()))
         .expect("failed to send add command to loading");
 
     LoadingGuard { name, sender }
@@ -149,20 +139,21 @@ impl Default for ChannelLoadings<'_> {
 impl<'s> ChannelLoadings<'s> {
     pub fn new() -> Self {
         let (tx, rx) = mpsc::unbounded_channel();
-        Self { rx, tx, loads: Loadings::new() }
+        Self {
+            rx,
+            tx,
+            loads: Loadings::new(),
+        }
     }
 
     pub fn recv_all(&mut self) -> Result<(), LoadingError> {
         while let Ok(command) = self.rx.try_recv() {
             match command {
-                Command::Add(name) =>
-                    self.loads.add(name)?,
+                Command::Add(name) => self.loads.add(name)?,
 
-                Command::Refresh(name, percent) =>
-                    self.loads.refresh(name, percent)?,
+                Command::Refresh(name, percent) => self.loads.refresh(name, percent)?,
 
-                Command::Finish(name) =>
-                    self.loads.finish(name)?,
+                Command::Finish(name) => self.loads.finish(name)?,
             }
         }
 
@@ -178,14 +169,16 @@ pub struct LoadingGuard {
 
 impl Drop for LoadingGuard {
     fn drop(&mut self) {
-        self.sender.send(Command::Finish(self.name))
+        self.sender
+            .send(Command::Finish(self.name))
             .expect("failed to send finish command to loading");
     }
 }
 
 impl LoadingGuard {
     pub fn refresh(&self, value: f32) {
-        self.sender.send(Command::Refresh(self.name, value))
+        self.sender
+            .send(Command::Refresh(self.name, value))
             .expect("failed to send refresh command to loading");
     }
 }

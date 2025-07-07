@@ -1,26 +1,14 @@
 #![allow(dead_code)]
 
-pub extern crate profiler_macros as profiler_target_macro;
-pub use profiler_target_macro::profiler_target;
-
-use {
-    crate::{
-        prelude::*,
-        time::timer::Timer,
-    },
-    std::{
-        time::Instant,
-        sync::Mutex,
-    },
-};
+use crate::{prelude::*, time::timer::Timer};
+use std::{sync::Mutex, time::Instant};
 
 pub mod prelude {
-    pub use super::{
-        profiler_target as profile,
-        super::profiler,
-        MeasureId,
-    };
+    pub use super::{super::profiler, MeasureId, profiler_target as profile};
 }
+
+pub extern crate profiler_macros as profiler_target_macro;
+pub use profiler_target_macro::profiler_target;
 
 pub type MeasureId = u64;
 pub type DataSummary<'s> = Vec<Data<'s>>;
@@ -48,7 +36,7 @@ impl Profile {
         Self {
             target_name: target_name.into(),
             measures: vec![],
-            max_time: 0.0
+            max_time: 0.0,
         }
     }
 }
@@ -63,7 +51,11 @@ pub struct Measure {
 
 impl Measure {
     pub fn new(id: MeasureId) -> Self {
-        Self { value: 0.0, now: Instant::now(), id }
+        Self {
+            value: 0.0,
+            now: Instant::now(),
+            id,
+        }
     }
 }
 
@@ -90,15 +82,13 @@ lazy_static! {
 
 /// Adds profile
 pub fn add_profile(profile: Profile, id: MeasureId) {
-    PROFILER.lock()
-        .unwrap()
-        .profiles
-        .insert(id, profile);
+    PROFILER.lock().unwrap().profiles.insert(id, profile);
 }
 
 /// Uploads measure
 pub fn upload_measure(measure: &Measure) {
-    PROFILER.lock()
+    PROFILER
+        .lock()
         .unwrap()
         .profiles
         .get_mut(&measure.id)
@@ -109,12 +99,8 @@ pub fn upload_measure(measure: &Measure) {
 
 /// Starting capturing to to profile under given `id`.
 pub fn start_capture(target_name: impl Into<String>, id: MeasureId) -> Measure {
-    let is_already_captured = PROFILER.lock()
-        .unwrap()
-        .profiles
-        .get(&id)
-        .is_some();
-    
+    let is_already_captured = PROFILER.lock().unwrap().profiles.contains_key(&id);
+
     if !is_already_captured {
         add_profile(Profile::new(target_name), id)
     }
@@ -129,13 +115,14 @@ pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer) {
     }
 
     let mut lock = PROFILER.lock().unwrap();
-    let data = lock.profiles
+    let data = lock
+        .profiles
         .iter_mut()
         .map(|(_, profile)| {
-            let time_summary: f64 = profile.measures.iter()
-                .copied()
-                .sum();
-            let cur_max = profile.measures.iter()
+            let time_summary: f64 = profile.measures.iter().copied().sum();
+            let cur_max = profile
+                .measures
+                .iter()
                 .copied()
                 .reduce(f64::max)
                 .unwrap_or(0.0);
@@ -150,7 +137,7 @@ pub fn update_and_build_window(ui: &imgui::Ui, timer: &Timer) {
             }
         })
         .collect();
-    
+
     build_window(ui, data);
     drop(lock);
 
@@ -174,28 +161,28 @@ pub fn build_window(ui: &imgui::Ui, profiler_result: DataSummary) {
         make_window(ui, "Profiler")
             .always_auto_resize(true)
             .build(|| {
-            /* Build all elements. Separate only existing lines. */
-            for (i, data) in profiler_result.iter().enumerate() {
-                /* Target name */
-                ui.text(data.name);
+                /* Build all elements. Separate only existing lines. */
+                for (i, data) in profiler_result.iter().enumerate() {
+                    /* Target name */
+                    ui.text(data.name);
 
-                /* Call count */
-                ui.text(format!("Call per frame: {}", data.call_freq));
+                    /* Call count */
+                    ui.text(format!("Call per frame: {}", data.call_freq));
 
-                /* Time that function need */
-                ui.text(format!("Time: {:.3}ms", data.time * 1000.0));
+                    /* Time that function need */
+                    ui.text(format!("Time: {:.3}ms", data.time * 1000.0));
 
-                /* Percent of frame time */
-                ui.text(format!("Frame time: {:.3}%", data.frame_time * 100.0));
+                    /* Percent of frame time */
+                    ui.text(format!("Frame time: {:.3}%", data.frame_time * 100.0));
 
-                /* Percent of frame time */
-                ui.text(format!("Max time: {:.3}ms", data.max_time * 1000.0));
+                    /* Percent of frame time */
+                    ui.text(format!("Max time: {:.3}ms", data.max_time * 1000.0));
 
-                /* Separator to next result */
-                if i != profiler_result.len() - 1 {
-                    ui.separator();
+                    /* Separator to next result */
+                    if i != profiler_result.len() - 1 {
+                        ui.separator();
+                    }
                 }
-            }
-        });
+            });
     }
 }

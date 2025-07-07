@@ -1,7 +1,4 @@
-use {
-    crate::prelude::*,
-    crate::math::ray::space_3d::Line,
-};
+use {crate::math::ray::space_3d::Line, crate::prelude::*};
 
 /// Represents axis aligned bounding box
 #[derive(Clone, Copy, Debug)]
@@ -19,7 +16,10 @@ impl Aabb {
     /// Constructs AABB from Int3 vectors.
     #[allow(dead_code)]
     pub fn from_int3(lo: Int3, hi: Int3) -> Self {
-        Aabb { lo: lo.into(), hi: hi.into() }
+        Aabb {
+            lo: lo.into(),
+            hi: hi.into(),
+        }
     }
 
     /// Represents AABB as corner vertex array.
@@ -46,9 +46,9 @@ impl Aabb {
     }
 
     /// Tests ray intersection.
-    /// 
+    ///
     /// # Source
-    /// 
+    ///
     /// Copied from <https://tavianator.com/2011/ray_box.html>
     pub fn intersects_ray(self, ray: &Line) -> bool {
         let mut t_max = f32::INFINITY;
@@ -84,8 +84,11 @@ impl Aabb {
     /// Checks if AABB contains given vertex or the vertex is on boundary.
     pub fn contains_point(self, p: vec3) -> bool {
         const EPS: f32 = f32::EPSILON;
-        self.lo.x - EPS < p.x && p.x < self.hi.x + EPS
-            && self.lo.y - EPS < p.y && p.y < self.hi.y + EPS
-            && self.lo.z - EPS < p.z && p.z < self.hi.z + EPS
+        self.lo.x - EPS < p.x
+            && p.x < self.hi.x + EPS
+            && self.lo.y - EPS < p.y
+            && p.y < self.hi.y + EPS
+            && self.lo.z - EPS < p.z
+            && p.z < self.hi.z + EPS
     }
 }

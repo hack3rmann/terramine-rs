@@ -1,22 +1,22 @@
 #![macro_use]
 
-pub mod vector;
-pub mod matrix;
 pub mod bounding_volumes;
+pub mod geometry;
+pub mod matrix;
 pub mod ray;
 pub mod space_index;
-pub mod geometry;
+pub mod vector;
 
 pub mod prelude {
     pub use super::{
-        vector::*,
-        matrix::*,
         bounding_volumes::aabb::*,
+        geometry::{angle::*, plane::*},
+        matrix::*,
         ray::*,
         space_index as sdex,
-        geometry::{
-            angle::*,
-            plane::*,
+        vector::{
+            macros::{vecf, veci, vecs, vecu},
+            *,
         },
     };
 

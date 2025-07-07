@@ -1,25 +1,24 @@
 pub mod utils;
 
-use {
-    /* Other files */
-    crate::{
-        graphics::{
-            self,
-            camera::Camera,
-            debug_visuals::{self, DebugVisualizedStatic},
-            light::DirectionalLight,
-            texture::Texture,
-            Graphics,
-        },
-        prelude::*,
-        terrain::chunk::{chunk_array::ChunkArray, ChunkDrawBundle},
+use crate::{
+    graphics::{
+        self, Graphics,
+        camera::Camera,
+        debug_visuals::{self, DebugVisualizedStatic},
+        light::DirectionalLight,
+        texture::Texture,
     },
-    glium::Surface,
+    prelude::*,
+    terrain::chunk::{ChunkDrawBundle, chunk_array::ChunkArray},
 };
-
-use glium::winit::error::EventLoopError;
-use glium::winit::event::{Event, StartCause, WindowEvent};
-use glium::winit::event_loop::ActiveEventLoop;
+use glium::{
+    Surface,
+    winit::{
+        error::EventLoopError,
+        event::{Event, StartCause, WindowEvent},
+        event_loop::ActiveEventLoop,
+    },
+};
 
 /// Struct that handles everything.
 pub struct App {
@@ -98,6 +97,7 @@ impl App {
     /// Runs app. Runs glium's `event_loop`.
     pub fn run(mut self) -> Result<(), EventLoopError> {
         let event_loop = self.graphics.take_event_loop();
+        // FIXME(hack3rmann): deprecated api
         event_loop.run(move |event, active| {
             RUNTIME
                 .block_on(self.run_frame_loop(event, active))

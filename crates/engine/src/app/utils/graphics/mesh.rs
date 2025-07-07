@@ -1,15 +1,11 @@
 use {
     crate::graphics::Shader,
     glium::{
-        Vertex,
-        VertexBuffer,
-        DrawParameters,
-        Surface,
-        DrawError,
-        uniforms::Uniforms,
+        DrawError, DrawParameters, Surface, Vertex, VertexBuffer,
         backend::Facade,
+        index::{IndicesSource, NoIndices, PrimitiveType},
+        uniforms::Uniforms,
         vertex::BufferCreationError,
-        index::{NoIndices, PrimitiveType, IndicesSource}
     },
 };
 
@@ -34,13 +30,22 @@ where
 
     /// Renders mesh.
     pub fn render<'s>(
-        &'s self, target: &mut impl Surface, shader: &Shader,
-        draw_params: &DrawParameters<'_>, uniforms: &impl Uniforms
+        &'s self,
+        target: &mut impl Surface,
+        shader: &Shader,
+        draw_params: &DrawParameters<'_>,
+        uniforms: &impl Uniforms,
     ) -> Result<(), DrawError>
     where
         &'s IntoIdx: Into<IndicesSource<'src>>,
     {
-        target.draw(&self.vertices, &self.indices, &shader.program, uniforms, draw_params)
+        target.draw(
+            &self.vertices,
+            &self.indices,
+            &shader.program,
+            uniforms,
+            draw_params,
+        )
     }
 
     /// Checks if vertices vector is empty.
@@ -51,10 +56,16 @@ where
 
 impl<V: Vertex> UnindexedMesh<V> {
     pub fn new_unindexed(vertices: VertexBuffer<V>, primitive_type: PrimitiveType) -> Self {
-        Self { vertices, indices: NoIndices(primitive_type) }
+        Self {
+            vertices,
+            indices: NoIndices(primitive_type),
+        }
     }
 
-    pub fn new_empty(facade: &dyn Facade, primitive_type: PrimitiveType) -> Result<Self, BufferCreationError> {
+    pub fn new_empty(
+        facade: &dyn Facade,
+        primitive_type: PrimitiveType,
+    ) -> Result<Self, BufferCreationError> {
         let vertices = VertexBuffer::new(facade, &[])?;
         Ok(Self::new_unindexed(vertices, primitive_type))
     }

@@ -11,11 +11,16 @@ pub mod space_3d {
 
     impl Line {
         /// Creates new Line.
-        pub fn new(origin: vec3, direction: vec3) -> Self { Line { origin, direction } }
+        pub fn new(origin: vec3, direction: vec3) -> Self {
+            Line { origin, direction }
+        }
 
         /// Creates line from 2 points.
         pub fn from_2_points(start: vec3, end: vec3) -> Self {
-            Line { origin: start, direction: (end - start).normalized() }
+            Line {
+                origin: start,
+                direction: (end - start).normalized(),
+            }
         }
 
         /// Gives point on the line by signed distance from line origin.
@@ -37,13 +42,19 @@ pub mod space_2d {
     impl Line {
         /// Creates new ray.
         pub fn new(origin: vec2, direction: vec2) -> Self {
-            assert!(direction != vec2::zero(), "Direction vector should have non-zero length!");
+            assert!(
+                direction != vec2::zero(),
+                "Direction vector should have non-zero length!"
+            );
             Self { origin, direction }
         }
 
         /// Creates ray from 2 points.
         pub fn from_2_points(start: vec2, end: vec2) -> Self {
-            Self { origin: start, direction: (end - start).normalized() }
+            Self {
+                origin: start,
+                direction: (end - start).normalized(),
+            }
         }
 
         /// Gives point on the ray by signed distance from ray origin.

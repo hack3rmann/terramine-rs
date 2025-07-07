@@ -1,6 +1,6 @@
 use {
-    tokio::runtime::{Runtime, Builder},
     lazy_static::lazy_static,
+    tokio::runtime::{Builder, Runtime},
 };
 
 lazy_static! {

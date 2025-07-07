@@ -1,10 +1,10 @@
+//! Provides some `type-byte` and `byte-type` reinterpretations to common types
+
 #![macro_use]
 
-//!
-//! Provides some `type-byte` and `byte-type` reinterpretations to common types
-//!
-
 use crate::prelude::*;
+
+pub use crate::{compose, read};
 
 /// Composes input list of `IntoIterator`s with `Item = u8`
 /// into one large iterator by sequetially calling `.chain()`,
@@ -12,15 +12,14 @@ use crate::prelude::*;
 #[macro_export]
 macro_rules! compose {
     () => {
-        Vec::<u8>::new()
-            .into_iter()
+        Vec::<u8>::new().into_iter()
     };
 
-    ($once:expr $(,)?) => {
+    ( $once:expr $(,)? ) => {
         $once.into_iter()
     };
 
-    ($first:expr, $($next:expr),+ $(,)?) => {
+    ( $first:expr, $( $next:expr ),+ $(,)? ) => {
         $first
             .into_iter()
             $(
@@ -39,21 +38,8 @@ macro_rules! read {
     };
 }
 
-pub use crate::{compose, read};
-
-pub trait Reinterpret:
-    AsBytes +
-    FromBytes +
-    StaticSizeHint +
-    DynamicSize
-{ }
-
-impl<T:
-    AsBytes +
-    FromBytes +
-    StaticSizeHint +
-    DynamicSize
-> Reinterpret for T { }
+pub trait Reinterpret: AsBytes + FromBytes + StaticSizeHint + DynamicSize {}
+impl<T: AsBytes + FromBytes + StaticSizeHint + DynamicSize> Reinterpret for T {}
 
 pub trait AsBytes {
     fn as_bytes(&self) -> Vec<u8>;
@@ -89,16 +75,10 @@ impl<T: StaticSize> DynamicSize for T {
     }
 }
 
-
-
 #[derive(Error, Debug)]
 pub enum ReinterpretError {
-    #[error("not enough bytes, index is {idx} but source length is {len}")]
-    NotEnoughBytes {
-        idx: String,
-        len: usize,
-    },
-
+    #[error("not enough bytes, index is {index} but source length is {len}")]
+    NotEnoughBytes { index: String, len: usize },
     #[error("failed to convert types: {0}")]
     Conversion(String),
 }
@@ -113,25 +93,27 @@ impl<'s> ByteReader<'s> {
     pub fn new(source: &'s [u8]) -> Self {
         Self { bytes: source }
     }
-    
+
     pub fn read<T>(&mut self) -> Result<T, ReinterpretError>
     where
         T: FromBytes + DynamicSize,
     {
         let result = T::from_bytes(self.bytes)?;
         let idx = result.dynamic_size()..;
-        self.bytes = self.bytes.get(idx.clone())
-            .ok_or_else(|| ReinterpretError::NotEnoughBytes {
-                idx: format!("{:?}", idx),
-                len: self.bytes.len()
-            })?;
+        self.bytes =
+            self.bytes
+                .get(idx.clone())
+                .ok_or_else(|| ReinterpretError::NotEnoughBytes {
+                    index: format!("{idx:?}"),
+                    len: self.bytes.len(),
+                })?;
 
         Ok(result)
     }
 }
 
 macro_rules! impl_nums {
-    ($($Type:ty),* $(,)?) => {
+    ( $( $Type:ty ),* $(,)? ) => {
         $(
             impl AsBytes for $Type {
                 fn as_bytes(&self) -> Vec<u8> {
@@ -144,19 +126,19 @@ macro_rules! impl_nums {
                     use std::array::TryFromSliceError;
 
                     let size = mem::size_of::<Self>();
+
                     Ok(Self::from_ne_bytes(source[..size].try_into().map_err(|err: TryFromSliceError|
                         ReinterpretError::Conversion(err.to_string())
                     )?))
                 }
             }
 
-            impl StaticSize for $Type { }
+            impl StaticSize for $Type {}
         )*
     }
 }
 
 impl_nums! { u8, i8, u16, i16, u32, i32, u64, i64, u128, i128, f32, f64 }
-
 
 impl AsBytes for usize {
     fn as_bytes(&self) -> Vec<u8> {
@@ -168,10 +150,9 @@ impl AsBytes for usize {
 impl FromBytes for usize {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let filled = u64::from_bytes(source)?;
-        filled.try_into()
-            .map_err(|_| ReinterpretError::Conversion(
-                format!("conversion of too large u64 ({filled}) to usize")
-            ))
+        filled.try_into().map_err(|_| {
+            ReinterpretError::Conversion(format!("conversion of too large u64 ({filled}) to usize"))
+        })
     }
 }
 
@@ -180,8 +161,6 @@ impl StaticSize for usize {
         u64::static_size()
     }
 }
-
-
 
 impl AsBytes for isize {
     fn as_bytes(&self) -> Vec<u8> {
@@ -193,10 +172,9 @@ impl AsBytes for isize {
 impl FromBytes for isize {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let filled = i64::from_bytes(source)?;
-        filled.try_into()
-            .map_err(|_| ReinterpretError::Conversion(
-                format!("conversion of too large i64 ({filled}) to isize")
-            ))
+        filled.try_into().map_err(|_| {
+            ReinterpretError::Conversion(format!("conversion of too large i64 ({filled}) to isize"))
+        })
     }
 }
 
@@ -205,8 +183,6 @@ impl StaticSize for isize {
         i64::static_size()
     }
 }
-
-
 
 impl AsBytes for char {
     fn as_bytes(&self) -> Vec<u8> {
@@ -217,10 +193,9 @@ impl AsBytes for char {
 impl FromBytes for char {
     fn from_bytes(source: &[u8]) -> Result<Self, ReinterpretError> {
         let source = u32::from_bytes(source)?;
-        source.try_into()
-            .map_err(|_| ReinterpretError::Conversion(
-                format!("conversion of non-UTF-8 u32 ({source}) to char")
-            ))
+        source.try_into().map_err(|_| {
+            ReinterpretError::Conversion(format!("conversion of non-UTF-8 u32 ({source}) to char"))
+        })
     }
 }
 
@@ -229,8 +204,6 @@ impl StaticSize for char {
         u32::static_size()
     }
 }
-
-
 
 impl AsBytes for bool {
     fn as_bytes(&self) -> Vec<u8> {
@@ -247,8 +220,8 @@ impl FromBytes for bool {
             0 => Ok(false),
             1 => Ok(true),
             _ => Err(ReinterpretError::Conversion(
-                "conversion of >1 byte to bool".into()
-            ))
+                "conversion of >1 byte to bool".into(),
+            )),
         }
     }
 }
@@ -259,15 +232,14 @@ impl StaticSize for bool {
     }
 }
 
-
-
 impl<T: AsBytes> AsBytes for Vec<T> {
     fn as_bytes(&self) -> Vec<u8> {
         compose! {
             self.len().as_bytes(),
             self.iter()
                 .flat_map(AsBytes::as_bytes),
-        }.collect()
+        }
+        .collect()
     }
 }
 
@@ -292,14 +264,13 @@ impl<T: StaticSize> DynamicSize for Vec<T> {
     }
 }
 
-
-
 impl AsBytes for bit_vec::BitVec {
     fn as_bytes(&self) -> Vec<u8> {
         compose! {
             self.len().as_bytes(),
             self.to_bytes(),
-        }.collect()
+        }
+        .collect()
     }
 }
 
@@ -321,8 +292,6 @@ impl DynamicSize for bit_vec::BitVec {
     }
 }
 
-
-
 impl<K, V> AsBytes for std::collections::HashMap<K, V>
 where
     K: AsBytes,
@@ -336,7 +305,8 @@ where
                     key.as_bytes(),
                     value.as_bytes(),
                 })
-        }.collect()
+        }
+        .collect()
     }
 }
 
@@ -352,10 +322,7 @@ where
         let mut result = Self::with_capacity(len);
 
         for _ in 0..len {
-            result.insert(
-                reader.read()?,
-                reader.read()?,
-            );
+            result.insert(reader.read()?, reader.read()?);
         }
 
         Ok(result)
@@ -368,8 +335,6 @@ impl<K: StaticSize, V: StaticSize> DynamicSize for std::collections::HashMap<K, 
     }
 }
 
-
-
 impl<T: AsBytes> AsBytes for Option<T> {
     fn as_bytes(&self) -> Vec<u8> {
         match self {
@@ -378,7 +343,8 @@ impl<T: AsBytes> AsBytes for Option<T> {
             Some(inner) => compose! {
                 true.as_bytes(),
                 inner.as_bytes(),
-            }.collect(),
+            }
+            .collect(),
         }
     }
 }
@@ -390,22 +356,20 @@ impl<T: FromBytes + DynamicSize> FromBytes for Option<T> {
 
         match is_some {
             false => Ok(None),
-            true  => Ok(Some(reader.read()?))
+            true => Ok(Some(reader.read()?)),
         }
     }
 }
 
 impl<T: DynamicSize> DynamicSize for Option<T> {
     fn dynamic_size(&self) -> usize {
-        bool::static_size() + 
-        match self {
-            None => 0,
-            Some(inner) => inner.dynamic_size(),
-        }
+        bool::static_size()
+            + match self {
+                None => 0,
+                Some(inner) => inner.dynamic_size(),
+            }
     }
 }
-
-
 
 use math_linear::prelude::*;
 
@@ -458,8 +422,6 @@ reinterpret_3d_vectors! {
     Color64 = (r, g, b): f64;
 }
 
-
-
 impl AsBytes for Float4 {
     fn as_bytes(&self) -> Vec<u8> {
         compose! {
@@ -467,7 +429,8 @@ impl AsBytes for Float4 {
             self.y().as_bytes(),
             self.z().as_bytes(),
             self.w().as_bytes(),
-        }.collect()
+        }
+        .collect()
     }
 }
 
@@ -485,7 +448,9 @@ impl FromBytes for Float4 {
 }
 
 impl StaticSize for Float4 {
-    fn static_size() -> usize { 16 }
+    fn static_size() -> usize {
+        16
+    }
 }
 
 #[cfg(test)]
@@ -653,7 +618,8 @@ mod tests {
 
     #[test]
     fn reinterpret_vec_option() {
-        let before: Vec<Option<i32>> = vec![Some(1), None, None, Some(12), None, Some(7327), Some(42)];
+        let before: Vec<Option<i32>> =
+            vec![Some(1), None, None, Some(12), None, Some(7327), Some(42)];
         let after: Vec<Option<i32>> = Vec::from_bytes(&before.as_bytes()).unwrap();
 
         assert_eq!(before, after);
@@ -670,9 +636,7 @@ mod tests {
             ('d', vec![1, 3, 5, 7, 9]),
         ]);
 
-        let after = HashMap::<char, Vec<i32>>::from_bytes(
-            &before.as_bytes()
-        ).unwrap();
+        let after = HashMap::<char, Vec<i32>>::from_bytes(&before.as_bytes()).unwrap();
 
         assert_eq!(before, after);
     }

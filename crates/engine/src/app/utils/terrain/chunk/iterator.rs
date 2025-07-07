@@ -2,25 +2,24 @@
 
 #![allow(dead_code)]
 
-use {
-    math_linear::prelude::*,
-    std::ops::{Range, RangeBounds},
-    smallvec::SmallVec,
-};
+use math_linear::prelude::*;
+use smallvec::SmallVec;
+use std::ops::{Range, RangeBounds};
 
 /// Iterator over chunk border.
-/// 
-/// # Example:
+///
+/// # Example
+///
 /// ```
 /// use crate::app::utils::terrain::chunk::{
 ///     position_function,
 ///     iterator::CubeBorder,
 /// };
-/// 
+///
 /// fn test2() {
-///     /* [`CubeBorder`] iterator */
+///     // [`CubeBorder`] iterator
 ///     let border = CubeBorder::new(16);
-/// 
+///
 ///     const MAX: i32 = 16 - 1;
 ///     let classic_iter = (0 .. 16_i32.pow(3))
 ///         .map(|i| position_function(i))
@@ -30,8 +29,8 @@ use {
 ///             pos.y() == 0 || pos.y() == MAX ||
 ///             pos.z() == 0 || pos.z() == MAX
 ///         );
-/// 
-///     /* Walk over both together */
+///
+///     // Walk over both together
 ///     for (b, w) in border.zip(classic_iter) {
 ///         assert_eq!(b, w)
 ///     }
@@ -45,7 +44,13 @@ pub struct CubeBorder {
 
 impl CubeBorder {
     const INITIAL_STATE: i32 = -1;
-    pub fn new(size: i32) -> Self { Self { prev: Int3::all(Self::INITIAL_STATE), size } }
+
+    pub fn new(size: i32) -> Self {
+        Self {
+            prev: Int3::all(Self::INITIAL_STATE),
+            size,
+        }
+    }
 }
 
 impl Iterator for CubeBorder {
@@ -57,11 +62,11 @@ impl Iterator for CubeBorder {
 
         /* Return if maximum reached */
         if self.prev == Int3::all(max) {
-            return None
+            return None;
         } else if self.prev == Int3::all(Self::INITIAL_STATE) {
             let new = Int3::all(0);
             self.prev = new;
-            return Some(new)
+            return Some(new);
         }
 
         /* Previous x, y and z */
@@ -76,145 +81,171 @@ impl Iterator for CubeBorder {
         /* If somewhere slicing cube (in 1 .. MAX - 1) */
         if x >= 1 && x <= max_minus_one {
             /* If position is slicing square */
-            if y >= 1 && y <= max_minus_one  {
-                if z == 0 { give(Int3::new(x, y, max)) }
-                else if z == max { give(Int3::new(x, y + 1, 0)) }
-                else { unreachable!(
-                    "Invalid z position! Must be in 0 or {max}! But actual value is {y}.",
-                    max = max,
-                    y = y,
-                )}
+            if y >= 1 && y <= max_minus_one {
+                if z == 0 {
+                    give(Int3::new(x, y, max))
+                } else if z == max {
+                    give(Int3::new(x, y + 1, 0))
+                } else {
+                    unreachable!(
+                        "Invalid z position! Must be in 0 or {max}! But actual value is {y}.",
+                        max = max,
+                        y = y,
+                    )
+                }
             }
-
             /* If position is on flat bottom of square */
             else if y == 0 {
-                if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-                else if z == max { give(Int3::new(x, y + 1, 0)) }
-                else { unreachable!(
-                    "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-                    size = self.size,
-                    z = z,
-                )}
+                if z >= 0 && z <= max_minus_one {
+                    give(Int3::new(x, y, z + 1))
+                } else if z == max {
+                    give(Int3::new(x, y + 1, 0))
+                } else {
+                    unreachable!(
+                        "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
+                        size = self.size,
+                        z = z,
+                    )
+                }
             }
-
             /* If position is on flat top of square */
             else if y == max {
-                if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-                else if z == max { give(Int3::new(x + 1, 0, 0)) }
-                else { unreachable!(
-                    "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-                    size = self.size,
-                    z = z,
-                )}
+                if z >= 0 && z <= max_minus_one {
+                    give(Int3::new(x, y, z + 1))
+                } else if z == max {
+                    give(Int3::new(x + 1, 0, 0))
+                } else {
+                    unreachable!(
+                        "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
+                        size = self.size,
+                        z = z,
+                    )
+                }
             }
-
             /* Other Ys are unreachable */
-            else { unreachable!(
-                "Invalid y position! Must be in 0..{size}! But actual value is {y}.",
-                size = self.size,
-                y = y,
-            )}
+            else {
+                unreachable!(
+                    "Invalid y position! Must be in 0..{size}! But actual value is {y}.",
+                    size = self.size,
+                    y = y,
+                )
+            }
         }
-
         /* If current position is bottom */
         else if x == 0 {
             /* Y is not maximum */
             if y >= 0 && y <= max_minus_one {
-                if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-                else if z == max { give(Int3::new(x, y + 1, 0)) }
-                else { unreachable!(
-                    "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-                    size = self.size,
-                    z = z,
-                )}
+                if z >= 0 && z <= max_minus_one {
+                    give(Int3::new(x, y, z + 1))
+                } else if z == max {
+                    give(Int3::new(x, y + 1, 0))
+                } else {
+                    unreachable!(
+                        "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
+                        size = self.size,
+                        z = z,
+                    )
+                }
             }
-
             /* Y is maximum */
             else if y == max {
-                if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-                else if z == max { give(Int3::new(x + 1, 0, 0)) }
-                else { unreachable!(
-                    "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-                    size = self.size,
-                    z = z,
-                )}
+                if z >= 0 && z <= max_minus_one {
+                    give(Int3::new(x, y, z + 1))
+                } else if z == max {
+                    give(Int3::new(x + 1, 0, 0))
+                } else {
+                    unreachable!(
+                        "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
+                        size = self.size,
+                        z = z,
+                    )
+                }
             }
-
             /* Others Ys are unreachable */
-            else { unreachable!(
-                "Invalid y position! Must be in 0..{size}! But actual value is {y}.",
-                size = self.size,
-                y = y,
-            )}
+            else {
+                unreachable!(
+                    "Invalid y position! Must be in 0..{size}! But actual value is {y}.",
+                    size = self.size,
+                    y = y,
+                )
+            }
         }
-
         /* If currents position is top */
         else if x == max {
             /* Y is not maximum */
             if y >= 0 && y <= max_minus_one {
-                if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-                else if z == max { give(Int3::new(x, y + 1, 0)) }
-                else { unreachable!(
-                    "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-                    size = self.size,
-                    z = z,
-                )}
+                if z >= 0 && z <= max_minus_one {
+                    give(Int3::new(x, y, z + 1))
+                } else if z == max {
+                    give(Int3::new(x, y + 1, 0))
+                } else {
+                    unreachable!(
+                        "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
+                        size = self.size,
+                        z = z,
+                    )
+                }
             }
-
             /* Y is maximum */
             else if y == max {
-                if z >= 0 && z <= max_minus_one { give(Int3::new(x, y, z + 1)) }
-                else if z == max { give(Int3::new(max, max, max)) }
-                else { unreachable!(
-                    "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
-                    size = self.size,
-                    z = z,
-                )}
+                if z >= 0 && z <= max_minus_one {
+                    give(Int3::new(x, y, z + 1))
+                } else if z == max {
+                    give(Int3::new(max, max, max))
+                } else {
+                    unreachable!(
+                        "Invalid z position! Must be in 0..{size}! But actual value is {z}.",
+                        size = self.size,
+                        z = z,
+                    )
+                }
             }
-
             /* Others Ys are unreachable */
-            else { unreachable!(
-                "Invalid y position! Must be in 0..{size}! But actual value is {y}.",
-                size = self.size,
-                y = y,
-            )}
+            else {
+                unreachable!(
+                    "Invalid y position! Must be in 0..{size}! But actual value is {y}.",
+                    size = self.size,
+                    y = y,
+                )
+            }
         }
-
         /* Other values of X is unreachable... */
-        else { unreachable!(
-            "Invalid x position! Must be in 0..{size}! But actual value is {x}.",
-            size = self.size,
-            x = x,
-        )}
+        else {
+            unreachable!(
+                "Invalid x position! Must be in 0..{size}! But actual value is {x}.",
+                size = self.size,
+                x = x,
+            )
+        }
     }
 }
 
 /// Full equivalent of 3-fold cycle.
-/// 
+///
 /// # Example:
-/// 
+///
 /// ```
 /// use crate::app::utils::{
 ///     math::Int3,
 ///     terrain::chunk::iterator::SpaceIter,
 /// };
-/// 
+///
 /// fn test() {
 ///     let mut res1 = vec![];
 ///     let mut res2 = vec![];
-/// 
+///
 ///     /* [`SpaceIter`] equivalent */
 ///     for pos in SpaceIter::new(Int3::ZERO..Int3::all(16)) {
 ///         res1.push(pos)
 ///     }
-/// 
+///
 ///     /* Classic 3-fold cycle */
 ///     for x in 0..16 {
 ///     for y in 0..16 {
 ///     for z in 0..16 {
 ///         res2.push(veci!(x, y, z))
 ///     }}}
-/// 
+///
 ///     assert_eq!(res1, res2);
 /// }
 /// ```
@@ -245,15 +276,18 @@ impl SpaceIter {
         let diff = end - start;
         assert!(
             0 <= diff.x && 0 <= diff.y && 0 <= diff.z,
-            "start position should be not greater by each coordinate than end. Range: {}..{}",
-            start,
-            end,
+            "start position should be not greater by each coordinate than end. Range: {start}..{end}",
         );
 
         let sizes = USize3::from(diff);
         let size = sizes.x * sizes.y * sizes.z;
 
-        Self { sizes, size, idx: 0, back_shift: start }
+        Self {
+            sizes,
+            size,
+            idx: 0,
+            back_shift: start,
+        }
     }
 
     pub fn new_cubed(range: Range<i32>) -> Self {
@@ -272,26 +306,27 @@ impl SpaceIter {
 
     pub fn split_chunks(iter_size: Int3, chunk_size: Int3) -> impl Iterator<Item = Self> {
         assert_eq!(
-            iter_size % chunk_size, Int3::ZERO,
+            iter_size % chunk_size,
+            Int3::ZERO,
             "iter_size (value is {iter_size:?}) should be divisible by chunk_size (value is {chunk_size:?})"
         );
 
-        Self::zeroed(iter_size / chunk_size)
-            .map(move |chunk_pos| {
-                let min = chunk_pos * chunk_size;
-                SpaceIter::new(min .. min + chunk_size)
-            })
+        Self::zeroed(iter_size / chunk_size).map(move |chunk_pos| {
+            let min = chunk_pos * chunk_size;
+            SpaceIter::new(min..min + chunk_size)
+        })
     }
 
     pub fn adj_iter(pos: Int3) -> std::array::IntoIter<Int3, 6> {
         [
-            pos + veci!( 1,  0,  0),
-            pos + veci!(-1,  0,  0),
-            pos + veci!( 0,  1,  0),
-            pos + veci!( 0, -1,  0),
-            pos + veci!( 0,  0,  1),
-            pos + veci!( 0,  0, -1),
-        ].into_iter()
+            pos + veci!(1, 0, 0),
+            pos + veci!(-1, 0, 0),
+            pos + veci!(0, 1, 0),
+            pos + veci!(0, -1, 0),
+            pos + veci!(0, 0, 1),
+            pos + veci!(0, 0, -1),
+        ]
+        .into_iter()
     }
 
     fn coord_idx_from_idx(idx: usize, sizes: USize3) -> USize3 {
@@ -303,10 +338,7 @@ impl SpaceIter {
     }
 
     fn pos_from_idx(idx: usize, back_shift: Int3, sizes: USize3) -> Int3 {
-        Self::pos_from_coord_idx(
-            Self::coord_idx_from_idx(idx, sizes),
-            back_shift,
-        )
+        Self::pos_from_coord_idx(Self::coord_idx_from_idx(idx, sizes), back_shift)
     }
 }
 
@@ -318,7 +350,7 @@ impl Iterator for SpaceIter {
                 let pos = Self::pos_from_idx(self.idx, self.back_shift, self.sizes);
                 self.idx += 1;
                 Some(pos)
-            },
+            }
 
             false => None,
         }
@@ -326,7 +358,9 @@ impl Iterator for SpaceIter {
 }
 
 impl ExactSizeIterator for SpaceIter {
-    fn len(&self) -> usize { self.size }
+    fn len(&self) -> usize {
+        self.size
+    }
 }
 
 impl DoubleEndedIterator for SpaceIter {
@@ -337,7 +371,7 @@ impl DoubleEndedIterator for SpaceIter {
                 let pos = Self::pos_from_idx(self.size - 1, self.back_shift, self.sizes);
                 self.size -= 1;
                 Some(pos)
-            },
+            }
 
             _ => None,
         }
@@ -355,14 +389,12 @@ pub fn idx_to_coord_idx(idx: usize, sizes: USize3) -> USize3 {
     vecs!(x, y, z)
 }
 
-
-
 /// Walks around 3D array in very specific way.
 /// It breaks standart 3-fold cycle into chunks
 /// and walks in them like usual 3-fold cycle.
-/// 
+///
 /// It is in some way relative to 3-fold cycle in 3-fold cycle...
-/// 
+///
 /// # Example:
 /// ```
 /// use crate::app::utils::{
@@ -371,11 +403,11 @@ pub fn idx_to_coord_idx(idx: usize, sizes: USize3) -> USize3 {
 ///         ChunkSplitten, SpaceIter
 ///     },
 /// };
-/// 
+///
 /// fn example() {
 ///     let split = ChunkSplitten::new(Int3::all(16), Int3::all(2));
 ///     let space: Vec<_> = SpaceIter::new(Int3::ZERO..Int3::all(16)).collect();
-/// 
+///
 ///     for (entire, _) in split {
 ///         assert!(space.contains(&entire));
 ///     }
@@ -393,20 +425,22 @@ pub struct ChunkSplitten {
 impl ChunkSplitten {
     /// Creates new [`ChunkSplitten`] from [`Int3`] of sizes of
     /// entire data and [`Int3`] of chunk sizes in elements of entire data structure.
-    /// 
+    ///
     /// # Panic
     /// Pnics if entire chunk size is not divisible into smaller chunk sizes.
-    #[allow(dead_code)] 
+    #[allow(dead_code)]
     pub fn new(entire: Int3, chunk_size: Int3) -> Self {
         /* Check that entire chunk are divisible into smaller ones */
         assert_eq!(entire % chunk_size, Int3::ZERO);
 
-        let mut outer = SpaceIter::new(Int3::ZERO .. entire / chunk_size);
+        let mut outer = SpaceIter::new(Int3::ZERO..entire / chunk_size);
         let current = outer.next().unwrap();
 
         Self {
             inner: SpaceIter::new(Int3::ZERO..chunk_size),
-            outer, current: Some(current), chunk_size,
+            outer,
+            current: Some(current),
+            chunk_size,
         }
     }
 }
@@ -421,7 +455,7 @@ impl Iterator for ChunkSplitten {
 
             self.inner.next().unwrap()
         });
-        
+
         let outer = self.current?;
 
         Some((outer * self.chunk_size + inner, inner, outer))
@@ -430,7 +464,7 @@ impl Iterator for ChunkSplitten {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
 pub struct Sides<T> {
-    /// Adjacent chunks in order: `back[0] -> front[1] -> top[2] -> 
+    /// Adjacent chunks in order: `back[0] -> front[1] -> top[2] ->
     /// bottom[3] -> right[4] -> left[5]`.
     pub inner: [T; 6],
 }
@@ -439,25 +473,31 @@ impl<T> std::iter::FromIterator<T> for Sides<T> {
     fn from_iter<Iter: IntoIterator<Item = T>>(iter: Iter) -> Self {
         let mut iter = iter.into_iter();
 
-        let arr = array_init::array_init(|_|
+        let arr = array_init::array_init(|_| {
             iter.next()
                 .expect("iterator should have exactly 6 elements")
-        );
+        });
 
-        assert!(iter.next().is_none(), "iterator should have exactly 6 elements");
+        assert!(
+            iter.next().is_none(),
+            "iterator should have exactly 6 elements"
+        );
 
         Self { inner: arr }
     }
 }
 
-impl<T: Copy> Copy for Sides<T> { }
+impl<T: Copy> Copy for Sides<T> {}
 
 impl<T> Sides<T> {
     pub fn new(sides: [T; 6]) -> Self {
         Self { inner: sides }
     }
 
-    pub fn all(side: T) -> Self where T: Copy {
+    pub fn all(side: T) -> Self
+    where
+        T: Copy,
+    {
         Self::new([side; 6])
     }
 
@@ -465,56 +505,116 @@ impl<T> Sides<T> {
         Self::new([back, front, top, bottom, right, left])
     }
 
-    pub fn as_array(&self) -> [T; 6] where T: Clone {
+    pub fn as_array(&self) -> [T; 6]
+    where
+        T: Clone,
+    {
         self.inner.clone()
     }
 
     pub fn set(&mut self, offset: Int3, item: T) -> Result<(), String> {
         match offset.as_tuple() {
-            ( 1,  0,  0) => self.inner[0] = item,
-            (-1,  0,  0) => self.inner[1] = item,
-            ( 0,  1,  0) => self.inner[2] = item,
-            ( 0, -1,  0) => self.inner[3] = item,
-            ( 0,  0,  1) => self.inner[4] = item,
-            ( 0,  0, -1) => self.inner[5] = item,
+            (1, 0, 0) => self.inner[0] = item,
+            (-1, 0, 0) => self.inner[1] = item,
+            (0, 1, 0) => self.inner[2] = item,
+            (0, -1, 0) => self.inner[3] = item,
+            (0, 0, 1) => self.inner[4] = item,
+            (0, 0, -1) => self.inner[5] = item,
             _ => return Err(format!("Offset should be small (adjacent) but {offset:?}")),
         }
 
         Ok(())
     }
 
-    pub fn by_offset(&self, offset: Int3) -> T where T: Clone {
+    pub fn by_offset(&self, offset: Int3) -> T
+    where
+        T: Clone,
+    {
         match offset.as_tuple() {
-            ( 1,  0,  0) => self.back(),
-            (-1,  0,  0) => self.front(),
-            ( 0,  1,  0) => self.top(),
-            ( 0, -1,  0) => self.bottom(),
-            ( 0,  0,  1) => self.right(),
-            ( 0,  0, -1) => self.left(),
-            _ => panic!("Offset should be small (adjacent) but {:?}", offset),
+            (1, 0, 0) => self.back(),
+            (-1, 0, 0) => self.front(),
+            (0, 1, 0) => self.top(),
+            (0, -1, 0) => self.bottom(),
+            (0, 0, 1) => self.right(),
+            (0, 0, -1) => self.left(),
+            _ => panic!("Offset should be small (adjacent) but {offset:?}"),
         }
     }
 
-    pub fn back_mut(&mut self)   -> &mut T { &mut self.inner[0] }
-    pub fn front_mut(&mut self)  -> &mut T { &mut self.inner[1] }
-    pub fn top_mut(&mut self)    -> &mut T { &mut self.inner[2] }
-    pub fn bottom_mut(&mut self) -> &mut T { &mut self.inner[3] }
-    pub fn right_mut(&mut self)  -> &mut T { &mut self.inner[4] }
-    pub fn left_mut(&mut self)   -> &mut T { &mut self.inner[5] }
+    pub fn back_mut(&mut self) -> &mut T {
+        &mut self.inner[0]
+    }
+    pub fn front_mut(&mut self) -> &mut T {
+        &mut self.inner[1]
+    }
+    pub fn top_mut(&mut self) -> &mut T {
+        &mut self.inner[2]
+    }
+    pub fn bottom_mut(&mut self) -> &mut T {
+        &mut self.inner[3]
+    }
+    pub fn right_mut(&mut self) -> &mut T {
+        &mut self.inner[4]
+    }
+    pub fn left_mut(&mut self) -> &mut T {
+        &mut self.inner[5]
+    }
 
-    pub fn back_ref(&self)   -> &T { &self.inner[0] }
-    pub fn front_ref(&self)  -> &T { &self.inner[1] }
-    pub fn top_ref(&self)    -> &T { &self.inner[2] }
-    pub fn bottom_ref(&self) -> &T { &self.inner[3] }
-    pub fn right_ref(&self)  -> &T { &self.inner[4] }
-    pub fn left_ref(&self)   -> &T { &self.inner[5] }
+    pub fn back_ref(&self) -> &T {
+        &self.inner[0]
+    }
+    pub fn front_ref(&self) -> &T {
+        &self.inner[1]
+    }
+    pub fn top_ref(&self) -> &T {
+        &self.inner[2]
+    }
+    pub fn bottom_ref(&self) -> &T {
+        &self.inner[3]
+    }
+    pub fn right_ref(&self) -> &T {
+        &self.inner[4]
+    }
+    pub fn left_ref(&self) -> &T {
+        &self.inner[5]
+    }
 
-    pub fn back(&self)   -> T where T: Clone { self.inner[0].clone() }
-    pub fn front(&self)  -> T where T: Clone { self.inner[1].clone() }
-    pub fn top(&self)    -> T where T: Clone { self.inner[2].clone() }
-    pub fn bottom(&self) -> T where T: Clone { self.inner[3].clone() }
-    pub fn right(&self)  -> T where T: Clone { self.inner[4].clone() }
-    pub fn left(&self)   -> T where T: Clone { self.inner[5].clone() }
+    pub fn back(&self) -> T
+    where
+        T: Clone,
+    {
+        self.inner[0].clone()
+    }
+    pub fn front(&self) -> T
+    where
+        T: Clone,
+    {
+        self.inner[1].clone()
+    }
+    pub fn top(&self) -> T
+    where
+        T: Clone,
+    {
+        self.inner[2].clone()
+    }
+    pub fn bottom(&self) -> T
+    where
+        T: Clone,
+    {
+        self.inner[3].clone()
+    }
+    pub fn right(&self) -> T
+    where
+        T: Clone,
+    {
+        self.inner[4].clone()
+    }
+    pub fn left(&self) -> T
+    where
+        T: Clone,
+    {
+        self.inner[5].clone()
+    }
 
     pub fn map<P>(self, map: impl Fn(T) -> P) -> Sides<P> {
         let Self { inner: sides } = self;
@@ -540,12 +640,24 @@ impl<T> std::ops::IndexMut<usize> for Sides<T> {
 pub fn offsets_from_border(pos: Int3, bounds: Range<Int3>) -> SmallVec<[Int3; 6]> {
     let mut result = SmallVec::new();
 
-    if pos.x == bounds.start.x { result.push(veci!(-1, 0, 0)) }
-    if pos.y == bounds.start.y { result.push(veci!(0, -1, 0)) }
-    if pos.z == bounds.start.z { result.push(veci!(0, 0, -1)) }
-    if pos.x == bounds.end.x - 1 { result.push(veci!(1, 0, 0)) }
-    if pos.y == bounds.end.y - 1 { result.push(veci!(0, 1, 0)) }
-    if pos.z == bounds.end.z - 1 { result.push(veci!(0, 0, 1)) }
+    if pos.x == bounds.start.x {
+        result.push(veci!(-1, 0, 0))
+    }
+    if pos.y == bounds.start.y {
+        result.push(veci!(0, -1, 0))
+    }
+    if pos.z == bounds.start.z {
+        result.push(veci!(0, 0, -1))
+    }
+    if pos.x == bounds.end.x - 1 {
+        result.push(veci!(1, 0, 0))
+    }
+    if pos.y == bounds.end.y - 1 {
+        result.push(veci!(0, 1, 0))
+    }
+    if pos.z == bounds.end.z - 1 {
+        result.push(veci!(0, 0, 1))
+    }
 
     result
 }
@@ -557,39 +669,36 @@ mod space_iter_tests {
     #[test]
     fn test_new() {
         let range = veci!(-10, -3, -1)..veci!(-3, 4, 2);
-        let poses1: Vec<_> = SpaceIter::new(range.clone())
-            .collect();
-        let poses2: Vec<_> = SpaceIter::new(range)
-            .collect();
+        let poses1: Vec<_> = SpaceIter::new(range.clone()).collect();
+        let poses2: Vec<_> = SpaceIter::new(range).collect();
 
         for pos in poses1.iter() {
-            assert!(poses2.contains(pos), "{}, {:?}, {:?}", pos, poses1, poses2);
+            assert!(poses2.contains(pos), "{pos}, {poses1:?}, {poses2:?}");
         }
- 
+
         for pos in poses2.iter() {
-            assert!(poses1.contains(pos), "{}, {:?}, {:?}", pos, poses1, poses2);
+            assert!(poses1.contains(pos), "{pos}, {poses1:?}, {poses2:?}");
         }
     }
 
     #[test]
     fn test_split_chunks() {
-        let sample: Vec<_> = SpaceIter::zeroed_cubed(4)
-            .collect();
+        let sample: Vec<_> = SpaceIter::zeroed_cubed(4).collect();
         let chunked: Vec<_> = SpaceIter::split_chunks(Int3::all(4), Int3::all(2))
             .flatten()
             .collect();
-    
+
         for pos in sample.iter() {
             match chunked.contains(pos) {
                 true => (),
-                false => panic!("chunked.contains(&pos): {:?}", pos),
+                false => panic!("chunked.contains(&pos): {pos:?}"),
             }
         }
-    
+
         for pos in chunked.iter() {
             match sample.contains(pos) {
                 true => (),
-                false => panic!("sample.contains(&pos): {:?}", pos),
+                false => panic!("sample.contains(&pos): {pos:?}"),
             }
         }
     }
@@ -599,15 +708,17 @@ mod space_iter_tests {
         let mut res1 = vec![];
         let mut res2 = vec![];
 
-        for pos in SpaceIter::new(Int3::zero() .. Int3::all(5)) {
+        for pos in SpaceIter::new(Int3::zero()..Int3::all(5)) {
             res1.push(pos)
         }
 
         for x in 0..5 {
-        for y in 0..5 {
-        for z in 0..5 {
-            res2.push(Int3::new(x, y, z))
-        }}}
+            for y in 0..5 {
+                for z in 0..5 {
+                    res2.push(Int3::new(x, y, z))
+                }
+            }
+        }
 
         assert_eq!(res1, res2);
     }
@@ -617,15 +728,17 @@ mod space_iter_tests {
         let mut res1 = vec![];
         let mut res2 = vec![];
 
-        for pos in SpaceIter::new(Int3::zero() .. Int3::new(16, 4, 9)) {
+        for pos in SpaceIter::new(Int3::zero()..Int3::new(16, 4, 9)) {
             res1.push(pos)
         }
 
         for x in 0..16 {
-        for y in 0..4 {
-        for z in 0..9 {
-            res2.push(Int3::new(x, y, z))
-        }}}
+            for y in 0..4 {
+                for z in 0..9 {
+                    res2.push(Int3::new(x, y, z))
+                }
+            }
+        }
 
         assert_eq!(res1, res2);
     }
@@ -635,15 +748,17 @@ mod space_iter_tests {
         let mut res1 = vec![];
         let mut res2 = vec![];
 
-        for pos in SpaceIter::new(Int3::all(-5) .. Int3::all(5)) {
+        for pos in SpaceIter::new(Int3::all(-5)..Int3::all(5)) {
             res1.push(pos)
         }
 
         for x in -5..5 {
-        for y in -5..5 {
-        for z in -5..5 {
-            res2.push(veci!(x, y, z))
-        }}}
+            for y in -5..5 {
+                for z in -5..5 {
+                    res2.push(veci!(x, y, z))
+                }
+            }
+        }
 
         assert_eq!(res1, res2);
     }
@@ -653,22 +768,24 @@ mod space_iter_tests {
         let mut res1 = vec![];
         let mut res2 = vec![];
 
-        for pos in SpaceIter::new(Int3::new(-8, 2, -10) .. Int3::new(9, 5, -5)) {
+        for pos in SpaceIter::new(Int3::new(-8, 2, -10)..Int3::new(9, 5, -5)) {
             res1.push(pos)
         }
 
         for x in -8..9 {
-        for y in 2..5 {
-        for z in -10..-5 {
-            res2.push(Int3::new(x, y, z))
-        }}}
+            for y in 2..5 {
+                for z in -10..-5 {
+                    res2.push(Int3::new(x, y, z))
+                }
+            }
+        }
 
         assert_eq!(res1, res2);
     }
 
     #[test]
     fn uniqueness() {
-        let iter = SpaceIter::new(veci!(-8, 2, -10) .. veci!(9, 5, -5));
+        let iter = SpaceIter::new(veci!(-8, 2, -10)..veci!(9, 5, -5));
         let mut map = std::collections::HashSet::new();
 
         for pos in iter {
@@ -679,33 +796,35 @@ mod space_iter_tests {
 
 #[cfg(test)]
 mod border_test {
-    use {
-        crate::app::utils::terrain::chunk::Chunk,
-        super::*,
-    };
+    use {super::*, crate::app::utils::terrain::chunk::Chunk};
 
     #[test]
     fn test_sides() {
         #[derive(Clone, Copy, Debug, Eq, PartialEq)]
         enum Side {
-            Top, Bottom, Left, Right, Front, Back,
+            Top,
+            Bottom,
+            Left,
+            Right,
+            Front,
+            Back,
         }
-        
-        let back   = veci!( 1,  0,  0);
-        let front  = veci!(-1,  0,  0);
-        let top    = veci!( 0,  1,  0);
-        let bottom = veci!( 0, -1,  0);
-        let right  = veci!( 0,  0,  1);
-        let left   = veci!( 0,  0, -1);
-    
+
+        let back = veci!(1, 0, 0);
+        let front = veci!(-1, 0, 0);
+        let top = veci!(0, 1, 0);
+        let bottom = veci!(0, -1, 0);
+        let right = veci!(0, 0, 1);
+        let left = veci!(0, 0, -1);
+
         let mut sides = Sides::new([Side::Top; 6]);
-        sides.set(back,   Side::Back).unwrap();
-        sides.set(front,  Side::Front).unwrap();
-        sides.set(top,    Side::Top).unwrap();
+        sides.set(back, Side::Back).unwrap();
+        sides.set(front, Side::Front).unwrap();
+        sides.set(top, Side::Top).unwrap();
         sides.set(bottom, Side::Bottom).unwrap();
-        sides.set(right,  Side::Right).unwrap();
-        sides.set(left,   Side::Left).unwrap();
-    
+        sides.set(right, Side::Right).unwrap();
+        sides.set(left, Side::Left).unwrap();
+
         assert_eq!(sides.back(), Side::Back);
         assert_eq!(sides.front(), Side::Front);
         assert_eq!(sides.top(), Side::Top);
@@ -720,12 +839,15 @@ mod border_test {
         const MAX: i32 = Chunk::SIZE as i32 - 1;
 
         for pos in border {
-            eprintln!("{:?}", pos);
+            eprintln!("{pos:?}");
 
             assert!(
-                pos.x() == 0 || pos.x() == MAX ||
-                pos.y() == 0 || pos.y() == MAX ||
-                pos.z() == 0 || pos.z() == MAX
+                pos.x() == 0
+                    || pos.x() == MAX
+                    || pos.y() == 0
+                    || pos.y() == MAX
+                    || pos.z() == 0
+                    || pos.z() == MAX
             );
         }
     }
@@ -737,11 +859,14 @@ mod border_test {
 
         let works = (0..Chunk::VOLUME)
             .map(|i| Int3::from(idx_to_coord_idx(i, Chunk::SIZES)))
-            .filter(|pos|
-                pos.x == 0 || pos.x == MAX ||
-                pos.y == 0 || pos.y == MAX ||
-                pos.z == 0 || pos.z == MAX
-            );
+            .filter(|pos| {
+                pos.x == 0
+                    || pos.x == MAX
+                    || pos.y == 0
+                    || pos.y == MAX
+                    || pos.z == 0
+                    || pos.z == MAX
+            });
 
         for (b, w) in border.zip(works) {
             assert_eq!(b, w)
@@ -756,7 +881,7 @@ mod splitten_tests {
     #[test]
     fn space_contains_split() {
         let split = ChunkSplitten::new(Int3::all(16), Int3::all(2));
-        let space: Vec<_> = SpaceIter::new(Int3::zero() .. Int3::all(16)).collect();
+        let space: Vec<_> = SpaceIter::new(Int3::zero()..Int3::all(16)).collect();
 
         for (entire, _, _) in split {
             assert!(space.contains(&entire));
@@ -765,8 +890,10 @@ mod splitten_tests {
 
     #[test]
     fn split_contains_space() {
-        let entire: Vec<_> = ChunkSplitten::new(Int3::all(16), Int3::all(2)).map(|(e, _, _)| e).collect();
-        let space = SpaceIter::new(Int3::zero() .. Int3::all(16));
+        let entire: Vec<_> = ChunkSplitten::new(Int3::all(16), Int3::all(2))
+            .map(|(e, _, _)| e)
+            .collect();
+        let space = SpaceIter::new(Int3::zero()..Int3::all(16));
 
         for pos in space {
             assert!(entire.contains(&pos));
@@ -776,7 +903,7 @@ mod splitten_tests {
     #[test]
     fn length() {
         let all: Vec<_> = ChunkSplitten::new(Int3::all(32), Int3::all(4)).collect();
-        let space: Vec<_> = SpaceIter::new(Int3::zero() .. Int3::all(32)).collect();
+        let space: Vec<_> = SpaceIter::new(Int3::zero()..Int3::all(32)).collect();
 
         assert_eq!(all.len(), space.len());
     }
@@ -786,7 +913,7 @@ mod splitten_tests {
         let split = ChunkSplitten::new(Int3::all(6), Int3::all(2));
 
         for (entire, inner, _) in split {
-            eprintln!("{:?} in {:?}", inner, entire);
+            eprintln!("{inner:?} in {entire:?}");
         }
     }
 
@@ -796,11 +923,7 @@ mod splitten_tests {
         let mut set = std::collections::HashSet::new();
 
         for (entire, inner, _) in split {
-            assert!(
-                set.insert(entire),
-                "Values are: {:?} in {:?}",
-                inner, entire
-            );
+            assert!(set.insert(entire), "Values are: {inner:?} in {entire:?}",);
         }
     }
 }

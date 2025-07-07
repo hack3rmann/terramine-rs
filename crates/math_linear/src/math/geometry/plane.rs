@@ -11,7 +11,10 @@ impl Plane {
     /// Constructs plane from origin and normal
     pub fn new(origin: vec3, mut normal: vec3) -> Self {
         normal = normal.normalized();
-        Plane { normal, distance: origin.dot(normal) }
+        Plane {
+            normal,
+            distance: origin.dot(normal),
+        }
     }
 
     /// Checks if gitven vector is in positive side of plane

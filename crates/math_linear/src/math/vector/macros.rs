@@ -1,10 +1,7 @@
-#![macro_use]
-
 /// Derives basic API for 3-dimensional `$Name` vector.
 /// Note: [`std::ops::Neg`] is not derived due to unsigned type (such as [`u32`]).
-#[macro_export]
 macro_rules! make_3_component_vector {
-    () => { };
+    () => {};
 
     (
         $(#[$macros:meta])*
@@ -29,36 +26,36 @@ macro_rules! make_3_component_vector {
         impl $Name {
             $vis const ZERO: Self = Self::zero();
             $vis const ONE:  Self = Self::ones();
-            
+
             /// Constructs new vector
             $vis const fn new($x: $Type, $y: $Type, $z: $Type) -> Self {
                 Self { $x, $y, $z }
             }
-            
+
             $vis const fn $x(&self) -> $Type { self.$x }
             $vis const fn $y(&self) -> $Type { self.$y }
             $vis const fn $z(&self) -> $Type { self.$z }
-        
+
             /// Constructs vector from one number.
             $vis const fn all(all: $Type) -> Self {
                 Self::new(all, all, all)
             }
-        
+
             /// Constructs zero vector.
             $vis const fn zero() -> Self {
                 Self::all(0 as $Type)
             }
-        
+
             /// Constructs unit vector.
             $vis const fn ones() -> Self {
                 Self::all(1 as $Type)
             }
-        
+
             /// Calculates dot product.
             $vis fn dot(self, other: Self) -> $Type {
                 self.$x * other.$x + self.$y * other.$y + self.$z * other.$z
             }
-        
+
             /// Calculates cross product.
             $vis fn cross(self, other: Self) -> Self {
                 Self::new(
@@ -78,7 +75,7 @@ macro_rules! make_3_component_vector {
                     Float3::from(self) / len
                 }
             }
-        
+
             /// Computes squared length.
             $vis fn sqr(self) -> $Type {
                 self.dot(self)
@@ -93,12 +90,12 @@ macro_rules! make_3_component_vector {
             $vis fn with_len(self, new_len: f32) -> Float3 {
                 self.normalized() * new_len
             }
-        
+
             /// Represents [`$Name`] as an array.
             $vis const fn as_array(self) -> [$Type; 3] {
                 [self.$x(), self.$y(), self.$z()]
             }
-        
+
             /// Represents [`$Name`] as a tuple.
             $vis const fn as_tuple(self) -> ($Type, $Type, $Type) {
                 (self.$x(), self.$y(), self.$z())
@@ -278,15 +275,15 @@ macro_rules! make_3_component_vector {
                 use std::cmp::Ordering;
 
                 if self == other { return Some(Ordering::Equal) }
-        
+
                 if self.$x < other.$x && self.$y < other.$y && self.$z < other.$z {
                     return Some(Ordering::Less)
                 }
-        
+
                 if self.$x > other.$x && self.$y > other.$y && self.$z > other.$z {
                     return Some(Ordering::Greater)
                 }
-        
+
                 None
             }
         }
@@ -303,7 +300,6 @@ macro_rules! make_3_component_vector {
     }
 }
 
-#[macro_export]
 macro_rules! derive_froms_3_component {
     ($Type1:ty { $x1:ident, $y1:ident, $z1:ident : $ElemType1:ty } <->
      $Type2:ty { $x2:ident, $y2:ident, $z2:ident : $ElemType2:ty }) =>
@@ -330,7 +326,6 @@ macro_rules! derive_froms_3_component {
 
 /// Derives basic API for 2-dimensional `$Name` vector.
 /// Note: [`std::ops::Neg`] is not derived due to unsigned type (such as [`u32`]).
-#[macro_export]
 macro_rules! make_2_component_vector {
     () => { };
 
@@ -360,35 +355,35 @@ macro_rules! make_2_component_vector {
             $vis fn make($x: impl Into<$Type>, $y: impl Into<$Type>) -> Self {
                 Self::new($x.into(), $y.into())
             }
-            
+
             $vis const fn $x(&self) -> $Type { self.$x }
             $vis const fn $y(&self) -> $Type { self.$y }
-        
+
             /// Constructs vector from one number.
             $vis const fn all(all: $Type) -> Self {
                 Self::new(all, all)
             }
-        
+
             /// Constructs zero vector.
             $vis const fn zero() -> Self {
                 Self::all(0 as $Type)
             }
-        
+
             /// Constructs unit vector.
             $vis const fn ones() -> Self {
                 Self::all(1 as $Type)
             }
-        
+
             /// Calculates dot product.
             $vis fn dot(self, other: Self) -> $Type {
                 self.$x * other.$x + self.$y * other.$y
             }
-        
+
             /// Calculates pseudoscalar product.
             $vis fn cross(self, other: Self) -> $Type {
                 self.$x * other.$y - self.$y * other.$x
             }
-        
+
             /// Computes squares length.
             $vis fn sqr(self) -> $Type {
                 self.dot(self)
@@ -404,7 +399,7 @@ macro_rules! make_2_component_vector {
                 self.normalized() * new_len
             }
 
-            /// Gives normalized vector. Result is always [`Float2`] due to 
+            /// Gives normalized vector. Result is always [`Float2`] due to
             /// integer vectors can not be normalized.
             $vis fn normalized(self) -> Float2 {
                 let len = self.len();
@@ -414,12 +409,12 @@ macro_rules! make_2_component_vector {
                     Float2::from(self) / len
                 }
             }
-        
+
             /// Represents [`$Name`] as an array.
             $vis const fn as_array(self) -> [$Type; 2] {
                 [self.$x(), self.$y()]
             }
-        
+
             /// Represents [`$Name`] as a tuple.
             $vis const fn as_tuple(self) -> ($Type, $Type) {
                 (self.$x(), self.$y())
@@ -583,15 +578,15 @@ macro_rules! make_2_component_vector {
                 use std::cmp::Ordering;
 
                 if self == other { return Some(Ordering::Equal) }
-        
+
                 if self.$x < other.$x && self.$y < other.$y {
                     return Some(Ordering::Less)
                 }
-        
+
                 if self.$x > other.$x && self.$y > other.$y {
                     return Some(Ordering::Greater)
                 }
-        
+
                 None
             }
         }
@@ -608,8 +603,7 @@ macro_rules! make_2_component_vector {
     }
 }
 
-#[macro_export]
-macro_rules! impl_eq {
+macro_rules! _impl_eq {
     () => { };
 
     ($($VecName:ident,)+) => {
@@ -617,7 +611,6 @@ macro_rules! impl_eq {
     };
 }
 
-#[macro_export]
 macro_rules! impl_neg {
     () => { };
 
@@ -637,7 +630,6 @@ macro_rules! impl_neg {
     }
 }
 
-#[macro_export]
 macro_rules! derive_froms_2_component {
     ($Type1:ty { $x1:ident, $y1:ident : $ElemType1:ty } <->
      $Type2:ty { $x2:ident, $y2:ident : $ElemType2:ty }) =>
@@ -731,25 +723,31 @@ macro_rules! generate_3d_swizzles_only_2d {
     };
 }
 
+#[macro_export]
 macro_rules! vector_macro {
     ($name:ident : $Vec3:ty, $Vec2:ty : $Type:ty) => {
-        #[macro_export]
-        macro_rules! $name {
-            () => {()};
-        
-            ($x:expr) => {{
-                {$x} as $Type
-            }};
-        
-            ($x:expr, $y:expr) => {{
-                use $crate::prelude::*;
-                <$Vec2>::new({$x} as $Type, {$y} as $Type)
-            }};
-        
-            ($x:expr, $y:expr, $z:expr) => {{
-                use $crate::prelude::*;
-                <$Vec3>::new({$x} as $Type, {$y} as $Type, {$z} as $Type)
-            }};
+        ::paste::paste! {
+            #[macro_export]
+            macro_rules! [< _ $name >] {
+                () => {()};
+
+                ($x:expr) => {{
+                    {$x} as $Type
+                }};
+
+                ($x:expr, $y:expr) => {{
+                    use $crate::prelude::*;
+                    <$Vec2>::new({$x} as $Type, {$y} as $Type)
+                }};
+
+                ($x:expr, $y:expr, $z:expr) => {{
+                    use $crate::prelude::*;
+                    <$Vec3>::new({$x} as $Type, {$y} as $Type, {$z} as $Type)
+                }};
+            }
+
+            #[doc(hidden)]
+            pub use [< _ $name >] as $name;
         }
 
         impl From<($Vec2, $Type)> for $Vec3 {
@@ -763,15 +761,12 @@ macro_rules! vector_macro {
                 Self::new(lhs, rhs.x, rhs.y)
             }
         }
-    }
+    };
 }
 
-use super::{
-    Float3, Float2,
-    Int3, Int2,
-    UInt3, UInt2,
-    USize3, USize2,
-};
+pub(crate) use vector_macro;
+
+use super::{Float2, Float3, Int2, Int3, UInt2, UInt3, USize2, USize3};
 
 vector_macro! { vecf: Float3, Float2: f32 }
 vector_macro! { veci: Int3,   Int2:   i32 }
